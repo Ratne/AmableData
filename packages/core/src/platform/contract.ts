@@ -336,6 +336,23 @@ export interface ResumeEmailResponse {
   readonly resumed: number;
 }
 
+/**
+ * `POST /api/platform/v1/restore` (signed) — after the control plane restored the
+ * installation D1 to `at` (Time Travel), rewinds every tenant Durable Object to the
+ * same instant (point-in-time recovery, last 30 days).
+ */
+export interface PointInTimeRestoreRequest {
+  /** Epoch ms. */
+  readonly at: number;
+}
+
+export interface PointInTimeRestoreResponse {
+  readonly ok: true;
+  readonly tenants: number;
+  readonly objects: number;
+  readonly failed: readonly { readonly tenantId: string; readonly object: string; readonly error: string }[];
+}
+
 /** `POST /api/platform/v1/assist/revoke` (signed) — the control plane revoked a grant. */
 export interface AssistRevokeRequest {
   readonly grantId: string;

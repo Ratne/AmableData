@@ -6,8 +6,11 @@ import type { AppEnv } from '../middleware';
 import { sendHeartbeat } from './heartbeat';
 import { platformLink } from './license';
 import { dropQuotaMemoryCache, quotaSnapshotSchema, storeQuotaSnapshot } from './quota';
+import { POINT_IN_TIME_WINDOW_MS, restoreTenantObjects } from './restore';
 import { verifiedControlPlaneBody } from './signature';
 import { flushUsage } from './usage';
+
+const restoreSchema = z.strictObject({ at: z.number().int().positive() });
 
 const resumeEmailSchema = z.strictObject({
   reason: z.enum(['top_up', 'quota_reset', 'manual']),
@@ -46,6 +49,24 @@ export function mountPlatformInbound(app: Hono<AppEnv>): void {
     const result = await resumeAllTenants(c.env);
     const response: ResumeEmailResponse = { ok: true, ...result };
     return c.json(response);
+  });
+
+  app.post('/platform/v1/restore', async (c) => {
+    const body = await verifiedControlPlaneBody(c);
+    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
+    let json: unknown;
+    try {
+      json = JSON.parse(body);
+    } catch {
+      return c.json({ error: 'invalid_json' }, 400);
+    }
+    const parsed = restoreSchema.safeParse(json);
+    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    const now = c.get('services').now();
+    if (parsed.data.at > now || parsed.data.at < now - POINT_IN_TIME_WINDOW_MS) {
+      return c.json({ error: 'restore_point_out_of_range' }, 422);
+    }
+    return c.json(await restoreTenantObjects(c.env, parsed.data.at));
   });
 
   // Signed reachability probe of the link (no data beyond what the control plane already knows).

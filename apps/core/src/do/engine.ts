@@ -25,6 +25,7 @@ import type { Env } from '../env';
 import { withAlarmReporting } from '../platform/telemetry';
 import { createPlatformQuotaGuard } from '../platform/quota';
 import { webhookService } from '../webhooks/runtime';
+import { armPointInTime } from './point-in-time';
 
 const nextUlid = monotonicFactory();
 
@@ -160,6 +161,15 @@ export class Engine extends DurableObject<Env> {
 
   backupDump(cursor: DumpCursor | null): DumpPage {
     return this.backup.dump(cursor);
+  }
+
+  /** Point-in-time recovery (apps/core/src/platform/restore.ts), signed control plane call only. */
+  pointInTimeArm(atMs: number): Promise<string> {
+    return armPointInTime(this.ctx.storage, atMs);
+  }
+
+  pointInTimeApply(): void {
+    this.ctx.abort('point-in-time restore');
   }
 
   backupWipe(): void {

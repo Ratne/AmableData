@@ -27,6 +27,7 @@ import {
   tokenSecrets,
   userDirectory,
 } from './runtime';
+import { armPointInTime } from '../do/point-in-time';
 
 /**
  * MailDb — one SQLite-backed Durable Object per tenant (addressed by tenant id)
@@ -103,6 +104,15 @@ export class MailDb extends DurableObject<Env> {
 
   backupDump(cursor: DumpCursor | null): DumpPage {
     return this.backup.dump(cursor);
+  }
+
+  /** Point-in-time recovery (apps/core/src/platform/restore.ts), signed control plane call only. */
+  pointInTimeArm(atMs: number): Promise<string> {
+    return armPointInTime(this.ctx.storage, atMs);
+  }
+
+  pointInTimeApply(): void {
+    this.ctx.abort('point-in-time restore');
   }
 
   backupWipe(): void {

@@ -8,6 +8,7 @@ import { consumeFormSubmissions, FORM_SUBMISSIONS_QUEUE } from './forms/queue';
 import { serveSpa } from './middleware/spa';
 import { platformScheduled } from './platform/mount';
 import { withErrorReporting } from './platform/telemetry';
+import { runUpdateCheck } from './platform/updates';
 import { handleGoogleOAuthCallback } from './providers/oauth-callback';
 import { GOOGLE_OAUTH_CALLBACK_PATH } from './providers/select';
 import { forwardToDevEdge, isDevEdgeRequest } from './public/dev-edge';
@@ -63,6 +64,8 @@ const handler = {
       await runScheduledBackups(backupDeps(env)).catch((error: unknown) => {
         console.error('[backup] scheduler failed:', error instanceof Error ? error.message : error);
       });
+      // Self-hosted: latest public release, once a day.
+      await runUpdateCheck(env, controller.scheduledTime);
     }, (promise) => ctx.waitUntil(promise));
   },
 } satisfies ExportedHandler<Env>;

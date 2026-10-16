@@ -54,7 +54,9 @@ Keep the description short: the context, not a list of every change.
 - **Every outside-world dependency behind an interface**, with a fake for tests: no
   network in tests.
 - **Database changes are new migrations** in `packages/db`; never edit an applied one.
-  They run automatically when the workers boot, on every installation.
+  They run automatically when the workers boot, on every installation, and must stay
+  additive (no drop, rename or `NOT NULL` column without a default) so the previous
+  release still works after a rollback (CI checks it).
 - **Names**: use the `amable` / `amabledata` brand or neutral names; don't name other
   products in code, comments, file names or commit messages (CI checks it).
 - **Formatting**: Prettier (`pnpm format`) on the files you touch.

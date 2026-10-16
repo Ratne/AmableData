@@ -1,5 +1,6 @@
 export type { Migration } from './migrations/types';
 export { latestSchemaVersion } from './migrations/types';
+export { nonAdditiveStatements, type AllowedNonAdditive, type NonAdditiveStatement } from './migrations/additive';
 export { installationMigrations } from './migrations/installation/index';
 export { tenantMigrations } from './migrations/tenant/index';
 

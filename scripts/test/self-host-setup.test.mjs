@@ -8,6 +8,7 @@ import {
   findD1Id,
   parseArgs,
   parseD1Id,
+  releaseVersion,
   renderTemplate,
   slugify,
   ulid,
@@ -34,6 +35,13 @@ describe('self-host setup script', () => {
     expect(() => parseArgs(['--app-origin', 'http://crm.example.com'])).toThrow(/https origin/);
     expect(() => parseArgs(['--owner-email', 'me@example.com'])).toThrow(/needs --app-origin/);
     expect(() => parseArgs(['--nope'])).toThrow(/unknown option/);
+  });
+
+  it('turns git describe output into APP_VERSION', () => {
+    expect(releaseVersion('2026.10.1\n')).toBe('2026.10.1');
+    expect(releaseVersion('2026.10.1-3-gabc1234')).toBe('2026.10.1-3-gabc1234');
+    expect(releaseVersion('backup-before-reset')).toBeNull();
+    expect(releaseVersion('')).toBeNull();
   });
 
   it('reads the D1 id from wrangler output', () => {

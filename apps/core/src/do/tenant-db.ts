@@ -19,6 +19,7 @@ import { ensureSearchIndex } from '../crm/search/index-store';
 import { seedCrm, type CrmSeedSummary } from '../crm/seed';
 import type { Env } from '../env';
 import { AlarmStepError, reportAlarmFailure, withAlarmReporting } from '../platform/telemetry';
+import { armPointInTime } from './point-in-time';
 
 /**
  * TenantDb — one SQLite-backed Durable Object per tenant (addressed by tenant id).
@@ -101,6 +102,15 @@ export class TenantDb extends DurableObject<Env> {
 
   backupDump(cursor: DumpCursor | null): DumpPage {
     return this.backup.dump(cursor);
+  }
+
+  /** Point-in-time recovery (apps/core/src/platform/restore.ts), signed control plane call only. */
+  pointInTimeArm(atMs: number): Promise<string> {
+    return armPointInTime(this.ctx.storage, atMs);
+  }
+
+  pointInTimeApply(): void {
+    this.ctx.abort('point-in-time restore');
   }
 
   backupWipe(): void {

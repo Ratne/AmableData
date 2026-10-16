@@ -79,6 +79,12 @@ after `git pull` to update), never overwrites existing secrets and supports `--d
 to print every command first. You can [review the script](scripts/self-host-setup.mjs)
 before you run it.
 
+To update, check out the new [release](https://github.com/Ratne/AmableData/releases) and
+rerun the script: `git fetch --tags && git checkout <tag> && pnpm install && pnpm self-host:setup --deploy`
+(same options). Once a day the app asks GitHub for the latest release and shows workspace
+owners a notice when a newer one exists; set the variable `UPDATE_CHECK=off` to disable it.
+Watch the repository for releases to get them by email.
+
 Or deploy the core worker in one click:
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Ratne/AmableData/tree/main/deploy/cloudflare)

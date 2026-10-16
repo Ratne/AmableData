@@ -10,6 +10,7 @@ import { HttpError, jsonError } from '../../middleware/errors';
 import { defer } from '../../middleware/request';
 import { appOrigin } from '../../middleware/security';
 import { parseJson } from '../../middleware/validate';
+import { updateNotice } from '../../platform/updates';
 import {
   describeChallenge,
   regenerateRecoveryCodes,
@@ -58,6 +59,13 @@ async function currentUser(c: Context<AppEnv>): Promise<UserRow> {
 }
 
 accountRoutes.get('/me', async (c) => c.json(await meBody(c, await currentUser(c))));
+
+// Only workspace owners administer a self-hosted installation, so only they see updates.
+accountRoutes.get('/me/update', async (c) => {
+  const memberships = await listMemberships(c.env.DB, getSessionAuth(c).user.id);
+  if (!memberships.some((m) => m.role === 'owner')) return c.json({ update: null });
+  return c.json({ update: await updateNotice(c.env) });
+});
 
 // --- preferences (language + theme) ------------------------------------------------------
 

@@ -74,8 +74,10 @@ export interface Env {
   CONTROL_PLANE_URL?: string;
   /** Raw Ed25519 public key (base64) of the control plane: signed calls + assisted-access tokens. */
   CONTROL_PLANE_PUBLIC_KEY?: string;
-  /** Release tag of the deployed code (set by the installer). */
+  /** Release tag of the deployed code (set by the installer and by `self-host:setup`). */
   APP_VERSION?: string;
+  /** `off` disables the daily "new version available" check (managed installations, opt-out). */
+  UPDATE_CHECK?: string;
   /** Error reporting sink: `local` (default: logs only), `control_plane` (needs LICENSE_KEY) or an https URL. */
   ERROR_REPORTING?: string;
   /** 0..1 sampling of repeated errors (default 1). */

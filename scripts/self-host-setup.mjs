@@ -223,6 +223,18 @@ function setSecrets(wrangler, config, names, shared) {
   }
 }
 
+/** `git describe` output → APP_VERSION (`2026.10.1`, or `2026.10.1-3-gabc1234` between releases). */
+export function releaseVersion(describe) {
+  const value = describe.trim();
+  return /^\d+\.\d+\.\d+(-\d+-g[0-9a-f]+)?$/.test(value) ? value : null;
+}
+
+/** Version of the checkout; null outside git or before the first release tag (no update check). */
+function checkoutVersion() {
+  const result = spawnSync('git', ['describe', '--tags', '--match', '[0-9]*.[0-9]*.[0-9]*'], { cwd: root, encoding: 'utf8' });
+  return result.status === 0 ? releaseVersion(result.stdout ?? '') : null;
+}
+
 function run(command, args, dryRun) {
   if (dryRun) {
     console.log(`[dry-run] ${command} ${args.join(' ')}`);
@@ -270,10 +282,13 @@ async function main() {
     return;
   }
   console.log('\n3/4 Build, deploy and secrets');
+  const version = checkoutVersion();
+  console.log(`  version: ${version ?? 'unknown (no release tag: the "new version available" notice stays off)'}`);
+  const versionVar = version === null ? [] : ['--var', `APP_VERSION:${version}`];
   run('pnpm', ['run', 'build:web'], options.dryRun);
-  wrangler(['deploy', '--config', EDGE_BOOTSTRAP_CONFIG]);
-  wrangler(['deploy', '--config', CORE_CONFIG]);
-  wrangler(['deploy', '--config', EDGE_CONFIG]);
+  wrangler(['deploy', '--config', EDGE_BOOTSTRAP_CONFIG, ...versionVar]);
+  wrangler(['deploy', '--config', CORE_CONFIG, ...versionVar]);
+  wrangler(['deploy', '--config', EDGE_CONFIG, ...versionVar]);
   const shared = {};
   setSecrets(wrangler, CORE_CONFIG, SECRETS.core, shared);
   setSecrets(wrangler, EDGE_CONFIG, SECRETS.edge, shared);

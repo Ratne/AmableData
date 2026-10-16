@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { EmailLiquidHelperProvider } from '../features/email/liquid/provider';
 import { GlobalSearch } from '../features/search/command-palette';
 import { SupportSessionBanner } from '../features/support/banner';
+import { UpdateBanner } from '../features/updates/banner';
 import { useWorkspaceProfile } from '../features/workspace/api';
 import { useI18n } from '../i18n';
 import { useMe } from '../lib/api';
@@ -97,6 +98,7 @@ function TenantLayout() {
         </>
       }
     >
+      <UpdateBanner />
       <SupportSessionBanner tenant={tenant} />
       <EmailLiquidHelperProvider>
         <Outlet />
