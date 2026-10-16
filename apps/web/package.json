@@ -1,0 +1,44 @@
+{
+  "name": "@amable/app-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p . && tsc -p test"
+  },
+  "dependencies": {
+    "@amable/api-types": "workspace:*",
+    "@amable/booking": "workspace:*",
+    "@amable/builder": "workspace:*",
+    "@amable/core": "workspace:*",
+    "@amable/editor": "workspace:*",
+    "@amable/email-render": "workspace:*",
+    "@amable/forms": "workspace:*",
+    "@amable/i18n": "workspace:*",
+    "@amable/ui": "workspace:*",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@tanstack/react-query": "^5.104.3",
+    "@tanstack/react-router": "^1.170.44",
+    "@xyflow/react": "^12.12.0",
+    "lucide-react": "^1.57.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^3.10.1",
+    "uqr": "^0.1.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^5.2.0",
+    "sass-embedded": "^1.105.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.7"
+  }
+}

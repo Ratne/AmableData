@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '@amable/ui/theme.css';
+
+/* Workspace packages are consumed as source; Tailwind must scan them for classes. */
+@source '../../../packages/ui/src';
+@source '../../../packages/editor/src';

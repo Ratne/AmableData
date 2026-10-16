@@ -1,0 +1,36 @@
+{
+  "name": "@amable/app-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "typecheck": "tsc -p . && tsc -p test"
+  },
+  "dependencies": {
+    "@amable/api-types": "workspace:*",
+    "@amable/app-edge": "workspace:*",
+    "@amable/auth": "workspace:*",
+    "@amable/booking": "workspace:*",
+    "@amable/builder": "workspace:*",
+    "@amable/core": "workspace:*",
+    "@amable/db": "workspace:*",
+    "@amable/email-render": "workspace:*",
+    "@amable/forms": "workspace:*",
+    "@amable/i18n": "workspace:*",
+    "@hono/zod-openapi": "^1.6.3",
+    "@phi-ag/argon2": "^0.6.1",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "ulid": "^3.0.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261015.1",
+    "@types/node": "^24.19.2",
+    "typescript": "~5.9.3",
+    "wrangler": "^4.151.0"
+  }
+}

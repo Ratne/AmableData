@@ -1,0 +1,25 @@
+{
+  "name": "@amable/email-render",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "@amable/auth": "workspace:*",
+    "@react-email/components": "^1.0.12",
+    "liquidjs": "^10.30.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

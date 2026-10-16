@@ -1,0 +1,35 @@
+// Self-hosted production config of the edge worker (tracking, hosted forms, booking
+// pages, landing SSR, email link redirects, unsubscribe pages).
+// Template rendered by `node scripts/self-host-setup.mjs` into apps/edge/wrangler.self-host.jsonc
+// (paths are relative to apps/edge). Placeholder: __CORE_ORIGIN__.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "amable-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+
+  "durable_objects": {
+    "bindings": [{ "name": "ANALYTICS", "class_name": "AnalyticsDO" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AnalyticsDO"] }],
+
+  "queues": {
+    "producers": [{ "binding": "ANALYTICS_QUEUE", "queue": "analytics" }],
+    "consumers": [{ "queue": "analytics", "max_batch_size": 100, "max_batch_timeout": 2 }],
+  },
+
+  "analytics_engine_datasets": [{ "binding": "AE", "dataset": "amable_analytics" }],
+
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "amable-files" }],
+
+  // The first deploy runs without this binding (amable-core does not exist yet) and
+  // reaches the core through CORE_ORIGIN; the setup script redeploys with it.
+  // @core-service
+  "services": [{ "binding": "CORE", "service": "amable-core" }],
+
+  // Custom domains / routes on your zone (e.g. t.example.com) are added by the
+  // in-app domain wizard (CLOUDFLARE_DNS_API_TOKEN) or manually in the dashboard.
+  // Secret (set by the setup script): EDGE_GATEWAY_SECRET.
+  "vars": { "ENVIRONMENT": "production", "CORE_ORIGIN": "__CORE_ORIGIN__" },
+}

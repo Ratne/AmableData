@@ -1,0 +1,32 @@
+{
+  "name": "amabledata",
+  "private": true,
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "pnpm --filter @amable/app-web run dev",
+    "dev:edge": "pnpm --filter @amable/app-edge run dev",
+    "seed": "node scripts/seed.mjs",
+    "seed:analytics": "node scripts/analytics-traffic.mjs",
+    "build": "pnpm run build:web && pnpm run build:workers",
+    "build:web": "pnpm --filter @amable/app-web run build",
+    "build:workers": "pnpm --filter @amable/app-core --filter @amable/app-edge run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "vitest run",
+    "check:names": "node scripts/check-forbidden-names.mjs",
+    "self-host:setup": "node scripts/self-host-setup.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.4"
+  }
+}

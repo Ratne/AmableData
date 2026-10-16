@@ -1,0 +1,80 @@
+// Self-hosted production config of the core worker.
+// Template rendered by `node scripts/self-host-setup.mjs` into apps/core/wrangler.self-host.jsonc
+// (paths are relative to apps/core). Placeholders: __D1_DATABASE_ID__, __APP_ORIGIN__, __EDGE_ORIGIN__.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "amable-core",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/*", "!/assets/*"],
+  },
+
+  "d1_databases": [
+    { "binding": "DB", "database_name": "amable-installation", "database_id": "__D1_DATABASE_ID__" },
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "TENANT_DB", "class_name": "TenantDb" },
+      { "name": "ENGINE", "class_name": "Engine" },
+      { "name": "MAIL_DB", "class_name": "MailDb" },
+      { "name": "EDIT_SESSION", "class_name": "EditSession" },
+      { "name": "BOOKING_CALENDAR", "class_name": "BookingCalendar" },
+      { "name": "ANALYTICS", "class_name": "AnalyticsDO", "script_name": "amable-edge" },
+    ],
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TenantDb", "Engine"] },
+    { "tag": "v2", "new_sqlite_classes": ["MailDb"] },
+    { "tag": "v3", "new_sqlite_classes": ["EditSession", "BookingCalendar"] },
+  ],
+
+  "queues": {
+    "producers": [
+      { "binding": "EMAIL_SEND", "queue": "email-send" },
+      { "binding": "EVENTS_ROLLUP", "queue": "events-rollup" },
+      { "binding": "WEBHOOKS_OUT", "queue": "webhooks-out" },
+      { "binding": "FORM_SUBMISSIONS", "queue": "form-submissions" },
+    ],
+    "consumers": [
+      { "queue": "email-send", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 100 },
+      { "queue": "events-rollup", "max_batch_size": 10, "max_batch_timeout": 5 },
+      { "queue": "webhooks-out", "max_batch_size": 10, "max_batch_timeout": 5 },
+      { "queue": "form-submissions", "max_batch_size": 10, "max_batch_timeout": 2, "max_retries": 10 },
+    ],
+  },
+
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "amable-files" }],
+
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  "ratelimits": [
+    { "name": "RL_AUTH", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+    { "name": "RL_API", "namespace_id": "1002", "simple": { "limit": 600, "period": 60 } },
+  ],
+
+  // System email through your own Cloudflare Email Sending (onboard the domain first:
+  // `wrangler email sending enable example.com`), then uncomment and set SYSTEM_EMAIL_FROM.
+  // "send_email": [{ "name": "SYSTEM_EMAIL" }],
+
+  // Secrets (set by the setup script, never here): PASSWORD_PEPPER, AUTH_ENCRYPTION_KEY,
+  // EMAIL_TOKEN_SECRET, EDGE_GATEWAY_SECRET. Optional: POSTSHIBA_API_KEY,
+  // POSTSHIBA_WEBHOOK_SECRET, TURNSTILE_SECRET_KEY, CLOUDFLARE_DNS_API_TOKEN,
+  // GOOGLE_OAUTH_CLIENT_SECRET, LICENSE_KEY (only to link a platform account).
+  "vars": {
+    "ENVIRONMENT": "production",
+    "APP_ORIGIN": "__APP_ORIGIN__",
+    "EDGE_ORIGIN": "__EDGE_ORIGIN__",
+    "ERROR_REPORTING": "local",
+    // "SYSTEM_EMAIL_FROM": "no-reply@example.com",
+    // "TURNSTILE_SITE_KEY": "",
+    // "GOOGLE_OAUTH_CLIENT_ID": "",
+    // "ADDRESS_LOOKUP_URL": "off", // or your own Photon, e.g. https://photon.example.com/api
+  },
+}

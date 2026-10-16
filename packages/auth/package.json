@@ -1,0 +1,23 @@
+{
+  "name": "@amable/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./security": "./src/security/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p . && tsc -p test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "@phi-ag/argon2": "^0.6.1",
+    "htmlparser2": "^12.0.0",
+    "liquidjs": "^10.30.0"
+  }
+}

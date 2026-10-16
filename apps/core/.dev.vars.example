@@ -1,0 +1,16 @@
+# Copy to .dev.vars (gitignored). Placeholders only — never commit real secrets.
+ENVIRONMENT=dev
+POSTSHIBA_BASE_URL=https://postshiba.example/api/v1
+POSTSHIBA_API_KEY=ps_test_placeholder
+LICENSE_KEY=license_key_placeholder
+# Access & security — placeholders. Generate real values for every installation:
+#   PASSWORD_PEPPER:      openssl rand -base64 32
+#   AUTH_ENCRYPTION_KEY:  openssl rand -base64 32   (must decode to exactly 32 bytes)
+# Without them, ENVIRONMENT=dev falls back to public dev values; production refuses to start auth.
+PASSWORD_PEPPER=dev_pepper_placeholder_change_me
+AUTH_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+# Turnstile: leave empty locally (verification disabled). Test keys exist in the Turnstile docs.
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+# Online breached-password range check (off by default in dev).
+HIBP_ENABLED=false

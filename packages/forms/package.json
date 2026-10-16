@@ -1,0 +1,24 @@
+{
+  "name": "@amable/forms",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bundle": "./generated/bundle.ts"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p . && tsc -p test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "preact": "^10.27.2",
+    "zod": "^4.6.7"
+  }
+}

@@ -1,0 +1,434 @@
+/* Layout of the configurable editor and the views of the email/Liquid blocks. Colors follow the app tokens when present. */
+
+.amable-editor {
+  --amable-editor-border: var(--border, #e7e7e7);
+  --amable-editor-muted: var(--muted, #efefef);
+  --amable-editor-muted-foreground: var(--muted-foreground, #5c5c5c);
+  --amable-editor-accent: var(--primary, #2563eb);
+  --amable-editor-bg: var(--background, #ffffff);
+  --tt-toolbar-height: 44px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--amable-editor-border);
+  border-radius: 10px;
+  background: var(--amable-editor-bg);
+  min-height: 12rem;
+}
+
+.amable-editor .amable-editor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  border-bottom: 1px solid var(--amable-editor-border);
+  border-radius: 10px 10px 0 0;
+}
+
+.amable-editor-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.amable-editor-body .tiptap.ProseMirror.amable-editor-content {
+  flex: 1;
+  padding: 1.25rem 1.5rem 2rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.amable-editor[data-mode='email'] .tiptap.ProseMirror.amable-editor-content {
+  max-width: 648px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.amable-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--amable-editor-muted-foreground);
+}
+
+.amable-toolbar-input {
+  height: 2rem;
+  min-width: 14rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--amable-editor-border);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.8125rem;
+  color: inherit;
+}
+
+/* Email blocks */
+
+.amable-email-block {
+  position: relative;
+  margin: 0.75rem 0;
+  border-radius: 8px;
+  outline: 1px dashed transparent;
+}
+
+.amable-email-block[data-selected='true'] {
+  outline-color: var(--amable-editor-accent);
+}
+
+.amable-email-button-row {
+  padding: 0.5rem 0;
+}
+
+.amable-email-button {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.amable-email-spacer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--amable-editor-border);
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  color: var(--amable-editor-muted-foreground);
+  overflow: hidden;
+}
+
+.amable-email-columns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+
+.amable-email-column {
+  min-width: 0;
+  padding: 0.5rem;
+  border: 1px dashed var(--amable-editor-border);
+  border-radius: 6px;
+}
+
+.amable-email-frame {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem 0.75rem;
+  border: 1px dashed var(--amable-editor-border);
+  border-radius: 8px;
+}
+
+.amable-email-frame-label,
+.amable-liquid-branch-label {
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--amable-editor-muted-foreground);
+  user-select: none;
+}
+
+.amable-email-frame[data-type='emailFooter'] {
+  font-size: 0.8125rem;
+  color: var(--amable-editor-muted-foreground);
+}
+
+.amable-email-unsubscribe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  user-select: none;
+}
+
+.amable-email-unsubscribe input {
+  align-self: center;
+  border: none;
+  background: transparent;
+  text-align: center;
+  text-decoration: underline;
+  color: inherit;
+  font: inherit;
+}
+
+.amable-email-unsubscribe small {
+  text-align: center;
+  font-size: 0.6875rem;
+}
+
+.amable-email-preheader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 8px;
+  background: var(--amable-editor-muted);
+  font-size: 0.75rem;
+  color: var(--amable-editor-muted-foreground);
+}
+
+.amable-email-preheader input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.amable-block-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--amable-editor-border);
+  border-radius: 8px;
+  background: var(--amable-editor-bg);
+  box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.16);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.amable-block-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.amable-block-panel input:not([type='color']):not([type='range']),
+.amable-block-panel select,
+.amable-liquid-condition-bar input,
+.amable-liquid-condition-bar select {
+  height: 1.875rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--amable-editor-border);
+  border-radius: 6px;
+  background: var(--amable-editor-bg);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+/* Liquid */
+
+.amable-liquid-chip-wrapper {
+  position: relative;
+}
+
+.amable-liquid-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.375rem;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--amable-editor-accent) 14%, transparent);
+  color: var(--amable-editor-accent);
+  font-size: 0.875em;
+  font-weight: 500;
+  line-height: 1.6;
+  cursor: pointer;
+  border: none;
+}
+
+.amable-liquid-chip[data-selected='true'] {
+  outline: 2px solid var(--amable-editor-accent);
+}
+
+.amable-liquid-chip-fallback {
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+.amable-liquid-chip-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  flex-direction: column;
+  min-width: 16rem;
+}
+
+.amable-liquid-chip-panel code,
+.amable-liquid-condition-source,
+.amable-liquid-condition-end code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem;
+  color: var(--amable-editor-muted-foreground);
+}
+
+.amable-liquid-condition {
+  margin: 0.75rem 0;
+  border: 1px solid color-mix(in oklab, var(--amable-editor-accent) 35%, transparent);
+  border-left-width: 3px;
+  border-radius: 8px;
+}
+
+.amable-liquid-condition-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--amable-editor-border);
+  font-size: 0.8125rem;
+  user-select: none;
+}
+
+.amable-liquid-condition-source {
+  margin-left: auto;
+}
+
+.amable-liquid-condition-source[data-invalid='true'] {
+  color: var(--destructive, #dc2626);
+}
+
+.amable-liquid-condition-content {
+  padding: 0.25rem 0.75rem;
+}
+
+.amable-liquid-branch[data-branch='else'] {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--amable-editor-border);
+}
+
+.amable-liquid-condition-end {
+  padding: 0 0.75rem 0.375rem;
+  user-select: none;
+}
+
+.amable-link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--amable-editor-accent);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.amable-liquid-raw {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--amable-editor-border);
+  border-radius: 8px;
+  background: var(--amable-editor-muted);
+}
+
+.amable-liquid-raw[data-selected='true'] {
+  outline: 2px solid var(--amable-editor-accent);
+}
+
+.amable-liquid-raw-label {
+  margin-bottom: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--amable-editor-muted-foreground);
+}
+
+.amable-liquid-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.amable-liquid-raw textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--amable-editor-border);
+  border-radius: 6px;
+  background: var(--amable-editor-bg);
+  color: inherit;
+  font-size: 0.8125rem;
+  resize: vertical;
+}
+
+.amable-field-picker {
+  display: flex;
+  flex-direction: column;
+  max-height: 18rem;
+  min-width: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--border, #e7e7e7);
+  border-radius: 10px;
+  background: var(--popover, #ffffff);
+  color: var(--popover-foreground, #161616);
+  box-shadow: 0 12px 32px -6px rgb(0 0 0 / 0.2);
+  font-size: 0.8125rem;
+}
+
+.amable-field-picker-empty {
+  padding: 0.5rem 0.75rem;
+  color: var(--muted-foreground, #5c5c5c);
+}
+
+.amable-field-picker-group {
+  padding: 0.5rem 0.5rem 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground, #5c5c5c);
+}
+
+.amable-field-picker-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.375rem 0.5rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.amable-field-picker-item[data-active='true'] {
+  background: var(--accent, #f3f3f3);
+}
+
+.amable-field-picker-item code {
+  font-size: 0.6875rem;
+  color: var(--muted-foreground, #5c5c5c);
+}
+
+/* Preview */
+
+.amable-email-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.amable-email-preview-subject {
+  font-weight: 600;
+}
+
+.amable-email-preview-frame {
+  width: 100%;
+  min-height: 36rem;
+  flex: 1;
+  border: 1px solid var(--border, #e7e7e7);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.amable-email-preview-text {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--border, #e7e7e7);
+  border-radius: 10px;
+  white-space: pre-wrap;
+  font-size: 0.8125rem;
+}
+
+.amable-email-preview-error {
+  color: var(--destructive, #dc2626);
+  font-size: 0.8125rem;
+}

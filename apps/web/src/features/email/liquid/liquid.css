@@ -1,0 +1,125 @@
+.liquid-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+  margin: 0;
+}
+.liquid-code [data-token='output'] {
+  color: #2563eb;
+}
+.liquid-code [data-token='tag'] {
+  color: #9333ea;
+}
+.liquid-code [data-token='string'] {
+  color: #16a34a;
+}
+.liquid-code [data-token='filter'] {
+  color: #d97706;
+}
+.liquid-code [data-token='keyword'] {
+  font-weight: 600;
+}
+.dark .liquid-code [data-token='output'] {
+  color: #60a5fa;
+}
+.dark .liquid-code [data-token='tag'] {
+  color: #c084fc;
+}
+.dark .liquid-code [data-token='string'] {
+  color: #4ade80;
+}
+.dark .liquid-code [data-token='filter'] {
+  color: #fbbf24;
+}
+
+.liquid-editor {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--obsidian-dashboard-shell-border, var(--border));
+  border-radius: 0.5rem;
+  background: var(--obsidian-dashboard-shell-control, transparent);
+}
+.liquid-editor:focus-within {
+  outline: 2px solid var(--obsidian-dashboard-shell-ring, #3b82f6);
+  outline-offset: -1px;
+}
+.liquid-editor-gutter {
+  flex: none;
+  overflow: hidden;
+  padding: 0.5rem 0;
+  min-width: 2.5rem;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  line-height: 1.5rem;
+  color: var(--obsidian-dashboard-shell-text-subtle, #888);
+  border-right: 1px solid var(--obsidian-dashboard-shell-border, var(--border));
+  user-select: none;
+}
+.liquid-editor-gutter > div {
+  padding: 0 0.5rem;
+}
+.liquid-editor-gutter > div[data-error] {
+  color: #fff;
+  background: var(--obsidian-dashboard-shell-danger, #dc2626);
+}
+.liquid-editor-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.liquid-editor-overlay,
+.liquid-editor-input {
+  position: absolute;
+  inset: 0;
+  padding: 0.5rem 0.75rem;
+  white-space: pre;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+  tab-size: 2;
+}
+.liquid-editor-overlay {
+  pointer-events: none;
+  color: var(--obsidian-dashboard-shell-foreground, inherit);
+  scrollbar-width: none;
+}
+.liquid-editor-input {
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--obsidian-dashboard-shell-foreground, currentColor);
+}
+.liquid-editor-input::placeholder {
+  color: var(--obsidian-dashboard-shell-text-subtle, #888);
+}
+.liquid-editor-input::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: transparent;
+}
+
+.liquid-guide h3 {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-top: 1.25rem;
+}
+.liquid-guide p,
+.liquid-guide li {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.liquid-guide code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8em;
+  padding: 0.05rem 0.25rem;
+  border-radius: 0.25rem;
+  background: var(--obsidian-dashboard-shell-muted, var(--muted));
+}
+.liquid-guide mark {
+  background: rgba(250, 204, 21, 0.45);
+  color: inherit;
+  border-radius: 2px;
+}

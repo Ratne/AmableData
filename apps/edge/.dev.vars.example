@@ -1,0 +1,2 @@
+# Copy to .dev.vars (gitignored). Placeholders only — never commit real secrets.
+ENVIRONMENT=dev

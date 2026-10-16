@@ -1,0 +1,90 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "amable-core",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+
+  // SPA assets built by apps/web (`pnpm build:web`). API routes always hit the worker.
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // The worker serves documents too (CSP nonce + preferences injected before first
+    // paint); hashed static files under /assets/* bypass it.
+    "run_worker_first": ["/*", "!/assets/*"],
+  },
+
+  // Installation database. The id is a placeholder: local dev never talks to the
+  // Cloudflare API, and the installer (control-plane phase) provisions the real
+  // database on the customer account and rewrites this value.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "amable-installation",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+    },
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "TENANT_DB", "class_name": "TenantDb" },
+      { "name": "ENGINE", "class_name": "Engine" },
+      { "name": "MAIL_DB", "class_name": "MailDb" },
+      // Landing page editing locks (one per page) and booking calendars (one per calendar).
+      { "name": "EDIT_SESSION", "class_name": "EditSession" },
+      { "name": "BOOKING_CALENDAR", "class_name": "BookingCalendar" },
+      // Web analytics DOs live in the edge worker (deploy amable-edge first).
+      { "name": "ANALYTICS", "class_name": "AnalyticsDO", "script_name": "amable-edge" },
+    ],
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TenantDb", "Engine"] },
+    { "tag": "v2", "new_sqlite_classes": ["MailDb"] },
+    { "tag": "v3", "new_sqlite_classes": ["EditSession", "BookingCalendar"] },
+  ],
+
+  "queues": {
+    "producers": [
+      { "binding": "EMAIL_SEND", "queue": "email-send" },
+      { "binding": "EVENTS_ROLLUP", "queue": "events-rollup" },
+      { "binding": "WEBHOOKS_OUT", "queue": "webhooks-out" },
+      // Encrypted form submissions → CRM contact, form.submitted, external connections.
+      { "binding": "FORM_SUBMISSIONS", "queue": "form-submissions" },
+    ],
+    "consumers": [
+      // Deferrals (warm-up cap, rate limit, paused broadcast) are retries too: the
+      // pipeline counts real provider attempts itself (max 5), hence the high limit.
+      { "queue": "email-send", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 100 },
+      { "queue": "events-rollup", "max_batch_size": 10, "max_batch_timeout": 5 },
+      { "queue": "webhooks-out", "max_batch_size": 10, "max_batch_timeout": 5 },
+      { "queue": "form-submissions", "max_batch_size": 10, "max_batch_timeout": 2, "max_retries": 10 },
+    ],
+  },
+
+  // File/image/backup storage stub. Local dev simulates R2; the installer creates
+  // the real bucket.
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "amable-files" }],
+
+  // Platform link cron: heartbeat, usage blocks, error outbox, assisted-access expiry
+  // (no-ops without LICENSE_KEY). Test locally with: wrangler dev --test-scheduled
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  // Workers Rate Limiting (coarse per-IP limits for auth endpoints and API keys).
+  // Exact per-account limits use D1 counters, which are also the fallback.
+  "ratelimits": [
+    { "name": "RL_AUTH", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+    { "name": "RL_API", "namespace_id": "1002", "simple": { "limit": 600, "period": 60 } },
+  ],
+
+  // Local default. The installer / fleet manager sets ENVIRONMENT=production on
+  // deploy, which removes every /api/dev/* route.
+  // EDGE_ORIGIN: public origin of the edge worker, used in tracking snippets.
+  // EMAIL_ALLOW_UNVERIFIED_DOMAIN: local sends without a verified domain (ignored outside dev).
+  "vars": {
+    "ENVIRONMENT": "dev",
+    "EDGE_ORIGIN": "http://localhost:8788",
+    "EMAIL_ALLOW_UNVERIFIED_DOMAIN": "true",
+  },
+
+  "dev": { "port": 8787 },
+}

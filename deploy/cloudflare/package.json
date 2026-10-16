@@ -1,0 +1,10 @@
+{
+  "name": "amable-deploy-cloudflare",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Deploy to Cloudflare button: builds the monorepo and deploys the core worker with ./wrangler.jsonc",
+  "scripts": {
+    "build": "cd ../.. && pnpm install --frozen-lockfile && pnpm run build:web",
+    "deploy": "cd ../.. && pnpm --filter @amable/app-core exec wrangler deploy --config ../../deploy/cloudflare/wrangler.jsonc"
+  }
+}

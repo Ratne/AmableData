@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "amable-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+
+  // This worker runs on routes of the customer's own zone (e.g. t.customer.example):
+  // tracking ingest, hosted forms, email link redirects, unsubscribe pages, landing SSR.
+  // Routes are attached by the installer (control-plane phase); local dev needs none.
+
+  // Web analytics: one AnalyticsDO per site (+ a site index per tenant). The core
+  // worker binds to this class through `script_name: "amable-edge"`.
+  "durable_objects": {
+    "bindings": [{ "name": "ANALYTICS", "class_name": "AnalyticsDO" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AnalyticsDO"] }],
+
+  // Enriched events are batched into the AnalyticsDO by this same worker.
+  "queues": {
+    "producers": [{ "binding": "ANALYTICS_QUEUE", "queue": "analytics" }],
+    "consumers": [{ "queue": "analytics", "max_batch_size": 100, "max_batch_timeout": 2 }],
+  },
+
+  // Realtime / high-volume counters (optional: without the binding, counts stay in memory).
+  "analytics_engine_datasets": [{ "binding": "AE", "dataset": "amable_analytics" }],
+
+  // Raw analytics archive (prefix analytics-archive/) — same bucket as the core worker.
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "amable-files" }],
+
+  // Tenant data (forms, bookings, published pages, media) comes from the core worker
+  // through signed calls on its default fetch (/_edge/*).
+  "services": [{ "binding": "CORE", "service": "amable-core" }],
+
+  // Local default. Production deployments never set ENVIRONMENT=dev.
+  // CORE_ORIGIN: the core worker, which verifies email click/open/unsubscribe tokens.
+  "vars": { "ENVIRONMENT": "dev", "CORE_ORIGIN": "http://localhost:8787" },
+
+  // Different port than apps/core (8787) so both run side by side locally.
+  "dev": { "port": 8788 },
+}

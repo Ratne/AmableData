@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`builder render > renders the public page with native embeds, meta and tracker 1`] = `
+"<body>
+<section class="b-el b-root b-widget-container b-container b-container--boxed"><div class="b-el b-h1 b-widget-heading"><h1 class="b-heading">Hello <strong>world</strong>&lt;script&gt;bad()&lt;/script&gt;</h1></div><div class="b-el b-btn b-widget-button"><a class="b-btn b-btn--md" ><span class="b-btn__label">Go</span></a></div><div class="b-el b-img b-widget-image"><figure class="b-image"><img src="/m/acme/01HX.png" alt="Pic" loading="lazy"/></figure></div><div class="b-el b-f b-widget-form"><div data-amable-form="01FORM" data-amable-tenant="acme" data-amable-page="01PAGE"></div></div><div class="b-el b-f2 b-widget-form"><div data-amable-form="01FORM2" data-amable-tenant="acme" data-amable-page="01PAGE"></div></div><div class="b-el b-b b-widget-booking"><div data-amable-booking="intro-call" data-amable-tenant="acme" data-amable-page="01PAGE"></div></div></section>
+"
+`;

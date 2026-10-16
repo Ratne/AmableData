@@ -1,0 +1,23 @@
+{
+  "name": "@amable/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema/installation": "./src/schema/installation.ts",
+    "./schema/tenant": "./src/schema/tenant.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p . && tsc -p test"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261015.1",
+    "@types/node": "^24.19.2",
+    "typescript": "~5.9.3"
+  }
+}

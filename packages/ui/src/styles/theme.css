@@ -1,0 +1,150 @@
+/*
+ * amable theme tokens.
+ *
+ * The shadcn-style variables used by the components in `components/ui` are
+ * mapped onto the ObsidianUI palette (the same values as the Dashboard Shell),
+ * so blocks and generic components look like one library. `--brand` is the
+ * white-label hook: `useTenantBranding` overrides it per tenant at runtime.
+ *
+ * Import after `@import "tailwindcss";` in the app stylesheet.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --brand: #2563eb;
+  --brand-hover: color-mix(in oklab, var(--brand) 88%, white);
+  --brand-foreground: #f9fbff;
+
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --foreground: #161616;
+  --card: #ffffff;
+  --card-foreground: #161616;
+  --popover: #ffffff;
+  --popover-foreground: #161616;
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --secondary: #efefef;
+  --secondary-foreground: #161616;
+  --muted: #efefef;
+  --muted-foreground: #5c5c5c;
+  --accent: #f3f3f3;
+  --accent-foreground: #161616;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --border: #e7e7e7;
+  --input: #d6d6d6;
+  --ring: #8b8b8b;
+  --chart-1: var(--brand);
+  --chart-2: #16a34a;
+  --chart-3: #d97706;
+  --chart-4: #9333ea;
+  --chart-5: #e5484d;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #161616;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
+  --sidebar-accent: #efefef;
+  --sidebar-accent-foreground: #161616;
+  --sidebar-border: #e7e7e7;
+  --sidebar-ring: #8b8b8b;
+  --shadow-color: rgb(0 0 0 / 0.08);
+  color-scheme: light;
+}
+
+.dark {
+  --background: #161616;
+  --foreground: #f9fbff;
+  --card: #1e1e1e;
+  --card-foreground: #f9fbff;
+  --popover: #1e1e1e;
+  --popover-foreground: #f9fbff;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f9fbff;
+  --muted: #2a2a2a;
+  --muted-foreground: #9a9a9a;
+  --accent: #262626;
+  --accent-foreground: #f9fbff;
+  --destructive: #e5484d;
+  --success: #22c55e;
+  --warning: #fbbf24;
+  --border: #232323;
+  --input: #393939;
+  --ring: #676767;
+  --sidebar: #161616;
+  --sidebar-foreground: #f9fbff;
+  --sidebar-accent: #2a2a2a;
+  --sidebar-accent-foreground: #f9fbff;
+  --sidebar-border: #232323;
+  --sidebar-ring: #676767;
+  --shadow-color: rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+
+/* The Dashboard Shell reads its own palette; its accent follows the tenant brand. */
+.obsidian-dashboard-shell,
+.obsidian-dashboard-shell-layer {
+  --obsidian-dashboard-shell-accent: var(--brand);
+  --obsidian-dashboard-shell-accent-hover: var(--brand-hover);
+  --obsidian-dashboard-shell-accent-foreground: var(--brand-foreground);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

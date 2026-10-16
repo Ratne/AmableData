@@ -1,0 +1,9 @@
+# Secrets asked by the "Deploy to Cloudflare" button. Generate each with:
+#   openssl rand -base64 32
+# PASSWORD_PEPPER and AUTH_ENCRYPTION_KEY must never change once users exist.
+PASSWORD_PEPPER=
+AUTH_ENCRYPTION_KEY=
+EMAIL_TOKEN_SECRET=
+EDGE_GATEWAY_SECRET=
+# Public origin of the app, e.g. https://amable-core.<your-subdomain>.workers.dev
+APP_ORIGIN=

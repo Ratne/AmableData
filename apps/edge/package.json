@@ -1,0 +1,33 @@
+{
+  "name": "@amable/app-edge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./analytics": "./src/analytics/rpc.ts"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @amable/tracker build && wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "typecheck": "tsc -p . && tsc -p test"
+  },
+  "dependencies": {
+    "@amable/api-types": "workspace:*",
+    "@amable/auth": "workspace:*",
+    "@amable/booking": "workspace:*",
+    "@amable/builder": "workspace:*",
+    "@amable/db": "workspace:*",
+    "@amable/forms": "workspace:*",
+    "@amable/tracker": "workspace:*",
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261015.1",
+    "@types/node": "^24.19.2",
+    "typescript": "~5.9.3",
+    "wrangler": "^4.151.0"
+  }
+}
