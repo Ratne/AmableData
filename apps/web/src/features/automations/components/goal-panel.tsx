@@ -8,6 +8,7 @@ import { useCustomFields, usePipelines } from '../../crm/api/hooks';
 import { ChoiceSelect, MultiChoice, TagMultiSelect } from '../../crm/components/inputs';
 import { clean } from '../lib/clean';
 import { defaultTrigger, GOAL_TYPES } from '../lib/defaults';
+import { AppEventTriggerForm } from './app-forms';
 import type { CanvasIssue } from '../lib/issues';
 import { ApiTriggerSnippet } from './api-snippet';
 import {
@@ -412,6 +413,8 @@ function TriggerFields({
           </Field>
         </div>
       );
+    case 'app_event':
+      return <AppEventTriggerForm trigger={trigger} onChange={onChange} disabled={disabled} />;
   }
 }
 

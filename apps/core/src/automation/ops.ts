@@ -15,6 +15,7 @@ import type { SqlDb } from '../crm/db/sql';
 import { CrmError } from '../crm/errors';
 import type { CrmResult } from '../crm/ops';
 import type { AutomationEngine, EngineActor } from './engine';
+import type { AppActionCatalog } from './validate';
 
 type Id = { id: string };
 
@@ -40,9 +41,10 @@ export const automationOps = {
     _a: EngineActor,
     input: { id: string; data: SaveDraftInput },
   ) => e.saveDraft(input),
-  'automations.validate': (e: AutomationEngine, _a: EngineActor, input: Id) =>
+  'automations.validate': (e: AutomationEngine, _a: EngineActor, input: Id & { apps?: AppActionCatalog }) =>
     e.validateDraft(input),
-  'automations.publish': (e: AutomationEngine, a: EngineActor, input: Id) => e.publish(a, input),
+  'automations.publish': (e: AutomationEngine, a: EngineActor, input: Id & { apps?: AppActionCatalog }) =>
+    e.publish(a, input),
   'automations.unpublish': (e: AutomationEngine, _a: EngineActor, input: Id) => e.unpublish(input),
   'automations.versions': (e: AutomationEngine, _a: EngineActor, input: Id) =>
     e.listVersions(input),

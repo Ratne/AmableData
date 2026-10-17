@@ -49,6 +49,10 @@ export const PERMISSIONS = [
   /** Cancel / reschedule bookings made by contacts. */
   'booking:manage_bookings',
   'emails:send_single',
+  /** Shared inbox: read conversations and messages of every channel. */
+  'conversations:read',
+  /** Reply, assign and close conversations. */
+  'conversations:write',
   /** Add / remove addresses on the tenant suppression list. */
   'suppressions:write',
   // E-commerce
@@ -76,6 +80,10 @@ export const PERMISSIONS = [
   'api_keys:manage',
   'webhooks:manage',
   'integrations:manage',
+  /** Install marketplace apps (consent to their scopes). */
+  'apps:install',
+  /** Settings, scope re-approval, health and uninstall of installed apps. */
+  'apps:manage',
   'audit:read',
   'data:bulk_delete',
   'data:export_full',
@@ -105,6 +113,7 @@ const READ_ALL: readonly Permission[] = [
   'forms:submissions_read',
   'pages:read',
   'booking:read',
+  'conversations:read',
   'orders:read',
   'products:read',
   'subscriptions:read',
@@ -163,6 +172,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'booking:write',
     'booking:manage_bookings',
     'emails:send_single',
+    'conversations:read',
+    'conversations:write',
     'suppressions:write',
     'analytics:read',
     'analytics:configure',
@@ -194,6 +205,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'products:read',
     'subscriptions:read',
     'emails:send_single',
+    'conversations:read',
+    'conversations:write',
     'broadcasts:read',
     'automations:read',
     'automations:trigger',

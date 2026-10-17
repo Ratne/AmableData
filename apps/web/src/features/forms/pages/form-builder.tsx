@@ -16,6 +16,7 @@ import { Choice, ErrorNotice, FormField as Field, PageState, SectionCard } from 
 import { FieldList, FieldProperties } from '../components/field-editor';
 import { useFormChrome } from '../components/form-chrome';
 import { FormPreview, previewConfig } from '../components/preview';
+import { useInstalledExtensions } from '../../apps/api';
 import { TagPicker } from '../../crm/components/tag-picker';
 
 type BuilderTab = 'fields' | 'crm' | 'settings' | 'style' | 'embed';
@@ -82,6 +83,9 @@ function Builder({ form }: { form: TypedForm }) {
   const style = definition.style;
   const setStyle = (patch: Partial<FormDefinition['style']>) => edit({ ...definition, style: { ...style, ...patch } });
   const crm = definition.crm;
+  const validators = (useInstalledExtensions().data?.data ?? [])
+    .filter((app) => app.status === 'active' && app.extensions.contact_validate !== undefined)
+    .map((app) => app.name);
   const setCrm = (patch: Partial<FormDefinition['crm']>) => edit({ ...definition, crm: { ...crm, ...patch } });
 
   const validation = useMemo(() => formDefinitionSchema.safeParse(definition), [definition]);
@@ -195,6 +199,22 @@ function Builder({ form }: { form: TypedForm }) {
                         />
                       )}
                     </Field>
+                    {validators.length > 0 ? (
+                      <Field
+                        label={t('forms.crm.appValidation')}
+                        hint={t(`forms.crm.appValidation.${crm.app_validation}.hint`, { apps: validators.join(', ') })}
+                      >
+                        {(id) => (
+                          <Choice
+                            id={id}
+                            value={crm.app_validation}
+                            options={(['advisory', 'blocking'] as const).map((value) => ({ value, label: t(`forms.crm.appValidation.${value}`) }))}
+                            disabled={!writable}
+                            onChange={(value) => setCrm({ app_validation: value === 'blocking' ? 'blocking' : 'advisory' })}
+                          />
+                        )}
+                      </Field>
+                    ) : null}
                     <Field label={t('forms.crm.leadSource')}>
                       {(id) => (
                         <Choice

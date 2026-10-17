@@ -24,6 +24,7 @@ import {
   submissionParamSchema,
   updateConnectionSchema,
   updateFormSchema,
+  type AppConnectorConfig,
   type ConnectorType,
   type ContactSubmission,
   type ContactSubmissionDetail,
@@ -40,7 +41,9 @@ import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
 import { maskValue } from '../crm/custom-fields/validate';
 import { CrmError, invalidMany } from '../crm/errors';
 import { toIso } from '../crm/util';
+import type { Env } from '../env';
 import { audit, getAuth, getTenant, type AppEnv } from '../middleware';
+import { appConnectorCatalog, appConnectorIssues } from './connectors/app';
 import { connectorCatalog, connectorOf } from './connectors/registry';
 import { decryptSubmission, encryptSecret, secretHint } from './crypto';
 import { processSubmission, testConnection } from './process';
@@ -229,12 +232,16 @@ async function serializeContactSubmissionDetail(
   };
 }
 
-function configIssues(type: ConnectorType, raw: unknown): Record<string, unknown> {
+async function configIssues(env: Env, tenantId: string, type: ConnectorType, raw: unknown): Promise<Record<string, unknown>> {
   const connector = connectorOf(type);
   if (connector === null) throw new CrmError('bad_request', `unknown connector ${type}`);
   const parsed = connector.parseConfig(raw);
   if (!parsed.success) {
     throw invalidMany(parsed.issues.map((i) => ({ path: `config.${i.path}`, message: i.message })));
+  }
+  if (type === 'app') {
+    const issues = await appConnectorIssues(env, tenantId, parsed.data as AppConnectorConfig);
+    if (issues.length > 0) throw invalidMany(issues);
   }
   return parsed.data as Record<string, unknown>;
 }
@@ -250,7 +257,16 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
       summary: 'Connector types a form connection can use on this installation',
       responses: { 200: json(z.object({ data: z.array(connectorInfoSchema) }), 'Connector catalog') },
     }),
-    async (c) => c.json({ data: connectorCatalog(await formsRuntime(c.env)) }, 200),
+    async (c) =>
+      c.json(
+        {
+          data: [
+            ...connectorCatalog(await formsRuntime(c.env)),
+            ...(await appConnectorCatalog(c.env, getTenant(c).tenant.id)),
+          ],
+        },
+        200,
+      ),
   );
 
   // -------------------------------------------------------------- forms
@@ -531,7 +547,7 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
         type: body.type,
         name: body.name,
         enabled: body.enabled ?? true,
-        config: configIssues(body.type, body.config),
+        config: await configIssues(c.env, tenantId, body.type, body.config),
         secretCiphertext: secret === null ? null : await encryptSecret(box, tenantId, id, secret),
         secretHint: secret === null ? null : secretHint(secret),
       });
@@ -568,7 +584,7 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
         id: connectionId,
         ...(body.name === undefined ? {} : { name: body.name }),
         ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
-        ...(body.config === undefined ? {} : { config: configIssues(current.type, body.config) }),
+        ...(body.config === undefined ? {} : { config: await configIssues(c.env, tenantId, current.type, body.config) }),
         ...(body.secret === undefined
           ? {}
           : {

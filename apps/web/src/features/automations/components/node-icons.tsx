@@ -1,6 +1,7 @@
 import type { GoalTriggerType, StepType } from '@amable/api-types';
 import {
   BadgeCheck,
+  Blocks,
   CalendarCheck,
   CalendarClock,
   CalendarPlus,
@@ -48,6 +49,7 @@ const GOAL_ICONS: Record<GoalTriggerType, LucideIcon> = {
   appointment_booked: CalendarCheck,
   opportunity_stage_changed: KanbanSquare,
   date_anniversary: CalendarClock,
+  app_event: Blocks,
 };
 
 const STEP_ICONS: Record<StepType, LucideIcon> = {
@@ -67,6 +69,7 @@ const STEP_ICONS: Record<StepType, LucideIcon> = {
   create_order: ShoppingCart,
   cancel_subscription: XCircle,
   http_request: Webhook,
+  app_action: Blocks,
   add_to_sequence: ListPlus,
   remove_from_sequence: ListMinus,
   end: CircleStop,

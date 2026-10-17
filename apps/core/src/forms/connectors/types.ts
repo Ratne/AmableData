@@ -1,5 +1,6 @@
 import type { ConnectorType, DeliveryStatus } from '@amable/api-types';
 import type { FormField, SubmissionMeta, SubmissionValues } from '@amable/forms';
+import type { Env } from '../../env';
 import type { FormsRuntime } from '../runtime';
 
 /** What a connector knows about the submission it delivers. */
@@ -14,6 +15,7 @@ export interface ConnectorSubmission {
 }
 
 export interface ConnectorContext<C> {
+  readonly env: Env;
   readonly tenantId: string;
   readonly form: { readonly id: string; readonly name: string; readonly fields: readonly FormField[] };
   readonly submission: ConnectorSubmission;

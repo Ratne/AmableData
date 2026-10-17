@@ -1,6 +1,8 @@
 import { AppShell, useTenantBranding, type DashboardShellNavSection } from '@amable/ui';
 import { createRoute, Outlet, useMatches, useParams, useRouterState } from '@tanstack/react-router';
 import { useMemo } from 'react';
+import { AppWindow } from 'lucide-react';
+import { text as localized, useAppScreens } from '../features/apps/api';
 import { EmailLiquidHelperProvider } from '../features/email/liquid/provider';
 import { GlobalSearch } from '../features/search/command-palette';
 import { SupportSessionBanner } from '../features/support/banner';
@@ -42,7 +44,7 @@ function useActiveModuleId(tenant: string): string {
 /** The workspace layout: Dashboard Shell with the module navigation, workspace switcher and user menu. */
 function TenantLayout() {
   const { tenant } = useParams({ from: tenantRoute.id });
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const me = useMe();
   const membership = me.data?.memberships.find((candidate) => candidate.slug === tenant);
   // Until the session is known (or in UI-only dev without the API) everything is shown; the server enforces access anyway.
@@ -54,7 +56,11 @@ function TenantLayout() {
     logoUrl: profile.data?.logo_url ?? null,
     primaryColor: profile.data?.primary_color ?? null,
   });
-  const activeItemId = useActiveModuleId(tenant);
+  const moduleItemId = useActiveModuleId(tenant);
+  const appPages = useAppScreens('app.page');
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const activeApp = appPages.find(({ app, ui }) => pathname === `/t/${tenant}/apps/${app.app_id}/${ui.key}`);
+  const activeItemId = activeApp === undefined ? moduleItemId : `app:${activeApp.app.app_id}:${activeApp.ui.key}`;
   const immersive = useMatches({ select: (matches) => matches.some((m) => m.staticData.immersive === true) });
 
   const toItem = (module: ModuleDef) => ({
@@ -70,6 +76,20 @@ function TenantLayout() {
       title: t(group.titleKey),
       items: group.modules.filter(allowed).map(toItem),
     })).filter((section) => section.items.length > 0),
+    ...(appPages.length === 0
+      ? []
+      : [
+          {
+            id: 'apps',
+            title: t('nav.group.apps'),
+            items: appPages.map(({ app, ui }) => ({
+              id: `app:${app.app_id}:${ui.key}`,
+              label: localized(ui.title, locale),
+              icon: AppWindow,
+              href: `/t/${tenant}/apps/${app.app_id}/${ui.key}`,
+            })),
+          },
+        ]),
     ...(import.meta.env.DEV ? [{ id: 'dev', title: 'Dev', items: DEV_MODULES.map(toItem) }] : []),
   ];
 

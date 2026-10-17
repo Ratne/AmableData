@@ -138,6 +138,14 @@ export interface AutomationEventPayloads {
   };
   /** A web analytics goal completed by an identified visitor. */
   'analytics.goal': { contactId: string; siteId: string; goalName: string };
+  /** Trigger fired by an installed app (`POST /api/v2/t/{slug}/apps/events`); `name` is `app.<appId>.<key>`. */
+  'app.event': {
+    contactId: string;
+    appId: string;
+    key: string;
+    name: string;
+    data: Readonly<Record<string, unknown>>;
+  };
 }
 
 export type AutomationEventType = keyof AutomationEventPayloads;
@@ -148,6 +156,7 @@ export const AUTOMATION_EVENT_TYPES = [
   'email.link_clicked',
   'booking.created',
   'analytics.goal',
+  'app.event',
 ] as const satisfies readonly AutomationEventType[];
 
 /** Event pushed to `Engine.ingest()`; `id` must be unique and stable (dedupe key). */

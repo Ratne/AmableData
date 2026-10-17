@@ -147,6 +147,8 @@ export const customFieldSchema = z.object({
   sensitive: z.boolean(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
+  /** Marketplace app that owns the field (declared in its manifest); null for fields created by users. */
+  owner_app_id: z.string().nullable().optional(),
 });
 export type CustomField = z.infer<typeof customFieldSchema>;
 

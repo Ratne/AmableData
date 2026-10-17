@@ -1,5 +1,7 @@
 import { runScheduledAnalytics } from './analytics/runtime';
 import { app } from './app';
+import { runAppsCron } from './apps/cron';
+import { DISCOVERY_PATH, handleWellKnown, JWKS_PATH } from './apps/well-known';
 import { backupDeps, runScheduledBackups } from './backup/service';
 import { handleEmailSendBatch } from './email/consumer';
 import { EMAIL_PUBLIC_PREFIXES, emailPublicApp } from './email/public';
@@ -35,6 +37,8 @@ const handler = {
       return emailPublicApp.fetch(request, env, ctx);
     }
     if (pathname === GOOGLE_OAUTH_CALLBACK_PATH) return handleGoogleOAuthCallback(request, env);
+    // Marketplace apps: discovery document and the installation's public keys.
+    if (pathname === DISCOVERY_PATH || pathname === JWKS_PATH) return handleWellKnown(request, env, pathname);
     return serveSpa(request, env);
   },
 
@@ -66,6 +70,8 @@ const handler = {
       });
       // Self-hosted: latest public release, once a day.
       await runUpdateCheck(env, controller.scheduledTime);
+      // Marketplace apps: catalog sync (every 6 hours), uninstall cleanup, metrics retention.
+      await runAppsCron(env, controller.scheduledTime);
     }, (promise) => ctx.waitUntil(promise));
   },
 } satisfies ExportedHandler<Env>;

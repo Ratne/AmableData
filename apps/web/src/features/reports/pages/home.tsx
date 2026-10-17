@@ -2,6 +2,7 @@ import { PageBody, usePageChrome } from '@amable/ui';
 import { Skeleton } from '@amable/ui/ui/skeleton';
 import { Link } from '@tanstack/react-router';
 import { useI18n } from '../../../i18n';
+import { DashboardAppWidgets } from '../../apps/slots';
 import { useHomeDashboard, useReportApi, useReportPermissions } from '../api/hooks';
 import { DashboardView } from '../components/dashboard-view';
 
@@ -20,7 +21,7 @@ export function HomeDashboardPage() {
       </PageBody>
     );
   return (
-    <PageBody className="pt-4">
+    <PageBody className="grid gap-4 pt-4">
       {!perms.ready || home.isPending ? (
         <div className="grid gap-3 md:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
@@ -44,6 +45,7 @@ export function HomeDashboardPage() {
           }
         />
       )}
+      <DashboardAppWidgets />
     </PageBody>
   );
 }

@@ -39,6 +39,8 @@ import { bookingOps } from '../booking/ops';
 import { formsOps } from '../forms/ops';
 import { pagesOps } from '../pages/ops';
 import { reportTenantOps } from '../reports/tenant-ops';
+import { appTenantOps } from '../apps/tenant-ops';
+import { conversationOps } from '../conversations/ops';
 
 function listContacts(ctx: CrmContext, input: ListContactsQuery): Page<Contact> {
   const result = executeSearch(
@@ -232,6 +234,10 @@ export const crmOps = {
   'mail.contactsForSend': mailReads.contactsForSend,
   // email events bridged into the outbox and the timeline (apps/core/src/email/bridge.ts)
   'mail.recordEvents': recordEmailEvents,
+  // marketplace apps: per-app data, record values, owned fields, timeline, erasure (apps/core/src/apps)
+  ...appTenantOps,
+  // shared inbox (apps/core/src/conversations)
+  ...conversationOps,
 } satisfies Record<string, (ctx: CrmContext, input: never) => unknown>;
 
 export type CrmOps = typeof crmOps;

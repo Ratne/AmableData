@@ -1,3 +1,4 @@
+import type { AppActionPort } from '../../src/apps/actions';
 import type { AutomationGraph, GraphNode, Step } from '@amable/api-types';
 import { createSecretBox } from '@amable/auth/security';
 import type { EmailSendRequest, QuotaDecision } from '@amable/core';
@@ -71,7 +72,7 @@ function withParamLimit<T extends SqlDb>(db: T): T {
   };
 }
 
-export function createEngineHarness(): EngineHarness {
+export function createEngineHarness(options: { apps?: AppActionPort } = {}): EngineHarness {
   const tenant = createTestTenant();
   const clock = tenant.clock;
   const tenantDb = withParamLimit(tenant.db);
@@ -136,6 +137,7 @@ export function createEngineHarness(): EngineHarness {
       },
     },
     secretBox: () => createSecretBox(TEST_ENCRYPTION_KEY),
+    ...(options.apps === undefined ? {} : { apps: options.apps }),
     now: () => clock.now,
     newId: () => nextId(clock.now),
   });
@@ -245,6 +247,8 @@ export function fakeEngineNamespace(
             await runAutomationOp(current.db, current.engine, actor, op, structuredClone(input)),
           ),
         kick: () => current.engine.kick(),
+        ingest: (_tenantId: string, events: Parameters<AutomationEngine['ingest']>[0]) =>
+          current.engine.ingest(events),
       };
     },
   };

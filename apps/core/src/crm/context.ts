@@ -10,7 +10,7 @@ export type SearchMode = 'fts5' | 'trigram';
  * the DO, and only after the tenant/permission checks.
  */
 export interface CrmActor {
-  type: 'user' | 'api_key' | 'system';
+  type: 'user' | 'api_key' | 'app' | 'system';
   id: string | null;
   /** False for roles without `contacts:read_sensitive` (sensitive fields masked). */
   canReadSensitive: boolean;

@@ -2,6 +2,7 @@ import type { Permission } from '@amable/core';
 import type { MessageKey } from '@amable/i18n';
 import {
   Activity,
+  AppWindow,
   AtSign,
   BarChart3,
   BookOpen,
@@ -25,6 +26,7 @@ import {
   ListChecks,
   Mail,
   MailX,
+  MessagesSquare,
   Package,
   PenLine,
   Percent,
@@ -74,6 +76,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
     titleKey: 'nav.group.crm',
     modules: [
       { id: 'dashboard', path: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+      {
+        id: 'conversations',
+        path: 'conversations',
+        labelKey: 'nav.conversations',
+        icon: MessagesSquare,
+        permission: 'conversations:read',
+      },
       {
         id: 'contacts',
         path: 'contacts',
@@ -335,6 +344,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         labelKey: 'nav.integrations',
         icon: Plug,
         permission: 'integrations:manage',
+      },
+      {
+        id: 'apps',
+        path: 'settings/apps',
+        labelKey: 'nav.apps',
+        icon: AppWindow,
+        permission: 'apps:install',
       },
       {
         id: 'api-keys',

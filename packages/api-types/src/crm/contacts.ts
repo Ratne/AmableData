@@ -242,7 +242,7 @@ export const activitySchema = z.object({
   contact_id: idSchema.nullable(),
   company_id: idSchema.nullable(),
   opportunity_id: idSchema.nullable(),
-  actor: z.object({ type: z.enum(['user', 'api_key', 'system']), id: z.string().nullable() }),
+  actor: z.object({ type: z.enum(['user', 'api_key', 'system', 'app']), id: z.string().nullable() }),
   data: z.record(z.string(), z.unknown()),
   occurred_at: timestampSchema,
 });

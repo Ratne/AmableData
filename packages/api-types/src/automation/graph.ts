@@ -91,7 +91,13 @@ export const GOAL_TRIGGER_TYPES = [
   'appointment_booked',
   'opportunity_stage_changed',
   'date_anniversary',
+  'app_event',
 ] as const;
+
+/** Marketplace app id (same rule as the manifest `id`). */
+export const appIdSchema = z.string().regex(/^[a-z][a-z0-9-]{2,39}$/, 'lowercase letters, digits and "-"');
+/** Key of an action or trigger declared in an app manifest. */
+export const appExtensionKeySchema = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/, 'lowercase letters, digits and "_"');
 
 export const apiCallNameSchema = z
   .string()
@@ -152,6 +158,8 @@ export const goalTriggerSchema = z.discriminatedUnion('type', [
     time: timeOfDaySchema.optional(),
     time_zone: timeZoneRefSchema.optional(),
   }),
+  /** Fired by an installed app with `POST /api/v2/t/{slug}/apps/events` (event `app.<app_id>.<key>`). */
+  z.strictObject({ type: z.literal('app_event'), app_id: appIdSchema, key: appExtensionKeySchema }),
 ]);
 export type GoalTrigger = z.infer<typeof goalTriggerSchema>;
 export type GoalTriggerType = GoalTrigger['type'];
@@ -220,6 +228,7 @@ export const STEP_TYPES = [
   'create_order',
   'cancel_subscription',
   'http_request',
+  'app_action',
   'add_to_sequence',
   'remove_from_sequence',
   'end',
@@ -376,6 +385,18 @@ export const stepSchema = z.discriminatedUnion('type', [
     payload: z.enum(['contact', 'minimal', 'none']).optional(),
     sign: z.boolean().optional(),
     timeout_ms: z.number().int().min(500).max(30_000).optional(),
+  }),
+  /**
+   * Action declared by an installed app (`extensions.automation_actions`). `input` is
+   * checked against the action's `input_schema` at publish; skipped while the app is
+   * not installed or paused.
+   */
+  z.strictObject({
+    ...stepBase,
+    type: z.literal('app_action'),
+    app_id: appIdSchema,
+    action_key: appExtensionKeySchema,
+    input: z.record(z.string().max(64), z.unknown()),
   }),
   z.strictObject({
     ...stepBase,

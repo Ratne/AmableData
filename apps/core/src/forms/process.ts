@@ -4,6 +4,7 @@ import { SYSTEM_ACTOR } from '../crm/context';
 import { CrmError } from '../crm/errors';
 import { parseJson } from '../crm/util';
 import type { Env } from '../env';
+import { applyFormValidation } from './app-validation';
 import { connectorOf } from './connectors/registry';
 import type { ConnectorContext, ConnectorResult, ConnectorSubmission } from './connectors/types';
 import { decryptSecret, decryptSubmission } from './crypto';
@@ -84,6 +85,7 @@ export async function deliver(input: DeliverInput): Promise<ConnectorResult> {
     }
   }
   const ctx: ConnectorContext<unknown> = {
+    env: input.env,
     tenantId: input.tenantId,
     form: input.form,
     submission: input.submission,
@@ -129,6 +131,7 @@ export async function processSubmission(
     try {
       const applied = await tenantOp(env, tenantId, SYSTEM_ACTOR, 'forms.applySubmission', { id: submission.id, ...content });
       contactId = applied.contactId;
+      if (contactId !== null) await applyFormValidation(env, tenantId, contactId, form.definition, content.values);
     } catch (error) {
       if (!(error instanceof CrmError)) throw error;
       const detail = error.details?.map((d) => `${d.path}: ${d.message}`).join('; ');

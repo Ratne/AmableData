@@ -137,6 +137,7 @@ export const formSettingsSchema = z.object({
 export type FormSettings = z.infer<typeof formSettingsSchema>;
 
 export const UPDATE_POLICIES = ['fill_empty', 'overwrite'] as const;
+export const APP_VALIDATION_MODES = ['advisory', 'blocking'] as const;
 
 export const formCrmSchema = z.object({
   /** Create (or update) a contact from the mapped fields. */
@@ -149,6 +150,12 @@ export const formCrmSchema = z.object({
   owner_id: z.string().min(1).max(64).nullable().default(null),
   /** `fill_empty` never replaces existing values; `overwrite` replaces them with the submission. */
   update_policy: z.enum(UPDATE_POLICIES).default('fill_empty'),
+  /**
+   * Apps that validate email/phone (`contact.validate`): `advisory` only tags or
+   * annotates the contact, `blocking` also rejects submissions an app marks invalid.
+   * Apps that do not answer in time never block.
+   */
+  app_validation: z.enum(APP_VALIDATION_MODES).default('advisory'),
 });
 export type FormCrmSettings = z.infer<typeof formCrmSchema>;
 

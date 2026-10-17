@@ -1,0 +1,24 @@
+{
+  "name": "amable-app",
+  "version": "0.1.0",
+  "description": "CLI for AmableData app developers: create-amable-app, keys, validate, conformance tests",
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "bin": {
+    "amable-app": "./bin/amable-app.mjs",
+    "create-amable-app": "./bin/create-amable-app.mjs"
+  },
+  "files": ["bin", "dist", "template"],
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/cli.mjs",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@amable/app-sdk": "workspace:*",
+    "@amable/core": "workspace:*",
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "~5.9.3"
+  }
+}

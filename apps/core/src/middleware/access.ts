@@ -8,6 +8,9 @@ import {
   slideSession,
 } from '@amable/auth';
 import { PERMISSIONS, ROLE_PERMISSIONS, type Permission } from '@amable/core';
+import { APP_SCOPES } from '@amable/core/apps';
+import { recordAppMetric } from '../apps/metrics';
+import { ACCESS_TOKEN_PREFIX, resolveAccessToken } from '../apps/tokens';
 import type { Context, MiddlewareHandler } from 'hono';
 import { RATE_RULES } from '../auth/rate-limit';
 import { clearSessionCookie, readSessionToken } from '../auth/sessions';
@@ -74,6 +77,52 @@ async function resolveApiKey(c: Context<AppEnv>, token: string): Promise<AuthCon
   };
 }
 
+const APP_SCOPE_SET: ReadonlySet<string> = new Set(APP_SCOPES);
+
+type AppResolution = { ok: true; auth: AuthContext } | { ok: false; code: string; retryAfterMs?: number };
+
+/** `Authorization: Bearer amb_app_…`: an active install, or one inside its cleanup window. */
+async function resolveAppToken(c: Context<AppEnv>, token: string): Promise<AppResolution> {
+  const services = c.get('services');
+  const resolved = await resolveAccessToken(c.env.DB, token, services.now());
+  if (resolved === null) return { ok: false, code: 'invalid_app_token' };
+  const { install } = resolved;
+  if (install.status === 'paused') return { ok: false, code: 'app_paused' };
+  if (install.status !== 'active' && install.status !== 'uninstalling') return { ok: false, code: 'invalid_app_token' };
+  const limit = await services.apiLimiter.consume(RATE_RULES.apiKey, `app:${install.id}`);
+  if (!limit.allowed) return { ok: false, code: 'rate_limited', retryAfterMs: limit.retryAfterMs };
+  await defer(
+    c,
+    c.env.DB.prepare(`UPDATE app_tokens SET last_used_at = ? WHERE id = ?`).bind(services.now(), resolved.tokenId).run(),
+  );
+  const cleanup = install.status === 'uninstalling';
+  return {
+    ok: true,
+    auth: {
+      kind: 'app',
+      user: {
+        id: `app:${install.appId}`,
+        email: '',
+        name: install.manifest.name,
+        locale: 'en',
+        theme: 'system',
+        lastTenantId: install.tenantId,
+      },
+      session: null,
+      apiKey: null,
+      app: {
+        installId: install.id,
+        appId: install.appId,
+        appName: install.manifest.name,
+        tenantId: install.tenantId,
+        scopes: cleanup ? [] : install.scopes.filter((s) => APP_SCOPE_SET.has(s)),
+        apiVersion: install.apiVersion,
+        cleanup,
+      },
+    },
+  };
+}
+
 type SessionResolution =
   | { ok: true; auth: AuthContext }
   | { ok: false; code: 'unauthenticated' | 'session_expired' };
@@ -126,6 +175,33 @@ export function requireAuth(options: { apiKey?: boolean } = {}): MiddlewareHandl
     const bearer = bearerToken(c);
     if (bearer !== null) {
       if (options.apiKey !== true) return jsonError(c, 401, 'api_key_not_allowed');
+      if (bearer.startsWith(ACCESS_TOKEN_PREFIX)) {
+        const app = await resolveAppToken(c, bearer);
+        if (!app.ok) {
+          if (app.retryAfterMs !== undefined) c.header('Retry-After', String(Math.max(1, Math.ceil(app.retryAfterMs / 1000))));
+          c.header('RateLimit-Policy', `${String(RATE_RULES.apiKey.limit)};w=60`);
+          return jsonError(c, app.code === 'rate_limited' ? 429 : 401, app.code);
+        }
+        c.set('auth', app.auth);
+        const started = c.get('services').now();
+        await next();
+        if (app.auth.kind === 'app') {
+          await defer(
+            c,
+            recordAppMetric(c.env.DB, {
+              installId: app.auth.app.installId,
+              kind: 'api',
+              ok: c.res.status < 500 && c.res.status !== 429,
+              durationMs: c.get('services').now() - started,
+              nowMs: started,
+            }),
+          );
+          c.res.headers.set('Amable-Api-Version', app.auth.app.apiVersion);
+          c.res.headers.set('Amable-Granted-Scopes', app.auth.app.scopes.join(' '));
+          c.res.headers.set('RateLimit-Policy', `${String(RATE_RULES.apiKey.limit)};w=60`);
+        }
+        return;
+      }
       const auth = await resolveApiKey(c, bearer);
       if (auth === null) return jsonError(c, 401, 'invalid_api_key');
       c.set('auth', auth);
@@ -162,6 +238,13 @@ export function requireTenant(): MiddlewareHandler<AppEnv> {
     if (slug === undefined || !SLUG_RE.test(slug)) return jsonError(c, 404, 'tenant_not_found');
     const tenant = await findTenantBySlug(c.env.DB, slug);
     if (tenant === null) return jsonError(c, 404, 'tenant_not_found');
+
+    if (auth.kind === 'app') {
+      if (auth.app.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
+      const permissions = new Set(auth.app.scopes.filter((s): s is Permission => PERMISSION_SET.has(s)));
+      c.set('tenant', buildTenantContext(tenant, 'viewer', permissions));
+      return next();
+    }
 
     if (auth.kind === 'api_key') {
       if (auth.apiKey.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
@@ -229,14 +312,15 @@ export function requireStepUp(
 /**
  * Step-up for browser sessions on actions that reveal or replace secrets
  * (webhook and signing secrets, domains): a stolen cookie alone is not enough.
- * API keys pass: they are explicit integrations bounded by their scopes.
+ * API keys and apps pass: they are explicit integrations bounded by their scopes.
  */
 export function requireStepUpForSession(
   maxAgeMs: number = AUTH_POLICY.stepUpMaxAgeMs,
 ): MiddlewareHandler<AppEnv> {
   const sessionGuard = requireStepUp(maxAgeMs);
   return async (c, next) => {
-    if (c.get('auth')?.kind === 'api_key') return next();
+    const kind = c.get('auth')?.kind;
+    if (kind === 'api_key' || kind === 'app') return next();
     return sessionGuard(c, next);
   };
 }

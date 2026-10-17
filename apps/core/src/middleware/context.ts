@@ -26,9 +26,23 @@ export interface AuthApiKey {
   readonly createdBy: string;
 }
 
+/** A marketplace app acting through its install's access token. */
+export interface AuthApp {
+  readonly installId: string;
+  readonly appId: string;
+  readonly appName: string;
+  readonly tenantId: string;
+  /** Granted scopes; empty while the app only cleans up after an uninstall. */
+  readonly scopes: readonly string[];
+  readonly apiVersion: string;
+  /** Uninstalled, inside the cleanup window: only its own data is reachable. */
+  readonly cleanup: boolean;
+}
+
 export type AuthContext =
-  | { readonly kind: 'session'; readonly user: AuthUser; readonly session: AuthSession; readonly apiKey: null }
-  | { readonly kind: 'api_key'; readonly user: AuthUser; readonly session: null; readonly apiKey: AuthApiKey };
+  | { readonly kind: 'session'; readonly user: AuthUser; readonly session: AuthSession; readonly apiKey: null; readonly app?: undefined }
+  | { readonly kind: 'api_key'; readonly user: AuthUser; readonly session: null; readonly apiKey: AuthApiKey; readonly app?: undefined }
+  | { readonly kind: 'app'; readonly user: AuthUser; readonly session: null; readonly apiKey: null; readonly app: AuthApp };
 
 export interface TenantContext {
   readonly tenant: { readonly id: string; readonly slug: string; readonly name: string };

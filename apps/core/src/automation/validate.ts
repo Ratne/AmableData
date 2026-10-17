@@ -8,11 +8,22 @@ import {
   type ValidationIssue,
   type ValidationResult,
 } from '@amable/api-types';
+import { validateAppInput, type AppInputSchema } from '@amable/core/apps';
 import { compileGraph } from './graph';
 import { isValidTimeZone, parseDate } from './time';
 
 /** Looks up another automation's graph (for add/remove-from-sequence targets). */
 export type AutomationLookup = (automationId: string) => { graph: AutomationGraph } | null;
+
+/** Input schema of every action of the installed apps (active or paused), by app id then action key. */
+export type AppActionCatalog = Readonly<Record<string, Readonly<Record<string, AppInputSchema>>>>;
+
+interface ValidationContext {
+  automationId: string;
+  lookup: AutomationLookup;
+  /** Without it (internal callers) `app_action` steps are not checked against the apps. */
+  apps?: AppActionCatalog;
+}
 
 /**
  * Publish validation: the shape is already guaranteed by the Zod schema, this
@@ -21,7 +32,7 @@ export type AutomationLookup = (automationId: string) => { graph: AutomationGrap
 export function validateGraph(
   graph: AutomationGraph,
   settings: AutomationSettings,
-  context: { automationId: string; lookup: AutomationLookup },
+  context: ValidationContext,
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
   const add = (
@@ -221,7 +232,7 @@ function validateNode(
   node: GraphNode,
   path: string,
   add: Add,
-  context: { automationId: string; lookup: AutomationLookup },
+  context: ValidationContext,
 ): void {
   if (node.type === 'goal') {
     node.triggers.forEach((trigger, j) => {
@@ -242,7 +253,7 @@ function validateStep(
   path: string,
   add: Add,
   nodeId: string,
-  context: { automationId: string; lookup: AutomationLookup },
+  context: ValidationContext,
 ): void {
   switch (step.type) {
     case 'wait_until':
@@ -310,6 +321,23 @@ function validateStep(
             nodeId,
           );
         }
+      }
+      return;
+    }
+    case 'app_action': {
+      if (context.apps === undefined) return;
+      const actions = context.apps[step.app_id];
+      if (actions === undefined) {
+        add('error', 'app_not_installed', `app ${step.app_id} is not installed`, `${path}.app_id`, nodeId);
+        return;
+      }
+      const schema = actions[step.action_key];
+      if (schema === undefined) {
+        add('error', 'unknown_app_action', `${step.app_id} has no action ${step.action_key}`, `${path}.action_key`, nodeId);
+        return;
+      }
+      for (const issue of validateAppInput(schema, step.input)) {
+        add('error', `app_input_${issue.code}`, `${issue.key}: ${issue.code}`, `${path}.input.${issue.key}`, nodeId);
       }
       return;
     }

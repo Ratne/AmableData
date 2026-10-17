@@ -26,7 +26,13 @@ export async function audit(
     tenantId: options.tenantId !== undefined ? options.tenantId : (tenant?.tenant.id ?? null),
     actorUserId:
       options.actorUserId !== undefined ? options.actorUserId : (auth?.user.id ?? null),
-    actorType: auth?.kind === 'api_key' ? 'api_key' : auth === undefined && options.actorUserId === undefined ? 'system' : 'user',
+    actorType:
+      auth?.kind === 'api_key' || auth?.kind === 'app'
+        ? auth.kind
+        : auth === undefined && options.actorUserId === undefined
+          ? 'system'
+          : 'user',
+    ...(auth?.kind === 'app' ? { actorAppId: auth.app.appId } : {}),
     action,
     target: options.target ?? null,
     details: options.details ?? null,

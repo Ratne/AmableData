@@ -42,6 +42,7 @@ interface FieldRow {
   sensitive: number;
   created_at: number;
   updated_at: number;
+  owner_app_id?: string | null;
 }
 
 /** Parsed definition used by services, validators and the query builder. */
@@ -59,6 +60,8 @@ export interface FieldDef {
   sensitive: boolean;
   createdAt: number;
   updatedAt: number;
+  /** Marketplace app that declared the field; it cannot be deleted while the app is installed. */
+  ownerAppId: string | null;
 }
 
 function toDef(row: FieldRow): FieldDef {
@@ -76,6 +79,7 @@ function toDef(row: FieldRow): FieldDef {
     sensitive: bool(row.sensitive),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ownerAppId: row.owner_app_id ?? null,
   };
 }
 
@@ -94,6 +98,7 @@ function toApi(def: FieldDef): CustomField {
     sensitive: def.sensitive,
     created_at: toIso(def.createdAt),
     updated_at: toIso(def.updatedAt),
+    owner_app_id: def.ownerAppId,
   };
 }
 
@@ -215,7 +220,12 @@ export function deleteCustomField(
   ctx: CrmContext,
   input: { entity: CustomFieldEntity; id: string },
 ): { id: string; deleted: true } {
-  getFieldRow(ctx, input.entity, input.id);
+  const field = getFieldRow(ctx, input.entity, input.id);
+  if (field.ownerAppId !== null) {
+    throw new CrmError('conflict', `custom field "${field.key}" belongs to the app ${field.ownerAppId}; uninstall the app first`, [
+      { path: 'owner_app_id', message: field.ownerAppId },
+    ]);
+  }
   ctx.db.run(`UPDATE crm_custom_fields SET deleted_at = ? WHERE id = ?`, ctx.now(), input.id);
   ctx.db.run(`DELETE FROM crm_custom_field_values WHERE field_id = ?`, input.id);
   return { id: input.id, deleted: true };

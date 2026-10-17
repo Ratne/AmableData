@@ -7,12 +7,14 @@ import {
 } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { analyticsPublicRoutes, analyticsRoutes } from './features/analytics/routes';
+import { appsPublicRoutes, appsRoutes } from './features/apps/routes';
 import { createAuthRoutes } from './features/auth/routes';
 import { automationRoutes } from './features/automations/routes';
 import { backupRoutes } from './features/backups/routes';
 import { billingRoutes } from './features/billing/routes';
 import { broadcastRoutes } from './features/broadcasts/routes';
 import { commerceRoutes } from './features/commerce/routes';
+import { conversationRoutes } from './features/conversations/routes';
 import { crmRoutes } from './features/crm/routes';
 import { developerPublicRoutes, developerRoutes } from './features/developers/routes';
 import { emailRoutes } from './features/email/routes';
@@ -97,6 +99,7 @@ const devRoutes = import.meta.env.DEV
 const featureRoutes = [
   ...reportRoutes,
   ...crmRoutes,
+  ...conversationRoutes,
   ...analyticsRoutes,
   ...formsRoutes,
   ...bookingRoutes,
@@ -109,6 +112,7 @@ const featureRoutes = [
   ...backupRoutes,
   ...developerRoutes,
   ...integrationsRoutes,
+  ...appsRoutes,
   ...membersRoutes,
   ...billingRoutes,
   ...workspaceRoutes,
@@ -136,6 +140,7 @@ const routeTree = rootRoute.addChildren([
   ...analyticsPublicRoutes,
   ...supportPublicRoutes,
   ...developerPublicRoutes,
+  ...appsPublicRoutes,
   tenantRoute.addChildren([tenantIndexRoute, ...featureRoutes, ...devRoutes, ...placeholderRoutes]),
 ]);
 

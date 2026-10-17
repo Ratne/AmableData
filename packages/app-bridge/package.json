@@ -1,0 +1,17 @@
+{
+  "name": "@amable/app-bridge",
+  "version": "0.1.0",
+  "description": "postMessage bridge between AmableData app screens (iframes) and the CRM",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

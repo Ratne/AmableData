@@ -94,6 +94,15 @@ function findExisting(ctx: CrmContext, email: string): string | null {
   return row?.id ?? null;
 }
 
+export interface ImportedContact {
+  readonly id: string;
+  readonly email: string | null;
+  readonly phone: string | null;
+}
+
+/** The job after the batch, plus the contacts the batch created (for app validation hooks). */
+export type ImportRowsResult = ImportJob & { readonly created_contacts: ImportedContact[] };
+
 /**
  * Processes one batch of data rows (called repeatedly while the CSV streams).
  * Each row is validated in full (schema + custom fields) before anything is
@@ -102,7 +111,7 @@ function findExisting(ctx: CrmContext, email: string): string | null {
 export function importRows(
   ctx: CrmContext,
   input: { importId: string; header: string[]; rows: string[][]; firstRowNumber: number },
-): ImportJob {
+): ImportRowsResult {
   const job = getRow(ctx, input.importId);
   if (job.status === 'completed' || job.status === 'failed') {
     throw new CrmError('conflict', `import ${job.id} is already ${job.status}`);
@@ -116,6 +125,7 @@ export function importRows(
   let updated = 0;
   let failed = 0;
   let total = 0;
+  const createdContacts: ImportedContact[] = [];
 
   input.rows.forEach((row, offset) => {
     const rowNumber = input.firstRowNumber + offset;
@@ -170,6 +180,7 @@ export function importRows(
       } else {
         contactId = createContact(ctx, data, { lenient: true, listDelimiter: delimiter }).id;
         created += 1;
+        createdContacts.push({ id: contactId, email: mapped.primaryEmail, phone: data.phones?.[0]?.number ?? null });
       }
       if (tagIds.length > 0) applyTagsToContact(ctx, contactId, tagIds);
     } catch (error) {
@@ -193,7 +204,7 @@ export function importRows(
     JSON.stringify(errors),
     job.id,
   );
-  return getImport(ctx, { id: job.id });
+  return { ...getImport(ctx, { id: job.id }), created_contacts: createdContacts };
 }
 
 function mergeEmails(

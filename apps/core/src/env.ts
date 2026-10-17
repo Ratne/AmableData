@@ -121,4 +121,12 @@ export interface Env {
   EDGE_HOSTNAME?: string;
   /** Worker script name used for Workers Routes on custom site paths (default amable-edge). */
   EDGE_SCRIPT_NAME?: string;
+
+  // --- Marketplace apps (apps/core/src/apps) ------------------------------------
+  /** `off` hides the marketplace and stops the catalog sync (private apps still install). */
+  APP_CATALOG?: string;
+  /** Own signed catalog index URL (default: the public amable-apps release). */
+  APP_CATALOG_URL?: string;
+  /** Extra trusted catalog keys, `<key_id>:<base64 raw Ed25519>` comma separated (required with APP_CATALOG_URL). */
+  APP_CATALOG_PUBLIC_KEY?: string;
 }

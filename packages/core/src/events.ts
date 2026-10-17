@@ -8,6 +8,7 @@
  * entity when they need more.
  */
 
+import { CONVERSATION_EVENT_TYPES, type ConversationEventPayloads } from './conversation-events';
 import { PUBLISHING_EVENT_TYPES, type PublishingEventPayloads } from './publishing-events';
 
 /** Typed payload of every CRM event. Keys are the event type strings. */
@@ -227,8 +228,11 @@ type MissingCommerceEvent = Exclude<CommerceEventType, (typeof COMMERCE_EVENT_TY
 const commerceEventListIsComplete: MissingCommerceEvent extends never ? true : never = true;
 void commerceEventListIsComplete;
 
-/** Every event the tenant outbox can hold (CRM + e-commerce + forms, bookings, pages). */
-export type OutboxEventPayloads = CrmEventPayloads & CommerceEventPayloads & PublishingEventPayloads;
+/** Every event the tenant outbox can hold (CRM + e-commerce + forms, bookings, pages + conversations). */
+export type OutboxEventPayloads = CrmEventPayloads &
+  CommerceEventPayloads &
+  PublishingEventPayloads &
+  ConversationEventPayloads;
 export type OutboxEventType = keyof OutboxEventPayloads;
 
 /** Events emitted by later modules (forms, email, booking). */
@@ -249,13 +253,14 @@ export const EVENT_TYPES = [
   ...COMMERCE_EVENT_TYPES,
   ...OTHER_EVENT_TYPES,
   ...PUBLISHING_EVENT_TYPES,
+  ...CONVERSATION_EVENT_TYPES,
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
 
 /** Who caused an event: a user (session or API key) or the system itself. */
 export interface EventActor {
-  readonly type: 'user' | 'api_key' | 'system';
+  readonly type: 'user' | 'api_key' | 'app' | 'system';
   readonly id: string | null;
 }
 

@@ -21,6 +21,9 @@ import {
   requireTenant,
   type AppEnv,
 } from './middleware';
+import { appsAdminRoutes } from './apps/admin-routes';
+import { appApiRoutes, contactPrivacyRoutes } from './apps/app-api';
+import { appsOAuthRoutes } from './apps/oauth';
 import { mountAutomationApi } from './automation/api/routes';
 import { analyticsKick, mountAnalyticsApi } from './analytics/routes';
 import { mountCrmApi } from './crm/api/router';
@@ -56,7 +59,7 @@ app.get('/health', (c) => {
 app.use('*', authServices());
 // /api/dev/* only exists with ENVIRONMENT=dev (local seed script).
 // /api/platform/v1/* carries no cookie: every request is Ed25519-signed by the control plane.
-app.use('*', csrfProtection({ exempt: ['/api/dev/', '/api/platform/v1/'] }));
+app.use('*', csrfProtection({ exempt: ['/api/dev/', '/api/platform/v1/', '/api/apps/v1/'] }));
 app.use('/invites/accept', optionalAuth());
 app.route('/', publicAuthRoutes);
 app.route('/', accountRoutes);
@@ -66,6 +69,9 @@ app.use('/t/:slug/*', requireAuth({ apiKey: true }), requireTenant());
 app.route('/t/:slug', tenantAdminRoutes);
 // Tenant backups (owner + step-up) under /api/t/:slug/backups.
 app.route('/t/:slug/backups', backupRoutes);
+// Marketplace apps: workspace management, and the OAuth server apps talk to.
+app.route('/t/:slug/apps', appsAdminRoutes);
+app.route('/apps/v1', appsOAuthRoutes);
 // --- end access & security --------------------------------------------------------------------
 
 // Automation engine: outbox kick around every v2 tenant request (+ dev seed route).
@@ -74,6 +80,9 @@ mountAutomationApi(app);
 app.use('/v2/t/:slug/*', analyticsKick());
 // CRM REST v2 under /api/v2/t/:slug (same central guards) + /api/v2/openapi.json.
 mountCrmApi(app);
+// Marketplace apps' REST surface and the GDPR routes that reach every app (same v2 guards).
+app.route('/v2/t/:slug/apps', appApiRoutes);
+app.route('/v2/t/:slug', contactPrivacyRoutes);
 // Email marketing + broadcasts REST v2 under /api/v2/t/:slug + /api/v2/openapi/email.json.
 mountEmailApi(app);
 // Web analytics REST v2 under /api/v2/t/:slug/analytics + /api/v2/openapi/analytics.json.

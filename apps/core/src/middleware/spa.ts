@@ -1,5 +1,6 @@
 import { COOKIE_NAMES, randomToken, sessionState, sha256Hex } from '@amable/auth';
 import { DEFAULT_THEME, isLocale, isTheme, negotiateLocale, type Locale, type Theme } from '@amable/i18n';
+import { appFrameOrigins } from '../apps/frames';
 import { findSessionByHash, findUserById } from '../auth/store';
 import type { Env } from '../env';
 import { ensureInstallationMigrated } from '../migrate';
@@ -31,6 +32,10 @@ function readCookie(header: string | null, name: string): string | null {
 }
 
 export async function resolveBootConfig(request: Request, env: Env, now: number): Promise<BootConfig> {
+  return (await resolveBoot(request, env, now)).config;
+}
+
+async function resolveBoot(request: Request, env: Env, now: number): Promise<{ config: BootConfig; userId: string | null }> {
   const cookies = request.headers.get('cookie');
   const base: BootConfig = {
     locale: negotiateLocale(request.headers.get('accept-language')),
@@ -47,6 +52,7 @@ export async function resolveBootConfig(request: Request, env: Env, now: number)
     if (isLocale(locale)) base.locale = locale;
     if (isTheme(theme)) base.theme = theme;
   }
+  let userId: string | null = null;
   const token = readCookie(cookies, COOKIE_NAMES.session);
   if (token !== null && token.length >= 20 && token.length <= 128) {
     try {
@@ -56,6 +62,7 @@ export async function resolveBootConfig(request: Request, env: Env, now: number)
         const user = await findUserById(env.DB, session.userId);
         if (user !== null) {
           base.authenticated = true;
+          userId = user.id;
           if (isLocale(user.locale)) base.locale = user.locale;
           if (isTheme(user.theme)) base.theme = user.theme;
         }
@@ -64,10 +71,11 @@ export async function resolveBootConfig(request: Request, env: Env, now: number)
       console.warn('[spa] could not resolve preferences from session', error);
     }
   }
-  return base;
+  return { config: base, userId };
 }
 
-export function contentSecurityPolicy(nonce: string, https: boolean): string {
+/** `frameOrigins`: hosts of the apps with screens installed in the user's workspaces. */
+export function contentSecurityPolicy(nonce: string, https: boolean, frameOrigins: readonly string[] = []): string {
   return [
     "default-src 'self'",
     `script-src 'nonce-${nonce}' 'strict-dynamic'`,
@@ -80,7 +88,10 @@ export function contentSecurityPolicy(nonce: string, https: boolean): string {
     "font-src 'self' data: https://fonts.gstatic.com",
     "connect-src 'self'",
     // Turnstile + video and map embeds shown by the landing page canvas.
-    'frame-src https://challenges.cloudflare.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com',
+    [
+      'frame-src https://challenges.cloudflare.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com',
+      ...frameOrigins,
+    ].join(' '),
     "frame-ancestors 'none'",
     "base-uri 'none'",
     "object-src 'none'",
@@ -89,8 +100,8 @@ export function contentSecurityPolicy(nonce: string, https: boolean): string {
   ].join('; ');
 }
 
-export function documentSecurityHeaders(headers: Headers, nonce: string, https: boolean) {
-  headers.set('Content-Security-Policy', contentSecurityPolicy(nonce, https));
+export function documentSecurityHeaders(headers: Headers, nonce: string, https: boolean, frameOrigins: readonly string[] = []) {
+  headers.set('Content-Security-Policy', contentSecurityPolicy(nonce, https, frameOrigins));
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   headers.set('X-Frame-Options', 'DENY');
@@ -134,12 +145,13 @@ export async function serveSpa(request: Request, env: Env): Promise<Response> {
   if (!(asset.headers.get('content-type') ?? '').includes('text/html')) return asset;
 
   const nonce = randomToken(16);
-  const config = await resolveBootConfig(request, env, Date.now());
+  const { config, userId } = await resolveBoot(request, env, Date.now());
+  const frameOrigins = userId === null ? [] : await appFrameOrigins(env.DB, userId).catch(() => []);
   const body = injectBoot(await asset.text(), config, nonce);
   const headers = new Headers(asset.headers);
   headers.delete('content-length');
   headers.delete('etag');
   headers.set('content-type', 'text/html; charset=utf-8');
-  documentSecurityHeaders(headers, nonce, url.protocol === 'https:');
+  documentSecurityHeaders(headers, nonce, url.protocol === 'https:', frameOrigins);
   return new Response(request.method === 'HEAD' ? null : body, { status: 200, headers });
 }

@@ -9,6 +9,7 @@ import {
   type SecretBox,
 } from '@amable/auth/security';
 import { AUTOMATION_EVENT_TYPES, EVENT_TYPES } from '@amable/core';
+import { recordAppMetric } from '../apps/metrics';
 
 /** Every event type an endpoint can subscribe to (`*` = all). */
 export const WEBHOOK_EVENT_TYPES: readonly string[] = [
@@ -45,6 +46,8 @@ export interface WebhookDeps {
   readonly newId: () => string;
   /** Dev only: lets `http://127.0.0.1:<port>` receivers through (local testing). */
   readonly allowLoopback?: boolean;
+  /** An app endpoint was auto-disabled after repeated failures (the apps module pauses the app). */
+  readonly onAppEndpointDisabled?: (installId: string) => Promise<void>;
 }
 
 export type EndpointStatus = 'active' | 'disabled';
@@ -53,6 +56,8 @@ export type DeliveryStatus = 'pending' | 'retrying' | 'succeeded' | 'failed';
 interface EndpointRow {
   id: string;
   tenant_id: string;
+  /** Set for the endpoint of a marketplace app install (apps/core/src/apps). */
+  app_install_id: string | null;
   url: string;
   description: string;
   event_types: string;
@@ -223,12 +228,40 @@ export function deliveryBody(tenantSlug: string, event: WebhookEvent): string {
   });
 }
 
+/** Body sent to an app: the webhook body plus its replay position and API version. */
+export function appDeliveryBody(
+  tenantSlug: string,
+  event: WebhookEvent,
+  app: { installId: string; apiVersion: string; sequence: number },
+): string {
+  return JSON.stringify({
+    id: event.id,
+    type: event.type,
+    created_at: event.occurredAt,
+    tenant: tenantSlug,
+    installation_id: app.installId,
+    api_version: app.apiVersion,
+    sequence: app.sequence,
+    data: event.payload,
+  });
+}
+
+/** AD of the app install secrets kept on `app_installs` (current and previous). */
+export const appSecretAd = (installId: string, which: 'current' | 'previous') => `appsecret:${installId}:${which}`;
+
+interface AppEndpointInfo {
+  readonly installId: string;
+  readonly apiVersion: string;
+  readonly status: string;
+}
+
 export class WebhookService {
   constructor(private readonly deps: WebhookDeps) {}
 
+  /** Endpoints managed by the tenant (app endpoints are managed by the apps module). */
   private async endpointRow(tenantId: string, id: string): Promise<EndpointRow> {
     const row = await this.deps.db
-      .prepare(`SELECT * FROM webhook_endpoints WHERE id = ? AND tenant_id = ?`)
+      .prepare(`SELECT * FROM webhook_endpoints WHERE id = ? AND tenant_id = ? AND app_install_id IS NULL`)
       .bind(id, tenantId)
       .first<EndpointRow>();
     if (row === null) throw new WebhookError(404, 'not_found', 'webhook endpoint not found');
@@ -237,7 +270,9 @@ export class WebhookService {
 
   async list(tenantId: string): Promise<WebhookEndpoint[]> {
     const rows = await this.deps.db
-      .prepare(`SELECT * FROM webhook_endpoints WHERE tenant_id = ? ORDER BY created_at DESC`)
+      .prepare(
+        `SELECT * FROM webhook_endpoints WHERE tenant_id = ? AND app_install_id IS NULL ORDER BY created_at DESC`,
+      )
       .bind(tenantId)
       .all<EndpointRow>();
     return rows.results.map(toEndpoint);
@@ -256,7 +291,7 @@ export class WebhookService {
     if (urlError !== null) throw new WebhookError(422, 'invalid_url', urlError);
     validateTypes(input.event_types);
     const count = await this.deps.db
-      .prepare(`SELECT COUNT(*) AS n FROM webhook_endpoints WHERE tenant_id = ?`)
+      .prepare(`SELECT COUNT(*) AS n FROM webhook_endpoints WHERE tenant_id = ? AND app_install_id IS NULL`)
       .bind(tenantId)
       .first<{ n: number }>();
     if ((count?.n ?? 0) >= MAX_ENDPOINTS_PER_TENANT) {
@@ -492,31 +527,100 @@ export class WebhookService {
     if (tenant === null) return 0;
     const endpoints = (
       await this.deps.db
-        .prepare(`SELECT * FROM webhook_endpoints WHERE tenant_id = ? AND status = 'active'`)
+        .prepare(
+          `SELECT e.*, i.api_version AS app_api_version, i.status AS app_status
+           FROM webhook_endpoints e LEFT JOIN app_installs i ON i.id = e.app_install_id
+           WHERE e.tenant_id = ? AND e.status = 'active'`,
+        )
         .bind(tenantId)
-        .all<EndpointRow>()
+        .all<EndpointRow & { app_api_version: string | null; app_status: string | null }>()
     ).results;
     let created = 0;
     for (const endpoint of endpoints) {
+      const app: AppEndpointInfo | null =
+        endpoint.app_install_id === null
+          ? null
+          : {
+              installId: endpoint.app_install_id,
+              apiVersion: endpoint.app_api_version ?? '',
+              status: endpoint.app_status ?? 'uninstalled',
+            };
+      if (app !== null && app.status !== 'active') continue;
       const types = parseTypes(endpoint.event_types);
       for (const event of events) {
         if (!subscribes(types, event.type)) continue;
-        const id = this.deps.newId();
-        const inserted = await this.insertDelivery({
-          id,
-          tenantId,
-          endpointId: endpoint.id,
-          eventId: event.id,
-          eventType: event.type,
-          payload: deliveryBody(tenant.slug, event),
-          replayOf: null,
-        });
-        if (!inserted) continue;
-        created += 1;
-        await this.deps.enqueue({ kind: 'webhooks.deliver', version: 1, deliveryId: id });
+        if (await this.queueDelivery(tenantId, tenant.slug, endpoint, app, event)) created += 1;
       }
     }
     return created;
+  }
+
+  /**
+   * One event to one app endpoint, regardless of its subscriptions (lifecycle
+   * and privacy events). Returns the replay sequence, or null when the app has
+   * no endpoint or already received this event.
+   */
+  async deliverToApp(installId: string, event: WebhookEvent): Promise<number | null> {
+    const endpoint = await this.deps.db
+      .prepare(
+        `SELECT e.*, i.api_version AS app_api_version, i.status AS app_status, t.slug AS tenant_slug
+         FROM webhook_endpoints e JOIN app_installs i ON i.id = e.app_install_id JOIN tenants t ON t.id = e.tenant_id
+         WHERE e.app_install_id = ?`,
+      )
+      .bind(installId)
+      .first<EndpointRow & { app_api_version: string; app_status: string; tenant_slug: string }>();
+    if (endpoint === null) return null;
+    const app = { installId, apiVersion: endpoint.app_api_version, status: endpoint.app_status };
+    const queued = await this.queueDelivery(endpoint.tenant_id, endpoint.tenant_slug, endpoint, app, event);
+    if (!queued) return null;
+    const row = await this.deps.db
+      .prepare(`SELECT seq FROM app_events WHERE install_id = ? AND event_id = ?`)
+      .bind(installId, event.id)
+      .first<{ seq: number }>();
+    return row?.seq ?? null;
+  }
+
+  private async queueDelivery(
+    tenantId: string,
+    tenantSlug: string,
+    endpoint: EndpointRow,
+    app: AppEndpointInfo | null,
+    event: WebhookEvent,
+  ): Promise<boolean> {
+    let payload = deliveryBody(tenantSlug, event);
+    if (app !== null) {
+      const now = this.deps.now();
+      await this.deps.db
+        .prepare(
+          `INSERT OR IGNORE INTO app_events (tenant_id, install_id, event_id, event_type, body, created_at)
+           VALUES (?, ?, ?, ?, '', ?)`,
+        )
+        .bind(tenantId, app.installId, event.id, event.type, now)
+        .run();
+      const logged = await this.deps.db
+        .prepare(`SELECT seq, body FROM app_events WHERE install_id = ? AND event_id = ?`)
+        .bind(app.installId, event.id)
+        .first<{ seq: number; body: string }>();
+      if (logged === null || logged.body !== '') return false;
+      payload = appDeliveryBody(tenantSlug, event, { ...app, sequence: logged.seq });
+      await this.deps.db
+        .prepare(`UPDATE app_events SET body = ? WHERE seq = ?`)
+        .bind(payload, logged.seq)
+        .run();
+    }
+    const id = this.deps.newId();
+    const inserted = await this.insertDelivery({
+      id,
+      tenantId,
+      endpointId: endpoint.id,
+      eventId: event.id,
+      eventType: event.type,
+      payload,
+      replayOf: null,
+    });
+    if (!inserted) return false;
+    await this.deps.enqueue({ kind: 'webhooks.deliver', version: 1, deliveryId: id });
+    return true;
   }
 
   /**
@@ -549,12 +653,26 @@ export class WebhookService {
       return 'failed';
     }
 
-    const secret = await (await this.deps.box()).decrypt(
-      endpoint.secret,
-      secretAd(endpoint.tenant_id, endpoint.id),
-    );
+    const box = await this.deps.box();
+    const secret = await box.decrypt(endpoint.secret, secretAd(endpoint.tenant_id, endpoint.id));
     const attempts = delivery.attempts + 1;
     const started = this.deps.now();
+    let signature = await signWebhook(secret, delivery.payload, started);
+    if (endpoint.app_install_id !== null) {
+      // During a secret rotation the app may still verify with the previous secret.
+      const install = await this.deps.db
+        .prepare(`SELECT webhook_secret_prev, webhook_secret_prev_until FROM app_installs WHERE id = ?`)
+        .bind(endpoint.app_install_id)
+        .first<{ webhook_secret_prev: string | null; webhook_secret_prev_until: number | null }>();
+      if (install?.webhook_secret_prev != null && (install.webhook_secret_prev_until ?? 0) > started) {
+        const previous = await box.decrypt(
+          install.webhook_secret_prev,
+          appSecretAd(endpoint.app_install_id, 'previous'),
+        );
+        const extra = (await signWebhook(previous, delivery.payload, started)).split(',')[1];
+        if (extra !== undefined) signature = `${signature},${extra}`;
+      }
+    }
     let statusCode: number | null = null;
     let error: string | null = null;
     let snippet: string | null = null;
@@ -563,11 +681,12 @@ export class WebhookService {
       const headers: Record<string, string> = {
         'content-type': 'application/json',
         'user-agent': 'amabledata-webhooks/1',
-        [WEBHOOK_SIGNATURE_HEADER]: await signWebhook(secret, delivery.payload, started),
+        [WEBHOOK_SIGNATURE_HEADER]: signature,
         'amable-event': delivery.event_type,
         'amable-event-id': delivery.event_id,
         'amable-delivery': delivery.id,
         'amable-attempt': String(attempts),
+        ...(endpoint.app_install_id === null ? {} : { 'amable-installation': endpoint.app_install_id }),
       };
       const init = { method: 'POST', headers, body: delivery.payload };
       if (this.deps.allowLoopback === true && isLoopback(endpoint.url)) {
@@ -604,6 +723,15 @@ export class WebhookService {
     }
     const finished = this.deps.now();
     const duration = Math.max(0, finished - started);
+    if (endpoint.app_install_id !== null) {
+      await recordAppMetric(this.deps.db, {
+        installId: endpoint.app_install_id,
+        kind: 'webhook',
+        nowMs: finished,
+        ok: error === null,
+        durationMs: duration,
+      });
+    }
 
     if (error === null) {
       await this.deps.db.batch([
@@ -653,6 +781,9 @@ export class WebhookService {
         )
         .bind(failures, finished, disable ? 1 : 0, disable ? 1 : 0, endpoint.id),
     ]);
+    if (disable && endpoint.app_install_id !== null) {
+      await this.deps.onAppEndpointDisabled?.(endpoint.app_install_id);
+    }
     if (retry) {
       await this.deps.enqueue({ kind: 'webhooks.deliver', version: 1, deliveryId }, delay);
     }
@@ -661,10 +792,12 @@ export class WebhookService {
 
   /** Drops delivery rows older than the retention window. */
   async prune(): Promise<number> {
+    const cutoff = this.deps.now() - DELIVERY_RETENTION_MS;
     const result = await this.deps.db
       .prepare(`DELETE FROM webhook_deliveries WHERE created_at < ?`)
-      .bind(this.deps.now() - DELIVERY_RETENTION_MS)
+      .bind(cutoff)
       .run();
+    await this.deps.db.prepare(`DELETE FROM app_events WHERE created_at < ?`).bind(cutoff).run();
     return result.meta.changes ?? 0;
   }
 }

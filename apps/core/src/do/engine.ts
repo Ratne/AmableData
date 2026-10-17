@@ -25,6 +25,7 @@ import type { Env } from '../env';
 import { withAlarmReporting } from '../platform/telemetry';
 import { createPlatformQuotaGuard } from '../platform/quota';
 import { webhookService } from '../webhooks/runtime';
+import { appActionPort } from '../apps/actions';
 import { armPointInTime } from './point-in-time';
 
 const nextUlid = monotonicFactory();
@@ -101,6 +102,7 @@ export class Engine extends DurableObject<Env> {
       webhooks: {
         publish: (events) => webhookService(this.env).publish(bound, events),
       },
+      apps: appActionPort(this.env, bound),
       now: () => Date.now(),
       newId: () => nextUlid(),
     });

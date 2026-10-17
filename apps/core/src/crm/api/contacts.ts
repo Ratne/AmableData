@@ -20,7 +20,8 @@ import {
 } from '@amable/api-types';
 import { callEngine } from '../../automation/api/routes';
 import { callMail } from '../../email/http';
-import { getTenant, type AppEnv } from '../../middleware';
+import { validateAndApply } from '../../apps/validate-hook';
+import { defer, getAuth, getTenant, type AppEnv } from '../../middleware';
 import { callCrm, crmRoute, json, jsonBody } from './core';
 
 const tags = ['Contacts'];
@@ -59,7 +60,18 @@ export function registerContactRoutes(app: OpenAPIHono<AppEnv>): void {
       request: { body: jsonBody(createContactSchema) },
       responses: { 201: json(contactSchema, 'The created contact') },
     }),
-    async (c) => c.json(await callCrm(c, 'contacts.create', c.req.valid('json')), 201),
+    async (c) => {
+      const contact = await callCrm(c, 'contacts.create', c.req.valid('json'));
+      // Apps validate their own writes; everyone else's new contacts go through contact.validate.
+      if (getAuth(c).kind !== 'app') {
+        const email = (contact.emails.find((e) => e.is_primary) ?? contact.emails[0])?.email ?? null;
+        const phone = contact.phones[0]?.number ?? null;
+        if (email !== null || phone !== null) {
+          await defer(c, validateAndApply(c.env, getTenant(c).tenant.id, contact.id, { email, phone }, 'crm'));
+        }
+      }
+      return c.json(contact, 201);
+    },
   );
 
   app.openapi(

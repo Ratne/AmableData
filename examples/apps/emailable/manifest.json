@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "emailable",
+  "name": "Emailable",
+  "tagline": {
+    "en": "Verify the email of every new contact",
+    "it": "Verifica l'email di ogni nuovo contatto"
+  },
+  "description": {
+    "en": "Checks with your Emailable account whether the email of new contacts (created in the CRM, from forms or imports) receives mail. The outcome goes to the Email status field and to the Invalid, Risky and Disposable email tags; forms can block invalid addresses.",
+    "it": "Controlla con il tuo account Emailable se l'email dei nuovi contatti (creati nel CRM, dai form o dagli import) riceve posta. L'esito va nel campo Stato email e nei tag Invalid, Risky e Disposable email; i form possono bloccare gli indirizzi non validi."
+  },
+  "developer": {
+    "name": "AmableData",
+    "url": "https://github.com/Ratne/AmableData",
+    "email": "apps@amabledata.com"
+  },
+  "categories": ["data_quality"],
+  "icon_url": "https://emailable.apps.amabledata.com/icon.png",
+  "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/emailable",
+  "support_url": "https://github.com/Ratne/AmableData/issues",
+  "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/emailable#privacy",
+  "base_url": "https://emailable.apps.amabledata.com",
+  "jwks_url": "https://emailable.apps.amabledata.com/.well-known/jwks.json",
+  "redirect_uris": ["https://emailable.apps.amabledata.com/install"],
+  "api_version": "2026-10",
+  "scopes": ["contacts:read", "contacts:write"],
+  "webhooks": { "endpoint": "/webhooks", "events": [] },
+  "privacy": {
+    "handles_personal_data": true,
+    "erasure_endpoint": "/privacy/erasure",
+    "data_request_endpoint": "/privacy/data"
+  },
+  "custom_fields": [
+    { "key": "email_status", "label": { "en": "Email status", "it": "Stato email" }, "type": "TEXT" }
+  ],
+  "pricing": {
+    "model": "free",
+    "note": {
+      "en": "Verifications use the credits of your own Emailable account.",
+      "it": "Le verifiche usano i crediti del tuo account Emailable."
+    }
+  },
+  "extensions": {
+    "contact_validate": {
+      "fields": ["email"],
+      "endpoint": "/hooks/validate",
+      "batch_endpoint": "/hooks/validate-batch",
+      "cache_ttl_seconds": 2592000
+    },
+    "ui": [
+      { "slot": "app.settings", "key": "settings", "path": "/ui/settings", "title": { "en": "Settings", "it": "Impostazioni" }, "height": 260 }
+    ]
+  }
+}

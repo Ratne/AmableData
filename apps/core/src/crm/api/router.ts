@@ -9,6 +9,7 @@ import { registerSearchRoutes } from './search';
 import { registerAutomationRoutes } from '../../automation/api/routes';
 import { registerCommerceRoutes } from '../../commerce/api';
 import { registerWorkspaceRoutes } from '../../workspace/api';
+import { registerConversationRoutes } from '../../conversations/api';
 
 /** Every CRM REST v2 route, relative to `/api/v2/t/{slug}`. */
 export const crmApi = createCrmRouter();
@@ -21,6 +22,7 @@ registerSearchRoutes(crmApi);
 registerAutomationRoutes(crmApi);
 registerCommerceRoutes(crmApi);
 registerWorkspaceRoutes(crmApi);
+registerConversationRoutes(crmApi);
 
 crmApi.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
   type: 'http',

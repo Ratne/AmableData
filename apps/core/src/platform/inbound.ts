@@ -1,6 +1,7 @@
 import type { ResumeEmailResponse } from '@amable/core/platform';
 import type { Hono } from 'hono';
 import { z } from 'zod';
+import { revokeApp } from '../apps/lifecycle';
 import type { Env } from '../env';
 import type { AppEnv } from '../middleware';
 import { sendHeartbeat } from './heartbeat';
@@ -11,6 +12,11 @@ import { verifiedControlPlaneBody } from './signature';
 import { flushUsage } from './usage';
 
 const restoreSchema = z.strictObject({ at: z.number().int().positive() });
+
+const revokeAppSchema = z.strictObject({
+  app_id: z.string().regex(/^[a-z][a-z0-9-]{2,39}$/),
+  reason: z.string().min(1).max(500),
+});
 
 const resumeEmailSchema = z.strictObject({
   reason: z.enum(['top_up', 'quota_reset', 'manual']),
@@ -67,6 +73,26 @@ export function mountPlatformInbound(app: Hono<AppEnv>): void {
       return c.json({ error: 'restore_point_out_of_range' }, 422);
     }
     return c.json(await restoreTenantObjects(c.env, parsed.data.at));
+  });
+
+  // Marketplace kill switch pushed by the control plane (the catalog sync would get it within 6 hours).
+  app.post('/platform/v1/apps/revoke', async (c) => {
+    const body = await verifiedControlPlaneBody(c);
+    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
+    let json: unknown;
+    try {
+      json = JSON.parse(body);
+    } catch {
+      return c.json({ error: 'invalid_json' }, 400);
+    }
+    const parsed = revokeAppSchema.safeParse(json);
+    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    const now = c.get('services').now();
+    await c.env.DB.prepare(`UPDATE app_catalog SET revoked = 1, revoked_reason = ? WHERE app_id = ?`)
+      .bind(parsed.data.reason, parsed.data.app_id)
+      .run();
+    const installs = await revokeApp(c.env, parsed.data.app_id, parsed.data.reason, now);
+    return c.json({ ok: true, installs });
   });
 
   // Signed reachability probe of the link (no data beyond what the control plane already knows).

@@ -200,7 +200,7 @@ export type ContactSubmissionDetail = z.infer<typeof contactSubmissionDetailSche
 
 // ------------------------------------------------------------ connections
 
-export const CONNECTOR_TYPES = ['webhook', 'google_sheets', 'email_notification', 'docuseal'] as const;
+export const CONNECTOR_TYPES = ['webhook', 'google_sheets', 'email_notification', 'docuseal', 'app'] as const;
 export const connectorTypeSchema = z.enum(CONNECTOR_TYPES);
 export type ConnectorType = z.infer<typeof connectorTypeSchema>;
 
@@ -300,6 +300,15 @@ export const docusealConfigSchema = z
   });
 export type DocusealConfig = z.infer<typeof docusealConfigSchema>;
 
+/** Destination provided by an installed app (`extensions.form_connectors` in its manifest). */
+export const appConnectorConfigSchema = z.strictObject({
+  app_id: z.string().regex(/^[a-z][a-z0-9-]{2,39}$/),
+  key: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+  /** Validated against the connector's `settings_schema`. */
+  settings: z.record(z.string().max(64), z.unknown()).default({}),
+});
+export type AppConnectorConfig = z.infer<typeof appConnectorConfigSchema>;
+
 const connectionCommon = {
   name: z.string().trim().min(1).max(100),
   enabled: z.boolean().optional(),
@@ -320,6 +329,7 @@ export const createConnectionSchema = z.discriminatedUnion('type', [
     /** DocuSeal API key (encrypted at rest, never returned). */
     secret: z.string().trim().min(1).max(500),
   }),
+  z.strictObject({ type: z.literal('app'), ...connectionCommon, config: appConnectorConfigSchema }),
 ]);
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 
@@ -366,6 +376,20 @@ export const connectorInfoSchema = z.object({
   oauth_provider: z.enum(['google']).nullable(),
   /** False when the installation cannot run it (e.g. no OAuth service). */
   available: z.boolean(),
+  /** `type: 'app'`: one entry per connector of each installed app. */
+  app: z
+    .object({
+      app_id: z.string(),
+      key: z.string(),
+      app_name: z.string(),
+      name: z.object({ en: z.string(), it: z.string().optional() }),
+      icon_url: z.string().nullable(),
+      description: z.object({ en: z.string(), it: z.string().optional() }).nullable(),
+      /** App input schema (`properties`, `required`) for the settings form. */
+      settings_schema: z.record(z.string(), z.unknown()).nullable(),
+      paused: z.boolean(),
+    })
+    .optional(),
 });
 export type ConnectorInfo = z.infer<typeof connectorInfoSchema>;
 

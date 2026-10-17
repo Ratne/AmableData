@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "id": "wati",
+  "name": "WATI",
+  "tagline": {
+    "en": "WhatsApp in your shared inbox and automations",
+    "it": "WhatsApp nella inbox condivisa e nelle automazioni"
+  },
+  "description": {
+    "en": "Connects your WATI account: WhatsApp messages arrive in Conversations, your team replies from the CRM and sees when messages are delivered and read. Automations can send approved WhatsApp templates and start when a contact writes on WhatsApp.",
+    "it": "Collega il tuo account WATI: i messaggi WhatsApp arrivano in Conversazioni, il team risponde dal CRM e vede quando i messaggi vengono consegnati e letti. Le automazioni possono inviare template WhatsApp approvati e partire quando un contatto scrive su WhatsApp."
+  },
+  "developer": {
+    "name": "AmableData",
+    "url": "https://github.com/Ratne/AmableData",
+    "email": "apps@amabledata.com"
+  },
+  "categories": ["messaging", "support"],
+  "icon_url": "https://wati.apps.amabledata.com/icon.png",
+  "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/wati",
+  "support_url": "https://github.com/Ratne/AmableData/issues",
+  "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/wati#privacy",
+  "base_url": "https://wati.apps.amabledata.com",
+  "jwks_url": "https://wati.apps.amabledata.com/.well-known/jwks.json",
+  "redirect_uris": ["https://wati.apps.amabledata.com/install"],
+  "api_version": "2026-10",
+  "scopes": ["contacts:read", "conversations:read", "conversations:write", "automations:trigger"],
+  "webhooks": { "endpoint": "/webhooks", "events": [] },
+  "privacy": {
+    "handles_personal_data": true,
+    "erasure_endpoint": "/privacy/erasure",
+    "data_request_endpoint": "/privacy/data"
+  },
+  "pricing": {
+    "model": "free",
+    "note": {
+      "en": "Needs a WATI plan with API access; WhatsApp conversation fees are billed by WATI.",
+      "it": "Serve un piano WATI con accesso API; le conversazioni WhatsApp sono fatturate da WATI."
+    }
+  },
+  "extensions": {
+    "channels": [
+      {
+        "key": "whatsapp",
+        "name": { "en": "WhatsApp", "it": "WhatsApp" },
+        "kind": "whatsapp",
+        "send_endpoint": "/channels/send",
+        "address_field": "phone"
+      }
+    ],
+    "automation_actions": [
+      {
+        "key": "send_template",
+        "name": { "en": "Send WhatsApp template", "it": "Invia template WhatsApp" },
+        "description": {
+          "en": "Sends an approved WATI template to the contact's phone number.",
+          "it": "Invia un template WATI approvato al numero di telefono del contatto."
+        },
+        "endpoint": "/actions/send-template",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "template_name": {
+              "type": "string",
+              "title": { "en": "Template name", "it": "Nome del template" },
+              "max_length": 200
+            },
+            "broadcast_name": {
+              "type": "string",
+              "title": { "en": "Broadcast name", "it": "Nome del broadcast" },
+              "description": { "en": "Groups the sends in WATI reports.", "it": "Raggruppa gli invii nei report WATI." },
+              "max_length": 200
+            },
+            "parameters": {
+              "type": "string",
+              "format": "textarea",
+              "title": { "en": "Parameters", "it": "Parametri" },
+              "description": {
+                "en": "One per line: name=value, for example name={{contact.first_name}}",
+                "it": "Uno per riga: nome=valore, per esempio name={{contact.first_name}}"
+              },
+              "max_length": 4000,
+              "merge_tags": true
+            }
+          },
+          "required": ["template_name"]
+        },
+        "output_keys": ["message_id"]
+      }
+    ],
+    "automation_triggers": [
+      {
+        "key": "message_received",
+        "name": { "en": "WhatsApp received", "it": "WhatsApp ricevuto" },
+        "description": {
+          "en": "A contact wrote on WhatsApp. The text is available as {{trigger.text}}.",
+          "it": "Un contatto ha scritto su WhatsApp. Il testo è disponibile come {{trigger.text}}."
+        }
+      }
+    ],
+    "ui": [
+      { "slot": "app.settings", "key": "settings", "path": "/ui/settings", "title": { "en": "Settings", "it": "Impostazioni" }, "height": 420 }
+    ]
+  }
+}

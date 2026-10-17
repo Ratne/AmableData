@@ -27,6 +27,7 @@ import {
 import { clean } from '../lib/clean';
 import { SendingDomainBanner, useStepUp } from '../../developers/components';
 import { CopyBlock } from './api-snippet';
+import { AppActionForm, useAppStepLabel } from './app-forms';
 import { EmailDialog } from './email-dialog';
 import {
   DurationInput,
@@ -1142,6 +1143,8 @@ export function StepForm({
       );
     case 'http_request':
       return <HttpForm step={step} onChange={onChange} disabled={disabled} ctx={ctx} />;
+    case 'app_action':
+      return <AppActionForm step={step} onChange={onChange} disabled={disabled} />;
     case 'add_to_sequence':
     case 'remove_from_sequence':
       return <SequenceTargetForm step={step} onChange={onChange} disabled={disabled} ctx={ctx} />;
@@ -1153,8 +1156,11 @@ export function StepForm({
 /** One-line summary of a step for the canvas and the step list. */
 export function useStepSummary(): (step: Step) => string {
   const { t } = useI18n();
+  const appLabel = useAppStepLabel();
   return (step: Step) => {
     switch (step.type) {
+      case 'app_action':
+        return step.app_id === '' ? '' : appLabel(step.app_id, step.action_key, 'action');
       case 'delay':
         return `${step.duration.amount} ${t(`auto.unit.${step.duration.unit}`)}`;
       case 'wait_until':

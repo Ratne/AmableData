@@ -79,6 +79,8 @@ import {
 } from '../components/record-panels';
 import { ContactJourneySlot } from '../components/journey-slot';
 import { ErrorNotice, PageState, SectionCard } from '../components/states';
+import { ContactAppActions, ContactAppCards } from '../../apps/slots';
+import { ContactConversations } from '../../conversations/contact-panel';
 import { customFieldTabsOf, CustomFieldsSection } from '../custom-fields/custom-fields-panel';
 import {
   CONTACT_TABS,
@@ -903,7 +905,8 @@ function ContactView({ contact }: { contact: Contact }) {
               contact.emails[0]?.email}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <ContactAppActions contactId={contact.id} />
           {can('contacts:merge') ? (
             <DashboardButton variant="ghost" onClick={() => setMerging(true)}>
               <GitMerge aria-hidden /> {t('crm.merge.title')}
@@ -1057,6 +1060,10 @@ function ContactView({ contact }: { contact: Contact }) {
           </div>
         </div>
       </SectionCard>
+
+      <ContactAppCards contactId={contact.id} />
+
+      <ContactConversations contactId={contact.id} />
 
       <p className="-mt-2 px-1 text-xs text-muted-foreground">
         {t('crm.contact.createdAt', { date: formatDate(locale, contact.created_at, true) })} ·{' '}

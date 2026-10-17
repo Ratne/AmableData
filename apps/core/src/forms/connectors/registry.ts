@@ -1,5 +1,6 @@
 import type { ConnectorInfo, ConnectorType } from '@amable/api-types';
 import type { FormsRuntime } from '../runtime';
+import { appConnector } from './app';
 import { docusealConnector } from './docuseal';
 import { emailNotificationConnector } from './email-notification';
 import { googleSheetsConnector } from './google-sheets';
@@ -12,6 +13,7 @@ export const CONNECTORS: { readonly [K in ConnectorType]: Connector<unknown> } =
   google_sheets: googleSheetsConnector as Connector<unknown>,
   email_notification: emailNotificationConnector as Connector<unknown>,
   docuseal: docusealConnector as Connector<unknown>,
+  app: appConnector as Connector<unknown>,
 };
 
 export function connectorOf(type: string): Connector<unknown> | null {
@@ -19,7 +21,10 @@ export function connectorOf(type: string): Connector<unknown> | null {
 }
 
 export function connectorCatalog(runtime: FormsRuntime): ConnectorInfo[] {
-  return Object.values(CONNECTORS).map((c) => ({
+  // App connectors are listed per installed app (`appConnectorCatalog`).
+  return Object.values(CONNECTORS)
+    .filter((c) => c.type !== 'app')
+    .map((c) => ({
     type: c.type,
     secret: c.secret,
     oauth_provider: c.oauthProvider,

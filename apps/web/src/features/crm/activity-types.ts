@@ -16,6 +16,8 @@ import {
   MailOpen,
   MailWarning,
   MailX,
+  MessageSquare,
+  MessagesSquare,
   MousePointerClick,
   RefreshCw,
   ShoppingCart,
@@ -90,6 +92,13 @@ const ACTIVITY_LABELS: Readonly<Record<string, MessageKey>> = {
   'subscription.ended': 'crm.activity.subscriptionEnded',
   'subscription.trial_started': 'crm.activity.subscriptionTrialStarted',
   'subscription.trial_converted': 'crm.activity.subscriptionTrialConverted',
+  'conversation.created': 'crm.activity.conversationCreated',
+  'conversation.assigned': 'crm.activity.conversationAssigned',
+  'conversation.closed': 'crm.activity.conversationClosed',
+  'conversation.reopened': 'crm.activity.conversationReopened',
+  'message.received': 'crm.activity.messageReceived',
+  'message.sent': 'crm.activity.messageSent',
+  'message.status_changed': 'crm.activity.messageStatusChanged',
 };
 
 const EXACT_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -124,6 +133,8 @@ const PREFIX_ICONS: Readonly<Record<string, LucideIcon>> = {
   payment: CreditCard,
   refund: CreditCard,
   subscription: RefreshCw,
+  conversation: MessagesSquare,
+  message: MessageSquare,
 };
 
 /** Catalog key of a known activity type, or null for types this build does not know. */
@@ -181,6 +192,9 @@ export function activityDetail(activity: Activity, ctx: ActivityDetailContext): 
         .join(', ');
     }
     return '';
+  }
+  if (activity.type.startsWith('message.')) {
+    return str(data['preview']) ?? str(data['status']) ?? '';
   }
   if (activity.type.startsWith('email.')) {
     return str(data['subject']) ?? str(data['url']) ?? str(data['reason']) ?? '';

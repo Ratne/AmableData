@@ -9,6 +9,8 @@ import { analyticsEn } from './analytics-en';
 import { reportsEn } from './reports-en';
 import { supportEn } from './support-en';
 import { developersEn } from './developers-en';
+import { appsEn } from './apps-en';
+import { conversationsEn } from './conversations-en';
 import { backupsEn } from './backups-en';
 import { foldersEn } from './folders-en';
 import { billingEn } from './billing-en';
@@ -28,6 +30,8 @@ export const en = {
   ...reportsEn,
   ...supportEn,
   ...developersEn,
+  ...appsEn,
+  ...conversationsEn,
   ...backupsEn,
   ...foldersEn,
   ...billingEn,

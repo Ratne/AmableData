@@ -70,3 +70,6 @@ export * from './billing/index';
 
 /** Settings > General: workspace identity, white label, regional defaults, company profile. */
 export * from './workspace/index';
+
+/** Conversations: shared inbox with channels provided by apps. */
+export * from './conversations/index';

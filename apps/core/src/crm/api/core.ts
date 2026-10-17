@@ -116,7 +116,7 @@ export function actorOf(c: Context<AppEnv>): CrmActor {
   const auth = getAuth(c);
   const tenant = getTenant(c);
   return {
-    type: auth.kind === 'api_key' ? 'api_key' : 'user',
+    type: auth.kind === 'session' ? 'user' : auth.kind,
     id: auth.user.id,
     canReadSensitive: tenant.can('contacts:read_sensitive'),
   };
@@ -161,7 +161,7 @@ export function idempotency(): MiddlewareHandler<AppEnv> {
       );
     }
     const auth = getAuth(c);
-    const key = `${auth.kind === 'api_key' ? `k:${auth.apiKey.id}` : `u:${auth.user.id}`}:${header}`;
+    const key = `${auth.kind === 'api_key' ? `k:${auth.apiKey.id}` : auth.kind === 'app' ? `a:${auth.app.installId}` : `u:${auth.user.id}`}:${header}`;
     const body = await c.req.raw.clone().text();
     const requestHash = await sha256Hex(`${c.req.method} ${new URL(c.req.url).pathname}\n${body}`);
     const begin = await callCrm(c, 'idempotency.begin', { key, requestHash });

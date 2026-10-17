@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "__APP_ID__",
+  "name": "__APP_NAME__",
+  "tagline": { "en": "Describe what the app does in one line" },
+  "description": { "en": "A longer description shown on the app page in the Marketplace." },
+  "developer": { "name": "Your name", "url": "__BASE_URL__", "email": "you@example.com" },
+  "categories": ["productivity"],
+  "icon_url": "__BASE_URL__/icon.png",
+  "homepage": "__BASE_URL__",
+  "support_url": "__BASE_URL__/support",
+  "privacy_url": "__BASE_URL__/privacy",
+  "base_url": "__BASE_URL__",
+  "jwks_url": "__BASE_URL__/.well-known/jwks.json",
+  "redirect_uris": ["__BASE_URL__/install"],
+  "api_version": "2026-10",
+  "scopes": ["contacts:read"],
+  "webhooks": { "endpoint": "/webhooks", "events": ["contact.created"] },
+  "privacy": {
+    "handles_personal_data": true,
+    "erasure_endpoint": "/privacy/erasure",
+    "data_request_endpoint": "/privacy/data"
+  },
+  "extensions": {
+    "contact_validate": { "fields": ["email"], "endpoint": "/hooks/validate", "cache_ttl_seconds": 86400 },
+    "ui": [{ "slot": "app.settings", "key": "settings", "path": "/ui/settings", "title": { "en": "Settings", "it": "Impostazioni" } }]
+  }
+}

@@ -1,4 +1,6 @@
 import { monotonicFactory } from 'ulid';
+import { pauseInstall } from '../apps/lifecycle';
+import { installById } from '../apps/store';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
 import { WebhookService, type WebhookDeps, type WebhookMessage } from './service';
@@ -29,6 +31,11 @@ export function webhookDeps(env: Env): WebhookDeps {
     now: () => Date.now(),
     newId: () => nextId(),
     allowLoopback: env.ENVIRONMENT === 'dev' && env.WEBHOOKS_ALLOW_LOOPBACK === 'true',
+    // An app that keeps failing its deliveries is paused and the admins are told.
+    onAppEndpointDisabled: async (installId) => {
+      const install = await installById(env.DB, installId);
+      if (install !== null) await pauseInstall(env, install, 'webhook_endpoint_disabled', Date.now());
+    },
   };
   return override === null ? base : override(base, env);
 }

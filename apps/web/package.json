@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@amable/api-types": "workspace:*",
+    "@amable/app-bridge": "workspace:*",
     "@amable/booking": "workspace:*",
     "@amable/builder": "workspace:*",
     "@amable/core": "workspace:*",

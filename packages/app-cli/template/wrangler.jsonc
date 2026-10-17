@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "__APP_ID__",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  // Built screen scripts (npm run build:screens).
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "kv_namespaces": [
+    // npx wrangler kv namespace create INSTALLS
+    { "binding": "INSTALLS", "id": "replace-with-your-namespace-id" }
+  ]
+  // Secret: APP_KEYS (npx amable-app keys secret | npx wrangler secret put APP_KEYS)
+}

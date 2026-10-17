@@ -21,6 +21,7 @@ export const GOAL_TYPES: readonly GoalTriggerType[] = [
   'appointment_booked',
   'opportunity_stage_changed',
   'date_anniversary',
+  'app_event',
 ];
 
 export function defaultTrigger(type: GoalTriggerType): GoalTrigger {
@@ -52,6 +53,8 @@ export function defaultTrigger(type: GoalTriggerType): GoalTrigger {
       return { type };
     case 'date_anniversary':
       return { type, field: 'birthday', offset_days: 0, time: '09:00' };
+    case 'app_event':
+      return { type, app_id: '', key: '' };
   }
 }
 
@@ -61,7 +64,7 @@ export const STEP_GROUPS: ReadonlyArray<{
   types: readonly StepType[];
 }> = [
   { id: 'timers', types: ['delay', 'wait_until', 'field_timer'] },
-  { id: 'messages', types: ['send_email', 'http_request'] },
+  { id: 'messages', types: ['send_email', 'http_request', 'app_action'] },
   {
     id: 'crm',
     types: [
@@ -132,6 +135,8 @@ export function defaultStep(type: StepType, id: string): Step {
       return { id, type, at_period_end: true };
     case 'http_request':
       return { id, type, method: 'POST', url: 'https://example.com/webhook', payload: 'contact' };
+    case 'app_action':
+      return { id, type, app_id: '', action_key: '', input: {} };
     case 'add_to_sequence':
       return { id, type, automation_id: '', node_id: '' };
     case 'remove_from_sequence':

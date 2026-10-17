@@ -1,5 +1,6 @@
 import type {
   ConnectionTestResult,
+  ConnectorInfo,
   ConnectorType,
   CreateConnectionInput,
   FormConnection,
@@ -16,6 +17,8 @@ import { useParams } from '@tanstack/react-router';
 import { FlaskConical, KeyRound, Pencil, Plus, Trash2, Wand2, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
+import { text, type AppInputSchema } from '../../apps/api';
+import { AppSchemaInputs } from '../../automations/components/app-forms';
 import { useStepUp } from '../../developers/components';
 import { formsKeys, useDates, useForm, useForms, useFormsMutation, usePermissions } from '../api/hooks';
 import { Choice, ErrorNotice, FormField as Field, Pill, SectionCard } from '../components/common';
@@ -28,6 +31,18 @@ type Pair = [string, string];
 const STANDARD_SOURCES = ['submission_id', 'form_name', 'submitted_at', 'contact_id', 'page_url', 'referrer', 'utm_source', 'utm_medium', 'utm_campaign'];
 
 const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
+
+type AppConnectorInfo = NonNullable<ConnectorInfo['app']>;
+type Editing = { connection: FormConnection | null; type: ConnectorType; app: AppConnectorInfo | null };
+
+const appKeyOf = (app_id: unknown, key: unknown) => `${str(app_id)}:${str(key)}`;
+
+/** Catalog entry of the app behind an `app` connection (null once the app is gone). */
+function appOfConnection(catalog: readonly ConnectorInfo[] | undefined, connection: FormConnection): AppConnectorInfo | null {
+  if (connection.type !== 'app') return null;
+  const wanted = appKeyOf(connection.config['app_id'], connection.config['key']);
+  return catalog?.find((info) => info.app !== undefined && appKeyOf(info.app.app_id, info.app.key) === wanted)?.app ?? null;
+}
 const pairsOf = (value: unknown, a: string, b: string): Pair[] =>
   Array.isArray(value) ? value.map((item: Record<string, unknown>) => [str(item[a]), str(item[b])] as Pair) : [];
 
@@ -70,12 +85,15 @@ export function ConnectionsPage() {
   const form = useForm(formId);
   useFormChrome(formId, form.data, 'connections');
   const manage = can('forms:connections_manage');
-  const [editing, setEditing] = useState<FormConnection | ConnectorType | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ name: string; result: ConnectionTestResult } | null>(null);
   const connections = useQuery({ queryKey: formsKeys.connections(slug, formId), queryFn: async () => (await api.connections.list(formId)).data });
   const catalog = useQuery({ queryKey: formsKeys.catalog(slug), queryFn: async () => (await api.connections.catalog()).data, staleTime: 60_000 });
   const invalidate = [formsKeys.connections(slug, formId)];
+  const { locale } = useI18n();
+  const connectorLabel = (type: ConnectorType, app: AppConnectorInfo | null) =>
+    app === null ? t(`forms.connector.${type}`) : `${text(app.name, locale)} · ${app.app_name}`;
 
   const { guard, dialog: stepUpDialog } = useStepUp();
   const toggle = useFormsMutation({
@@ -106,8 +124,13 @@ export function ConnectionsPage() {
           manage ? (
             <div className="flex flex-wrap gap-2">
               {(catalog.data ?? []).map((info) => (
-                <DashboardButton key={info.type} variant="ghost" disabled={!info.available} onClick={() => setEditing(info.type)}>
-                  <Plus aria-hidden /> {t(`forms.connector.${info.type}`)}
+                <DashboardButton
+                  key={info.app === undefined ? info.type : appKeyOf(info.app.app_id, info.app.key)}
+                  variant="ghost"
+                  disabled={!info.available}
+                  onClick={() => setEditing({ connection: null, type: info.type, app: info.app ?? null })}
+                >
+                  <Plus aria-hidden /> {connectorLabel(info.type, info.app ?? null)}
                 </DashboardButton>
               ))}
             </div>
@@ -126,7 +149,11 @@ export function ConnectionsPage() {
             title={
               <span className="flex items-center gap-2">
                 {c.name}
-                <Pill tone="neutral">{t(`forms.connector.${c.type}`)}</Pill>
+                <Pill tone="neutral">
+                  {c.type === 'app' && appOfConnection(catalog.data, c) === null
+                    ? t('forms.connector.appMissing', { app: str(c.config['app_id']) })
+                    : connectorLabel(c.type, appOfConnection(catalog.data, c))}
+                </Pill>
                 {c.last_delivery ? (
                   <Pill tone={c.last_delivery.status === 'success' ? 'success' : c.last_delivery.status === 'skipped' ? 'neutral' : 'danger'}>
                     {t(`forms.delivery.${c.last_delivery.status}`)} · {dateTime(c.last_delivery.at)}
@@ -146,7 +173,7 @@ export function ConnectionsPage() {
                       <KeyRound aria-hidden /> {t('forms.connections.rotate')}
                     </Button>
                   ) : null}
-                  <Button size="icon" variant="ghost" aria-label={t('forms.action.edit')} onClick={() => setEditing(c)}>
+                  <Button size="icon" variant="ghost" aria-label={t('forms.action.edit')} onClick={() => setEditing({ connection: c, type: c.type, app: appOfConnection(catalog.data, c) })}>
                     <Pencil aria-hidden />
                   </Button>
                   <Button size="icon" variant="ghost" aria-label={t('forms.connections.delete')} onClick={() => remove.mutate(c.id)}>
@@ -164,8 +191,9 @@ export function ConnectionsPage() {
         <ConnectionDialog
           formId={formId}
           fields={form.data.definition.fields}
-          connection={typeof editing === 'string' ? null : editing}
-          type={typeof editing === 'string' ? editing : editing.type}
+          connection={editing.connection}
+          type={editing.type}
+          app={editing.app}
           onClose={() => setEditing(null)}
           onSecret={setSecret}
           guard={guard}
@@ -221,6 +249,8 @@ function ConnectionSummary({ connection }: { connection: FormConnection }) {
         return Array.isArray(c['recipients']) ? c['recipients'].join(', ') : '';
       case 'docuseal':
         return `${t('forms.connections.template')} ${String(c['template_id'] ?? '')}`;
+      case 'app':
+        return `${str(c['app_id'])} · ${str(c['key'])}`;
     }
   })();
   return (
@@ -237,6 +267,7 @@ function ConnectionDialog({
   fields,
   connection,
   type,
+  app,
   onClose,
   onSecret,
   guard,
@@ -245,15 +276,21 @@ function ConnectionDialog({
   fields: readonly FormField[];
   connection: FormConnection | null;
   type: ConnectorType;
+  /** `type: 'app'`: the app connector, from the catalog. */
+  app: AppConnectorInfo | null;
   onClose: () => void;
   onSecret: (secret: string | null) => void;
   /** Step-up dialog of the page: replays the save once the second factor is verified. */
   guard: (error: unknown, retry: () => void) => boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { slug, api } = useForms();
   const initial = connection?.config ?? {};
-  const [name, setName] = useState(connection?.name ?? t(`forms.connector.${type}`));
+  const title = app === null ? t(`forms.connector.${type}`) : text(app.name, locale);
+  const [name, setName] = useState(connection?.name ?? title);
+  const [settings, setSettings] = useState<Record<string, unknown>>(
+    (initial['settings'] as Record<string, unknown> | undefined) ?? {},
+  );
   const [config, setConfig] = useState<Config>(initial);
   const [pairs, setPairs] = useState<Pair[]>(
     type === 'webhook'
@@ -328,6 +365,8 @@ function ConnectionDialog({
           prefill: clean.map(([source, field]) => ({ source, field: field.trim() })),
           send_email: config['send_email'] !== false,
         };
+      case 'app':
+        return { app_id: app?.app_id ?? str(initial['app_id']), key: app?.key ?? str(initial['key']), settings };
     }
   };
 
@@ -362,8 +401,14 @@ function ConnectionDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>{t(`forms.connector.${type}`)}</DialogTitle>
-            <DialogDescription>{t(`forms.connector.${type}.hint`)}</DialogDescription>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>
+              {app === null
+                ? t(`forms.connector.${type}.hint`)
+                : app.description === null
+                  ? t('forms.connector.app.hint', { app: app.app_name })
+                  : text(app.description, locale)}
+            </DialogDescription>
           </DialogHeader>
           <Field label={t('forms.field.name')}>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
           {type === 'webhook' ? (
@@ -521,11 +566,20 @@ function ConnectionDialog({
               </label>
             </>
           ) : null}
+          {type === 'app' && app === null ? (
+            <p className="text-sm text-destructive">{t('forms.connector.appMissing', { app: str(initial['app_id']) })}</p>
+          ) : null}
+          {type === 'app' && app !== null && app.settings_schema !== null ? (
+            <AppSchemaInputs schema={app.settings_schema as unknown as AppInputSchema} input={settings} onChange={setSettings} />
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" disabled={save.isPending || name.trim() === '' || (type === 'webhook' && !bodyValid)}>
+            <Button
+              type="submit"
+              disabled={save.isPending || name.trim() === '' || (type === 'webhook' && !bodyValid) || (type === 'app' && app === null)}
+            >
               {t('common.save')}
             </Button>
           </DialogFooter>

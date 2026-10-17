@@ -1041,7 +1041,9 @@ export async function touchApiKey(db: D1Database, id: string, now: number) {
 export interface AuditEntry {
   tenantId: string | null;
   actorUserId: string | null;
-  actorType: 'user' | 'api_key' | 'system' | 'support';
+  actorType: 'user' | 'api_key' | 'app' | 'system' | 'support';
+  /** Marketplace app acting through its token (audit_log.actor_app_id). */
+  actorAppId?: string | null;
   action: string;
   target: string | null;
   details: Record<string, string | number | boolean | null> | null;
@@ -1052,14 +1054,15 @@ export interface AuditEntry {
 export async function insertAudit(db: D1Database, entry: AuditEntry) {
   await db
     .prepare(
-      `INSERT INTO audit_log (id, tenant_id, actor_user_id, actor_type, action, target, details,
-         ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO audit_log (id, tenant_id, actor_user_id, actor_type, actor_app_id, action, target, details,
+         ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       ulid(entry.now),
       entry.tenantId,
       entry.actorUserId,
       entry.actorType,
+      entry.actorAppId ?? null,
       entry.action,
       entry.target,
       entry.details === null ? null : JSON.stringify(entry.details),
@@ -1076,7 +1079,7 @@ export async function listAudit(
 ) {
   const result = await db
     .prepare(
-      `SELECT id, actor_user_id, actor_type, action, target, details, ip, created_at
+      `SELECT id, actor_user_id, actor_type, actor_app_id, action, target, details, ip, created_at
        FROM audit_log WHERE tenant_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?`,
     )
     .bind(tenantId, input.before ?? Number.MAX_SAFE_INTEGER, input.limit)
@@ -1084,6 +1087,7 @@ export async function listAudit(
       id: string;
       actor_user_id: string | null;
       actor_type: string | null;
+      actor_app_id: string | null;
       action: string;
       target: string | null;
       details: string | null;
@@ -1094,6 +1098,7 @@ export async function listAudit(
     id: r.id,
     actorUserId: r.actor_user_id,
     actorType: r.actor_type,
+    actorAppId: r.actor_app_id,
     action: r.action,
     target: r.target,
     details: r.details,

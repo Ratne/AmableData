@@ -16,7 +16,8 @@ import {
   updateSavedSearchSchema,
 } from '@amable/api-types';
 import type { Context } from 'hono';
-import type { AppEnv } from '../../middleware';
+import { validateImportBatch } from '../../apps/validate-hook';
+import { defer, getAuth, getTenant, type AppEnv } from '../../middleware';
 import { CrmError } from '../errors';
 import { CsvParser, detectDelimiter } from '../import/csv';
 import type { SearchEntityKind } from '../search/index-store';
@@ -237,7 +238,10 @@ async function streamCsvImport(c: Context<AppEnv>, importId: string) {
     nextRowNumber += batch.length;
     const current = batch;
     batch = [];
-    await callCrm(c, 'imports.rows', { importId, header, rows: current, firstRowNumber });
+    const result = await callCrm(c, 'imports.rows', { importId, header, rows: current, firstRowNumber });
+    if (result.created_contacts.length > 0 && getAuth(c).kind !== 'app') {
+      await defer(c, validateImportBatch(c.env, getTenant(c).tenant.id, result.created_contacts));
+    }
   };
   const accept = async (parsed: string[][]): Promise<void> => {
     for (const row of parsed) {

@@ -73,7 +73,7 @@ import {
   type TokenStatus,
 } from './store';
 import { addDays, formatDate, isLeap, isValidTimeZone, parseTimeOfDay, wallClock } from './time';
-import { validateGraph } from './validate';
+import { validateGraph, type AppActionCatalog } from './validate';
 
 /** Who performs an engine API operation (user id from the verified context). */
 export interface EngineActor {
@@ -274,14 +274,15 @@ export class AutomationEngine implements StepHost {
     return this.getAutomation({ id: row.id });
   }
 
-  validateDraft(input: { id: string }): ValidationResult {
+  validateDraft(input: { id: string; apps?: AppActionCatalog }): ValidationResult {
     const row = this.automationOrThrow(input.id);
-    return this.validate(row, parseGraph(row.draft_graph));
+    return this.validate(row, parseGraph(row.draft_graph), input.apps);
   }
 
-  private validate(row: AutomationRow, graph: AutomationGraph): ValidationResult {
+  private validate(row: AutomationRow, graph: AutomationGraph, apps?: AppActionCatalog): ValidationResult {
     return validateGraph(graph, parseSettings(row.settings), {
       automationId: row.id,
+      ...(apps === undefined ? {} : { apps }),
       lookup: (automationId) => {
         if (automationId === row.id) return { graph };
         const target = getAutomationRow(this.db, automationId);
@@ -295,10 +296,10 @@ export class AutomationEngine implements StepHost {
     });
   }
 
-  publish(actor: EngineActor, input: { id: string }): PublishResult {
+  publish(actor: EngineActor, input: { id: string; apps?: AppActionCatalog }): PublishResult {
     const row = this.automationOrThrow(input.id);
     const graph = parseGraph(row.draft_graph);
-    const result = this.validate(row, graph);
+    const result = this.validate(row, graph, input.apps);
     if (!result.valid) {
       throw invalidMany(
         result.issues

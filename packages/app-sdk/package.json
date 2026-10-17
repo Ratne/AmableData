@@ -1,0 +1,16 @@
+{
+  "name": "@amable/app-sdk",
+  "version": "0.1.0",
+  "description": "Server SDK for AmableData apps: discovery, OAuth with private_key_jwt, signed requests, session tokens, API client",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

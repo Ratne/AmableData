@@ -33,6 +33,7 @@ import {
   validationResultSchema,
 } from '@amable/api-types';
 import type { Context, Hono, MiddlewareHandler } from 'hono';
+import { appActionCatalog } from '../../apps/actions';
 import { getAuth, getTenant, type AppEnv } from '../../middleware';
 import { CrmHttpError, crmRoute, json, jsonBody } from '../../crm/api/core';
 import type { CrmResult } from '../../crm/ops';
@@ -212,7 +213,14 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       request: { params: automationIdParamSchema },
       responses: { 200: json(validationResultSchema, 'Errors block publishing, warnings do not') },
     }),
-    async (c) => c.json(await callEngine(c, 'automations.validate', c.req.valid('param')), 200),
+    async (c) =>
+      c.json(
+        await callEngine(c, 'automations.validate', {
+          ...c.req.valid('param'),
+          apps: await appActionCatalog(c.env, getTenant(c).tenant.id),
+        }),
+        200,
+      ),
   );
   app.openapi(
     crmRoute('automations:publish', {
@@ -225,7 +233,14 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       request: { params: automationIdParamSchema },
       responses: { 200: json(publishResultSchema, 'The published version') },
     }),
-    async (c) => c.json(await callEngine(c, 'automations.publish', c.req.valid('param')), 200),
+    async (c) =>
+      c.json(
+        await callEngine(c, 'automations.publish', {
+          ...c.req.valid('param'),
+          apps: await appActionCatalog(c.env, getTenant(c).tenant.id),
+        }),
+        200,
+      ),
   );
   app.openapi(
     crmRoute('automations:publish', {

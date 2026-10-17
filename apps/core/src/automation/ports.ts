@@ -1,3 +1,4 @@
+import type { AppActionPort } from '../apps/actions';
 import type { SecretBox } from '@amable/auth/security';
 import type { EmailSendRequest, QuotaGuard } from '@amable/core';
 import type { CrmActor } from '../crm/context';
@@ -51,6 +52,8 @@ export interface EnginePorts {
   readonly secretBox?: () => Promise<SecretBox | null>;
   /** Outgoing webhooks: every event seen by the bus is offered for fan-out (at-least-once). */
   readonly webhooks?: WebhookPublisher;
+  /** Actions of installed apps (`app_action` steps); without it those steps are skipped. */
+  readonly apps?: AppActionPort;
   now(): number;
   newId(): string;
 }

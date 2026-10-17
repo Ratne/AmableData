@@ -6,10 +6,14 @@
   "license": "AGPL-3.0-only",
   "exports": {
     ".": "./src/index.ts",
-    "./platform": "./src/platform/index.ts"
+    "./platform": "./src/platform/index.ts",
+    "./apps": "./src/apps/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "typescript": "~5.9.3"

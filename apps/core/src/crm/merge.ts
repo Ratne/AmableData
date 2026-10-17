@@ -8,6 +8,8 @@ import type {
 import type { CrmContext } from './context';
 import { invalid } from './errors';
 import { emit } from './events';
+import { mergeAppEntityData } from '../apps/tenant-ops';
+import { mergeConversations } from '../conversations/ops';
 import {
   getContact,
   getContactRow,
@@ -143,6 +145,8 @@ export function mergeContacts(
     ]) {
       ctx.db.run(`UPDATE ${table} SET contact_id = ? WHERE contact_id = ?`, target.id, source.id);
     }
+    mergeAppEntityData(ctx, target.id, [source.id]);
+    mergeConversations(ctx, target.id, [source.id]);
     purgeContactSatellites(ctx, source.id);
     ctx.db.run(
       `UPDATE crm_contacts SET deleted_at = ?, updated_at = ?, merged_into_id = ?, primary_email = NULL,

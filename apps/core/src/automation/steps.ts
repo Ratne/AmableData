@@ -2,6 +2,7 @@ import {
   ResponseTooLargeError,
   SsrfBlockedError,
   WEBHOOK_SIGNATURE_HEADER,
+  renderSandboxed,
   safeFetch,
   signWebhook,
 } from '@amable/auth/security';
@@ -16,6 +17,7 @@ import {
   type UserRef,
 } from '@amable/api-types';
 import type { EmailSendRequest, EmailSendSource } from '@amable/core';
+import type { AppActionContact } from '../apps/actions';
 import type { CrmOpInput, CrmOpName, CrmOpOutput } from '../crm/ops';
 import { CrmCallError, crmCall, type EnginePorts } from './ports';
 import {
@@ -450,6 +452,76 @@ async function runHttp(ctx: StepContext, step: StepOf<'http_request'>): Promise<
   throw new StepFailure(`HTTP ${status}`, !transient);
 }
 
+// --------------------------------------------------------------- app actions
+
+function appActionContact(contact: Contact): AppActionContact {
+  return {
+    id: contact.id,
+    first_name: contact.given_name,
+    last_name: contact.family_name,
+    email: (contact.emails.find((e) => e.is_primary) ?? contact.emails[0])?.email ?? null,
+    phone: contact.phones[0]?.number ?? null,
+  };
+}
+
+async function resolveAppInput(
+  ctx: StepContext,
+  input: Readonly<Record<string, unknown>>,
+  contact: Contact,
+): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  let vars: Record<string, unknown> | null = null;
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value !== 'string' || !value.includes('{{')) {
+      out[key] = value;
+      continue;
+    }
+    vars ??= {
+      contact: {
+        ...appActionContact(contact),
+        name: [contact.given_name, contact.family_name].filter(Boolean).join(' '),
+        job_title: contact.job_title,
+        custom: contact.custom_fields,
+      },
+    };
+    try {
+      out[key] = await renderSandboxed(value, vars, { escapeHtml: false, timezone: await ctx.timeZone() });
+    } catch (error) {
+      throw new StepFailure(`input ${key}: ${error instanceof Error ? error.message : String(error)}`, true);
+    }
+  }
+  return out;
+}
+
+async function runAppAction(ctx: StepContext, step: StepOf<'app_action'>): Promise<StepOutcome> {
+  const port = ctx.host.ports.apps;
+  if (port === undefined) return { kind: 'skip', message: 'apps are not available on this installation' };
+  const contact = await crm(() => ctx.contact());
+  const input = await resolveAppInput(ctx, step.input, contact);
+  let outcome;
+  try {
+    outcome = await port.run({
+      appId: step.app_id,
+      actionKey: step.action_key,
+      input,
+      contactId: ctx.contactId,
+      contact: appActionContact(contact),
+      idempotencyKey: ctx.key,
+      automation: { id: ctx.automationId, versionId: ctx.versionId, nodeId: ctx.node.id, stepId: step.id },
+    });
+  } catch (error) {
+    throw new StepFailure(`app ${step.app_id}: ${error instanceof Error ? error.message : String(error)}`, false);
+  }
+  switch (outcome.kind) {
+    case 'skipped':
+      return { kind: 'skip', message: `app ${step.app_id}: ${outcome.reason.replace('_', ' ')}` };
+    case 'ok':
+      return { kind: 'done', message: `${step.app_id}.${step.action_key}: HTTP ${outcome.status}`, result: outcome.output };
+    case 'failed':
+      throw new StepFailure(`${step.app_id}.${step.action_key}: ${outcome.error}`, !outcome.transient);
+  }
+}
+
 // ------------------------------------------------------------------ router
 
 export async function executeStep(ctx: StepContext): Promise<StepOutcome> {
@@ -547,6 +619,8 @@ export async function executeStep(ctx: StepContext): Promise<StepOutcome> {
       return runCancelSubscription(ctx, step);
     case 'http_request':
       return runHttp(ctx, step);
+    case 'app_action':
+      return runAppAction(ctx, step);
     case 'add_to_sequence':
       return {
         kind: 'done',

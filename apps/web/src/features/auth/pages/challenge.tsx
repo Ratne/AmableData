@@ -158,8 +158,14 @@ export function ChallengePage() {
   }, [t]);
 
   function finish(body: AuthenticatedBody) {
-    // Back to a pending invitation if the sign-in started from one.
+    // Back to a pending invitation or app authorization if the sign-in started from one.
     const pendingInvite = sessionStorage.getItem('amb_invite_token') !== null;
+    const pendingApp = sessionStorage.getItem('amb_app_authorize');
+    if (pendingApp !== null && !pendingInvite) {
+      sessionStorage.removeItem('amb_app_authorize');
+      window.location.assign(pendingApp);
+      return;
+    }
     window.location.assign(pendingInvite ? '/invite' : homePath(body.lastTenantSlug));
   }
 

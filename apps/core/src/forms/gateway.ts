@@ -11,6 +11,7 @@ import {
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { GatewayError, type GatewayContext, type GatewayHandlers, type GatewayRawHandlers } from '../public/context';
+import { blockingValidationErrors } from './app-validation';
 import { encryptSubmission } from './crypto';
 import { enqueueSubmission } from './queue';
 import { formsRuntime, type FormsRuntime } from './runtime';
@@ -152,6 +153,8 @@ async function submit(ctx: GatewayContext, input: unknown): Promise<Output<'form
       Object.entries(validation.errors).map(([path, message]) => ({ path, message })),
     );
   }
+  const appErrors = await blockingValidationErrors(ctx.env, ctx.tenant.id, definition, validation.values);
+  if (appErrors.length > 0) throw new GatewayError(422, 'validation_failed', 'some fields are not valid', appErrors);
 
   const tracking: Record<string, string> = {};
   for (const key of TRACKING_PARAMS) {
