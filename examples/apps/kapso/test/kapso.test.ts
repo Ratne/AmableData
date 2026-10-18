@@ -110,7 +110,7 @@ async function setup(
   const webhook = async (event: { event: string; body: unknown }, secret = HOOK_SECRET) => {
     const raw = JSON.stringify(event.body);
     const response = await fetch(
-      new Request(`${manifest.base_url}/kapso/webhook/${install.id}`, {
+      new Request(`${manifest.base_url}/inbound/${install.id}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -613,7 +613,7 @@ describe('kapso: settings, onboarding and templates page', () => {
     const hook = (
       created.body as { whatsapp_webhook: { url: string; secret_key: string; events: string[] } }
     ).whatsapp_webhook;
-    expect(hook.url).toBe(`${manifest.base_url}/kapso/webhook/${app.install.id}`);
+    expect(hook.url).toBe(`https://apps.amabledata.com/kapso/inbound/${app.install.id}`);
     expect(hook.events).toContain('whatsapp.contact.marketing_preference_changed');
     expect(app.crm.data.get('kapso_webhook_secret')).toEqual({
       value: hook.secret_key,
@@ -641,7 +641,7 @@ describe('kapso: settings, onboarding and templates page', () => {
       setup_link: { success_redirect_url: string };
     };
     const success = request.setup_link.success_redirect_url;
-    expect(success).toMatch(new RegExp(`^${manifest.base_url}/kapso/connected/[0-9a-f]{32}$`));
+    expect(success).toMatch(/^https:\/\/apps\.amabledata\.com\/kapso\/setup\/connected\/[0-9a-f]{32}$/);
 
     // Kapso sends the admin back with the new number.
     const back = await app.fetch(
@@ -656,7 +656,7 @@ describe('kapso: settings, onboarding and templates page', () => {
     });
     // The link works once.
     expect((await app.fetch(new Request(success))).status).toBe(400);
-    expect((await app.fetch(new Request(success.replace('/connected/', '/failed/')))).status).toBe(
+    expect((await app.fetch(new Request(success.replace('/setup/connected/', '/setup/failed/')))).status).toBe(
       400,
     );
   });

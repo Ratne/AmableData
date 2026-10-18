@@ -10,6 +10,7 @@
     "typecheck": "tsc -p . && tsc -p test"
   },
   "dependencies": {
+    "@amable/ads-providers": "workspace:*",
     "@amable/api-types": "workspace:*",
     "@amable/app-edge": "workspace:*",
     "@amable/auth": "workspace:*",

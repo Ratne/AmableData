@@ -152,7 +152,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
           '/privacy/data': async () => ({ data: null }),
         },
         screens: {
-          '/ui/settings': () => settingsPage(),
+          '/ui/settings': () => settingsPage(manifest.base_url),
         },
         screenApi: {
           '/api/settings': async (req, _session, ctx) => {

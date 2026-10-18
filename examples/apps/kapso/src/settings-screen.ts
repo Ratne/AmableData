@@ -155,7 +155,7 @@ async function update(path: string, body: unknown, invalidMessage = t.failed): P
   }
 }
 
-void call('/api/settings', 'GET').then(({ body }) => {
+void call('api/settings', 'GET').then(({ body }) => {
   state = body as State;
   render();
 });
@@ -165,23 +165,23 @@ keyForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const input = keyForm.elements.namedItem('api_key') as HTMLInputElement;
   if (input.value.trim() === '') return;
-  void update('/api/settings', { api_key: input.value.trim() }, t.invalid).then(() => {
+  void update('api/settings', { api_key: input.value.trim() }, t.invalid).then(() => {
     input.value = '';
   });
 });
-$('#remove-key').addEventListener('click', () => void update('/api/settings', { api_key: '' }));
+$('#remove-key').addEventListener('click', () => void update('api/settings', { api_key: '' }));
 $('#use-number').addEventListener('click', () => {
   const id = $<HTMLSelectElement>('#numbers').value;
-  if (id !== '') void update('/api/number', { phone_number_id: id });
+  if (id !== '') void update('api/number', { phone_number_id: id });
 });
 $('#disconnect').addEventListener(
   'click',
-  () => void update('/api/number', { phone_number_id: null }),
+  () => void update('api/number', { phone_number_id: null }),
 );
 $('#connect').addEventListener('click', () => {
   // Open the tab synchronously (popup blockers), then point it at the setup link.
   const tab = window.open('about:blank', '_blank');
-  void call('/api/connect', 'POST', {})
+  void call('api/connect', 'POST', {})
     .then(({ status, body }) => {
       if (status >= 400 || typeof body['url'] !== 'string') {
         tab?.close();

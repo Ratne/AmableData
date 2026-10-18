@@ -157,9 +157,9 @@ if (customer !== undefined) {
       body: {
         setup_link: {
           success_redirect_url:
-            'https://kapso.apps.amabledata.com/kapso/connected/0123456789abcdef0123456789abcdef',
+            'https://apps.amabledata.com/kapso/setup/connected/0123456789abcdef0123456789abcdef',
           failure_redirect_url:
-            'https://kapso.apps.amabledata.com/kapso/failed/0123456789abcdef0123456789abcdef',
+            'https://apps.amabledata.com/kapso/setup/failed/0123456789abcdef0123456789abcdef',
         },
       },
     },

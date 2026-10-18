@@ -114,6 +114,12 @@ validate` checks a file against it.
 
 Rules worth knowing:
 
+- **`base_url`** may include a path (`https://apps.example.com/my-app`): several apps can share
+  one domain or one Worker. `createAppHandler` strips the path before routing (`appPath()` does
+  the same for your own routes), and screens should load their files and call their API with
+  relative URLs under `<base href="<base_url>/">`. The official apps run this way in the
+  [apps host](../../examples/apps/host).
+
 - **Scopes** are the tenant permissions (`contacts:read`, `orders:write`, …) minus the ones that
   administer people, keys, apps and the workspace. `contacts:read_sensitive`,
   `data:export_full`, `data:bulk_delete` and `orders:refund` are shown with a warning and only

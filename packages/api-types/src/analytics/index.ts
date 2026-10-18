@@ -9,6 +9,7 @@
 export * from './base';
 export * from './reports';
 export * from './funnel-graph';
+export * from './funnel-validate';
 export * from './traffic-sources';
 export * from './ads';
 export * from './attribution-reports';

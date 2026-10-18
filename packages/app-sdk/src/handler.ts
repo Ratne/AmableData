@@ -98,6 +98,18 @@ export interface AppHandlerOptions {
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 
+/**
+ * The request path relative to `base_url`: an app hosted under a path
+ * (`https://apps.example.com/my-app`) sees the same routes as one at the root.
+ * `null` when the request is outside `base_url`.
+ */
+export function appPath(url: URL, baseUrl: string): string | null {
+  const prefix = URL.canParse(baseUrl) ? new URL(baseUrl).pathname.replace(/\/+$/, '') : '';
+  if (prefix === '') return url.pathname;
+  if (url.pathname === prefix) return '/';
+  return url.pathname.startsWith(`${prefix}/`) ? url.pathname.slice(prefix.length) : null;
+}
+
 export function createAppHandler(options: AppHandlerOptions) {
   const fetcher = options.fetch ?? fetch;
   const keys = options.keys.map(parsePrivateJwk);
@@ -187,7 +199,8 @@ export function createAppHandler(options: AppHandlerOptions) {
     },
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
-      const path = url.pathname;
+      const path = appPath(url, baseUrl);
+      if (path === null) return json({ error: 'not_found' }, 404);
       try {
         if (request.method === 'GET' && path === (options.jwksPath ?? '/.well-known/jwks.json')) {
           return new Response(JSON.stringify(jwksOf(keys)), {

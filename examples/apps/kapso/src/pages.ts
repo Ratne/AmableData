@@ -24,18 +24,20 @@ const STYLE = `
   [hidden] { display: none !important; }
 `;
 
-function shell(title: string, body: string, script: string): Response {
+/** `<base>` makes the script and the API calls relative to `base_url`, wherever the app is hosted. */
+function shell(baseUrl: string, title: string, body: string, script: string): Response {
   const html = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="${baseUrl}/" />
     <title>${title}</title>
     <style>${STYLE}</style>
   </head>
   <body>
 ${body}
-    <script type="module" src="/${script}"></script>
+    <script type="module" src="${script}"></script>
   </body>
 </html>`;
   return new Response(html, {
@@ -43,8 +45,9 @@ ${body}
   });
 }
 
-export function settingsPage(): Response {
+export function settingsPage(baseUrl: string): Response {
   return shell(
+    baseUrl,
     'Kapso',
     `    <p data-i18n="intro">Connect a WhatsApp number through Kapso: conversations land in the shared inbox, and automations can send approved templates.</p>
     <section id="key-section">
@@ -73,8 +76,9 @@ export function settingsPage(): Response {
   );
 }
 
-export function templatesPage(): Response {
+export function templatesPage(baseUrl: string): Response {
   return shell(
+    baseUrl,
     'WhatsApp templates',
     `    <p data-i18n="intro">Templates are the only messages WhatsApp lets you send when the contact has not written in the last 24 hours. Meta reviews each one before it can be used.</p>
     <p id="status" class="muted"></p>

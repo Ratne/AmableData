@@ -8,8 +8,8 @@
     "url": "https://api.kapso.ai/platform/v1/customers/{customer_id}/setup_links",
     "body": {
       "setup_link": {
-        "success_redirect_url": "https://kapso.apps.amabledata.com/kapso/connected/0123456789abcdef0123456789abcdef",
-        "failure_redirect_url": "https://kapso.apps.amabledata.com/kapso/failed/0123456789abcdef0123456789abcdef"
+        "success_redirect_url": "https://apps.amabledata.com/kapso/setup/connected/0123456789abcdef0123456789abcdef",
+        "failure_redirect_url": "https://apps.amabledata.com/kapso/setup/failed/0123456789abcdef0123456789abcdef"
       }
     }
   },
@@ -22,7 +22,7 @@
         "allowed_origins": [],
         "created_at": "2026-10-18T05:14:02-03:00",
         "expires_at": "2026-11-17T05:14:02-03:00",
-        "failure_redirect_url": "https://kapso.apps.amabledata.com/kapso/failed/0123456789abcdef0123456789abcdef",
+        "failure_redirect_url": "https://apps.amabledata.com/kapso/setup/failed/0123456789abcdef0123456789abcdef",
         "language": null,
         "meta_billing_mode": "customer_managed",
         "phone_number_area_code": null,
@@ -31,7 +31,7 @@
         "provisioned_phone_number": null,
         "reconnect_phone_number": null,
         "status": "active",
-        "success_redirect_url": "https://kapso.apps.amabledata.com/kapso/connected/0123456789abcdef0123456789abcdef",
+        "success_redirect_url": "https://apps.amabledata.com/kapso/setup/connected/0123456789abcdef0123456789abcdef",
         "theme_config": {},
         "token": "[redacted]",
         "url": "https://app.kapso.ai/whatsapp/setup/[redacted]",

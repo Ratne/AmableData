@@ -47,19 +47,24 @@ fixtures with `"source": "live"` were recorded from a test project by `pnpm reco
 reference and webhook docs, linked in `docs_url`, for calls a sandbox cannot make. When Kapso
 changes an answer, record or copy it again and let the tests show what broke.
 
-## Run your own copy
+## Hosting
+
+The official copy runs at `https://apps.amabledata.com/kapso` inside the
+[apps host](../host), one Worker for every official app.
+
+To run your own copy on its own Worker:
 
 ```sh
-pnpm --filter @amable/example-app-kapso dev              # from the repo root
+pnpm --filter @amable/example-app-kapso dev       # from the repo root
 npx amable-app keys generate                             # in this folder; writes .amable/keys.json
 npx amable-app keys secret | npx wrangler secret put APP_KEYS
 npx wrangler kv namespace create INSTALLS                # put the id in wrangler.jsonc
-pnpm --filter @amable/example-app-kapso deploy
+pnpm --filter @amable/example-app-kapso run deploy
 ```
 
-Change `base_url`, `jwks_url`, `redirect_uris`, `icon_url` and the route in `wrangler.jsonc` to
-your domain, then install it from **Settings → Apps → Install from URL** with
-`<base_url>/manifest.json`.
+Change `base_url`, `jwks_url`, `redirect_uris` and `icon_url` to your Worker's URL (a path such as
+`https://example.com/kapso` works too), then install it from **Settings → Apps → Install from
+URL** with `<base_url>/manifest.json`.
 
 ## Privacy
 

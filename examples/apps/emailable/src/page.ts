@@ -1,10 +1,14 @@
-/** The settings screen shell; the logic is in screen.ts (bundled to public/screen.js). */
-export function settingsPage(): Response {
+/**
+ * The settings screen shell; the logic is in screen.ts (bundled to public/screen.js).
+ * `<base>` makes the script and the API calls relative to `base_url`, wherever the app is hosted.
+ */
+export function settingsPage(baseUrl: string): Response {
   const html = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="${baseUrl}/" />
     <title>Emailable</title>
     <style>
       body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; color: #111; background: transparent; }
@@ -32,7 +36,7 @@ export function settingsPage(): Response {
       <button type="submit" data-i18n="save">Save</button>
       <button type="button" id="remove" data-i18n="remove">Remove key</button>
     </form>
-    <script type="module" src="/screen.js"></script>
+    <script type="module" src="screen.js"></script>
   </body>
 </html>`;
   return new Response(html, {

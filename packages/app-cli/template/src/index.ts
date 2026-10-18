@@ -22,6 +22,7 @@ function page(title: string): Response {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="${manifest.base_url}/" />
     <title>${title}</title>
     <style>
       body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; color: #111; background: transparent; }
@@ -36,7 +37,7 @@ function page(title: string): Response {
       <label>Greeting <input name="greeting" maxlength="100" /></label>
       <button type="submit">Save</button>
     </form>
-    <script type="module" src="/screen.js"></script>
+    <script type="module" src="screen.js"></script>
   </body>
 </html>`;
   return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });

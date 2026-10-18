@@ -16,13 +16,13 @@
     "email": "apps@amabledata.com"
   },
   "categories": ["messaging", "support"],
-  "icon_url": "https://kapso.apps.amabledata.com/icon.png",
+  "icon_url": "https://apps.amabledata.com/kapso/icon.png",
   "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/kapso",
   "support_url": "https://github.com/Ratne/AmableData/issues",
   "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/kapso#privacy",
-  "base_url": "https://kapso.apps.amabledata.com",
-  "jwks_url": "https://kapso.apps.amabledata.com/.well-known/jwks.json",
-  "redirect_uris": ["https://kapso.apps.amabledata.com/install"],
+  "base_url": "https://apps.amabledata.com/kapso",
+  "jwks_url": "https://apps.amabledata.com/kapso/.well-known/jwks.json",
+  "redirect_uris": ["https://apps.amabledata.com/kapso/install"],
   "api_version": "2026-10",
   "scopes": ["contacts:read", "contacts:write", "conversations:write", "automations:trigger"],
   "webhooks": {

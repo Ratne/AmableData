@@ -7,7 +7,7 @@ bridge.autoResize();
 bridge.onContext((context) => document.body.classList.toggle('dark', context.theme === 'dark'));
 
 async function api(method: 'GET' | 'POST', body?: unknown): Promise<Record<string, unknown>> {
-  const response = await fetch('/api/settings', {
+  const response = await fetch('api/settings', {
     method,
     headers: { authorization: `Bearer ${await bridge.sessionToken()}`, 'content-type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

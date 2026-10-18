@@ -129,7 +129,7 @@ async function call(
   query = '',
   body?: unknown,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  const response = await fetch(`/api/templates${query}`, {
+  const response = await fetch(`api/templates${query}`, {
     method,
     headers: {
       authorization: `Bearer ${await bridge.sessionToken()}`,

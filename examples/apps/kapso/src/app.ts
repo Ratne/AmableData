@@ -1,5 +1,6 @@
 import {
   AmableApiError,
+  appPath,
   createAppHandler,
   kvInstallStore,
   type AppContext,
@@ -185,7 +186,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
     const secret = randomHex(32);
     const webhookId = await client.createWebhook(
       number.phone_number_id,
-      `${BASE_URL}/kapso/webhook/${ctx.install.id}`,
+      `${BASE_URL}/inbound/${ctx.install.id}`,
       secret,
     );
     const connected: ConnectedNumber = { ...number, webhook_id: webhookId };
@@ -566,8 +567,8 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
           },
         },
         screens: {
-          '/ui/settings': () => settingsPage(),
-          '/ui/templates': () => templatesPage(),
+          '/ui/settings': () => settingsPage(BASE_URL),
+          '/ui/templates': () => templatesPage(BASE_URL),
         },
         screenApi: {
           '/api/settings': async (req, _session, ctx) => {
@@ -629,8 +630,8 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
                 `AmableData ${ctx.install.tenant.slug}`,
               );
               const link = await client.createSetupLink(customerId, {
-                success: `${BASE_URL}/kapso/connected/${nonce}`,
-                failure: `${BASE_URL}/kapso/failed/${nonce}`,
+                success: `${BASE_URL}/setup/connected/${nonce}`,
+                failure: `${BASE_URL}/setup/failed/${nonce}`,
               });
               await env.INSTALLS.put(`setup:${nonce}`, ctx.install.id, {
                 expirationTtl: SETUP_TTL_S,
@@ -700,10 +701,11 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
       });
 
       const url = new URL(request.url);
-      const webhook = url.pathname.match(/^\/kapso\/webhook\/([A-Za-z0-9_-]{1,64})$/);
+      const path = appPath(url, BASE_URL) ?? '';
+      const webhook = path.match(/^\/inbound\/([A-Za-z0-9_-]{1,64})$/);
       if (webhook !== null && request.method === 'POST')
         return handleWebhook(request, env, webhook[1]!, (id) => app.contextFor(id));
-      const setup = url.pathname.match(/^\/kapso\/(connected|failed)\/([0-9a-f]{32})$/);
+      const setup = path.match(/^\/setup\/(connected|failed)\/([0-9a-f]{32})$/);
       if (setup !== null && request.method === 'GET') {
         const [, outcome, nonce] = setup;
         const installId = await env.INSTALLS.get(`setup:${nonce!}`);

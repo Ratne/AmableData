@@ -43,18 +43,24 @@ network. `"source": "live"` fixtures were recorded with `pnpm record-fixtures` (
 public or made-up addresses; key and account email redacted); the others are the examples of
 Emailable's API reference, linked in `docs_url`.
 
-## Run your own copy
+## Hosting
+
+The official copy runs at `https://apps.amabledata.com/emailable` inside the
+[apps host](../host), one Worker for every official app.
+
+To run your own copy on its own Worker:
 
 ```sh
-pnpm --filter @amable/example-app-emailable dev          # from the repo root
+pnpm --filter @amable/example-app-emailable dev   # from the repo root
 npx amable-app keys generate                             # in this folder; writes .amable/keys.json
 npx amable-app keys secret | npx wrangler secret put APP_KEYS
 npx wrangler kv namespace create INSTALLS                # put the id in wrangler.jsonc
-pnpm --filter @amable/example-app-emailable deploy
+pnpm --filter @amable/example-app-emailable run deploy
 ```
 
-Change `base_url`, `jwks_url`, `redirect_uris` and the route in `wrangler.jsonc` to your domain,
-then install it from **Settings → Apps → Install from URL** with `<base_url>/manifest.json`.
+Change `base_url`, `jwks_url`, `redirect_uris` and `icon_url` to your Worker's URL (a path such as
+`https://example.com/emailable` works too), then install it from **Settings → Apps → Install from
+URL** with `<base_url>/manifest.json`.
 
 ## Privacy
 

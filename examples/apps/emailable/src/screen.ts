@@ -69,7 +69,7 @@ async function api(
   method: 'GET' | 'POST',
   body?: unknown,
 ): Promise<{ status: number; settings: Settings }> {
-  const response = await fetch('/api/settings', {
+  const response = await fetch('api/settings', {
     method,
     headers: {
       authorization: `Bearer ${await bridge.sessionToken()}`,

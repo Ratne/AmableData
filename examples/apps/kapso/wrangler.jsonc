@@ -4,7 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
-  "routes": [{ "pattern": "kapso.apps.amabledata.com", "custom_domain": true }],
   "assets": { "directory": "./public", "binding": "ASSETS" },
   "kv_namespaces": [{ "binding": "INSTALLS", "id": "replace-with-your-namespace-id" }],
   // Secret: APP_KEYS (amable-app keys secret | wrangler secret put APP_KEYS)
