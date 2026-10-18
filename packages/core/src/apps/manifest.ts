@@ -44,6 +44,7 @@ export type AppUiSlot = (typeof APP_UI_SLOTS)[number];
 /** Extension points an installation advertises in `/.well-known/amable-apps.json`. */
 export const APP_EXTENSION_POINTS = [
   'contact.validate',
+  'contact.address_lookup',
   'contact.timeline',
   'automation.actions',
   'automation.triggers',
@@ -156,6 +157,17 @@ const contactValidateSchema = z.strictObject({
   cache_ttl_seconds: z.number().int().min(0).max(90 * 24 * 3600).default(7 * 24 * 3600),
 });
 
+/**
+ * Address autocomplete of the contact editor: the CRM posts `{ q, lang, country }`
+ * and shows the `suggestions` instead of the installation's geocoder
+ * (OpenStreetMap), which stays the fallback when the app fails.
+ */
+const addressLookupSchema = z.strictObject({
+  endpoint: relativePath,
+  /** Shown under the suggestions, as the provider's terms require (`© Mapbox © OpenStreetMap`). */
+  attribution: z.string().trim().min(1).max(120).optional(),
+});
+
 const automationActionSchema = z.strictObject({
   key: z.string().regex(KEY_RE),
   name: shortText,
@@ -261,6 +273,7 @@ export const appManifestSchema = z
     extensions: z
       .strictObject({
         contact_validate: contactValidateSchema.optional(),
+        address_lookup: addressLookupSchema.optional(),
         automation_actions: z.array(automationActionSchema).max(30).optional(),
         automation_triggers: z.array(automationTriggerSchema).max(30).optional(),
         ui: z.array(uiExtensionSchema).max(20).optional(),
@@ -298,6 +311,7 @@ export const appManifestSchema = z
       if (condition && !scopes.has(scope)) issue(path, `requires the ${scope} scope`);
     };
     needs(ext.contact_validate !== undefined, 'contacts:read', ['extensions', 'contact_validate']);
+    needs(ext.address_lookup !== undefined, 'contacts:read', ['extensions', 'address_lookup']);
     needs((ext.form_connectors ?? []).length > 0, 'forms:submissions_read', ['extensions', 'form_connectors']);
     needs((ext.channels ?? []).length > 0, 'conversations:write', ['extensions', 'channels']);
     needs(manifest.custom_fields.length > 0, 'contacts:write', ['custom_fields']);

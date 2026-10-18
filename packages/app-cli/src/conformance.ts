@@ -37,7 +37,7 @@ function url(manifest: AppManifest, path: string): string {
 }
 
 /** Every POST endpoint the CRM calls, with a sample body. */
-type Endpoint = { name: string; path: string; body: Record<string, unknown>; budgetMs?: number; listKey?: 'templates' | 'options' };
+type Endpoint = { name: string; path: string; body: Record<string, unknown>; budgetMs?: number; listKey?: 'templates' | 'options' | 'suggestions' };
 
 function endpoints(manifest: AppManifest): Endpoint[] {
   const ext = manifest.extensions;
@@ -66,6 +66,15 @@ function endpoints(manifest: AppManifest): Endpoint[] {
         budgetMs: 10_000,
       });
     }
+  }
+  if (ext.address_lookup !== undefined) {
+    out.push({
+      name: 'address lookup',
+      path: ext.address_lookup.endpoint,
+      body: { q: 'Via Roma 1', lang: 'en', test: true },
+      budgetMs: 3_000,
+      listKey: 'suggestions',
+    });
   }
   for (const action of ext.automation_actions ?? []) {
     out.push({ name: `action ${action.key}`, path: action.endpoint, body: { action: action.key, input: {}, contact_id: 'c_test', test: true }, budgetMs: 15_000 });

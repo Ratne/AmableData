@@ -1,0 +1,16 @@
+{
+  "provider": "mapbox",
+  "description": "The account has an issue, or the token has URL restrictions",
+  "source": "docs",
+  "docs_url": "https://docs.mapbox.com/api/search/geocoding/#geocoding-api-errors",
+  "request": {
+    "method": "GET",
+    "url": "https://api.mapbox.com/search/geocode/v6/forward"
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "message": "Forbidden"
+    }
+  }
+}

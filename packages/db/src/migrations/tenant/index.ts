@@ -12,6 +12,7 @@ import { t0010AddressStreetNumber } from './0010_address_street_number';
 import { t0011Apps } from './0011_apps';
 import { t0012Conversations } from './0012_conversations';
 import { t0013ConversationTemplates } from './0013_conversation_templates';
+import { t0014DropMapboxSettings } from './0014_drop_mapbox_settings';
 
 /**
  * Ordered list of tenant-DO SQLite migrations.
@@ -31,4 +32,5 @@ export const tenantMigrations: readonly Migration[] = [
   t0011Apps,
   t0012Conversations,
   t0013ConversationTemplates,
+  t0014DropMapboxSettings,
 ];

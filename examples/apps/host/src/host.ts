@@ -1,6 +1,7 @@
 import type { KeyValue } from '@amable/app-sdk';
 import { createWorker as emailable } from '../../emailable/src/app';
 import { createWorker as kapso } from '../../kapso/src/app';
+import { createWorker as mapbox } from '../../mapbox/src/app';
 
 /**
  * One Worker for every official app: `https://apps.amabledata.com/<app id>/…`.
@@ -17,6 +18,7 @@ export interface Env {
   INSTALLS: Store;
   EMAILABLE_APP_KEYS: string;
   KAPSO_APP_KEYS: string;
+  MAPBOX_APP_KEYS: string;
 }
 
 interface AppWorker {
@@ -31,6 +33,7 @@ export interface HostedApp {
 export const APPS: Readonly<Record<string, HostedApp>> = {
   emailable: { worker: emailable(), keys: (env) => env.EMAILABLE_APP_KEYS },
   kapso: { worker: kapso(), keys: (env) => env.KAPSO_APP_KEYS },
+  mapbox: { worker: mapbox(), keys: (env) => env.MAPBOX_APP_KEYS },
 };
 
 /** The app's view of the shared namespace: its keys never meet another app's. */

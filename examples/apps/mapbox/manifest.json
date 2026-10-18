@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "id": "mapbox",
+  "name": "Mapbox",
+  "tagline": {
+    "en": "Address autocomplete with your Mapbox account",
+    "it": "Completamento indirizzi con il tuo account Mapbox"
+  },
+  "description": {
+    "en": "Suggests postal addresses while you type on the contact page, from Mapbox instead of the built-in OpenStreetMap search: more complete data, including streets and house numbers in small towns, with the province in Italy and Spain. Searches use your own Mapbox access token and its free tier or price list. If Mapbox does not answer, the CRM falls back to OpenStreetMap.",
+    "it": "Suggerisce gli indirizzi mentre scrivi nella scheda contatto, da Mapbox invece della ricerca OpenStreetMap integrata: dati più completi, anche su vie e civici dei piccoli comuni, con la provincia in Italia e Spagna. Le ricerche usano il tuo token di accesso Mapbox, con la sua quota gratuita o il suo listino. Se Mapbox non risponde, il CRM torna a OpenStreetMap."
+  },
+  "developer": {
+    "name": "AmableData",
+    "url": "https://github.com/Ratne/AmableData",
+    "email": "apps@amabledata.com"
+  },
+  "categories": ["data_quality"],
+  "icon_url": "https://apps.amabledata.com/mapbox/icon.png",
+  "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/mapbox",
+  "support_url": "https://github.com/Ratne/AmableData/issues",
+  "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/mapbox#privacy",
+  "base_url": "https://apps.amabledata.com/mapbox",
+  "jwks_url": "https://apps.amabledata.com/mapbox/.well-known/jwks.json",
+  "redirect_uris": ["https://apps.amabledata.com/mapbox/install"],
+  "api_version": "2026-10",
+  "scopes": ["contacts:read"],
+  "webhooks": {
+    "endpoint": "/webhooks",
+    "events": []
+  },
+  "privacy": {
+    "handles_personal_data": true,
+    "erasure_endpoint": "/privacy/erasure",
+    "data_request_endpoint": "/privacy/data"
+  },
+  "pricing": {
+    "model": "free",
+    "note": {
+      "en": "Searches use your own Mapbox account (monthly free tier, then Mapbox's price list).",
+      "it": "Le ricerche usano il tuo account Mapbox (quota gratuita mensile, poi il listino di Mapbox)."
+    }
+  },
+  "extensions": {
+    "address_lookup": {
+      "endpoint": "/address/suggest",
+      "attribution": "© Mapbox © OpenStreetMap"
+    },
+    "ui": [
+      {
+        "slot": "app.settings",
+        "key": "settings",
+        "path": "/ui/settings",
+        "title": {
+          "en": "Settings",
+          "it": "Impostazioni"
+        },
+        "height": 320
+      }
+    ]
+  }
+}

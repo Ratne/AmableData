@@ -294,6 +294,28 @@ importers:
         specifier: ^4.151.0
         version: 4.151.0(@cloudflare/workers-types@5.20261015.1)(@types/node@24.19.2)
 
+  examples/apps/mapbox:
+    dependencies:
+      '@amable/app-bridge':
+        specifier: workspace:*
+        version: link:../../../packages/app-bridge
+      '@amable/app-sdk':
+        specifier: workspace:*
+        version: link:../../../packages/app-sdk
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20261015.1
+        version: 5.20261015.1
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.151.0
+        version: 4.151.0(@cloudflare/workers-types@5.20261015.1)(@types/node@24.19.2)
+
   packages/ads-providers:
     dependencies:
       '@amable/api-types':

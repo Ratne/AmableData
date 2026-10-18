@@ -146,9 +146,9 @@ export function AddressSearch({ country, onPick }: AddressSearchProps) {
               </li>
             ))
           )}
-          {suggestions.length > 0 && search.data?.provider ? (
+          {suggestions.length > 0 && search.data?.attribution ? (
             <li aria-hidden className="mt-1 border-t px-2 pt-1 text-right text-[10px] text-muted-foreground">
-              {t(search.data.provider === 'mapbox' ? 'crm.address.attributionMapbox' : 'crm.address.attributionOsm')}
+              {search.data.attribution}
             </li>
           ) : null}
         </ul>

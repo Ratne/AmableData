@@ -1,0 +1,16 @@
+{
+  "provider": "mapbox",
+  "description": "The account went over its rate limit",
+  "source": "docs",
+  "docs_url": "https://docs.mapbox.com/api/search/geocoding/#geocoding-api-errors",
+  "request": {
+    "method": "GET",
+    "url": "https://api.mapbox.com/search/geocode/v6/forward"
+  },
+  "response": {
+    "status": 429,
+    "body": {
+      "message": "Rate limit exceeded"
+    }
+  }
+}

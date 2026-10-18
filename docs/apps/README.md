@@ -12,7 +12,7 @@ cd my-app && npm install && npm run dev && npm test
 
 The generated project ([template](../../packages/app-cli/template)) already does the plumbing
 (install flow, signatures, keys, tokens, screens) with [`@amable/app-sdk`](../../packages/app-sdk)
-and ships a first test: you write only the app logic. Two reference apps show complete
+and ships a first test: you write only the app logic. Three reference apps show complete
 integrations with their tests and recorded fixtures:
 
 - [Emailable](../../examples/apps/emailable): email verification. Validation hook and its batch
@@ -20,6 +20,8 @@ integrations with their tests and recorded fixtures:
 - [Kapso](../../examples/apps/kapso): WhatsApp. A conversation channel with a 24-hour reply window
   and templates, provider onboarding through a hosted page, signed provider webhooks, triggers, an
   automation block whose options come from the app, a full page to manage templates.
+- [Mapbox](../../examples/apps/mapbox): address autocomplete on the contact editor with the
+  workspace's own token, falling back to the built-in OpenStreetMap search.
 
 ## Contents
 
@@ -30,17 +32,18 @@ integrations with their tests and recorded fixtures:
 5. [Calls from the CRM and their signature](#calls-from-the-crm-and-their-signature)
 6. [Events (webhooks)](#events-webhooks)
 7. [Contact validation hook](#contact-validation-hook)
-8. [Automation actions and triggers](#automation-actions-and-triggers)
-9. [Options loaded from the app](#options-loaded-from-the-app)
-10. [Form connectors](#form-connectors)
-11. [Conversation channels](#conversation-channels)
-12. [Screens inside the CRM](#screens-inside-the-crm)
-13. [App API](#app-api)
-14. [Privacy](#privacy)
-15. [Integrating well](#integrating-well)
-16. [Tests and fixtures (required)](#tests-and-fixtures-required)
-17. [The CLI](#the-cli)
-18. [Publishing in the Marketplace](#publishing-in-the-marketplace)
+8. [Address lookup](#address-lookup)
+9. [Automation actions and triggers](#automation-actions-and-triggers)
+10. [Options loaded from the app](#options-loaded-from-the-app)
+11. [Form connectors](#form-connectors)
+12. [Conversation channels](#conversation-channels)
+13. [Screens inside the CRM](#screens-inside-the-crm)
+14. [App API](#app-api)
+15. [Privacy](#privacy)
+16. [Integrating well](#integrating-well)
+17. [Tests and fixtures (required)](#tests-and-fixtures-required)
+18. [The CLI](#the-cli)
+19. [Publishing in the Marketplace](#publishing-in-the-marketplace)
 
 ## What you can extend
 
@@ -49,12 +52,13 @@ Everything an app adds is declared in the manifest; the CRM shows nothing that i
 | You want to… | What users see | Manifest | Example |
 | --- | --- | --- | --- |
 | Check emails or phones as contacts arrive | Verdicts on forms, imports and new contacts; your field and tags | `extensions.contact_validate` | Emailable |
+| Suggest postal addresses | Your suggestions in the address field of the contact editor, instead of OpenStreetMap | `extensions.address_lookup` | Mapbox |
 | Do something during an automation | A block in the automation editor, with a form and outputs for later steps | `extensions.automation_actions` | Emailable "Verify email", Kapso "Send WhatsApp template" |
 | Start automations from your service | Events in the trigger list | `extensions.automation_triggers` | Kapso "WhatsApp message received" |
 | Fill choices from your service | A select whose options your app lists (templates, lists, pipelines) | `options_endpoint` on an input | Kapso template picker |
 | Send form submissions somewhere | A connector next to the built-in ones in **Forms → Connections** | `extensions.form_connectors` | |
 | Bring a messaging channel into the inbox | Conversations, replies, delivery state, templates when the reply window is closed | `extensions.channels` | Kapso WhatsApp |
-| Show your own UI | Settings, a full page with a sidebar entry, a contact card or button, a dashboard widget | `extensions.ui` | Both |
+| Show your own UI | Settings, a full page with a sidebar entry, a contact card or button, a dashboard widget | `extensions.ui` | All three |
 | Store values on records | Your fields on contacts, companies, opportunities | `custom_fields` | Emailable "Email status" |
 | Keep app data per record or per install | Nothing directly; exported and erased with the record | App API `entities`, `data` | Both |
 | Add history to a contact | Entries in the contact timeline | App API `timeline` | |
@@ -126,7 +130,7 @@ Rules worth knowing:
   the owner can grant them. Ask for the least you need: admins see the list before installing.
 - **Events** need the scope that reads their data (`contact.*` needs `contacts:read`, `order.*`
   needs `orders:read`, …).
-- **Extensions** need their scope: `contact_validate` needs `contacts:read`, `channels` need
+- **Extensions** need their scope: `contact_validate` and `address_lookup` need `contacts:read`, `channels` need
   `conversations:write`, `form_connectors` need `forms:submissions_read`, custom fields need
   `contacts:write`; firing triggers needs `automations:trigger`.
 - **Custom fields** are created on install, prefixed `app_<id>_<key>` and owned by the app:
@@ -237,6 +241,36 @@ Answer within **1.5 seconds**:
 - Imports call `batch_endpoint` (if declared) with `{ "items": [{ "ref", "values" }] }` (up to
   100) and expect `{ "results": [{ "ref", "valid", … }] }` within 10 seconds. Bound your
   concurrency and answer what is done before the deadline (Emailable's `mapLimited`).
+
+## Address lookup
+
+`address_lookup` replaces the CRM's built-in address search (OpenStreetMap through Photon) in the
+address field of the contact editor. While the user types, the CRM calls `endpoint` with:
+
+```json
+{ "q": "via roma 1", "lang": "it-IT", "country": "IT" }
+```
+
+`lang` and `country` (ISO 3166-1 alpha-2, the country picked on the address) may be `null`.
+Answer within **3 seconds**:
+
+```json
+{ "suggestions": [{ "line1": "Via Roma", "street_number": "1", "locality": "Milano",
+  "region": "Milano", "postal_code": "20121", "country_code": "IT" }] }
+```
+
+- Only `line1` is required; `label` is optional (the CRM builds `Via Roma 1, 20121 Milano, …`).
+  The CRM keeps the first 5 in `country`, without duplicates.
+- Put on `region` what goes on a postal address of that country: the province in Italy and
+  Spain, the state elsewhere.
+- Any error or a slower answer makes the CRM use OpenStreetMap for that search, unless the
+  installation turned it off (`ADDRESS_LOOKUP_URL=off`). Answer an error, not an empty list, when
+  the app is not set up yet (no API key), so users keep getting suggestions.
+- `attribution` (up to 120 characters) is shown under the suggestions, as most geocoders'
+  terms require; without it the CRM shows the app name.
+- With more than one address app, the one installed first answers. Paused apps are skipped.
+- The CRM stores the address the user picks: if the provider allows keeping results only under
+  some plan (Mapbox's permanent geocoding), let the admin choose it in your settings screen.
 
 ## Automation actions and triggers
 

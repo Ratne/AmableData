@@ -23,5 +23,7 @@ Additions:
   conversation after the reply window), `message.template` in channel sends, `text` in the send
   answer, `POST /apps/messages/outbound` for messages the app sent outside the inbox.
 - `options_endpoint` on string inputs of automation actions and form connectors.
+- `extensions.address_lookup` (extension point `contact.address_lookup`): address suggestions
+  for the contact editor in place of the built-in OpenStreetMap search.
 - `@amable/app-sdk/testing`: fixtures of recorded provider answers, an in-memory CRM, signed calls
   and screen session tokens for offline tests.

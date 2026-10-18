@@ -14,7 +14,6 @@ import { createCrmContext, type CrmActor, type CrmContext, type SearchMode } fro
 import type { SqlDb } from './db/sql';
 import { CrmError, type CrmErrorShape } from './errors';
 import { contactIdsByMonthDay, runOnce, type OnceInput } from './automation-queries';
-import { getAddressLookup, updateAddressLookup } from './address-settings';
 import { getWorkspace, updateWorkspace } from '../workspace/settings';
 import * as calendar from './calendar';
 import * as companies from './companies';
@@ -214,8 +213,6 @@ export const crmOps = {
   'idempotency.begin': idempotency.idempotencyBegin,
   'idempotency.complete': idempotency.idempotencyComplete,
   'idempotency.abort': idempotency.idempotencyAbort,
-  'addressLookup.settings.get': getAddressLookup,
-  'addressLookup.settings.update': updateAddressLookup,
   'workspace.settings.get': getWorkspace,
   'workspace.settings.update': updateWorkspace,
   // e-commerce (apps/core/src/commerce)

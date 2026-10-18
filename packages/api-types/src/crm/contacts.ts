@@ -273,39 +273,28 @@ export const addressSuggestionSchema = z.object({
 export type AddressSuggestion = z.infer<typeof addressSuggestionSchema>;
 
 export const addressSuggestionsResponseSchema = z.object({
-  /** False when no geocoder is available (installation one off, no tenant Mapbox token). */
+  /** False when no geocoder is available (installation one off, no address app installed). */
   enabled: z.boolean(),
-  /** Source of the suggestions, to show its attribution next to them. */
-  provider: z.enum(['photon', 'mapbox']).nullable(),
+  /** Source of the suggestions: the installation geocoder (OpenStreetMap) or an installed app. */
+  provider: z.enum(['photon', 'app']).nullable(),
+  /** Attribution to show next to the suggestions, as the source's terms require. */
+  attribution: z.string().nullable(),
   data: z.array(addressSuggestionSchema),
 });
 export type AddressSuggestionsResponse = z.infer<typeof addressSuggestionsResponseSchema>;
 
-/** Address autocomplete provider of the tenant (`/settings/addressLookup`). */
+/** Where address suggestions come from (`/settings/addressLookup`). */
 export const addressLookupSettingsSchema = z.object({
-  /** `default`: the installation geocoder (OpenStreetMap); `mapbox`: the tenant's own Mapbox token. */
-  provider: z.enum(['default', 'mapbox']),
   /** False when the installation turned its own geocoder off (`ADDRESS_LOOKUP_URL=off`). */
   default_available: z.boolean(),
-  mapbox: z.object({
-    configured: z.boolean(),
-    /** Last characters of the saved token, to recognize it. */
-    token_hint: z.string().nullable(),
-    /** Mapbox "permanent" geocoding: results may be stored (billed differently by Mapbox). */
-    permanent: z.boolean(),
-  }),
+  /** The installed app answering instead of the installation geocoder (`extensions.address_lookup`). */
+  app: z
+    .object({
+      app_id: z.string(),
+      name: z.string(),
+      icon_url: z.string(),
+      paused: z.boolean(),
+    })
+    .nullable(),
 });
 export type AddressLookupSettings = z.infer<typeof addressLookupSettingsSchema>;
-
-export const updateAddressLookupSettingsSchema = z.strictObject({
-  provider: z.enum(['default', 'mapbox']).optional(),
-  /** New Mapbox access token (verified against Mapbox before saving); `null` removes it. */
-  mapbox_token: z
-    .string()
-    .trim()
-    .regex(/^[ps]k\.[A-Za-z0-9._-]{20,500}$/, 'not a Mapbox access token (pk.… or sk.…)')
-    .nullable()
-    .optional(),
-  mapbox_permanent: z.boolean().optional(),
-});
-export type UpdateAddressLookupSettingsInput = z.infer<typeof updateAddressLookupSettingsSchema>;

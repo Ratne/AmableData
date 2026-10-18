@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "amable-app-mapbox",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "kv_namespaces": [{ "binding": "INSTALLS", "id": "replace-with-your-namespace-id" }],
+  // Secret: APP_KEYS (amable-app keys secret | wrangler secret put APP_KEYS)
+}

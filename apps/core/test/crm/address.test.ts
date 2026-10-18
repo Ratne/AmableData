@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AddressLookupUnauthorized,
   AddressLookupUnavailable,
-  lookupMapbox,
-  mapboxRequestUrl,
-  mapboxToSuggestion,
-  verifyMapboxToken,
   addressLookupUrl,
+  appSuggestions,
   DEFAULT_ADDRESS_LOOKUP_URL,
   lookupAddresses,
   photonRequestUrl,
@@ -116,91 +112,38 @@ describe('address lookup', () => {
   });
 });
 
-describe('Mapbox address lookup', () => {
-  const viaFontanastasia = {
-    type: 'Feature',
-    properties: {
-      feature_type: 'address',
-      name: 'Via Fontanastasia 9',
-      context: {
-        address: { name: 'Via Fontanastasia 9', address_number: '9', street_name: 'Via Fontanastasia' },
-        street: { name: 'Via Fontanastasia' },
-        postcode: { name: '00060' },
-        place: { name: 'Castelnuovo di Porto' },
-        district: { name: 'Roma' },
-        region: { name: 'Lazio' },
-        country: { name: 'Italia', country_code: 'it' },
+describe('address app answers', () => {
+  it('trims and caps fields, rebuilds missing labels and drops bad entries', () => {
+    const answer = {
+      suggestions: [
+        { line1: ' Via Roma ', street_number: '1', locality: 'Milano', country_code: 'it', extra: true },
+        { label: 'Custom label', line1: 'Corso Italia', country_code: 'Italy' },
+        { line1: '   ' },
+        null,
+        'junk',
+      ],
+    };
+    expect(appSuggestions(answer, undefined)).toEqual([
+      {
+        label: 'Via Roma 1, Milano, IT',
+        line1: 'Via Roma',
+        street_number: '1',
+        locality: 'Milano',
+        region: null,
+        postal_code: null,
+        country_code: 'IT',
       },
-    },
-  };
-
-  it('builds the forward geocoding request with country, language and storage mode', () => {
-    const url = new URL(
-      mapboxRequestUrl('pk.test-token', { q: 'via fontanastasia 9', lang: 'it-IT', country: 'IT' }, { permanent: true }),
-    );
-    expect(url.origin + url.pathname).toBe('https://api.mapbox.com/search/geocode/v6/forward');
-    expect(Object.fromEntries(url.searchParams)).toMatchObject({
-      q: 'via fontanastasia 9',
-      autocomplete: 'true',
-      types: 'address,street',
-      language: 'it',
-      country: 'it',
-      permanent: 'true',
-      access_token: 'pk.test-token',
-    });
-    expect(new URL(mapboxRequestUrl('pk.x', { q: 'a b c' })).searchParams.has('permanent')).toBe(false);
-  });
-
-  it('maps addresses and streets to address fields', () => {
-    expect(mapboxToSuggestion(viaFontanastasia.properties)).toEqual({
-      label: 'Via Fontanastasia 9, 00060 Castelnuovo di Porto, Roma, IT',
-      line1: 'Via Fontanastasia',
-      street_number: '9',
-      locality: 'Castelnuovo di Porto',
-      region: 'Roma',
-      postal_code: '00060',
-      country_code: 'IT',
-    });
-    expect(
-      mapboxToSuggestion({ feature_type: 'street', name: 'Main Street', context: { region: { name: 'Illinois' }, country: { country_code: 'US' } } }),
-    ).toMatchObject({ line1: 'Main Street', street_number: null, region: 'Illinois' });
-    expect(mapboxToSuggestion({ feature_type: 'place', name: 'Roma' })).toBeNull();
-  });
-
-  it('never caches Mapbox answers and reports rejected tokens apart', async () => {
-    const fetchFn = vi.fn<typeof fetch>(
-      async () => new Response(JSON.stringify({ features: [viaFontanastasia] }), { status: 200 }),
-    );
-    const first = await lookupMapbox('pk.t', { q: 'via fontanastasia 9', country: 'IT' }, {}, fetchFn);
-    await lookupMapbox('pk.t', { q: 'via fontanastasia 9', country: 'IT' }, {}, fetchFn);
-    expect(first[0]?.street_number).toBe('9');
-    expect(fetchFn).toHaveBeenCalledTimes(2);
-    const refused = vi.fn<typeof fetch>(async () => new Response('{"message":"Not Authorized"}', { status: 401 }));
-    await expect(verifyMapboxToken('pk.wrong', refused)).rejects.toBeInstanceOf(AddressLookupUnauthorized);
-  });
-});
-
-describe('address lookup settings', () => {
-  it('defaults to the installation geocoder and keeps only what is written', () => {
-    const t = createTestTenant();
-    expect(t.op('addressLookup.settings.get', {})).toEqual({
-      provider: 'default',
-      mapbox_token_ciphertext: null,
-      mapbox_token_hint: null,
-      mapbox_permanent: false,
-    });
-    t.op('addressLookup.settings.update', {
-      provider: 'mapbox',
-      mapbox_token_ciphertext: 'cipher',
-      mapbox_token_hint: '…abcd',
-      mapbox_permanent: true,
-    });
-    expect(t.op('addressLookup.settings.get', {})).toMatchObject({ provider: 'mapbox', mapbox_permanent: true });
-    const cleared = t.op('addressLookup.settings.update', {
-      provider: 'default',
-      mapbox_token_ciphertext: null,
-      mapbox_token_hint: null,
-    });
-    expect(cleared).toEqual({ provider: 'default', mapbox_token_ciphertext: null, mapbox_token_hint: null, mapbox_permanent: true });
+      {
+        label: 'Custom label',
+        line1: 'Corso Italia',
+        street_number: null,
+        locality: null,
+        region: null,
+        postal_code: null,
+        country_code: null,
+      },
+    ]);
+    expect(appSuggestions(answer, 'IT')?.map((s) => s.line1)).toEqual(['Via Roma']);
+    expect(appSuggestions({ data: [] }, undefined)).toBeNull();
   });
 });

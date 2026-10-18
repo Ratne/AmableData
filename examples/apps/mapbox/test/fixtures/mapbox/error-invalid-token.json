@@ -1,0 +1,16 @@
+{
+  "provider": "mapbox",
+  "description": "The access token is wrong or revoked",
+  "source": "docs",
+  "docs_url": "https://docs.mapbox.com/api/search/geocoding/#geocoding-api-errors",
+  "request": {
+    "method": "GET",
+    "url": "https://api.mapbox.com/search/geocode/v6/forward"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "message": "Not Authorized - Invalid Token"
+    }
+  }
+}
