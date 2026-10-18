@@ -44,6 +44,7 @@ integrations with their tests and recorded fixtures:
 17. [Tests and fixtures (required)](#tests-and-fixtures-required)
 18. [The CLI](#the-cli)
 19. [Publishing in the Marketplace](#publishing-in-the-marketplace)
+20. [Releasing an update](#releasing-an-update)
 
 ## What you can extend
 
@@ -94,6 +95,7 @@ validate` checks a file against it.
   "schema_version": 1,
   "id": "my-app",                      // 3-40 chars, a-z 0-9 -, unique in the Marketplace
   "name": "My App",
+  "version": "1.0.0",                  // semver, bumped with every release; shown to admins
   "tagline": { "en": "One line", "it": "Una riga" },
   "description": { "en": "Shown on the app page (up to 500 characters)" },
   "developer": { "name": "…", "url": "https://…", "email": "…" },
@@ -138,8 +140,9 @@ Rules worth knowing:
 - Apps with a personal-data scope must set `handles_personal_data: true` and provide both
   privacy endpoints.
 - Texts shown to users are localized objects (`{ "en": …, "it": … }`); `en` is required.
-- Changing scopes or extensions in a new version of the manifest makes existing installs ask
-  the admin again (`app.scopes_pending`); the app keeps working with the old scopes meanwhile.
+- A new manifest is applied to existing installs automatically, unless it asks for new scopes:
+  then the admin is asked again (`app.scopes_pending`) and the app keeps working with the old
+  scopes meanwhile. See [Releasing an update](#releasing-an-update).
 
 ## Install flow (OAuth)
 
@@ -588,8 +591,8 @@ them.
 The catalog is the [amable-apps](https://github.com/Ratne/amable-apps) repository. Open a pull
 request adding `apps/<id>/manifest.json`; CI validates it and runs the conformance suite against
 your live `base_url`, then a maintainer reviews the scopes, the privacy policy and the app's
-tests. On merge the signed index is rebuilt and installations pick it up within a day. Updating
-means a new pull request with the new manifest. A listed app can be revoked if it misbehaves:
+tests. On merge the signed index is rebuilt and installations pick it up within 6 hours. Updating
+means a new pull request with the new manifest (see [Releasing an update](#releasing-an-update)). A listed app can be revoked if it misbehaves:
 installations then pause it everywhere.
 
 Checklist before opening the pull request:
@@ -609,3 +612,47 @@ Checklist before opening the pull request:
       per install and deleted on disconnect and uninstall.
 - [ ] Screens work in light and dark theme, in both languages, inside the iframe.
 - [ ] `privacy_url` and `support_url` work.
+
+## Releasing an update
+
+An app is a service you host, not code copied into each CRM: every installation, on the Cloud
+or self-hosted, calls the same `base_url`. An update therefore travels on two channels.
+
+| What changed | How it reaches installations | When |
+| --- | --- | --- |
+| App code (bug fixes, better answers, new provider calls) | Your deploy | At once, everywhere |
+| Manifest without new scopes (texts, endpoints, extensions, fields, events) | Catalog pull request, then each CRM's catalog sync | Within 6 hours, applied automatically |
+| Manifest with new scopes | Same, then an admin approves on **Settings → Apps → Installed** | When each admin approves |
+| App installed from a URL | Each CRM fetches `manifest_url` again, same rules | Within 6 hours |
+
+**Settings → Apps → Refresh catalog** fetches the catalog and the workspace's private manifests at
+once. A revoked app is paused everywhere at the next sync.
+
+### Steps
+
+1. Fix the code, bump `version` in the manifest (patch for fixes, minor for features, major when
+   admins must act) and add the entry to the app's `CHANGELOG.md`.
+2. Run the offline tests and the typecheck; add a fixture for the provider answer the fix is
+   about.
+3. Deploy, then run `amable-app test --manifest manifest.json` against production. The code is
+   live for every installation from this moment.
+4. If the manifest changed beyond `version`, open the catalog pull request with it. Bumping
+   `version` alone is also worth a pull request, so admins see the release they run.
+5. New scopes wait for each admin: until then the app gets `app.scopes_pending` and works with the
+   old ones. On approval it gets `app.scopes_granted`.
+6. Something broke: roll the deploy back (`wrangler rollback`), and open a catalog pull request
+   with the previous manifest if that changed too.
+
+### Staying compatible
+
+- **The code runs ahead of the manifest.** For hours (catalog sync) or days (scopes not yet
+  approved) some installations still run the previous manifest against your new code. Keep
+  serving every endpoint the previous manifest declares, and check the granted scopes
+  (`Amable-Granted-Scopes`) before using a new one.
+- **Self-hosted CRMs update at their own pace.** A manifest using a field or extension point their
+  release does not know is rejected by their catalog sync: the app disappears from their
+  Marketplace and existing installs keep the previous manifest. Check `extension_points` in
+  `/.well-known/amable-apps.json`, and set `min_version` when the app cannot work on older
+  releases.
+- **Official apps share one Worker** ([apps host](../../examples/apps/host)): a deploy ships every
+  app on `main`, so `main` must always be releasable.

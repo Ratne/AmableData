@@ -10,7 +10,7 @@ import type { Env } from '../env';
 import { AppError } from './errors';
 import { appFetch, type AppHttpResponse } from './http';
 import { applyManifestUpdate, revokeApp } from './lifecycle';
-import { installsOfApp } from './store';
+import { installsOfApp, toInstall, type AppInstall, type InstallRow } from './store';
 
 /**
  * Marketplace catalog of this installation: the signed index published by the
@@ -255,4 +255,69 @@ export async function fetchPrivateManifest(
     throw new AppError(422, 'invalid_manifest', 'development manifests (http://localhost) need ENVIRONMENT=dev');
   }
   return { manifest: check.manifest, hash: await manifestHash(check.manifest) };
+}
+
+export const PRIVATE_REFRESH_KEY = 'app_private_refresh';
+
+/**
+ * Apps installed from a URL get manifest updates like catalog ones: every
+ * CATALOG_SYNC_INTERVAL_MS each `manifest_url` is fetched again (once per URL)
+ * and changes go through applyManifestUpdate (new scopes wait for an admin).
+ * An unreachable or invalid manifest, or one now describing another app,
+ * keeps the installed one.
+ */
+export async function refreshPrivateInstalls(
+  env: Env,
+  nowMs: number,
+  options: { force?: boolean; tenantId?: string; fetcher?: CatalogFetcher } = {},
+): Promise<{ checked: number; updated: number; failed: number }> {
+  const result = { checked: 0, updated: 0, failed: 0 };
+  if (options.force !== true) {
+    const last = await env.DB.prepare(`SELECT value FROM installation_meta WHERE key = ?`)
+      .bind(PRIVATE_REFRESH_KEY)
+      .first<{ value: string }>();
+    if (last !== null && nowMs - Number(last.value) < CATALOG_SYNC_INTERVAL_MS) return result;
+    await env.DB.prepare(
+      `INSERT INTO installation_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    )
+      .bind(PRIVATE_REFRESH_KEY, String(nowMs))
+      .run();
+  }
+  const rows = await env.DB.prepare(
+    `SELECT * FROM app_installs WHERE source = 'private' AND manifest_url IS NOT NULL
+       AND status IN ('pending', 'active', 'paused') AND (? IS NULL OR tenant_id = ?)`,
+  )
+    .bind(options.tenantId ?? null, options.tenantId ?? null)
+    .all<InstallRow>();
+  const byUrl = new Map<string, AppInstall[]>();
+  for (const install of rows.results.map(toInstall)) {
+    const url = install.manifestUrl!;
+    byUrl.set(url, [...(byUrl.get(url) ?? []), install]);
+  }
+  for (const [url, installs] of byUrl) {
+    let fetched: { manifest: AppManifest; hash: string };
+    try {
+      fetched = await fetchPrivateManifest(env, url, options.fetcher);
+    } catch (error) {
+      result.failed += installs.length;
+      console.warn(`[apps] private manifest ${url} not refreshed:`, error instanceof Error ? error.message : error);
+      continue;
+    }
+    for (const install of installs) {
+      result.checked += 1;
+      if (fetched.manifest.id !== install.appId) {
+        result.failed += 1;
+        console.warn(`[apps] private manifest ${url} now describes ${fetched.manifest.id}, not ${install.appId}`);
+        continue;
+      }
+      try {
+        const outcome = await applyManifestUpdate(env, install, fetched.manifest, fetched.hash, nowMs);
+        if (outcome !== 'unchanged') result.updated += 1;
+      } catch (error) {
+        result.failed += 1;
+        console.error(`[apps] update ${install.id} failed:`, error instanceof Error ? error.message : error);
+      }
+    }
+  }
+  return result;
 }

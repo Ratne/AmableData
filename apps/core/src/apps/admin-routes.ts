@@ -7,7 +7,15 @@ import { getAuth, getTenant, requirePermission, requireSession, requireStepUp } 
 import { audit } from '../middleware/audit';
 import { isNewer, parseVersion } from '../platform/updates';
 import { appOriginOf } from '../providers/select';
-import { catalogConfig, catalogSyncState, fetchPrivateManifest, getCatalogApp, listCatalog, runCatalogSync } from './catalog-sync';
+import {
+  catalogConfig,
+  catalogSyncState,
+  fetchPrivateManifest,
+  getCatalogApp,
+  listCatalog,
+  refreshPrivateInstalls,
+  runCatalogSync,
+} from './catalog-sync';
 import { callApp } from './call';
 import { AppError } from './errors';
 import { replayAppEvents, rotateWebhookSecret, sendAppEvent } from './events';
@@ -114,7 +122,8 @@ appsAdminRoutes.get('/catalog/:appId', async (c) => {
 
 appsAdminRoutes.post('/catalog/refresh', requirePermission('apps:manage'), async (c) => {
   const state = await runCatalogSync(c.env, now(c), { force: true });
-  return c.json({ state });
+  const privateApps = await refreshPrivateInstalls(c.env, now(c), { force: true, tenantId: getTenant(c).tenant.id });
+  return c.json({ state, private: privateApps });
 });
 
 /** Private app: fetches and validates a manifest for the consent screen. */

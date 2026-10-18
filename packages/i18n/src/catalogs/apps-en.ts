@@ -16,6 +16,7 @@ export const appsEn = {
   'apps.disabled.body': 'This installation has the public catalog turned off. You can still install private apps from a manifest URL.',
   'apps.notFound': 'This app is not available ({code}).',
   'apps.by': 'By {developer}',
+  'apps.version': 'Version {version}',
   'apps.verified': 'Reviewed',
   'apps.unverified': 'Not reviewed',
   'apps.adds': 'What it adds',

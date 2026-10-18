@@ -49,6 +49,11 @@ describe('app manifest', () => {
     }
   });
 
+  it('takes an optional semver release', () => {
+    expect(parseAppManifest(manifest({ version: '1.0.1' })).ok).toBe(true);
+    expect(parseAppManifest(manifest({ version: 'v1.0' })).ok).toBe(false);
+  });
+
   it('rejects administrative scopes and events the scopes do not cover', () => {
     expect(issuesOf(manifest({ scopes: ['contacts:read', 'users:manage'] })).join()).toMatch(/scopes/);
     expect(issuesOf(manifest({ webhooks: { endpoint: '/webhooks', events: ['order.paid'] } })).join()).toMatch(

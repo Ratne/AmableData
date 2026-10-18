@@ -2,6 +2,7 @@
   "schema_version": 1,
   "id": "mapbox",
   "name": "Mapbox",
+  "version": "1.0.0",
   "tagline": {
     "en": "Address autocomplete with your Mapbox account",
     "it": "Completamento indirizzi con il tuo account Mapbox"

@@ -18,6 +18,7 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'apps.disabled.body': 'Questa installazione ha il catalogo pubblico disattivato. Puoi comunque installare app private da un URL di manifest.',
   'apps.notFound': 'Questa app non è disponibile ({code}).',
   'apps.by': 'Di {developer}',
+  'apps.version': 'Versione {version}',
   'apps.verified': 'Revisionata',
   'apps.unverified': 'Non revisionata',
   'apps.adds': 'Cosa aggiunge',

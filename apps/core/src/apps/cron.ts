@@ -1,5 +1,5 @@
 import type { Env } from '../env';
-import { runCatalogSync } from './catalog-sync';
+import { refreshPrivateInstalls, runCatalogSync } from './catalog-sync';
 import { finalizeUninstalls } from './lifecycle';
 import { pruneAppMetrics } from './metrics';
 
@@ -9,6 +9,7 @@ const ASSERTION_GRACE_MS = 60_000;
 export async function runAppsCron(env: Env, nowMs: number): Promise<void> {
   const steps: Array<[string, () => Promise<unknown>]> = [
     ['catalog sync', () => runCatalogSync(env, nowMs)],
+    ['private manifests refresh', () => refreshPrivateInstalls(env, nowMs)],
     ['uninstall cleanup', () => finalizeUninstalls(env, nowMs)],
     ['metrics retention', () => pruneAppMetrics(env.DB, nowMs)],
     [

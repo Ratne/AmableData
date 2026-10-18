@@ -2,6 +2,7 @@
   "schema_version": 1,
   "id": "kapso",
   "name": "Kapso WhatsApp",
+  "version": "1.0.0",
   "tagline": {
     "en": "WhatsApp in the shared inbox, templates and automations",
     "it": "WhatsApp nella inbox condivisa, template e automazioni"

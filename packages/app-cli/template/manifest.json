@@ -2,6 +2,7 @@
   "schema_version": 1,
   "id": "__APP_ID__",
   "name": "__APP_NAME__",
+  "version": "0.1.0",
   "tagline": { "en": "Describe what the app does in one line" },
   "description": { "en": "A longer description shown on the app page in the Marketplace." },
   "developer": { "name": "Your name", "url": "__BASE_URL__", "email": "you@example.com" },

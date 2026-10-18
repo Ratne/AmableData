@@ -1,7 +1,7 @@
 import { manifestHash, parseAppManifest, type AppManifest } from '@amable/core/apps';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { overrideAuthServices } from '../../src/auth/services';
-import { runCatalogSync, getCatalogApp, listCatalog } from '../../src/apps/catalog-sync';
+import { getCatalogApp, listCatalog, refreshPrivateInstalls, runCatalogSync } from '../../src/apps/catalog-sync';
 import {
   activateInstall,
   approvePendingScopes,
@@ -35,13 +35,13 @@ function parsed(overrides: Parameters<typeof manifestInput>[0] = {}): AppManifes
 
 let ownerId: string;
 
-async function install(manifest = parsed()) {
+async function install(manifest = parsed(), manifestUrl: string | null = null) {
   const pending = await createPendingInstall(h.env, {
     tenantId: 't_acme',
     manifest,
     manifestHash: await manifestHash(manifest),
-    source: 'catalog',
-    manifestUrl: null,
+    source: manifestUrl === null ? 'catalog' : 'private',
+    manifestUrl,
     userId: ownerId,
     nowMs: h.clock.now,
   });
@@ -125,6 +125,42 @@ describe('catalog sync', () => {
     const approved = await approvePendingScopes(h.env, pending!, await manifestHash(pending!.pendingManifest), h.clock.now);
     expect(approved.scopes).toContain('forms:read');
     expect(approved.pendingScopes).toBeNull();
+  });
+});
+
+describe('private app updates', () => {
+  const URL_ = 'https://apps.example.com/manifest.json';
+
+  it('applies the refreshed manifest of apps installed from a URL, with the same rules', async () => {
+    let served: unknown = manifestInput({ version: '1.0.0' });
+    h.routes.set(URL_, () => Response.json(served));
+    const active = await install(parsed({ version: '1.0.0' }), URL_);
+
+    served = manifestInput({ version: '1.0.1' });
+    expect(await refreshPrivateInstalls(h.env, h.clock.now)).toEqual({ checked: 1, updated: 1, failed: 0 });
+    expect((await installById(h.env.DB, active.id))?.manifest.version).toBe('1.0.1');
+
+    // Throttled like the catalog: nothing is fetched again before 6 hours.
+    served = manifestInput({ version: '1.0.2' });
+    await refreshPrivateInstalls(h.env, h.clock.now + 3600_000);
+    expect(h.calls.filter((c) => c.url === URL_)).toHaveLength(1);
+
+    served = manifestInput({ version: '1.1.0', scopes: ['contacts:read', 'contacts:write', 'forms:read'] });
+    await refreshPrivateInstalls(h.env, h.clock.now, { force: true });
+    const pending = await installById(h.env.DB, active.id);
+    expect(pending).toMatchObject({ scopes: ['contacts:read', 'contacts:write'], pendingScopes: ['forms:read'] });
+    expect(pending?.manifest.version).toBe('1.0.1');
+  });
+
+  it('keeps the installed manifest when the URL fails or describes another app', async () => {
+    let served: () => Response = () => new Response('down', { status: 500 });
+    h.routes.set(URL_, () => served());
+    const active = await install(parsed({ version: '1.0.0' }), URL_);
+    expect(await refreshPrivateInstalls(h.env, h.clock.now, { force: true })).toEqual({ checked: 0, updated: 0, failed: 1 });
+
+    served = () => Response.json(manifestInput({ id: 'other-app', version: '9.0.0' }));
+    expect(await refreshPrivateInstalls(h.env, h.clock.now, { force: true })).toEqual({ checked: 1, updated: 0, failed: 1 });
+    expect((await installById(h.env.DB, active.id))?.manifest.version).toBe('1.0.0');
   });
 });
 

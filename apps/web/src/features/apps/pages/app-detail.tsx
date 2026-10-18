@@ -87,6 +87,7 @@ export function AppDetailPage() {
               <p className="text-sm text-(--obsidian-dashboard-shell-text-subtle)">{text(manifest.tagline, locale)}</p>
               <p className="text-xs text-(--obsidian-dashboard-shell-text-subtle)">
                 {t('apps.by', { developer: manifest.developer.name })}
+                {manifest.version !== undefined ? ` · ${t('apps.version', { version: manifest.version })}` : null}
               </p>
             </div>
           </div>

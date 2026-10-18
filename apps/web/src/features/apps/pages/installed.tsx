@@ -106,7 +106,9 @@ function InstallCard({ install, onUninstall }: { install: AppInstallView; onUnin
           </CardTitle>
           <p className="text-sm text-(--obsidian-dashboard-shell-text-subtle)">{text(install.manifest.tagline, locale)}</p>
           <p className="text-xs text-(--obsidian-dashboard-shell-text-subtle)">
-            {t('apps.installed.since', { at: formatDateTime(locale, install.activated_at ?? install.created_at) })} · API{' '}
+            {t('apps.installed.since', { at: formatDateTime(locale, install.activated_at ?? install.created_at) })}
+            {install.manifest.version !== undefined ? ` · ${t('apps.version', { version: install.manifest.version })}` : null}
+            {' · API '}
             {install.api_version}
           </p>
         </div>

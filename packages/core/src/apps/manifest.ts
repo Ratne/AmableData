@@ -229,6 +229,11 @@ export const appManifestSchema = z
     schema_version: z.literal(APP_MANIFEST_SCHEMA_VERSION),
     id: z.string().regex(APP_ID_RE, 'lowercase letters, digits and dashes, 3-40 chars'),
     name: z.string().min(2).max(60),
+    /** Release of the app (semver), bumped with every published change; shown to admins. */
+    version: z
+      .string()
+      .regex(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/, 'semver: MAJOR.MINOR.PATCH')
+      .optional(),
     tagline: shortText,
     description: localizedTextSchema,
     developer: z.strictObject({

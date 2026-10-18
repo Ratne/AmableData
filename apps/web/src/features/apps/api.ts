@@ -29,6 +29,7 @@ export interface FrameSession {
 export interface AppManifestView {
   readonly id: string;
   readonly name: string;
+  readonly version?: string;
   readonly tagline: LocalizedText;
   readonly description: LocalizedText;
   readonly developer: { readonly name: string; readonly url?: string; readonly email?: string };
