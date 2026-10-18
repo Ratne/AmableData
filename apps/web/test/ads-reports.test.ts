@@ -40,6 +40,7 @@ function row(patch: Partial<PerformanceRow> = {}): PerformanceRow {
     revenue_minor: 25_050,
     total_revenue_minor: 30_000,
     profit_minor: 15_050,
+    hard_costs_minor: 1_050,
     net_profit_minor: 14_000,
     roas: 2.505,
     roi: 1.505,

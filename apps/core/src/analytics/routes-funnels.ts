@@ -14,6 +14,7 @@ import {
   validateGraph,
   type FunnelGraph,
   type FunnelGraphError,
+  type FunnelLinks,
   type FunnelNode,
   type FunnelNodeOf,
   type FunnelPage,
@@ -74,22 +75,6 @@ async function activeTrackingDomain(c: Ctx, siteId: string, hostname: string): P
     .first<{ ok: number }>();
   return row !== null;
 }
-
-const funnelLinksResponseSchema = funnelLinksSchema.extend({
-  base_url: z.string(),
-  /** Page URL + direct suffix, when the page has an external URL. */
-  direct_url: z.string().nullable(),
-  /** Page node the direct / action links belong to. */
-  page_node_id: z.string().nullable(),
-  action_urls: z.array(
-    z.object({
-      action: z.number().int(),
-      url: z.string(),
-      /** Same action carrying the page node as fallback origin (visits without a known session). */
-      default_url: z.string(),
-    }),
-  ),
-});
 
 export const rangeBound = z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.iso.datetime({ offset: true })]);
 const heatmapQuery = siteQuery.extend({
@@ -318,7 +303,7 @@ export function registerFunnelRoutes(api: OpenAPIHono<AppEnv>): void {
         'Entrance (redirect) link, direct-link suffix, action links of the page node and the universal JS snippet. ' +
         'Links are derived, never stored: regenerate them at will.',
       request: { params: idParam, query: linksQuery },
-      responses: { 200: json(funnelLinksResponseSchema, 'Links') },
+      responses: { 200: json(funnelLinksSchema, 'Links') },
     }),
     async (c) => {
       const q = c.req.valid('query');
@@ -367,19 +352,17 @@ export function registerFunnelRoutes(api: OpenAPIHono<AppEnv>): void {
               url: buildActionUrl(base, action),
               default_url: buildActionUrl(base, action, { funnelId: graph.id, nodeId: pageNode.id }),
             }));
-      return c.json(
-        {
-          base_url: base,
-          entrance_url,
-          direct_suffix,
-          direct_url:
-            pageNode !== null && directPage?.url !== undefined ? buildDirectUrl(directPage.url, direct_suffix) : null,
-          page_node_id: pageNode?.id ?? null,
-          action_urls,
-          snippet: snippetFor(record.site, origin).html,
-        },
-        200,
-      );
+      const links: FunnelLinks = {
+        base_url: base,
+        entrance_url,
+        direct_suffix,
+        direct_url:
+          pageNode !== null && directPage?.url !== undefined ? buildDirectUrl(directPage.url, direct_suffix) : null,
+        page_node_id: pageNode?.id ?? null,
+        action_urls,
+        snippet: snippetFor(record.site, origin).html,
+      };
+      return c.json(links, 200);
     },
   );
 
@@ -419,7 +402,8 @@ export function registerFunnelRoutes(api: OpenAPIHono<AppEnv>): void {
           limit: MAX_TOUCHES,
         }),
       ]);
-      return c.json(computeHeatmap(graph, touches, conversions, q.metric), 200);
+      const truncated = touches.length >= MAX_TOUCHES || conversions.length >= MAX_TOUCHES;
+      return c.json(computeHeatmap(graph, touches, conversions, q.metric, truncated), 200);
     },
   );
 }

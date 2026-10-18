@@ -87,13 +87,20 @@ export const performanceRowSchema = z.object({
   parent_key: z.string().nullable(),
   visits: z.number().int(),
   clicks: z.number().int(),
+  /** Ad spend / entrance cost, with the traffic source's cost modifier applied. */
   cost_minor: z.number().int(),
-  /** Attributed revenue of the selected model (first purchases + renewals). */
+  /** Attributed revenue of the selected model (first purchases + renewals), with the source's revenue modifier applied. */
   revenue_minor: z.number().int(),
-  /** All revenue of the attributed customers in the range. */
+  /** All revenue of the attributed customers in the range (no modifier). */
   total_revenue_minor: z.number().int(),
   profit_minor: z.number().int(),
-  /** Profit minus hard costs / COGS / taxes recorded on the CRM payments. */
+  /**
+   * Hard costs + COGS + taxes credited with the model: the `hard_cost_minor`,
+   * `cogs_minor` and `tax_minor` data of postback conversions. CRM and tracker
+   * payments carry none of them, so their share is always 0.
+   */
+  hard_costs_minor: z.number().int().default(0),
+  /** `profit_minor - hard_costs_minor`. */
   net_profit_minor: z.number().int(),
   /** Revenue / cost; null without cost. */
   roas: z.number().nullable(),

@@ -2,6 +2,7 @@ import { isProviderError, ProviderError, type AdsProvider as AdPlatformClient } 
 import type {
   AdConnection,
   AdEntity,
+  AdEntityLevel,
   AdPlatform,
   AdSpendDay,
   GatewayResponse,
@@ -60,7 +61,12 @@ export const BACKFILL_MAX_DAYS = 90;
 export const TOKEN_REFRESH_MARGIN_MS = 2 * HOUR;
 const STATE_TTL_MS = 10 * MIN;
 const MAX_ACCOUNTS_PER_CONNECT = 25;
-const SPEND_LEVEL = 'campaign' as const;
+/**
+ * Spend is pulled at every level (one provider call per level and range); the
+ * performance report reads a single level per platform, so the levels never
+ * add up twice.
+ */
+export const SPEND_LEVELS: readonly AdEntityLevel[] = ['campaign', 'adset', 'ad'];
 
 /** Ad methods of the site DO with plain types (the RPC stub types erase `metadata: Record<string, unknown>`). */
 export interface AdsSiteStub {
@@ -273,6 +279,8 @@ export interface AdsSyncPorts {
   /** Tells the workspace a connection needs attention; must not throw. */
   notify(alert: AdConnectionAlert): Promise<void>;
   now(): number;
+  /** Entity levels whose spend is pulled; default `SPEND_LEVELS`. */
+  spendLevels?: readonly AdEntityLevel[];
 }
 
 export interface SiteRef {
@@ -327,9 +335,11 @@ async function pullRange(
   meta: ConnectionMeta,
 ): Promise<number> {
   const stub = adsStub(ports.ns, site.id);
-  const rows = aggregateSpend(
-    await client.fetchSpend(token, conn.account_id, { ...range, granularity: 'day', level: SPEND_LEVEL }),
-  ).filter((r) => r.platform === conn.platform);
+  const fetched: Awaited<ReturnType<AdPlatformClient['fetchSpend']>> = [];
+  for (const level of ports.spendLevels ?? SPEND_LEVELS) {
+    fetched.push(...(await client.fetchSpend(token, conn.account_id, { ...range, granularity: 'day', level })));
+  }
+  const rows = aggregateSpend(fetched).filter((r) => r.platform === conn.platform);
   const ids = [...new Set(rows.map((r) => r.entity_external_id))];
   const known =
     ids.length === 0 ? [] : await stub.listAdEntities({ platform: conn.platform, external_ids: ids });
@@ -345,9 +355,10 @@ async function pullRange(
     if (entities.length > 0) must(await stub.upsertAdEntities(entities, conn.id));
     meta.entities_at = now;
   }
+  const levels = new Set(ports.spendLevels ?? SPEND_LEVELS);
   const own = new Set(
-    (await stub.listAdEntities({ platform: conn.platform, level: SPEND_LEVEL }))
-      .filter((e) => e.connection_id === conn.id)
+    (await stub.listAdEntities({ platform: conn.platform }))
+      .filter((e) => e.connection_id === conn.id && levels.has(e.level))
       .map((e) => e.external_id),
   );
   const fresh = new Set(rows.map((r) => `${r.entity_external_id}|${r.day}`));

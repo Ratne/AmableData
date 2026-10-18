@@ -80,6 +80,17 @@ export interface EnrichedEvent {
    * secret) when it drains the site's identity queue.
    */
   contactToken?: string | null;
+  /** Email/SMS link params of the landing page (`he`, `sl`, `el`). */
+  landing?: LandingParams | null;
+}
+
+export interface LandingParams {
+  /** SHA-256 of the normalized `he` email: the clear address is never kept. */
+  emailHash: string | null;
+  /** `sl`: custom source name, reported as `@<name>`. */
+  sourceLabel: string | null;
+  /** `el`: email/SMS source label (`email`, a campaign name…), reported as `@<label>` on the Email channel. */
+  emailLabel: string | null;
 }
 
 /** A request recognised as a bot or crawler (aggregated, never a visitor). */

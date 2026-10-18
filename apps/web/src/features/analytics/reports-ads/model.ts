@@ -32,6 +32,7 @@ export const PERFORMANCE_COLUMNS = {
   revenue_minor: 'money',
   total_revenue_minor: 'money',
   profit_minor: 'money',
+  hard_costs_minor: 'money',
   net_profit_minor: 'money',
   roas: 'ratio',
   roi: 'percent',
@@ -62,7 +63,11 @@ export const DEFAULT_PERFORMANCE_COLUMNS: readonly PerformanceColumn[] = [
 ];
 
 /** Columns where a higher value is worse (colored red when rising). */
-export const LOWER_IS_BETTER: ReadonlySet<PerformanceColumn> = new Set(['cost_minor', 'cpa_minor']);
+export const LOWER_IS_BETTER: ReadonlySet<PerformanceColumn> = new Set([
+  'cost_minor',
+  'hard_costs_minor',
+  'cpa_minor',
+]);
 
 export function isPerformanceColumn(value: unknown): value is PerformanceColumn {
   return typeof value === 'string' && value in PERFORMANCE_COLUMNS;

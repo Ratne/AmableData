@@ -7,7 +7,7 @@ import type {
 import { beforeAll, describe, expect, it } from 'vitest';
 import { entitySlots, modelWeights } from '../src/analytics/store/reports-shared';
 import { createStore, siteInit, SITE_ID } from './helpers';
-import { createSources, D, DAY, seedPerformanceFixture, touch } from './reports-fixture';
+import { createSources, D, DAY, insertPayment, seedPerformanceFixture, touch } from './reports-fixture';
 
 type Store = ReturnType<typeof createStore>['store'];
 
@@ -112,6 +112,7 @@ describe('ads performance report (fixture: 20 visitors, 2 sources)', () => {
       revenue_minor: 7500,
       total_revenue_minor: 7500,
       profit_minor: 4500,
+      hard_costs_minor: 500,
       net_profit_minor: 4000,
       roas: 2.5,
       roi: 1.5,
@@ -293,6 +294,86 @@ describe('ads performance report without synced spend', () => {
     expect(nodes.get('traffic')).toMatchObject({ visits: 2, cost_minor: 50 });
     const firstNode = byKey(run(store, { group_by: 'node', model: 'first_click' }));
     expect(firstNode.get('traffic')?.revenue_minor).toBe(900);
+  });
+});
+
+describe('ads performance report with spend synced at several levels', () => {
+  it('reads one level per platform: no double counting, finer rows used when grouping finer', () => {
+    const { store, db } = createStore();
+    seedPerformanceFixture(store, db);
+    store.upsertAdSpend([
+      { platform: 'meta', entity_external_id: 'm1-s1', day: '2026-10-02', spend_minor: 400 },
+      { platform: 'meta', entity_external_id: 'm1-s2', day: '2026-10-02', spend_minor: 600 },
+      { platform: 'meta', entity_external_id: 'm1-s1', day: '2026-10-10', spend_minor: 800 },
+      { platform: 'meta', entity_external_id: 'm1-s2', day: '2026-10-10', spend_minor: 1200 },
+    ]);
+    expect(byKey(run(store, { group_by: 'platform' })).get('meta')?.cost_minor).toBe(3500);
+    expect(byKey(run(store, { group_by: 'campaign' })).get('m1')?.cost_minor).toBe(3000);
+    const adsets = run(store, { group_by: 'adset', filters: [{ dimension: 'campaign', value: 'm1' }] });
+    expect(adsets.rows.map((r) => [r.key, r.cost_minor])).toEqual([
+      [null, 0],
+      ['m1-s2', 1800],
+      ['m1-s1', 1200],
+    ]);
+    expect(adsets.totals.cost_minor).toBe(3000);
+  });
+});
+
+function setModifiers(store: Store, id: string, cost: number | null, revenue: number | null): void {
+  const source = store.getTrafficSource(id);
+  if (source === null) throw new Error('missing source');
+  const { id: _id, status: _status, created_at: _c, updated_at: _u, ...body } = source;
+  const r = store.updateTrafficSource(id, { ...body, cost_modifier_pct: cost, revenue_modifier_pct: revenue });
+  if (!r.ok) throw new Error(r.error.message);
+}
+
+describe('traffic source cost / revenue modifiers', () => {
+  it('scale the touch cost and the revenue credited to the source', () => {
+    const { store, db } = createStore();
+    store.initSite(siteInit());
+    const { meta, google } = createSources(store);
+    setModifiers(store, meta, 20, -10);
+    const touches = [
+      touch('a', D(2), meta, 'm1', { cost_minor: 25 }),
+      touch('b', D(2), meta, 'm1', { cost_minor: 25 }),
+      touch('c', D(3), google, 'g1', { cost_minor: 40 }),
+    ];
+    store.recordTouches(touches);
+    store.recordConversionFromPostback({ hit: touches[0]?.id ?? '', tx: 'o1', revenue_minor: 900, ts: D(4) });
+    store.recordConversionFromPostback({ hit: touches[2]?.id ?? '', tx: 'o2', revenue_minor: 500, ts: D(4) });
+    insertPayment(db, { tx: 'crm_1', visitor: 'b', ts: D(5), amount: 300 });
+    const rows = byKey(run(store, { group_by: 'source' }));
+    expect(rows.get(meta)).toMatchObject({
+      cost_minor: 60,
+      revenue_minor: 810 + 270,
+      total_revenue_minor: 1200,
+      profit_minor: 1080 - 60,
+      hard_costs_minor: 0,
+      net_profit_minor: 1020,
+      roas: 18,
+    });
+    expect(rows.get(google)).toMatchObject({ cost_minor: 40, revenue_minor: 500, hard_costs_minor: 0 });
+
+    setModifiers(store, meta, null, null);
+    expect(byKey(run(store, { group_by: 'source' })).get(meta)).toMatchObject({ cost_minor: 50, revenue_minor: 1200 });
+  });
+
+  it('apply the cost modifier to the synced spend, split or not', () => {
+    const { store, db } = createStore();
+    const { meta } = seedPerformanceFixture(store, db);
+    setModifiers(store, meta, 10, null);
+    const campaigns = byKey(run(store, { group_by: 'campaign' }));
+    expect(campaigns.get('m1')?.cost_minor).toBe(3300);
+    expect(campaigns.get('m2')?.cost_minor).toBe(550);
+    expect(campaigns.get('g1')?.cost_minor).toBe(4000);
+    const sources = run(store, { group_by: 'source' });
+    expect(sources.rows.map((r) => [r.label, r.cost_minor])).toEqual([
+      ['Meta Ads', 3850],
+      ['Google Ads', 4000],
+      [null, 0],
+    ]);
+    // Postback hard costs stay unscaled.
+    expect(campaigns.get('m1')?.hard_costs_minor).toBe(500);
   });
 });
 

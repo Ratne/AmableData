@@ -1,4 +1,4 @@
-import type { ContactJourney, JourneyItem, JourneyItemKind, TouchKind } from '@amable/api-types';
+import type { ContactJourney, JourneyItem, JourneyItemKind } from '@amable/api-types';
 import { cn } from '@amable/ui';
 import { Skeleton } from '@amable/ui/ui/skeleton';
 import { Link, useParams } from '@tanstack/react-router';
@@ -126,37 +126,12 @@ function TimelineItem({ item }: { item: JourneyItem }) {
   );
 }
 
-/** Funnel / ad touch of the contact's visitors and their identity-merge groups. */
-interface JourneyFunnelTouch {
-  readonly id: string;
-  /** Epoch ms or ISO. */
-  readonly ts: number | string;
-  readonly visitor_id: string;
-  readonly kind: TouchKind;
-  readonly funnel_name: string | null;
-  readonly node_id: string;
-  readonly traffic_source_name: string | null;
-  readonly campaign: string | null;
-  readonly campaign_name: string | null;
-  readonly external_click_id: string | null;
-}
-
-/** Optional identity-graph fields of the contact activity (present when the server sends them). */
-interface JourneyIdentityFields {
-  readonly merged_visitor_ids?: readonly string[];
-  readonly funnel_touches?: readonly JourneyFunnelTouch[];
-  readonly tags?: readonly string[];
-}
-
-const isoOf = (ts: number | string) => (typeof ts === 'number' ? new Date(ts).toISOString() : ts);
-
 function IdentityExtras({ tenant, journey }: { tenant: string; journey: ContactJourney }) {
   const { t } = useI18n();
   const f = useFormatters();
-  const extras = journey as ContactJourney & JourneyIdentityFields;
-  const merged = extras.merged_visitor_ids ?? [];
-  const touches = extras.funnel_touches ?? [];
-  const tags = extras.tags ?? [];
+  const merged = journey.merged_visitor_ids ?? [];
+  const touches = journey.funnel_touches ?? [];
+  const tags = journey.tags ?? [];
   if (merged.length === 0 && touches.length === 0 && tags.length === 0) return null;
   const siteId = journey.sites[0]?.site_id;
   return (
@@ -192,10 +167,10 @@ function IdentityExtras({ tenant, journey }: { tenant: string; journey: ContactJ
                   ) : null}
                 </span>
                 <time
-                  dateTime={isoOf(touch.ts)}
+                  dateTime={touch.ts}
                   className="shrink-0 text-[11px] text-muted-foreground"
                 >
-                  {f.dateTime(isoOf(touch.ts))}
+                  {f.dateTime(touch.ts)}
                 </time>
               </li>
             ))}

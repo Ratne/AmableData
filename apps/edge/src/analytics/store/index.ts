@@ -986,6 +986,12 @@ export class AnalyticsStore {
   getFunnelSession(visitorId: string, funnelId?: string | null): funnelSessions.FunnelSessionRecord | null {
     return funnelSessions.getFunnelSession(this.db, visitorId, funnelId);
   }
+  /** Tracker visitor of a funnel page ↔ funnel visitor of its redirect (session merge). */
+  linkFunnelVisitor(link: identity.FunnelVisitorLink): AnalyticsResult<ReturnType<typeof identity.linkFunnelVisitor>> {
+    const l = parse(identity.funnelVisitorLinkSchema, link);
+    if (!l.ok) return l;
+    return { ok: true, value: this.db.transaction(() => identity.linkFunnelVisitor(this.db, l.value, this.now())) };
+  }
   /** One routing step: its touches, the visitor's new session state and the tag effects, atomically. */
   recordFunnelStep(step: funnelSessions.FunnelStepInput): AnalyticsResult<funnelSessions.FunnelStepResult> {
     const s = parse(funnelSessions.funnelStepInputSchema, step);

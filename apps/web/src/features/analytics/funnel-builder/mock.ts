@@ -251,5 +251,6 @@ export function mockHeatmap(
       const count = edgeCount.get(e.id) ?? 0;
       return { edge_id: e.id, count, flow_pct: (count / ENTRANCES) * 100 };
     }),
+    truncated: false,
   };
 }

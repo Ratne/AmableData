@@ -118,6 +118,8 @@ import type {
   FunnelStepInput,
   FunnelStepResult,
 } from './store/funnel-sessions';
+import type { VisitorMerge } from '@amable/api-types';
+import type { FunnelVisitorLink } from './store/identity';
 import { DAY_MS } from './time';
 import type { BotHit, EnrichedEvent } from './types';
 
@@ -487,6 +489,9 @@ export class AnalyticsDO extends DurableObject<Env> {
   }
   recordFunnelStep(step: FunnelStepInput): AnalyticsResult<FunnelStepResult> {
     return this.store.recordFunnelStep(step);
+  }
+  linkFunnelVisitor(link: FunnelVisitorLink): AnalyticsResult<VisitorMerge | null> {
+    return this.store.linkFunnelVisitor(link);
   }
 
   upsertAdConnection(input: AdConnectionInput): AnalyticsResult<AdConnectionRecord> {

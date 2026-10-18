@@ -422,6 +422,16 @@ function Builder({
           <ErrorState error={heatmap.error} compact />
         </div>
       ) : null}
+      {metric && heatmap.data?.truncated ? (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b bg-warning/10 px-4 py-1 text-[11px]"
+          data-testid="funnel-heatmap-truncated"
+        >
+          <CircleAlert className="size-3.5 text-warning" aria-hidden />
+          <span className="flex-1">{t('analytics.funnelBuilder.heatmap.truncated')}</span>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1">
         <FunnelPalette

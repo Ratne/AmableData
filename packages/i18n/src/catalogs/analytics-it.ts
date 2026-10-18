@@ -600,6 +600,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.performance.col.revenue_minor': 'Ricavi',
   'analytics.performance.col.total_revenue_minor': 'Ricavi totali',
   'analytics.performance.col.profit_minor': 'Profitto',
+  'analytics.performance.col.hard_costs_minor': 'Costi diretti',
   'analytics.performance.col.net_profit_minor': 'Profitto netto',
   'analytics.performance.col.roas': 'ROAS',
   'analytics.performance.col.roi': 'ROI',
@@ -685,7 +686,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.journeys.contact.kind.view': 'Visualizzazione',
   'analytics.journeys.contact.kind.click': 'Clic',
   'analytics.journeys.contact.kind.action': 'Azione',
-  'analytics.journeys.contact.clickId': 'Click ID',
+  'analytics.journeys.contact.clickId': 'ID clic',
 
   'analytics.adsWidgets.title': 'Attribuzione annunci',
   'analytics.adsWidgets.spend': 'Spesa pubblicitaria',
@@ -752,7 +753,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
     'Seleziona un nodo per evidenziare i percorsi che lo attraversano.',
   'analytics.funnelBuilder.fitView': 'Adatta allo schermo',
   'analytics.funnelBuilder.heatmap.label': 'Heatmap',
-  'analytics.funnelBuilder.heatmap.off': 'Off',
+  'analytics.funnelBuilder.heatmap.off': 'Disattivata',
   'analytics.funnelBuilder.heatmap.visits': 'Visite',
   'analytics.funnelBuilder.heatmap.flow_pct': '% flusso',
   'analytics.funnelBuilder.heatmap.cvr': 'CVR',
@@ -783,7 +784,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.node.noUrl': 'URL mancante',
   'analytics.funnelBuilder.node.mapped': 'Azione → pagina',
 
-  'analytics.funnelBuilder.edge.default': 'Default',
+  'analytics.funnelBuilder.edge.default': 'Predefinito',
   'analytics.funnelBuilder.edge.action': 'Azione {list}',
   'analytics.funnelBuilder.edge.route': 'Route',
 
@@ -873,7 +874,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.panel.method': 'Metodo',
   'analytics.funnelBuilder.panel.headers': 'Header',
   'analytics.funnelBuilder.panel.addHeader': 'Aggiungi header',
-  'analytics.funnelBuilder.panel.body': 'Body',
+  'analytics.funnelBuilder.panel.body': 'Corpo',
   'analytics.funnelBuilder.panel.bodyHint':
     'Inviato in background con POST; token come {visitor} e {hit} vengono sostituiti.',
   'analytics.funnelBuilder.panel.edgeTitle': 'Connessione',
@@ -883,7 +884,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.panel.via.weight': 'Peso',
   'analytics.funnelBuilder.panel.via.route': 'Route',
   'analytics.funnelBuilder.panel.via.action': 'Azione',
-  'analytics.funnelBuilder.panel.via.default': 'Default',
+  'analytics.funnelBuilder.panel.via.default': 'Predefinito',
   'analytics.funnelBuilder.panel.actions': 'Numeri di azione (separati da virgola)',
   'analytics.funnelBuilder.panel.removeEdge': 'Elimina connessione',
 
@@ -912,6 +913,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
     'Questo funnel è archiviato: i suoi link continuano a funzionare, ma non compare nella lista.',
   'analytics.funnelBuilder.heatmap.source': 'Sorgente',
   'analytics.funnelBuilder.heatmap.allSources': 'Tutte le sorgenti',
+  'analytics.funnelBuilder.heatmap.truncated':
+    'Heatmap parziale: il periodo supera i 10.000 hit, restringi le date o scegli una sorgente.',
   'analytics.funnelBuilder.palette.search': 'Cerca pagine',
   'analytics.funnelBuilder.palette.noPages':
     'Ancora nessuna pagina AmableCRM: aggiungi un page group e inserisci un URL esterno.',
@@ -1071,7 +1074,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.sources.costType.cpc': 'CPC (per clic)',
   'analytics.sources.costType.cpm': 'CPM (per 1000 impression)',
   'analytics.sources.costType.cpa': 'CPA (per conversione)',
-  'analytics.sources.costType.revshare': 'Revenue share',
+  'analytics.sources.costType.revshare': 'Quota sui ricavi',
   'analytics.sources.costType.none': 'Nessun costo',
   'analytics.sources.defaultCost': 'Costo predefinito per ingresso',
   'analytics.sources.defaultCostHint': 'Usato quando il link non porta un costo.',
@@ -1134,6 +1137,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.ads.outbound.value': 'Valore',
   'analytics.ads.outbound.attempts': 'Tentativi',
   'analytics.ads.outbound.empty': 'Nessuna conversione in coda.',
+  'analytics.ads.outbound.truncated': 'Mostrate le {count} più recenti: restringi i filtri per vedere le altre.',
   'analytics.ads.outbound.resend': 'Reinvia',
   'analytics.ads.outbound.resendSelected': 'Reinvia selezionate ({count})',
   'analytics.ads.outbound.resendFailed': 'Reinvia tutte le fallite',

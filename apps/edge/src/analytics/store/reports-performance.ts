@@ -51,6 +51,11 @@ import {
  *   count, so drill-down rows add up to their parent.
  * - `click_date` credits a conversion to the range of the credited touch (later
  *   sales included); `sale_date` reports conversions of the range.
+ * - The cost / revenue modifiers of a traffic source scale the cost of its
+ *   touches and the revenue credited to them; spend not split through touches
+ *   takes the modifier of the platform's first source (by id).
+ * - Hard costs (hard cost, COGS, taxes) only exist on postback conversions;
+ *   payments carry none.
  */
 
 const ENTITY_LEVELS: readonly AdEntityLevel[] = ['campaign', 'adset', 'ad'];
@@ -137,6 +142,11 @@ class Rows {
   }
 }
 
+const costFactorOf = (ctx: PerformanceContext, source: string | null | undefined): number =>
+  source === null || source === undefined ? 1 : (ctx.sources.get(source)?.costFactor ?? 1);
+const revenueFactorOf = (ctx: PerformanceContext, source: string | null | undefined): number =>
+  source === null || source === undefined ? 1 : (ctx.sources.get(source)?.revenueFactor ?? 1);
+
 function parentDim(groupBy: PerformanceGroupBy): PerformanceGroupBy | null {
   if (groupBy === 'ad') return 'adset';
   if (groupBy === 'adset') return 'campaign';
@@ -215,7 +225,7 @@ function clickLog(
     const touchCost =
       dims.platform !== null && dims.platform !== undefined && spendPlatforms.has(dims.platform)
         ? 0
-        : g.cost;
+        : Math.round(g.cost * costFactorOf(ctx, dims.source));
     rows.add(dims[groupBy] ?? null, parent === null ? null : (dims[parent] ?? null), (a) => {
       a.visits += g.entrances + (viewsAreVisits ? g.views : 0);
       a.clicks += g.clicks;
@@ -368,6 +378,8 @@ function spendInto(
     if (s.platform !== null && !fallbackSource.has(s.platform))
       fallbackSource.set(s.platform, s.id);
   }
+  // Spend not split through touches takes the modifier of the platform's first source.
+  const platformFactor = (platform: AdPlatform): number => costFactorOf(ctx, fallbackSource.get(platform));
   const credit = (
     key: string | null,
     parentKey: string | null,
@@ -409,7 +421,7 @@ function spendInto(
         parent === null ? null : (direct[parent] ?? null),
         u,
         1,
-        u.spend_minor,
+        Math.round(u.spend_minor * platformFactor(u.platform)),
         reported,
       );
       continue;
@@ -427,10 +439,13 @@ function spendInto(
             : null;
       const parentKey =
         parent === null ? null : (direct[parent] ?? (groupBy === 'source' ? u.platform : null));
-      credit(key, parentKey, u, 1, u.spend_minor, reported);
+      credit(key, parentKey, u, 1, Math.round(u.spend_minor * platformFactor(u.platform)), reported);
       continue;
     }
-    const shares = new Map<string, { key: string | null; parent: string | null; n: number }>();
+    const shares = new Map<
+      string,
+      { key: string | null; parent: string | null; n: number; factored: number }
+    >();
     for (const g of matching) {
       const dims = { ...g.dims, ...direct };
       if (!passes(dims, filters)) continue;
@@ -440,8 +455,10 @@ function spendInto(
         key,
         parent: parent === null ? null : (dims[parent] ?? null),
         n: 0,
+        factored: 0,
       };
       cur.n += g.entrances;
+      cur.factored += g.entrances * costFactorOf(ctx, g.dims.source);
       shares.set(id, cur);
     }
     const list = [...shares.values()];
@@ -455,7 +472,7 @@ function spendInto(
         s.parent,
         u,
         s.n / total,
-        amounts[i] ?? 0,
+        Math.round(((amounts[i] ?? 0) * s.factored) / s.n),
         revenues === null ? null : (revenues[i] ?? 0),
       ),
     );
@@ -565,7 +582,7 @@ function attributeInto(
         key,
         parent === null ? null : (dims[parent] ?? null),
         weight,
-        amounts[i] ?? 0,
+        Math.round((amounts[i] ?? 0) * revenueFactorOf(ctx, t.source)),
         costs[i] ?? 0,
       );
     });
@@ -599,6 +616,7 @@ function toRow(a: Acc, label: string | null): PerformanceRow {
     revenue_minor: a.revenue,
     total_revenue_minor: a.totalRevenue,
     profit_minor: profit,
+    hard_costs_minor: a.costs,
     net_profit_minor: profit - a.costs,
     roas: a.cost === 0 ? null : round4(a.revenue / a.cost),
     roi: a.cost === 0 ? null : round4(profit / a.cost),

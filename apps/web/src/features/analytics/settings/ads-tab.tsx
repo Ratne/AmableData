@@ -506,6 +506,11 @@ function OutboundPanel({
               {t(`analytics.ads.outbound.status.${s}`)} · {f.number(log.data.stats[s])}
             </StatusPill>
           ))}
+          {log.data.truncated ? (
+            <StatusPill tone="warning">
+              {t('analytics.ads.outbound.truncated', { count: f.number(jobs.length) })}
+            </StatusPill>
+          ) : null}
         </div>
       ) : null}
       {log.error ? (

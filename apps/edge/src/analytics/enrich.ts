@@ -1,6 +1,7 @@
 import type { ServerEvent, TrackerEvent } from '@amable/api-types';
 import { classifyChannel } from './channels';
 import { cookielessVisitorId } from './cookieless';
+import { landingEmailHash } from './store/identity';
 import { parseUserAgent } from './ua';
 import type { EnrichedEvent, ExtraValue, Geo, IdentityData, PaymentData } from './types';
 
@@ -261,9 +262,47 @@ export async function enrichTrackerEvent(
       if (payload.ct !== undefined && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(payload.ct)) {
         event.contactToken = payload.ct;
       }
+      applyLandingParams(event, payload.la);
       break;
   }
   return event;
+}
+
+const LANDING_LABEL = /^[\p{L}\p{N} _.:@-]{1,64}$/u;
+
+function landingLabel(raw: string | null | undefined): string | null {
+  const v = (raw ?? '').trim().replace(/^@+/, '').replace(/\s+/g, ' ').slice(0, 64);
+  return LANDING_LABEL.test(v) ? v : null;
+}
+
+/**
+ * Email/SMS link params of a landing pageview, from the tracker (`la`) or the
+ * page URL: `he` becomes the SHA-256 identity key and is removed from the
+ * stored URL; `el` puts the session on the Email channel with source
+ * `@<label>`, `sl` sets the source `@<name>` (an otherwise direct visit
+ * becomes a referral).
+ */
+export function applyLandingParams(event: EnrichedEvent, la: TrackerEvent['la']): void {
+  if (event.type !== 'pageview') return;
+  const url = parseUrl(event.url);
+  const q = url?.searchParams;
+  const he = la?.he ?? q?.get('he') ?? null;
+  const sourceLabel = landingLabel(la?.sl ?? q?.get('sl'));
+  const emailLabel = landingLabel(la?.el ?? q?.get('el'));
+  if (url !== null && q?.has('he') === true) {
+    q.delete('he');
+    event.url = url.toString().slice(0, 2048);
+  }
+  const emailHash = he === null || he === '' ? null : landingEmailHash(he);
+  if (emailHash === null && sourceLabel === null && emailLabel === null) return;
+  event.landing = { emailHash, sourceLabel, emailLabel };
+  if (emailLabel !== null) {
+    event.channel = 'Email';
+    event.source = `@${emailLabel}`;
+  } else if (sourceLabel !== null) {
+    event.source = `@${sourceLabel}`;
+    if (event.channel === 'Direct') event.channel = 'Referral';
+  }
 }
 
 /** Funnel page reached directly from an ad (`?f=…&ts=…&n=…[&p=…]`, no redirect). */
@@ -365,6 +404,7 @@ export async function enrichServerEvent(
       };
       break;
     case 'pageview':
+      applyLandingParams(event, undefined);
       break;
   }
   return event;

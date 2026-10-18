@@ -6,6 +6,9 @@ import {
   adSpendDaySchema,
   cohortQuerySchema,
   conditionAttributeSchema,
+  contactJourneySchema,
+  funnelHeatmapSchema,
+  funnelLinksSchema,
   createTrackingDomainSchema,
   funnelEdgeSchema,
   funnelGraphInputSchema,
@@ -188,6 +191,74 @@ describe('funnel graph contracts', () => {
   });
 });
 
+describe('funnel links, heatmap and contact journey contracts', () => {
+  it('describes every field of the links response', () => {
+    const links = {
+      base_url: 'https://edge.test/s/st_1',
+      entrance_url: 'https://edge.test/s/st_1/go/fg_1-ts_1?campaign={campaignid}',
+      direct_suffix: 'f=fg_1&ts=ts_1&n=la',
+      direct_url: 'https://lander.test/a?f=fg_1&ts=ts_1&n=la',
+      page_node_id: 'la',
+      action_urls: [{ action: 1, url: 'https://edge.test/s/st_1/a/1', default_url: 'https://edge.test/s/st_1/go/fg_1/la/a/1' }],
+      snippet: '<script></script>',
+    };
+    expect(funnelLinksSchema.strict().parse(links)).toEqual(links);
+    expect(funnelLinksSchema.safeParse({ ...links, action_urls: [{ action: 1, url: 'x' }] }).success).toBe(false);
+    expect(funnelLinksSchema.safeParse({ ...links, direct_url: null, page_node_id: null, action_urls: [] }).success).toBe(true);
+  });
+
+  it('flags truncated heatmaps, false when absent', () => {
+    const heatmap = { metric: 'visits', nodes: [], edges: [] };
+    expect(funnelHeatmapSchema.parse(heatmap).truncated).toBe(false);
+    expect(funnelHeatmapSchema.parse({ ...heatmap, truncated: true }).truncated).toBe(true);
+  });
+
+  it('keeps the identity-graph fields of a contact journey optional', () => {
+    const journey = {
+      contact_id: 'ct_1',
+      sites: [],
+      visitors: [],
+      first_visit: null,
+      totals: { sessions: 0, pageviews: 0, goals: 0, revenue: [], orders: 0, emails_opened: 0, emails_clicked: 0 },
+      sources: [],
+      top_pages: [],
+      goals: [],
+      first_touch: null,
+      last_non_direct_touch: null,
+      time_to_conversion: {
+        first_seen: null,
+        first_purchase_at: null,
+        sessions_before_purchase: null,
+        days_to_purchase: null,
+        hours_to_purchase: null,
+      },
+      prediction: null,
+      items: [],
+    };
+    expect(contactJourneySchema.safeParse(journey).success).toBe(true);
+    const touch = {
+      id: 'hit_1',
+      ts: '2026-10-15T10:00:00.000Z',
+      site_id: 'st_1',
+      visitor_id: 'v1',
+      kind: 'entrance',
+      funnel_id: 'fg_1',
+      funnel_name: 'Main',
+      node_id: 't',
+      page_id: null,
+      traffic_source_id: 'ts_1',
+      traffic_source_name: 'Meta',
+      campaign: '123',
+      campaign_name: 'Spring',
+      external_click_id: 'fb.1',
+      fields: { c1: 'adset' },
+    };
+    const full = { ...journey, merged_visitor_ids: ['v2'], funnel_touches: [touch], tags: ['hot'] };
+    expect(contactJourneySchema.parse(full)).toEqual(full);
+    expect(contactJourneySchema.safeParse({ ...full, funnel_touches: [{ ...touch, kind: 'bogus' }] }).success).toBe(false);
+  });
+});
+
 describe('traffic source contracts', () => {
   it('parses a template-like source with defaults', () => {
     const parsed = trafficSourceInputSchema.parse(sourceInput());
@@ -315,7 +386,9 @@ describe('attribution report contracts', () => {
       reported_revenue_minor: 4000,
       reported_vs_revenue_minor: -1000,
     };
-    expect(performanceRowSchema.parse(row)).toEqual(row);
+    // Rows without hard costs (older servers) read as 0.
+    expect(performanceRowSchema.parse(row)).toEqual({ ...row, hard_costs_minor: 0 });
+    expect(performanceRowSchema.parse({ ...row, hard_costs_minor: 200 }).hard_costs_minor).toBe(200);
     expect(ltvQuerySchema.parse({ site_id: 's', from: '2026-01-01', to: '2026-10-01' }).model).toBe('first_click');
     expect(cohortQuerySchema.parse({ site_id: 's', from: '2026-01-01', to: '2026-10-01' }).granularity).toBe('month');
     expect(journeyQuerySchema.parse({ site_id: 's', from: '2026-01-01', to: '2026-10-01', converted_only: 'true' }).converted_only).toBe(true);

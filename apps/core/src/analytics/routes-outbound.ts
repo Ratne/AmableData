@@ -68,7 +68,15 @@ export function registerOutboundRoutes(api: OpenAPIHono<AppEnv>): void {
       summary: 'Outbound conversion log (newest first) with the job count per status',
       request: { query: listQuery },
       responses: {
-        200: json(z.object({ data: z.array(outboundConversionJobSchema), stats: statsSchema }), 'Jobs'),
+        200: json(
+          z.object({
+            data: z.array(outboundConversionJobSchema),
+            stats: statsSchema,
+            /** More jobs match the filter than `limit`: only the newest are listed. */
+            truncated: z.boolean(),
+          }),
+          'Jobs',
+        ),
       },
     }),
     async (c) => {
@@ -84,7 +92,8 @@ export function registerOutboundRoutes(api: OpenAPIHono<AppEnv>): void {
         stub.listOutbound({ ...filter, status: q.status, event_id: q.event_id, limit: q.limit }),
         stub.outboundStats({ ...filter, event_id: q.event_id }),
       ]);
-      return c.json({ data: jobs.map(redact), stats }, 200);
+      const matching = q.status === undefined ? OUTBOUND_STATUSES.reduce((n, s) => n + stats[s], 0) : stats[q.status];
+      return c.json({ data: jobs.map(redact), stats, truncated: matching > jobs.length }, 200);
     },
   );
 

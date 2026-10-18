@@ -12,6 +12,8 @@ import {
 } from '../helpers/harness';
 
 const BASE = '/api/v2/t/acme/analytics';
+/** Spend rows per day of the fake account: campaigns, adsets and ads. */
+const ENTITIES_PER_DAY = 2 + 4 + 8;
 const OTHER = '/api/v2/t/other/analytics';
 
 let h: Harness;
@@ -97,7 +99,8 @@ describe('ad connections API', () => {
     expect(grants).toHaveLength(1);
     expect(grants[0]?.value).not.toContain('fake-access');
     const spend = await ns.store(`site:${siteId}`).listAdSpend({ from: '2026-10-08', to: '2026-10-15' });
-    expect(spend.length).toBe(16);
+    // 2 campaigns, 4 adsets and 8 ads of the fake account, every day.
+    expect(spend.length).toBe(8 * ENTITIES_PER_DAY);
 
     const list = await viewer.get(`${BASE}/ads/connections?site_id=${siteId}`);
     expect((list.body['data'] as unknown[]).length).toBe(1);
@@ -110,7 +113,7 @@ describe('ad connections API', () => {
       to: '2026-10-15',
     });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ connection_id: connectionId, from: '2026-09-16', to: '2026-10-15', rows: 60 });
+    expect(res.body).toEqual({ connection_id: connectionId, from: '2026-09-16', to: '2026-10-15', rows: 30 * ENTITIES_PER_DAY });
     const tooLong = await owner.post(`${BASE}/ads/connections/${connectionId}/backfill?site_id=${siteId}`, {
       from: '2026-01-01',
       to: '2026-10-15',
@@ -165,6 +168,6 @@ describe('ad connections API', () => {
     const list = await viewer.get(`${BASE}/ads/connections?site_id=${siteId}`);
     expect((list.body['data'] as Array<Record<string, unknown>>)[0]).toMatchObject({ status: 'disconnected' });
     expect(await grantKeys()).toEqual([]);
-    expect((await ns.store(`site:${siteId}`).listAdSpend({ from: '2026-09-16', to: '2026-10-15' })).length).toBe(60);
+    expect((await ns.store(`site:${siteId}`).listAdSpend({ from: '2026-09-16', to: '2026-10-15' })).length).toBe(30 * ENTITIES_PER_DAY);
   });
 });

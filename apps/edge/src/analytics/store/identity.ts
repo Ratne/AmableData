@@ -281,6 +281,17 @@ export function sha256Hex(text: string): string {
   return h.map((x) => x.toString(16).padStart(8, '0')).join('');
 }
 
+/**
+ * SHA-256 of the normalized email of a `he=` landing param (plain or already
+ * hashed). Landing links travel in URLs, so only the hash is ever stored.
+ */
+export function landingEmailHash(raw: string): string | null {
+  const v = raw.trim().toLowerCase();
+  if (SHA256_HEX.test(v)) return v;
+  const email = normalizeEmailKey(v);
+  return email === null ? null : sha256Hex(email);
+}
+
 /** Identity hints carried by an event or a CRM contact (raw, normalized here). */
 export interface IdentitySignals {
   email?: string | null | undefined;
@@ -308,9 +319,8 @@ export function identityKeyRefs(s: IdentitySignals): IdentityKeyRef[] {
   };
   if (s.email) addEmail(s.email);
   if (s.landingEmail) {
-    const v = s.landingEmail.trim().toLowerCase();
-    if (SHA256_HEX.test(v)) add('email', v);
-    else addEmail(v);
+    const hash = landingEmailHash(s.landingEmail);
+    if (hash !== null) add('email', hash);
   }
   if (s.phone) {
     const phone = normalizePhoneKey(s.phone);
@@ -322,6 +332,7 @@ export function identityKeyRefs(s: IdentitySignals): IdentityKeyRef[] {
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null);
 
 function landingEmailOf(e: EnrichedEvent): string | null {
+  if (e.landing?.emailHash) return e.landing.emailHash;
   const loose = e as unknown as Record<string, unknown>;
   for (const field of ['la', 'landing']) {
     const v = loose[field];
@@ -601,6 +612,34 @@ export function recordIdentity(
   }
   retroLink(db, visitorId);
   return { added, merges };
+}
+
+export const funnelVisitorLinkSchema = z.object({
+  visitor_id: z.string().min(1).max(128),
+  funnel_visitor_id: z.string().min(1).max(128),
+  ts: z.number().int(),
+});
+export type FunnelVisitorLink = z.input<typeof funnelVisitorLinkSchema>;
+
+/**
+ * Links the tracker visitor of a funnel page to the funnel visitor of the
+ * redirect that brought it there (`vid` of the landing URL). Same browser, so
+ * it is a `session` merge: the funnel touches and the page events (identify,
+ * goals, payments) become one person. Both hold the funnel visitor as a
+ * session key, so further trackers landing with the same `vid` join too.
+ */
+export function linkFunnelVisitor(
+  db: SqlDb,
+  link: z.output<typeof funnelVisitorLinkSchema>,
+  now: number,
+): VisitorMerge | null {
+  const { visitor_id: visitorId, funnel_visitor_id: funnelVisitorId, ts } = link;
+  if (visitorId === funnelVisitorId || !getMergeSettings(db).session) return null;
+  upsertIdentityKeys(
+    db,
+    [funnelVisitorId, visitorId].map((v) => ({ key_type: 'session' as const, key_value: funnelVisitorId, visitor_id: v, first_seen: ts })),
+  );
+  return linkGroups(db, funnelVisitorId, visitorId, 'session', now);
 }
 
 export const visitorIdentityInputSchema = z.object({

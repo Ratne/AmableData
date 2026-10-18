@@ -101,6 +101,8 @@ describe('identity normalization', () => {
       { key_type: 'phone', key_value: '+393331234567' },
     ]);
     expect(identityKeyRefs({ landingEmail: hash.toUpperCase() })).toEqual([{ key_type: 'email', key_value: hash }]);
+    // A clear he= email comes from a URL: only its hash is kept.
+    expect(identityKeyRefs({ landingEmail: ' Mario.Rossi@example.com' })).toEqual([{ key_type: 'email', key_value: hash }]);
     expect(identityKeyRefs({ email: 'bad', phone: 'x' })).toEqual([]);
   });
 });

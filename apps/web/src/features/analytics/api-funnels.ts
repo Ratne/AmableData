@@ -86,14 +86,6 @@ const send = (method: string, body: unknown = {}): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-/** Response of `GET /funnels-v2/{id}/links` (the contract plus the page and fallback URLs). */
-export interface FunnelLinksResponse extends Omit<FunnelLinks, 'action_urls'> {
-  readonly base_url: string;
-  readonly direct_url: string | null;
-  readonly page_node_id: string | null;
-  readonly action_urls: readonly { action: number; url: string; default_url: string }[];
-}
-
 export interface FunnelLinksParams {
   readonly source: string;
   readonly node?: string;
@@ -128,6 +120,8 @@ export interface OutboundQuery {
 export interface OutboundList {
   readonly data: OutboundConversionJob[];
   readonly stats: Record<OutboundStatus, number>;
+  /** More jobs match than `limit`: only the newest are listed. */
+  readonly truncated: boolean;
 }
 
 export type OutboundResendBody =
@@ -159,7 +153,7 @@ export function funnelsApi(tenant: string) {
           send('POST', name ? { name } : {}),
         ),
       links: (siteId: string, id: string, params: FunnelLinksParams) =>
-        request<FunnelLinksResponse>(
+        request<FunnelLinks>(
           sited(siteId, `${graph(id)}/links`, {
             ...params,
             wordpress: params.wordpress ? 'true' : undefined,

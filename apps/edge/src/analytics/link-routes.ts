@@ -477,8 +477,27 @@ export async function recordDirectLinkView(
 }
 
 /**
- * Wraps `POST /e`: once the ingest accepted a direct-link landing pageview,
- * its funnel touches are recorded in the background.
+ * Tracker visitor and funnel visitor of a page reached through an entrance or
+ * action redirect: the landing URL carries the funnel `vid`, which the tracker
+ * echoes as `dl.vid`. Only the landing itself counts (the tracker resends its
+ * funnel context with every event).
+ */
+export function funnelVisitorLink(payload: TrackerEvent): { visitorId: string; funnelVisitorId: string } | null {
+  const funnelVisitorId = validVisitorId(payload.dl?.vid);
+  if (payload.type !== 'pageview' || payload.cl === 1 || payload.vid === undefined || funnelVisitorId === null) return null;
+  if (funnelVisitorId === payload.vid) return null;
+  try {
+    if (new URL(payload.url).searchParams.get('vid') !== funnelVisitorId) return null;
+  } catch {
+    return null;
+  }
+  return { visitorId: payload.vid, funnelVisitorId };
+}
+
+/**
+ * Wraps `POST /e`: once the ingest accepted a pageview, links the tracker
+ * visitor of a redirected landing to its funnel visitor, and records the
+ * funnel touches of a direct-link landing, both in the background.
  */
 export const directLinkViews: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
   let payload: TrackerEvent | null = null;
@@ -493,9 +512,20 @@ export const directLinkViews: MiddlewareHandler<{ Bindings: Env }> = async (c, n
   }
   await next();
   if (payload === null || c.res.status !== 202 || !SITE_ID_RE.test(payload.site)) return;
+  const facts = requestFacts(c.req.raw);
+  const link = funnelVisitorLink(payload);
+  if (link !== null && detectBot(facts.userAgent) === null) {
+    background(
+      c,
+      siteStub(c.env.ANALYTICS, payload.site)
+        .linkFunnelVisitor({ visitor_id: link.visitorId, funnel_visitor_id: link.funnelVisitorId, ts: Date.now() })
+        .catch((error: unknown) =>
+          console.error('[links] funnel visitor not linked', error instanceof Error ? error.message : String(error)),
+        ),
+    );
+  }
   const view = directLinkView(payload);
   if (view === null) return;
-  const facts = requestFacts(c.req.raw);
   background(
     c,
     recordDirectLinkView(c.env, payload.site, view, facts).catch((error: unknown) =>

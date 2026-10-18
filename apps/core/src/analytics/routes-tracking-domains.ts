@@ -136,10 +136,19 @@ async function applyState(
   row: TrackingDomainRow,
   state: CustomHostnameState | null,
 ): Promise<TrackingDomainRow> {
-  const now = c.get('services').now();
+  await writeState(c.env.DB, c.get('services').now(), row, state);
+  return rowOf(c, row.id);
+}
+
+async function writeState(
+  db: D1Database,
+  now: number,
+  row: TrackingDomainRow,
+  state: CustomHostnameState | null,
+): Promise<void> {
   const status: TrackingDomainStatus = state === null ? 'error' : state.status;
   const error = state === null ? 'hostname_unknown_to_provider' : state.error;
-  await c.env.DB.prepare(
+  await db.prepare(
     `UPDATE tracking_domains
        SET status = ?, provider_id = COALESCE(?, provider_id), txt_name = COALESCE(?, txt_name),
            txt_value = COALESCE(?, txt_value), error = ?, checked_at = ?,
@@ -159,7 +168,108 @@ async function applyState(
       row.tenant_id,
     )
     .run();
-  return rowOf(c, row.id);
+}
+
+/** Marks a domain whose site is gone and whose custom hostname could not be removed yet. */
+const SITE_DELETED = 'site_deleted';
+
+async function removeRow(db: D1Database, row: TrackingDomainRow): Promise<void> {
+  await db.prepare(`DELETE FROM tracking_domains WHERE id = ? AND tenant_id = ?`).bind(row.id, row.tenant_id).run();
+}
+
+/**
+ * Disconnects every tracking domain of a deleted site: the custom hostname is
+ * removed at the provider, then the row. When the provider is unavailable or
+ * fails, the row stays as `error` / `site_deleted` (no longer resolved by the
+ * edge) and the cron retries the removal.
+ */
+export async function removeSiteTrackingDomains(
+  env: Env,
+  tenantId: string,
+  siteId: string,
+  now: number,
+): Promise<{ removed: number; deferred: number }> {
+  const rows = await env.DB.prepare(`SELECT * FROM tracking_domains WHERE tenant_id = ? AND site_id = ?`)
+    .bind(tenantId, siteId)
+    .all<TrackingDomainRow>();
+  const hostnames = rows.results.some((r) => r.provider_id !== null) ? customHostnames(env) : null;
+  let removed = 0;
+  let deferred = 0;
+  for (const row of rows.results) {
+    if (row.provider_id !== null) {
+      try {
+        if (hostnames === null) throw new CustomHostnameError('provider unavailable');
+        await hostnames.delete(row.provider_id);
+      } catch {
+        await env.DB.prepare(
+          `UPDATE tracking_domains SET status = 'error', error = ?, checked_at = ? WHERE id = ? AND tenant_id = ?`,
+        )
+          .bind(SITE_DELETED, now, row.id, row.tenant_id)
+          .run();
+        deferred += 1;
+        continue;
+      }
+    }
+    await removeRow(env.DB, row);
+    removed += 1;
+  }
+  return { removed, deferred };
+}
+
+/** Per cron tick: at most this many provider calls, each domain re-checked at most every interval. */
+export const TRACKING_DOMAIN_CHECKS_PER_TICK = 5;
+export const TRACKING_DOMAIN_RECHECK_MS = 10 * 60_000;
+
+/**
+ * Cron: finishes the removals deferred by a site deletion, then refreshes the
+ * status of the pending domains least recently checked, so a domain becomes
+ * active without the customer pressing "check".
+ */
+export async function runScheduledTrackingDomains(
+  env: Env,
+  now: number,
+): Promise<{ removed: number; checked: number }> {
+  const hostnames = customHostnames(env);
+  if (hostnames === null) return { removed: 0, checked: 0 };
+  let budget = TRACKING_DOMAIN_CHECKS_PER_TICK;
+  let removed = 0;
+  let checked = 0;
+  const orphans = await env.DB.prepare(
+    `SELECT * FROM tracking_domains WHERE status = 'error' AND error = ? ORDER BY checked_at, id LIMIT ?`,
+  )
+    .bind(SITE_DELETED, budget)
+    .all<TrackingDomainRow>();
+  for (const row of orphans.results) {
+    budget -= 1;
+    try {
+      if (row.provider_id !== null) await hostnames.delete(row.provider_id);
+      await removeRow(env.DB, row);
+      removed += 1;
+    } catch (error) {
+      await env.DB.prepare(`UPDATE tracking_domains SET checked_at = ? WHERE id = ?`).bind(now, row.id).run();
+      console.error(`[tracking-domains] removal of ${row.hostname} failed: ${String(error)}`);
+    }
+  }
+  if (budget <= 0) return { removed, checked };
+  const pending = await env.DB.prepare(
+    `SELECT * FROM tracking_domains
+      WHERE status IN ('pending_dns', 'pending_ssl') AND (checked_at IS NULL OR checked_at <= ?)
+      ORDER BY COALESCE(checked_at, 0), id LIMIT ?`,
+  )
+    .bind(now - TRACKING_DOMAIN_RECHECK_MS, budget)
+    .all<TrackingDomainRow>();
+  for (const row of pending.results) {
+    try {
+      const state =
+        row.provider_id === null ? await hostnames.create(row.hostname) : await hostnames.get(row.provider_id);
+      await writeState(env.DB, now, row, state);
+      checked += 1;
+    } catch (error) {
+      await env.DB.prepare(`UPDATE tracking_domains SET checked_at = ? WHERE id = ?`).bind(now, row.id).run();
+      console.error(`[tracking-domains] check of ${row.hostname} failed: ${String(error)}`);
+    }
+  }
+  return { removed, checked };
 }
 
 async function hostnameTaken(env: Env, hostname: string): Promise<boolean> {

@@ -5,6 +5,7 @@ import {
   ATTRIBUTION_MODELS,
   type AttributionModel,
 } from './base';
+import { TOUCH_KINDS } from './funnel-graph';
 
 /**
  * Web analytics, second wave: attribution, purchases, realtime, insights,
@@ -402,6 +403,27 @@ export const journeyItemSchema = z.object({
 });
 export type JourneyItem = z.infer<typeof journeyItemSchema>;
 
+/** Funnel / ad touch of the contact's visitors and of their identity-merge groups. */
+export const contactFunnelTouchSchema = z.object({
+  id: z.string(),
+  ts: z.string(),
+  site_id: z.string(),
+  visitor_id: z.string(),
+  kind: z.enum(TOUCH_KINDS),
+  funnel_id: z.string(),
+  funnel_name: z.string().nullable(),
+  node_id: z.string(),
+  page_id: z.string().nullable(),
+  traffic_source_id: z.string().nullable(),
+  traffic_source_name: z.string().nullable(),
+  campaign: z.string().nullable(),
+  /** Campaign name from the synced ad entities, when known. */
+  campaign_name: z.string().nullable(),
+  external_click_id: z.string().nullable(),
+  fields: z.record(z.string(), z.string()).nullable(),
+});
+export type ContactFunnelTouch = z.infer<typeof contactFunnelTouchSchema>;
+
 export const contactJourneySchema = z.object({
   contact_id: z.string(),
   sites: z.array(z.object({ site_id: z.string(), name: z.string(), currency: z.string() })),
@@ -436,6 +458,12 @@ export const contactJourneySchema = z.object({
   prediction: predictionSchema.nullable(),
   /** Newest first, at most `limit`. */
   items: z.array(journeyItemSchema),
+  /** Visitors joined to the contact's visitors by the identity graph but not linked to the contact. */
+  merged_visitor_ids: z.array(z.string()).optional(),
+  /** Chronological, at most `limit`. */
+  funnel_touches: z.array(contactFunnelTouchSchema).optional(),
+  /** Visitor tags set by funnels on the contact's merge groups. */
+  tags: z.array(z.string()).optional(),
 });
 export type ContactJourney = z.infer<typeof contactJourneySchema>;
 

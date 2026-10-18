@@ -12,6 +12,7 @@ import {
   finishAdsConnect,
   kvAdGrantStore,
   RECONCILE_DAYS,
+  SPEND_LEVELS,
   startAdsConnect,
   syncAdConnection,
   syncAllAds,
@@ -95,6 +96,8 @@ beforeEach(async () => {
     },
     notify: (a) => Promise.resolve(void alerts.push(a)),
     now: () => clock.now,
+    // Cadence and error handling are checked on one level; the levels on their own below.
+    spendLevels: ['campaign'],
   };
   for (const site of [SITE_A, SITE_B, SITE_C]) {
     ns.store(`site:${site.id}`).initSite(siteInit({ siteId: site.id, tenantId: site.tenantId, name: site.name }));
@@ -433,6 +436,36 @@ describe('ads sync cron', () => {
     const report = await syncAllAds(ports, ['tenant_c']);
     expect(report.connections).toBe(0);
     expect(fetches()).toEqual([]);
+  });
+});
+
+describe('spend levels', () => {
+  it('pulls campaign, adset and ad spend by default, each zeroed when the platform drops it', async () => {
+    delete ports.spendLevels;
+    const c = await connect(SITE_A);
+    await syncAllAds(ports, tenants);
+    expect(fetches().map((f) => (f.args[2] as { level: string; from: string }).level)).toEqual([
+      ...SPEND_LEVELS,
+      ...SPEND_LEVELS,
+    ]);
+    const stub = adsStub(edge, SITE_A.id);
+    const entities = await stub.listAdEntities({ platform: 'meta' });
+    const levelOf = new Map(entities.map((e) => [e.external_id, e.level]));
+    const today = await spendOf(SITE_A, TODAY);
+    const perLevel = (level: string) => today.filter((r) => levelOf.get(r.entity_external_id) === level);
+    expect(perLevel('campaign').length).toBe(entities.filter((e) => e.level === 'campaign').length);
+    expect(perLevel('adset').length).toBe(entities.filter((e) => e.level === 'adset').length);
+    expect(perLevel('ad').length).toBe(entities.filter((e) => e.level === 'ad').length);
+    // Reconciliation zeroes the closed days of an ad the platform no longer reports.
+    const ad = perLevel('ad')[0]?.entity_external_id ?? '';
+    overrides.meta = (base) => ({
+      fetchSpend: async (t, a, q) => (await base.fetchSpend(t, a, q)).filter((r) => r.entity_external_id !== ad),
+    });
+    clock.now = Date.UTC(2026, 9, 16, 2, 0);
+    await backfillAdConnection(ports, SITE_A, await conn(SITE_A, c.id), { from: '2026-10-14', to: '2026-10-14' });
+    const dropped = (await spendOf(SITE_A, '2026-10-14')).find((r) => r.entity_external_id === ad);
+    expect(dropped).toMatchObject({ spend_minor: 0, reported_conversions: 0 });
+    expect((await spendOf(SITE_A, '2026-10-14')).filter((r) => r.spend_minor > 0).length).toBeGreaterThan(0);
   });
 });
 

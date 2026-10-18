@@ -1,4 +1,4 @@
-import type { FunnelGraphInput, FunnelTouch } from '@amable/api-types';
+import { funnelHeatmapSchema, funnelLinksSchema, type FunnelGraphInput, type FunnelTouch } from '@amable/api-types';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { FakeAnalyticsNamespace, T0 } from '../../../edge/test/helpers';
 import { computeHeatmap } from '../../src/analytics/heatmap';
@@ -248,6 +248,9 @@ describe('funnel graphs v2 API', () => {
           { action: 2, url: `${edge()}/a/2`, default_url: `${edge()}/go/${funnelId}/la/a/2` },
         ],
       });
+      // The response is exactly the shared contract (no fields outside it).
+      expect(funnelLinksSchema.strict().parse(lander.body)).toEqual(lander.body);
+      expect(funnelLinksSchema.strict().parse(res.body)).toEqual(res.body);
     });
 
     it('builds Google links with ValueTrack parameters and no gclid', async () => {
@@ -303,10 +306,25 @@ describe('funnel graphs v2 API', () => {
       cost_minor: 150,
       value: 566.67,
     });
+    expect(res.body['truncated']).toBe(false);
+    expect(funnelHeatmapSchema.parse(res.body)).toEqual(res.body);
     const empty = await viewer.get(`${BASE}/funnels-v2/${funnelId}/heatmap?${sq()}&from=2026-10-16&to=2026-10-17`);
     expect((empty.body['nodes'] as Array<{ visits: number }>).every((n) => n.visits === 0)).toBe(true);
     expect((await viewer.get(`${BASE}/funnels-v2/${funnelId}/heatmap?${sq()}&from=2026-10-17&to=2026-10-16`)).status).toBe(422);
     expect((await viewer.get(`${BASE}/funnels-v2/${funnelId}/heatmap?${sq()}&metric=nope`)).status).toBe(422);
+  });
+
+  it('flags a heatmap built from a capped number of touches as truncated', async () => {
+    const store = ns.store(`site:${siteId}`);
+    const day = T0 + 5 * 86_400_000;
+    const many = Array.from({ length: 10_000 }, (_, i) =>
+      touch({ id: `bulk_${i}`, visitor_id: `bv${i}`, node_id: 't', kind: 'entrance', ts: day + i, funnel_id: funnelId }),
+    );
+    expect(store.recordTouches(many).ok).toBe(true);
+    const res = await viewer.get(`${BASE}/funnels-v2/${funnelId}/heatmap?${sq()}&from=2026-10-20&to=2026-10-20`);
+    expect(res.status).toBe(200);
+    expect(res.body['truncated']).toBe(true);
+    expect((res.body['nodes'] as Array<{ node_id: string; visits: number }>).find((n) => n.node_id === 't')?.visits).toBe(10_000);
   });
 
   it("isolates tenants: another tenant's site is a 404 on every endpoint", async () => {

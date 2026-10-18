@@ -601,6 +601,7 @@ export const analyticsEn = {
   'analytics.performance.col.revenue_minor': 'Revenue',
   'analytics.performance.col.total_revenue_minor': 'Total revenue',
   'analytics.performance.col.profit_minor': 'Profit',
+  'analytics.performance.col.hard_costs_minor': 'Hard costs',
   'analytics.performance.col.net_profit_minor': 'Net profit',
   'analytics.performance.col.roas': 'ROAS',
   'analytics.performance.col.roi': 'ROI',
@@ -912,6 +913,8 @@ export const analyticsEn = {
     'This funnel is archived: its links keep working, it is hidden from the list.',
   'analytics.funnelBuilder.heatmap.source': 'Source',
   'analytics.funnelBuilder.heatmap.allSources': 'All sources',
+  'analytics.funnelBuilder.heatmap.truncated':
+    'Partial heatmap: the range has more than 10,000 hits, narrow the dates or pick a source.',
   'analytics.funnelBuilder.palette.search': 'Search pages',
   'analytics.funnelBuilder.palette.noPages':
     'No AmableCRM pages yet: add a page group and enter an external URL.',
@@ -1134,6 +1137,7 @@ export const analyticsEn = {
   'analytics.ads.outbound.value': 'Value',
   'analytics.ads.outbound.attempts': 'Attempts',
   'analytics.ads.outbound.empty': 'No conversions in the queue.',
+  'analytics.ads.outbound.truncated': 'Showing the newest {count}: narrow the filters to see the others.',
   'analytics.ads.outbound.resend': 'Resend',
   'analytics.ads.outbound.resendSelected': 'Resend selected ({count})',
   'analytics.ads.outbound.resendFailed': 'Resend all failed',

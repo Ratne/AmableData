@@ -320,12 +320,25 @@ export type FunnelGraphError = z.infer<typeof funnelGraphErrorSchema>;
 // ------------------------------------------------------------ links & heatmap
 
 export const funnelLinksSchema = z.object({
+  /** Origin the links are built on: `<edge>/s/{siteId}` or `https://<tracking domain>`. */
+  base_url: z.string(),
   /** `/go/{funnelId}-{trafficSourceId}?…` with the source tokens appended. */
   entrance_url: z.string(),
-  /** Query suffix for pages reached directly (no redirect): `f, ts, n, p` + fields. */
+  /** Query suffix for pages reached directly (no redirect): `f, ts, n, p` + fields; empty without a page node. */
   direct_suffix: z.string(),
-  /** Action URLs of the selected page node (`/a/1`, `/a/2`, …). */
-  action_urls: z.array(z.object({ action: z.number().int(), url: z.string() })),
+  /** Page URL + direct suffix, when the page node has an external URL. */
+  direct_url: z.string().nullable(),
+  /** Page node the direct / action links belong to. */
+  page_node_id: z.string().nullable(),
+  /** Action URLs of the page node (`/a/1`, `/a/2`, …). */
+  action_urls: z.array(
+    z.object({
+      action: z.number().int(),
+      url: z.string(),
+      /** Same action carrying funnel and page node as fallback origin (`/go/{funnelId}/{nodeId}/a/{n}`). */
+      default_url: z.string(),
+    }),
+  ),
   /** Universal JS snippet for external pages. */
   snippet: z.string(),
 });
@@ -348,6 +361,8 @@ export const funnelHeatmapSchema = z.object({
     }),
   ),
   edges: z.array(z.object({ edge_id: z.string(), count: z.number().int(), flow_pct: z.number() })),
+  /** The touches or conversions of the range hit the server cap: the figures cover only part of it. */
+  truncated: z.boolean().default(false),
 });
 export type FunnelHeatmap = z.infer<typeof funnelHeatmapSchema>;
 

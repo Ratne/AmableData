@@ -15,7 +15,7 @@ import {
 } from '@amable/api-types';
 import type { Hono, MiddlewareHandler } from 'hono';
 import { createCrmRouter, crmRoute, json, jsonBody } from '../crm/api/core';
-import { audit, requireAuth, requireTenant, type AppEnv } from '../middleware';
+import { audit, getTenant, requireAuth, requireTenant, type AppEnv } from '../middleware';
 import { publicAnalyticsApi, siteKeyApi } from './public';
 import { registerAdsRoutes } from './routes-ads';
 import { registerAdsReportRoutes } from './routes-ads-reports';
@@ -24,9 +24,10 @@ import { registerFunnelRoutes } from './routes-funnels';
 import { registerOutboundRoutes } from './routes-outbound';
 import { registerSourceRoutes } from './routes-sources';
 import { registerReportRoutes } from './routes-reports';
-import { registerTrackingDomainRoutes } from './routes-tracking-domains';
+import { registerTrackingDomainRoutes, removeSiteTrackingDomains } from './routes-tracking-domains';
 import { siteStub } from '@amable/app-edge/analytics';
 import { generateTraffic, liveTraffic } from './dev-traffic';
+import { FunnelDemoError, generateFunnelDemo } from './dev-funnel-demo';
 import { syncIntegration } from './integrations';
 import { integrationsFor, runTenantSync, syncPorts } from './runtime';
 import {
@@ -123,6 +124,7 @@ analyticsApi.openapi(
   async (c) => {
     const { siteId } = c.req.valid('param');
     await deleteSite(c, siteId);
+    await removeSiteTrackingDomains(c.env, getTenant(c).tenant.id, siteId, c.get('services').now());
     await audit(c, 'analytics.site_deleted', { target: siteId });
     return c.json({ id: siteId, deleted: true as const }, 200);
   },
@@ -265,7 +267,8 @@ export function mountAnalyticsApi(app: Hono<AppEnv>): void {
 
 /**
  * Dev-only (ENVIRONMENT=dev, `scripts/analytics-traffic.mjs`): fake traffic for
- * the demo tenant, live visitors for the realtime view, a forced CRM sync.
+ * the demo tenant, the demo funnel with its click-log and fake ad data, live
+ * visitors for the realtime view, a forced CRM sync.
  */
 function mountAnalyticsDevRoutes(app: Hono<AppEnv>): void {
   const tenantOf = async (env: AppEnv['Bindings'], slug: string) =>
@@ -334,6 +337,25 @@ function mountAnalyticsDevRoutes(app: Hono<AppEnv>): void {
     }
     const prediction = await site.trainPrediction();
     return c.json({ ok: true, ...report, prediction });
+  });
+
+  app.post('/dev/analytics/funnel-demo', async (c) => {
+    if (c.env.ENVIRONMENT !== 'dev' || c.env.ANALYTICS === undefined) return c.notFound();
+    const slug = c.req.query('tenant') ?? 'demo';
+    const tenant = await tenantOf(c.env, slug);
+    if (tenant === null) return c.json({ error: 'tenant_not_found' }, 404);
+    try {
+      const report = await generateFunnelDemo(c.env, c.env.ANALYTICS, { id: tenant.id, slug }, {
+        days: Math.min(Math.max(Number(c.req.query('days') ?? '30'), 1), 90),
+        visitors: Math.min(Math.max(Number(c.req.query('visitors') ?? '400'), 1), 5000),
+        seed: c.req.query('seed') ?? 'amable-demo',
+        now: Date.now(),
+      });
+      return c.json({ ok: true, ...report });
+    } catch (error) {
+      if (error instanceof FunnelDemoError) return c.json({ error: 'no_site', message: error.message }, 409);
+      throw error;
+    }
   });
 
   app.post('/dev/analytics/live', async (c) => {

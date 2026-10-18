@@ -546,4 +546,16 @@ export const analyticsMigrations: readonly Migration[] = [
       `CREATE INDEX funnel_sessions_updated ON funnel_sessions (updated_at)`,
     ],
   },
+  {
+    id: 5,
+    name: 'analytics_report_indexes',
+    statements: [
+      // Range scans of the reports without a funnel / source prefix (country and
+      // device breakdowns, heatmap of all sources); covers the journey's
+      // `DISTINCT visitor_id … WHERE ts … AND kind` without reading the rows.
+      `CREATE INDEX touches_ts ON touches (ts, kind, visitor_id)`,
+      // Campaign names of journey touches (looked up by id, platform unknown).
+      `CREATE INDEX ad_entities_external ON ad_entities (external_id, level)`,
+    ],
+  },
 ];

@@ -1,4 +1,5 @@
 import { runScheduledAdsSync } from './analytics/ads-sync';
+import { runScheduledTrackingDomains } from './analytics/routes-tracking-domains';
 import { runScheduledAnalytics } from './analytics/runtime';
 import { app } from './app';
 import { runAppsCron } from './apps/cron';
@@ -65,6 +66,8 @@ const handler = {
       await runScheduledAnalytics(env);
       // Ad platforms: hourly spend of the current day, daily reconciliation, token refresh.
       await runScheduledAdsSync(env);
+      // Tracking domains: status of the pending ones, removals left by deleted sites.
+      await runScheduledTrackingDomains(env, controller.scheduledTime);
       // Outgoing webhooks: delivery log retention.
       await webhookService(env).prune();
       // R2 backups: installation D1 + each tenant's DOs, once a day, a few per tick.

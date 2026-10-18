@@ -44,6 +44,7 @@ export function computeHeatmap(
   touches: readonly FunnelTouch[],
   conversions: readonly HeatmapConversion[],
   metric: HeatmapMetric,
+  truncated = false,
 ): FunnelHeatmap {
   const live = new Map<string, FunnelNode>();
   for (const n of graph.nodes) if (n.deleted_at == null) live.set(n.id, n);
@@ -194,5 +195,6 @@ export function computeHeatmap(
       const count = edgeCount.get(e.id) ?? 0;
       return { edge_id: e.id, count, flow_pct: entrances > 0 ? round2((count / entrances) * 100) : 0 };
     }),
+    truncated,
   };
 }

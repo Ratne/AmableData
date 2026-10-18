@@ -1,4 +1,4 @@
-import type { ContactJourney, JourneyItem, Touch } from '@amable/api-types';
+import type { ContactFunnelTouch, ContactJourney, JourneyItem, Touch } from '@amable/api-types';
 import {
   siteStub,
   tenantSitesStub,
@@ -148,6 +148,32 @@ export async function contactJourney(
     }
   }
   const predictions = activities.map((a) => a.prediction).filter((p) => p !== null);
+  const funnelTouches: ContactFunnelTouch[] = activities
+    .flatMap((a) => (a.funnel_touches ?? []).map((t) => ({ ...t, site_id: a.site_id })))
+    .sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id))
+    .slice(-limit)
+    .map((t) => ({
+      id: t.id,
+      ts: iso(t.ts),
+      site_id: t.site_id,
+      visitor_id: t.visitor_id,
+      kind: t.kind,
+      funnel_id: t.funnel_id,
+      funnel_name: t.funnel_name,
+      node_id: t.node_id,
+      page_id: t.page_id,
+      traffic_source_id: t.traffic_source_id,
+      traffic_source_name: t.traffic_source_name,
+      campaign: t.campaign,
+      campaign_name: t.campaign_name,
+      external_click_id: t.external_click_id,
+      fields: t.fields,
+    }));
+  const linked = new Set(links.map((l) => l.visitorId));
+  const mergedVisitorIds = [...new Set(activities.flatMap((a) => a.merged_visitor_ids ?? []))].filter(
+    (id) => !linked.has(id),
+  );
+  const tags = [...new Set(activities.flatMap((a) => a.tags ?? []))].sort();
 
   return {
     contact_id: contactId,
@@ -203,5 +229,8 @@ export async function contactJourney(
     },
     prediction: predictions.sort((a, b) => b.score - a.score)[0] ?? null,
     items: items.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, limit),
+    merged_visitor_ids: mergedVisitorIds,
+    funnel_touches: funnelTouches,
+    tags,
   };
 }

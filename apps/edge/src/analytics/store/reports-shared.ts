@@ -200,7 +200,13 @@ export interface SourceInfo {
   adsetSlot: string | null;
   /** Tracking field slot holding the ad / creative id. */
   adSlot: string | null;
+  /** Multipliers of the source's cost / revenue modifiers (1 = none). */
+  costFactor: number;
+  revenueFactor: number;
 }
+
+const modifierFactor = (pct: number | null | undefined): number =>
+  pct === null || pct === undefined ? 1 : Math.max(0, 1 + pct / 100);
 
 const normalizeName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 const ADSET_FIELD_NAMES = new Set(['adset', 'adsetid', 'adgroup', 'adgroupid']);
@@ -246,6 +252,8 @@ export function loadSources(db: SqlDb): Map<string, SourceInfo> {
       platform: sourcePlatform(s),
       adsetSlot: slots.adset,
       adSlot: slots.ad,
+      costFactor: modifierFactor(s.cost_modifier_pct),
+      revenueFactor: modifierFactor(s.revenue_modifier_pct),
     });
   }
   return out;

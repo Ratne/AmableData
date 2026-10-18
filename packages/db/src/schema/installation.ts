@@ -1,4 +1,4 @@
-import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 /**
  * Drizzle schema for the installation D1 database.
@@ -179,6 +179,32 @@ export const domains = sqliteTable('domains', {
   status: text('status').notNull().default('pending'),
   createdAt: integer('created_at').notNull(),
 });
+
+// 0008_tracking_domains
+/** Custom tracking hostname of an analytics site (custom hostname of the platform zone). */
+export const trackingDomains = sqliteTable(
+  'tracking_domains',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    siteId: text('site_id').notNull(),
+    hostname: text('hostname').notNull().unique(),
+    /** 'pending_dns' | 'pending_ssl' | 'active' | 'error'. */
+    status: text('status').notNull().default('pending_dns'),
+    /** Id of the custom hostname at the provider. */
+    providerId: text('provider_id'),
+    cnameTarget: text('cname_target').notNull(),
+    txtName: text('txt_name'),
+    txtValue: text('txt_value'),
+    error: text('error'),
+    createdAt: integer('created_at').notNull(),
+    checkedAt: integer('checked_at'),
+    activatedAt: integer('activated_at'),
+  },
+  (table) => [index('idx_tracking_domains_tenant_site').on(table.tenantId, table.siteId)],
+);
 
 export const apiKeys = sqliteTable('api_keys', {
   id: text('id').primaryKey(),

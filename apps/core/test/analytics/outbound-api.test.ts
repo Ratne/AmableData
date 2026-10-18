@@ -101,6 +101,15 @@ describe('outbound conversions API', () => {
     expect((await viewer.get(`${BASE}/outbound?${sq()}&status=nope`)).status).toBe(422);
   });
 
+  it('flags the list as truncated when more jobs match than the limit', async () => {
+    const list = async (q: string) => (await viewer.get(`${BASE}/outbound?${sq()}&${q}`)).body;
+    expect(await list('limit=3')).toMatchObject({ truncated: false });
+    expect(await list('limit=2')).toMatchObject({ truncated: true });
+    expect(await list('limit=2&status=failed')).toMatchObject({ truncated: false });
+    expect(await list('limit=1&status=failed')).toMatchObject({ truncated: true });
+    expect(await list('limit=1&platform=google')).toMatchObject({ truncated: false });
+  });
+
   it('reads one job', async () => {
     const res = await viewer.get(`${BASE}/outbound/${ids['ev-pending']}?${sq()}`);
     expect(res.status).toBe(200);
