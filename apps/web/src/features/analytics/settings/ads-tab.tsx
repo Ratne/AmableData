@@ -539,7 +539,7 @@ function OutboundPanel({
                 <th className="py-1 font-medium">{t('analytics.ads.outbound.platform')}</th>
                 <th className="py-1 font-medium">{t('analytics.ads.outbound.event')}</th>
                 <th className="py-1 text-right font-medium">{t('analytics.ads.outbound.value')}</th>
-                <th className="py-1 font-medium">{t('analytics.ads.outbound.status')}</th>
+                <th className="py-1 pl-4 font-medium">{t('analytics.ads.outbound.status')}</th>
                 <th className="py-1 text-right font-medium">{t('analytics.ads.outbound.attempts')}</th>
                 <th className="py-1" />
               </tr>
@@ -569,7 +569,7 @@ function OutboundPanel({
                     ) : null}
                   </td>
                   <td className="py-1.5 text-right tabular-nums">{value(job)}</td>
-                  <td className="py-1.5">
+                  <td className="py-1.5 pl-4">
                     <StatusPill tone={OUTBOUND_TONE[job.status]}>
                       {t(`analytics.ads.outbound.status.${job.status}`)}
                     </StatusPill>
