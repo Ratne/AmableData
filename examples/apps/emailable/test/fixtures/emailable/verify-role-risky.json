@@ -1,0 +1,38 @@
+{
+  "provider": "emailable",
+  "description": "A role address (support@): Emailable calls it risky",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify?email=support%40emailable.com",
+    "match_query": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "accept_all": false,
+      "birth_year": null,
+      "did_you_mean": null,
+      "disposable": false,
+      "domain": "emailable.com",
+      "duration": 0.143,
+      "email": "support@emailable.com",
+      "first_name": null,
+      "free": false,
+      "full_name": null,
+      "gender": null,
+      "last_name": null,
+      "mailbox_full": false,
+      "mx_record": "aspmx.l.google.com",
+      "no_reply": false,
+      "reason": "low_quality",
+      "role": true,
+      "score": 70,
+      "smtp_provider": "Google",
+      "state": "risky",
+      "tag": null,
+      "user": "support"
+    }
+  }
+}

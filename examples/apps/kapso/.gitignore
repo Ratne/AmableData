@@ -1,4 +1,4 @@
-public/screen.js
+public/*.js
 .amable/
 .dev.vars
 .wrangler/

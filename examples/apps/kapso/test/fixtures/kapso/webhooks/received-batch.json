@@ -1,0 +1,75 @@
+{
+  "provider": "kapso",
+  "description": "Two messages delivered together (buffering on)",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/docs/platform/webhooks/advanced",
+  "event": "whatsapp.message.received",
+  "body": {
+    "type": "whatsapp.message.received",
+    "batch": true,
+    "data": [
+      {
+        "message": {
+          "id": "wamid.b1",
+          "timestamp": "1730092800",
+          "type": "text",
+          "from": "393470001111",
+          "text": {
+            "body": "Buongiorno"
+          },
+          "kapso": {
+            "direction": "inbound",
+            "status": "received",
+            "origin": "cloud_api",
+            "content": "Buongiorno"
+          }
+        },
+        "conversation": {
+          "id": "conv_123",
+          "contact_name": "Bob",
+          "phone_number": "393470001111",
+          "status": "active",
+          "last_active_at": "2025-10-28T14:25:01-03:00",
+          "created_at": "2025-10-28T13:40:00-03:00",
+          "updated_at": "2025-10-28T14:25:01-03:00",
+          "metadata": {},
+          "phone_number_id": "1234567890"
+        },
+        "phone_number_id": "1234567890"
+      },
+      {
+        "message": {
+          "id": "wamid.b2",
+          "timestamp": "1730092805",
+          "type": "text",
+          "from": "393470001111",
+          "text": {
+            "body": "Vorrei un appuntamento"
+          },
+          "kapso": {
+            "direction": "inbound",
+            "status": "received",
+            "origin": "cloud_api",
+            "content": "Vorrei un appuntamento"
+          }
+        },
+        "conversation": {
+          "id": "conv_123",
+          "contact_name": "Bob",
+          "phone_number": "393470001111",
+          "status": "active",
+          "last_active_at": "2025-10-28T14:25:01-03:00",
+          "created_at": "2025-10-28T13:40:00-03:00",
+          "updated_at": "2025-10-28T14:25:01-03:00",
+          "metadata": {},
+          "phone_number_id": "1234567890"
+        },
+        "phone_number_id": "1234567890"
+      }
+    ],
+    "batch_info": {
+      "size": 2,
+      "window_seconds": 5
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "provider": "kapso",
+  "description": "A contact sends a photo with a caption",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/docs/platform/webhooks/message-events",
+  "event": "whatsapp.message.received",
+  "body": {
+    "message": {
+      "id": "wamid.in2",
+      "timestamp": "1730092900",
+      "type": "image",
+      "from": "393331234567",
+      "image": {
+        "id": "media_1",
+        "mime_type": "image/jpeg",
+        "caption": "Il preventivo"
+      },
+      "kapso": {
+        "direction": "inbound",
+        "status": "received",
+        "origin": "cloud_api",
+        "has_media": true,
+        "media_url": "https://api.kapso.ai/media/1"
+      }
+    },
+    "conversation": {
+      "id": "conv_123",
+      "contact_name": "Ada Lovelace",
+      "phone_number": "393331234567",
+      "status": "active",
+      "last_active_at": "2025-10-28T14:25:01-03:00",
+      "created_at": "2025-10-28T13:40:00-03:00",
+      "updated_at": "2025-10-28T14:25:01-03:00",
+      "metadata": {},
+      "phone_number_id": "1234567890"
+    },
+    "is_new_conversation": false,
+    "phone_number_id": "1234567890"
+  }
+}

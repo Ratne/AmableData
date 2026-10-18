@@ -1,0 +1,38 @@
+{
+  "provider": "emailable",
+  "description": "A misspelled domain: Emailable suggests the fix",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify?email=amable.fixture%40gmial.com",
+    "match_query": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "accept_all": null,
+      "birth_year": null,
+      "did_you_mean": "amable.fixture@gmail.com",
+      "disposable": false,
+      "domain": "gmial.com",
+      "duration": 0.031,
+      "email": "amable.fixture@gmial.com",
+      "first_name": null,
+      "free": false,
+      "full_name": null,
+      "gender": null,
+      "last_name": null,
+      "mailbox_full": false,
+      "mx_record": null,
+      "no_reply": false,
+      "reason": "invalid_domain",
+      "role": false,
+      "score": 0,
+      "smtp_provider": null,
+      "state": "undeliverable",
+      "tag": null,
+      "user": "amable.fixture"
+    }
+  }
+}

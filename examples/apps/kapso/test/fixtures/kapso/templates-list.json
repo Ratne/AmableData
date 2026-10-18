@@ -1,0 +1,207 @@
+{
+  "provider": "kapso",
+  "description": "Templates of a WhatsApp Business Account in every state (list example of the API reference, plus its named-parameter and media examples)",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/api/meta/whatsapp/templates/list-message-templates",
+  "request": {
+    "method": "GET",
+    "url": "https://api.kapso.ai/meta/whatsapp/v24.0/{waba_id}/message_templates"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "1192339204654487",
+          "name": "hello_world",
+          "previous_category": "ACCOUNT_UPDATE",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Hello World"
+            },
+            {
+              "type": "BODY",
+              "text": "Welcome and congratulations!! This message demonstrates your ability to send a message notification from WhatsApp Business Platform's Cloud API. Thank you for taking the time to test with us."
+            },
+            {
+              "type": "FOOTER",
+              "text": "WhatsApp Business API Team"
+            }
+          ],
+          "language": "en_US",
+          "status": "APPROVED",
+          "category": "MARKETING"
+        },
+        {
+          "id": "920070352646140",
+          "name": "seasonal_promotion",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Fall Sale"
+            },
+            {
+              "type": "BODY",
+              "text": "Hi {{1}}, our Fall Sale is on! Use promo code {{2}} Get an extra 25% off every order above $350!",
+              "example": {
+                "body_text": [["Mark", "FALL25"]]
+              }
+            },
+            {
+              "type": "FOOTER",
+              "text": "Not interested in any of our sales? Tap Stop Promotions"
+            },
+            {
+              "type": "BUTTONS",
+              "buttons": [
+                {
+                  "type": "QUICK_REPLY",
+                  "text": "Stop promotions"
+                }
+              ]
+            }
+          ],
+          "language": "en_US",
+          "status": "APPROVED",
+          "category": "MARKETING"
+        },
+        {
+          "id": "1627019861106475",
+          "name": "order_confirmation_simple",
+          "parameter_format": "NAMED",
+          "components": [
+            {
+              "type": "BODY",
+              "text": "Thank you, {{customer_name}}! Your order number is {{order_number}}.",
+              "example": {
+                "body_text_named_params": [
+                  {
+                    "param_name": "customer_name",
+                    "example": "Pablo"
+                  },
+                  {
+                    "param_name": "order_number",
+                    "example": "860198-230332"
+                  }
+                ]
+              }
+            }
+          ],
+          "language": "it",
+          "status": "APPROVED",
+          "category": "UTILITY"
+        },
+        {
+          "id": "771234567890123",
+          "name": "event_reminder",
+          "parameter_format": "NAMED",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "{{event_name}} reminder",
+              "example": {
+                "header_text_named_params": [
+                  {
+                    "param_name": "event_name",
+                    "example": "Summer Webinar"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "BODY",
+              "text": "Don't forget: {{event_name}} starts {{start_time}}.",
+              "example": {
+                "body_text_named_params": [
+                  {
+                    "param_name": "event_name",
+                    "example": "Summer Webinar"
+                  },
+                  {
+                    "param_name": "start_time",
+                    "example": "tomorrow at 3 PM"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "BUTTONS",
+              "buttons": [
+                {
+                  "type": "URL",
+                  "text": "Open",
+                  "url": "https://www.examplesite.com/events/{{1}}",
+                  "example": ["https://www.examplesite.com/events/summer"]
+                }
+              ]
+            }
+          ],
+          "language": "en_US",
+          "status": "APPROVED",
+          "category": "UTILITY"
+        },
+        {
+          "id": "881234567890123",
+          "name": "product_demo_video",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "VIDEO",
+              "example": {
+                "header_handle": ["4::aW..."]
+              }
+            },
+            {
+              "type": "BODY",
+              "text": "Watch the demo of our new product."
+            }
+          ],
+          "language": "en_US",
+          "status": "APPROVED",
+          "category": "MARKETING"
+        },
+        {
+          "id": "991234567890123",
+          "name": "delivery_notification",
+          "parameter_format": "POSITIONAL",
+          "components": [
+            {
+              "type": "BODY",
+              "text": "Good news {{1}}! Your order #{{2}} has been delivered.",
+              "example": {
+                "body_text": [["Mark", "566701"]]
+              }
+            }
+          ],
+          "language": "en_US",
+          "status": "PENDING",
+          "category": "UTILITY"
+        },
+        {
+          "id": "101234567890123",
+          "name": "flash_sale",
+          "components": [
+            {
+              "type": "BODY",
+              "text": "Everything at 90% off, today only!"
+            }
+          ],
+          "language": "it",
+          "status": "REJECTED",
+          "rejected_reason": "PROMOTIONAL",
+          "category": "MARKETING"
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "MAZDZD",
+          "after": "MjQZD"
+        }
+      }
+    }
+  }
+}

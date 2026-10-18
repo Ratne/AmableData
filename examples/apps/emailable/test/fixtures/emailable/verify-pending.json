@@ -1,0 +1,17 @@
+{
+  "provider": "emailable",
+  "description": "Verification still running after the timeout: ask again",
+  "source": "docs",
+  "docs_url": "https://emailable.com/docs/api/#verify-an-email",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify",
+    "match_query": true
+  },
+  "response": {
+    "status": 249,
+    "body": {
+      "message": "Your request is taking longer than normal. Please send your request again."
+    }
+  }
+}

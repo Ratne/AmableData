@@ -1,0 +1,17 @@
+{
+  "provider": "emailable",
+  "description": "Account of a valid API key",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/account"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "owner_email": "owner@example.com",
+      "available_credits": 40232
+    }
+  }
+}

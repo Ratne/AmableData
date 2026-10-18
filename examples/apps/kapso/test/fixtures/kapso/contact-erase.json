@@ -1,0 +1,13 @@
+{
+  "provider": "kapso",
+  "description": "Contact erasure queued",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/api/platform/v1/contacts/erase-contact",
+  "request": {
+    "method": "DELETE",
+    "url": "https://api.kapso.ai/platform/v1/whatsapp/contacts/{identifier}"
+  },
+  "response": {
+    "status": 204
+  }
+}

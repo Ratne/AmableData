@@ -1,0 +1,22 @@
+{
+  "provider": "kapso",
+  "description": "No customer with this external id yet",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.kapso.ai/platform/v1/customers?external_customer_id=amable-t_fixture_none"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "data": [],
+      "meta": {
+        "page": 1,
+        "per_page": 20,
+        "total_pages": 1,
+        "total_count": 0
+      }
+    }
+  }
+}

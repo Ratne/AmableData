@@ -1,0 +1,26 @@
+{
+  "provider": "kapso",
+  "description": "The contact stops marketing messages",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/docs/platform/webhooks/message-events",
+  "event": "whatsapp.contact.marketing_preference_changed",
+  "body": {
+    "contact": {
+      "id": "contact_123",
+      "wa_id": "393331234567",
+      "profile_name": "Ada Lovelace",
+      "display_name": "Ada Lovelace",
+      "created_at": "2025-10-28T14:00:00-03:00",
+      "updated_at": "2025-10-28T15:10:45-03:00",
+      "metadata": {}
+    },
+    "marketing_preference": {
+      "status": "stopped",
+      "previous_status": "resumed",
+      "detail": "User requested to stop marketing messages",
+      "occurred_at": "2025-10-28T15:10:45-03:00",
+      "sequence": 4821
+    },
+    "phone_number_id": "1234567890"
+  }
+}

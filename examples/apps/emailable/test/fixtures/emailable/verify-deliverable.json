@@ -1,0 +1,38 @@
+{
+  "provider": "emailable",
+  "description": "A mailbox that receives mail (example of the API reference)",
+  "source": "docs",
+  "docs_url": "https://emailable.com/docs/api/#verify-an-email",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify?email=john.smith%40gmail.com",
+    "match_query": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "accept_all": null,
+      "birth_year": null,
+      "did_you_mean": null,
+      "disposable": false,
+      "domain": "gmail.com",
+      "duration": 0.493,
+      "email": "john.smith@gmail.com",
+      "first_name": "John",
+      "free": true,
+      "full_name": "John Smith",
+      "gender": "male",
+      "last_name": "Smith",
+      "mailbox_full": false,
+      "mx_record": "aspmx.l.google.com",
+      "no_reply": false,
+      "reason": "accepted_email",
+      "role": false,
+      "score": 100,
+      "smtp_provider": "google",
+      "state": "deliverable",
+      "tag": null,
+      "user": "john.smith"
+    }
+  }
+}

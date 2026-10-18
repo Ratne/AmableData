@@ -1,0 +1,16 @@
+{
+  "provider": "kapso",
+  "description": "Templates of the sandbox WhatsApp Business Account: not available",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.kapso.ai/meta/whatsapp/v24.0/{waba_id}/message_templates"
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "Sandbox WhatsApp configurations only support messaging endpoints"
+    }
+  }
+}

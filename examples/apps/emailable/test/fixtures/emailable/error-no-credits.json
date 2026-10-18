@@ -1,0 +1,17 @@
+{
+  "provider": "emailable",
+  "description": "The account has no credits left (message from the status code table)",
+  "source": "docs",
+  "docs_url": "https://emailable.com/docs/api/#status-codes",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify",
+    "match_query": true
+  },
+  "response": {
+    "status": 402,
+    "body": {
+      "message": "You don’t have enough credits to complete this request."
+    }
+  }
+}

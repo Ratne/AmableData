@@ -7,8 +7,8 @@
     "it": "Verifica l'email di ogni nuovo contatto"
   },
   "description": {
-    "en": "Checks with your Emailable account whether the email of new contacts (created in the CRM, from forms or imports) receives mail. The outcome goes to the Email status field and to the Invalid, Risky and Disposable email tags; forms can block invalid addresses.",
-    "it": "Controlla con il tuo account Emailable se l'email dei nuovi contatti (creati nel CRM, dai form o dagli import) riceve posta. L'esito va nel campo Stato email e nei tag Invalid, Risky e Disposable email; i form possono bloccare gli indirizzi non validi."
+    "en": "Checks with your Emailable account whether an email address really receives mail. New contacts (created in the CRM, from forms or imports) are verified automatically: the outcome goes to the Email status field and to the Invalid, Risky and Disposable email tags, misspelled domains get a suggested fix, and forms can block invalid addresses. Automations get the \"Verify email\" block, whose state and score can drive the next steps.",
+    "it": "Controlla con il tuo account Emailable se un indirizzo email riceve davvero posta. I nuovi contatti (creati nel CRM, dai form o dagli import) vengono verificati in automatico: l'esito va nel campo Stato email e nei tag Invalid, Risky e Disposable email, i domini scritti male ricevono un suggerimento e i form possono bloccare gli indirizzi non validi. Le automazioni hanno il blocco \"Verifica email\", con stato e punteggio da usare nei passi successivi."
   },
   "developer": {
     "name": "AmableData",
@@ -25,14 +25,24 @@
   "redirect_uris": ["https://emailable.apps.amabledata.com/install"],
   "api_version": "2026-10",
   "scopes": ["contacts:read", "contacts:write"],
-  "webhooks": { "endpoint": "/webhooks", "events": [] },
+  "webhooks": {
+    "endpoint": "/webhooks",
+    "events": []
+  },
   "privacy": {
     "handles_personal_data": true,
     "erasure_endpoint": "/privacy/erasure",
     "data_request_endpoint": "/privacy/data"
   },
   "custom_fields": [
-    { "key": "email_status", "label": { "en": "Email status", "it": "Stato email" }, "type": "TEXT" }
+    {
+      "key": "email_status",
+      "label": {
+        "en": "Email status",
+        "it": "Stato email"
+      },
+      "type": "TEXT"
+    }
   ],
   "pricing": {
     "model": "free",
@@ -48,8 +58,50 @@
       "batch_endpoint": "/hooks/validate-batch",
       "cache_ttl_seconds": 2592000
     },
+    "automation_actions": [
+      {
+        "key": "verify_email",
+        "name": {
+          "en": "Verify email",
+          "it": "Verifica email"
+        },
+        "description": {
+          "en": "Checks whether the address receives mail. Outputs: state (deliverable, undeliverable, risky, unknown), score (0-100), reason, did_you_mean, disposable.",
+          "it": "Controlla se l'indirizzo riceve posta. Output: state (deliverable, undeliverable, risky, unknown), score (0-100), reason, did_you_mean, disposable."
+        },
+        "endpoint": "/actions/verify-email",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "merge_tags": true,
+              "max_length": 320,
+              "title": {
+                "en": "Email",
+                "it": "Email"
+              },
+              "description": {
+                "en": "Leave empty to verify the contact's email.",
+                "it": "Lascia vuoto per verificare l'email del contatto."
+              }
+            }
+          }
+        },
+        "output_keys": ["state", "score", "reason", "did_you_mean", "disposable"]
+      }
+    ],
     "ui": [
-      { "slot": "app.settings", "key": "settings", "path": "/ui/settings", "title": { "en": "Settings", "it": "Impostazioni" }, "height": 260 }
+      {
+        "slot": "app.settings",
+        "key": "settings",
+        "path": "/ui/settings",
+        "title": {
+          "en": "Settings",
+          "it": "Impostazioni"
+        },
+        "height": 260
+      }
     ]
   }
 }

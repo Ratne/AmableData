@@ -1,0 +1,16 @@
+{
+  "provider": "kapso",
+  "description": "Any call with a wrong API key",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.kapso.ai/platform/v1/whatsapp/phone_numbers?per_page=100"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": "Invalid or missing API key"
+    }
+  }
+}

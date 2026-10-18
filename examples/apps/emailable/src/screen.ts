@@ -2,7 +2,16 @@ import { createAppBridge } from '@amable/app-bridge';
 
 const TEXT = {
   en: {
-    intro: 'New contacts are verified with your Emailable account. The outcome goes to the "Email status" field and to tags.',
+    intro:
+      'Emailable checks whether an email address really receives mail, without sending anything to it. Every new contact (created in the CRM, from a form or an import) is verified with your account, one credit per address.',
+    deliverable: 'Deliverable: the mailbox exists and accepts mail.',
+    undeliverable:
+      'Undeliverable: it does not exist (tag "Invalid email"); forms with blocking validation reject it and suggest the fix of a misspelled domain.',
+    risky:
+      'Risky: it may bounce, e.g. role or catch-all addresses (tag "Risky email"). Disposable addresses also get "Disposable email".',
+    automation:
+      'In automations, the "Verify email" block returns state and score for the next steps.',
+    credits: (credits: number) => ` Credits left: ${credits.toLocaleString('en')}.`,
     key: 'Emailable API key',
     save: 'Save',
     remove: 'Remove key',
@@ -14,7 +23,16 @@ const TEXT = {
     failed: 'Could not save',
   },
   it: {
-    intro: 'I nuovi contatti vengono verificati con il tuo account Emailable. L\'esito va nel campo "Stato email" e nei tag.',
+    intro:
+      'Emailable controlla se un indirizzo email riceve davvero posta, senza inviargli nulla. Ogni nuovo contatto (creato nel CRM, da un form o da un import) viene verificato con il tuo account, un credito per indirizzo.',
+    deliverable: 'Deliverable: la casella esiste e accetta posta.',
+    undeliverable:
+      'Undeliverable: non esiste (tag "Invalid email"); i form con validazione bloccante lo rifiutano e suggeriscono la correzione di un dominio scritto male.',
+    risky:
+      'Risky: potrebbe rimbalzare, per esempio indirizzi di ruolo o catch-all (tag "Risky email"). Gli indirizzi usa e getta ricevono anche "Disposable email".',
+    automation:
+      'Nelle automazioni, il blocco "Verifica email" restituisce stato e punteggio per i passi successivi.',
+    credits: (credits: number) => ` Crediti rimasti: ${credits.toLocaleString('it')}.`,
     key: 'Chiave API Emailable',
     save: 'Salva',
     remove: 'Rimuovi chiave',
@@ -43,13 +61,20 @@ bridge.onContext((context) => {
 interface Settings {
   configured?: boolean;
   last4?: string;
+  credits?: number | null;
   error?: string;
 }
 
-async function api(method: 'GET' | 'POST', body?: unknown): Promise<{ status: number; settings: Settings }> {
+async function api(
+  method: 'GET' | 'POST',
+  body?: unknown,
+): Promise<{ status: number; settings: Settings }> {
   const response = await fetch('/api/settings', {
     method,
-    headers: { authorization: `Bearer ${await bridge.sessionToken()}`, 'content-type': 'application/json' },
+    headers: {
+      authorization: `Bearer ${await bridge.sessionToken()}`,
+      'content-type': 'application/json',
+    },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, settings: (await response.json()) as Settings };
@@ -60,7 +85,11 @@ const form = document.querySelector<HTMLFormElement>('#settings')!;
 const input = form.elements.namedItem('api_key') as HTMLInputElement;
 
 const show = (settings: Settings) => {
-  status.textContent = settings.configured === true ? t.configured(settings.last4 ?? '') : t.missing;
+  status.textContent =
+    settings.configured === true
+      ? t.configured(settings.last4 ?? '') +
+        (typeof settings.credits === 'number' ? t.credits(settings.credits) : '')
+      : t.missing;
 };
 
 async function save(apiKey: string): Promise<void> {

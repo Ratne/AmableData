@@ -1,0 +1,39 @@
+{
+  "provider": "kapso",
+  "description": "A contact writes to the number",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/docs/platform/webhooks/message-events",
+  "event": "whatsapp.message.received",
+  "body": {
+    "message": {
+      "id": "wamid.in1",
+      "timestamp": "1730092800",
+      "type": "text",
+      "from": "393331234567",
+      "text": {
+        "body": "Ciao, avete disponibilità sabato?"
+      },
+      "kapso": {
+        "direction": "inbound",
+        "status": "received",
+        "processing_status": "pending",
+        "origin": "cloud_api",
+        "has_media": false,
+        "content": "Ciao, avete disponibilità sabato?"
+      }
+    },
+    "conversation": {
+      "id": "conv_123",
+      "contact_name": "Ada Lovelace",
+      "phone_number": "393331234567",
+      "status": "active",
+      "last_active_at": "2025-10-28T14:25:01-03:00",
+      "created_at": "2025-10-28T13:40:00-03:00",
+      "updated_at": "2025-10-28T14:25:01-03:00",
+      "metadata": {},
+      "phone_number_id": "1234567890"
+    },
+    "is_new_conversation": true,
+    "phone_number_id": "1234567890"
+  }
+}

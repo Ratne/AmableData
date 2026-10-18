@@ -1,0 +1,57 @@
+{
+  "provider": "kapso",
+  "description": "Webhook created on a number",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "POST",
+    "url": "https://api.kapso.ai/platform/v1/whatsapp/phone_numbers/{phone_number_id}/webhooks",
+    "body": {
+      "whatsapp_webhook": {
+        "kind": "kapso",
+        "url": "https://example.com/amable-fixture",
+        "events": [
+          "whatsapp.message.received",
+          "whatsapp.message.sent",
+          "whatsapp.message.delivered",
+          "whatsapp.message.read",
+          "whatsapp.message.failed",
+          "whatsapp.contact.marketing_preference_changed"
+        ],
+        "secret_key": "[redacted]",
+        "active": true
+      }
+    }
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "data": {
+        "id": "37275d38-b879-4182-8375-04acb4e0c6ab",
+        "active": true,
+        "buffer_enabled": false,
+        "buffer_events": ["whatsapp.message.received"],
+        "buffer_window_seconds": 5,
+        "created_at": "2026-10-18T05:14:01-03:00",
+        "events": [
+          "whatsapp.message.received",
+          "whatsapp.message.sent",
+          "whatsapp.message.delivered",
+          "whatsapp.message.read",
+          "whatsapp.message.failed",
+          "whatsapp.contact.marketing_preference_changed"
+        ],
+        "headers": {},
+        "inactivity_minutes": 60,
+        "kind": "kapso",
+        "max_buffer_size": 50,
+        "payload_version": "v2",
+        "phone_number_id": "597907523413541",
+        "project_id": null,
+        "secret_key": "[redacted]",
+        "updated_at": "2026-10-18T05:14:01-03:00",
+        "url": "https://example.com/amable-fixture"
+      }
+    }
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "id": "kapso",
+  "name": "Kapso WhatsApp",
+  "tagline": {
+    "en": "WhatsApp in the shared inbox, templates and automations",
+    "it": "WhatsApp nella inbox condivisa, template e automazioni"
+  },
+  "description": {
+    "en": "Connects your team's WhatsApp number through Kapso. Conversations land in the shared inbox; after 24 hours of silence the inbox reopens the chat with an approved template. The WhatsApp templates page submits templates to Meta for review, in any language and category. Automations get the \"Send WhatsApp template\" block and the message received and marketing opt-out events. Works with a new number or with the WhatsApp Business app on your phone.",
+    "it": "Collega il numero WhatsApp del tuo team tramite Kapso. Le conversazioni arrivano nella inbox condivisa; dopo 24 ore di silenzio la inbox riapre la chat con un template approvato. La pagina Template WhatsApp invia i template a Meta per la revisione, in ogni lingua e categoria. Le automazioni hanno il blocco \"Invia template WhatsApp\" e gli eventi messaggio ricevuto e opt-out marketing. Funziona con un numero nuovo o con l'app WhatsApp Business sul telefono."
+  },
+  "developer": {
+    "name": "AmableData",
+    "url": "https://github.com/Ratne/AmableData",
+    "email": "apps@amabledata.com"
+  },
+  "categories": ["messaging", "support"],
+  "icon_url": "https://kapso.apps.amabledata.com/icon.png",
+  "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/kapso",
+  "support_url": "https://github.com/Ratne/AmableData/issues",
+  "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/kapso#privacy",
+  "base_url": "https://kapso.apps.amabledata.com",
+  "jwks_url": "https://kapso.apps.amabledata.com/.well-known/jwks.json",
+  "redirect_uris": ["https://kapso.apps.amabledata.com/install"],
+  "api_version": "2026-10",
+  "scopes": ["contacts:read", "contacts:write", "conversations:write", "automations:trigger"],
+  "webhooks": {
+    "endpoint": "/webhooks",
+    "events": []
+  },
+  "privacy": {
+    "handles_personal_data": true,
+    "erasure_endpoint": "/privacy/erasure",
+    "data_request_endpoint": "/privacy/data"
+  },
+  "pricing": {
+    "model": "free",
+    "note": {
+      "en": "Needs a Kapso account; WhatsApp conversations are billed by Meta through Kapso.",
+      "it": "Serve un account Kapso; le conversazioni WhatsApp sono fatturate da Meta tramite Kapso."
+    }
+  },
+  "extensions": {
+    "channels": [
+      {
+        "key": "whatsapp",
+        "name": {
+          "en": "WhatsApp",
+          "it": "WhatsApp"
+        },
+        "kind": "whatsapp",
+        "send_endpoint": "/channels/send",
+        "address_field": "phone",
+        "reply_window_hours": 24,
+        "templates_endpoint": "/channels/templates"
+      }
+    ],
+    "automation_actions": [
+      {
+        "key": "send_template",
+        "name": {
+          "en": "Send WhatsApp template",
+          "it": "Invia template WhatsApp"
+        },
+        "description": {
+          "en": "Sends an approved template to the contact's phone; the message also appears in the inbox thread.",
+          "it": "Invia un template approvato al telefono del contatto; il messaggio compare anche nella conversazione della inbox."
+        },
+        "endpoint": "/actions/send-template",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "template": {
+              "type": "string",
+              "title": {
+                "en": "Template",
+                "it": "Template"
+              },
+              "description": {
+                "en": "Approved templates of the connected number.",
+                "it": "Template approvati del numero collegato."
+              },
+              "options_endpoint": "/options/templates"
+            },
+            "params": {
+              "type": "string",
+              "format": "textarea",
+              "merge_tags": true,
+              "max_length": 4000,
+              "title": {
+                "en": "Parameters",
+                "it": "Parametri"
+              },
+              "description": {
+                "en": "One per line, name=value: first_name={{ contact.first_name }}",
+                "it": "Uno per riga, nome=valore: first_name={{ contact.first_name }}"
+              }
+            }
+          },
+          "required": ["template"]
+        },
+        "output_keys": ["message_id", "template", "language"]
+      }
+    ],
+    "automation_triggers": [
+      {
+        "key": "message_received",
+        "name": {
+          "en": "WhatsApp message received",
+          "it": "Messaggio WhatsApp ricevuto"
+        },
+        "description": {
+          "en": "The contact wrote on WhatsApp (data: text, type).",
+          "it": "Il contatto ha scritto su WhatsApp (dati: text, type)."
+        }
+      },
+      {
+        "key": "marketing_opted_out",
+        "name": {
+          "en": "WhatsApp marketing stopped",
+          "it": "Marketing WhatsApp disattivato"
+        },
+        "description": {
+          "en": "The contact asked to stop marketing messages on WhatsApp.",
+          "it": "Il contatto ha chiesto di non ricevere più messaggi marketing su WhatsApp."
+        }
+      },
+      {
+        "key": "marketing_opted_in",
+        "name": {
+          "en": "WhatsApp marketing resumed",
+          "it": "Marketing WhatsApp riattivato"
+        },
+        "description": {
+          "en": "The contact accepts marketing messages on WhatsApp again.",
+          "it": "Il contatto accetta di nuovo i messaggi marketing su WhatsApp."
+        }
+      }
+    ],
+    "ui": [
+      {
+        "slot": "app.settings",
+        "key": "settings",
+        "path": "/ui/settings",
+        "title": {
+          "en": "Settings",
+          "it": "Impostazioni"
+        },
+        "height": 460
+      },
+      {
+        "slot": "app.page",
+        "key": "templates",
+        "path": "/ui/templates",
+        "title": {
+          "en": "WhatsApp templates",
+          "it": "Template WhatsApp"
+        },
+        "height": 900
+      }
+    ]
+  }
+}

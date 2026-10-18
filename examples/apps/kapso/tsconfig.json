@@ -11,5 +11,6 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src", "test"],
+  "exclude": ["src/*-screen.ts"]
 }

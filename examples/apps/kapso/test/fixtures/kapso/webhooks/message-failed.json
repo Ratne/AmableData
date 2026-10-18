@@ -1,0 +1,59 @@
+{
+  "provider": "kapso",
+  "description": "Free text after the 24-hour window: Meta refuses it",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/docs/platform/webhooks/message-events",
+  "event": "whatsapp.message.failed",
+  "body": {
+    "message": {
+      "id": "wamid.out2",
+      "timestamp": "1730093200",
+      "type": "text",
+      "to": "393331234567",
+      "text": {
+        "body": "Ci sei?"
+      },
+      "kapso": {
+        "direction": "outbound",
+        "status": "failed",
+        "processing_status": "completed",
+        "origin": "cloud_api",
+        "has_media": false,
+        "statuses": [
+          {
+            "id": "wamid.out2",
+            "status": "sent",
+            "timestamp": "1730093100",
+            "recipient_id": "393331234567"
+          },
+          {
+            "id": "wamid.out2",
+            "status": "failed",
+            "timestamp": "1730093200",
+            "recipient_id": "393331234567",
+            "errors": [
+              {
+                "code": 131047,
+                "title": "Re-engagement message",
+                "message": "More than 24 hours have passed since the recipient last replied"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "conversation": {
+      "id": "conv_123",
+      "contact_name": "Ada Lovelace",
+      "phone_number": "393331234567",
+      "status": "active",
+      "last_active_at": "2025-10-28T14:25:01-03:00",
+      "created_at": "2025-10-28T13:40:00-03:00",
+      "updated_at": "2025-10-28T14:25:01-03:00",
+      "metadata": {},
+      "phone_number_id": "1234567890"
+    },
+    "is_new_conversation": false,
+    "phone_number_id": "1234567890"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "provider": "kapso",
+  "description": "Meta refuses the template format",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/api/meta/whatsapp/templates/create-or-update-message-template",
+  "request": {
+    "method": "POST",
+    "url": "https://api.kapso.ai/meta/whatsapp/v24.0/{waba_id}/message_templates"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "message": "Invalid template format",
+        "type": "OAuthException",
+        "code": 400
+      }
+    }
+  }
+}

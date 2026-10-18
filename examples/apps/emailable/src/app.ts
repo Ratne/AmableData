@@ -1,11 +1,25 @@
-import { createAppHandler, kvInstallStore, type AppContext, type KeyValue, type PrivateJwk } from '@amable/app-sdk';
+import {
+  createAppHandler,
+  kvInstallStore,
+  type AppContext,
+  type KeyValue,
+  type PrivateJwk,
+} from '@amable/app-sdk';
 import manifest from '../manifest.json';
-import { checkApiKey, hookAnswer, mapLimited, verifyEmail, type Fetch } from './emailable';
+import {
+  checkApiKey,
+  hookAnswer,
+  mapLimited,
+  requestVerification,
+  verifyEmail,
+  type Fetch,
+} from './emailable';
 import { settingsPage } from './page';
 
 /**
  * Emailable for AmableData: verifies the email of new contacts (CRM, forms,
- * imports) and records the outcome in the "Email status" field and tags.
+ * imports) and records the outcome in the "Email status" field and tags;
+ * the "Verify email" automation block returns the outcome to the flow.
  * The workspace's own Emailable API key is stored encrypted in the app data
  * of the installation; this Worker keeps nothing about contacts.
  */
@@ -20,6 +34,9 @@ const KEY_TTL_MS = 5 * 60_000;
 const BATCH_CONCURRENCY = 10;
 /** The CRM waits 10 s for a batch: answer what is done by then. */
 const BATCH_BUDGET_MS = 8_500;
+/** Automation actions get 15 s: Emailable may work 10 s before answering 249. */
+const ACTION_WAIT_S = 10;
+const ACTION_TIMEOUT_MS = 13_000;
 
 /** Per-isolate cache of API keys, so each hook does not read the CRM first. */
 const keyCache = new Map<string, { key: string | null; until: number }>();
@@ -32,6 +49,8 @@ async function apiKeyOf(ctx: AppContext): Promise<string | null> {
   keyCache.set(ctx.install.id, { key, until: Date.now() + KEY_TTL_MS });
   return key;
 }
+
+const failure = (status: number, error: string) => Response.json({ error }, { status });
 
 const emailOf = (values: unknown): string | null => {
   const email = (values as { email?: unknown } | undefined)?.email;
@@ -61,7 +80,9 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
           },
           '/hooks/validate-batch': async (body, ctx) => {
             const started = Date.now();
-            const items = Array.isArray(body['items']) ? (body['items'] as Array<{ ref?: unknown; values?: unknown }>) : [];
+            const items = Array.isArray(body['items'])
+              ? (body['items'] as Array<{ ref?: unknown; values?: unknown }>)
+              : [];
             const apiKey = await apiKeyOf(ctx);
             const results = await mapLimited(
               items,
@@ -69,12 +90,62 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
               started + BATCH_BUDGET_MS,
               async (item) => {
                 const email = emailOf(item.values);
-                const answer = email === null || apiKey === null ? { valid: null } : hookAnswer(await verifyEmail(apiKey, email, { fetch: outbound }));
+                const answer =
+                  email === null || apiKey === null
+                    ? { valid: null }
+                    : hookAnswer(await verifyEmail(apiKey, email, { fetch: outbound }));
                 return { ref: item.ref, ...answer };
               },
               (item) => ({ ref: item.ref, valid: null }),
             );
             return { results };
+          },
+          '/actions/verify-email': async (body, ctx) => {
+            if (body['test'] === true) return { ok: true, test: true };
+            const input = (body['input'] ?? {}) as { email?: unknown };
+            const typed = typeof input.email === 'string' ? input.email.trim() : '';
+            const email = typed === '' ? emailOf(body['contact']) : emailOf({ email: typed });
+            if (email === null)
+              return failure(
+                422,
+                typed === '' ? 'the contact has no email' : 'not an email address',
+              );
+            const apiKey = await apiKeyOf(ctx);
+            if (apiKey === null)
+              return failure(422, 'add your Emailable API key in the app settings');
+            const result = await requestVerification(apiKey, email, {
+              fetch: outbound,
+              waitSeconds: ACTION_WAIT_S,
+              timeoutMs: ACTION_TIMEOUT_MS,
+            });
+            // Pending, rate-limited or down: a 5xx/429 makes the CRM retry the step later.
+            if (result.kind === 'pending')
+              return failure(503, 'Emailable is still verifying this address');
+            if (result.kind === 'failed') {
+              const retry = result.status === 0 || result.status === 429 || result.status >= 500;
+              return failure(retry ? (result.status === 429 ? 429 : 503) : 422, result.message);
+            }
+            const v = result.verification;
+            const contactId = typeof body['contact_id'] === 'string' ? body['contact_id'] : null;
+            if (contactId !== null && email === emailOf(body['contact'])) {
+              await ctx.api.entities
+                .set('contact', contactId, {
+                  score: v.score,
+                  reason: v.reason,
+                  disposable: v.disposable,
+                  did_you_mean: v.didYouMean,
+                })
+                .catch(() => null);
+            }
+            return {
+              output: {
+                state: v.state,
+                score: v.score,
+                reason: v.reason,
+                did_you_mean: v.didYouMean,
+                disposable: v.disposable,
+              },
+            };
           },
           // Nothing about contacts is stored here: nothing to erase or export.
           '/privacy/erasure': async () => ({ ok: true }),
@@ -97,10 +168,16 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
               if (!check.ok) return Response.json({ error: 'invalid_api_key' }, { status: 422 });
               await ctx.api.data.set(API_KEY, apiKey, { secret: true });
               keyCache.set(ctx.install.id, { key: apiKey, until: Date.now() + KEY_TTL_MS });
-              return Response.json({ configured: true, last4: apiKey.slice(-4), credits: check.credits });
+              return Response.json({
+                configured: true,
+                last4: apiKey.slice(-4),
+                credits: check.credits,
+              });
             }
             const apiKey = await apiKeyOf(ctx);
-            return Response.json(apiKey === null ? { configured: false } : { configured: true, last4: apiKey.slice(-4) });
+            if (apiKey === null) return Response.json({ configured: false });
+            const { credits } = await checkApiKey(apiKey, outbound);
+            return Response.json({ configured: true, last4: apiKey.slice(-4), credits });
           },
         },
       });

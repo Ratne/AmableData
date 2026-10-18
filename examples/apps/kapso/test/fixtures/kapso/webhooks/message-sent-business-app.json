@@ -1,0 +1,46 @@
+{
+  "provider": "kapso",
+  "description": "The team replies from the WhatsApp Business app on the phone (coexistence echo)",
+  "source": "docs",
+  "docs_url": "https://docs.kapso.ai/docs/platform/webhooks/message-events",
+  "event": "whatsapp.message.sent",
+  "body": {
+    "message": {
+      "id": "wamid.app1",
+      "timestamp": "1730093300",
+      "type": "text",
+      "to": "393331234567",
+      "text": {
+        "body": "Ti chiamo tra 5 minuti"
+      },
+      "kapso": {
+        "direction": "outbound",
+        "status": "sent",
+        "processing_status": "completed",
+        "origin": "business_app",
+        "has_media": false,
+        "statuses": [
+          {
+            "id": "wamid.app1",
+            "status": "sent",
+            "timestamp": "1730093300",
+            "recipient_id": "393331234567"
+          }
+        ]
+      }
+    },
+    "conversation": {
+      "id": "conv_123",
+      "contact_name": "Ada Lovelace",
+      "phone_number": "393331234567",
+      "status": "active",
+      "last_active_at": "2025-10-28T14:25:01-03:00",
+      "created_at": "2025-10-28T13:40:00-03:00",
+      "updated_at": "2025-10-28T14:25:01-03:00",
+      "metadata": {},
+      "phone_number_id": "1234567890"
+    },
+    "is_new_conversation": false,
+    "phone_number_id": "1234567890"
+  }
+}

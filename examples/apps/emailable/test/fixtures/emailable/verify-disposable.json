@@ -1,0 +1,38 @@
+{
+  "provider": "emailable",
+  "description": "An address of a disposable email service",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify?email=amable-fixture%40mailinator.com",
+    "match_query": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "accept_all": null,
+      "birth_year": null,
+      "did_you_mean": null,
+      "disposable": true,
+      "domain": "mailinator.com",
+      "duration": 0.039,
+      "email": "amable-fixture@mailinator.com",
+      "first_name": "Amable",
+      "free": false,
+      "full_name": "Amable Fixture",
+      "gender": "male",
+      "last_name": "Fixture",
+      "mailbox_full": false,
+      "mx_record": "mail.mailinator.com",
+      "no_reply": false,
+      "reason": "low_deliverability",
+      "role": false,
+      "score": 5,
+      "smtp_provider": null,
+      "state": "risky",
+      "tag": null,
+      "user": "amable-fixture"
+    }
+  }
+}

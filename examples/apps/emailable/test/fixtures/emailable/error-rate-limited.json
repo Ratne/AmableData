@@ -1,0 +1,17 @@
+{
+  "provider": "emailable",
+  "description": "Too many requests (message from the status code table)",
+  "source": "docs",
+  "docs_url": "https://emailable.com/docs/api/#rate-limits",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify",
+    "match_query": true
+  },
+  "response": {
+    "status": 429,
+    "body": {
+      "message": "You’re requesting an endpoint too often."
+    }
+  }
+}

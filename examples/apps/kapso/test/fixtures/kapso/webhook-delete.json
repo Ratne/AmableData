@@ -1,0 +1,13 @@
+{
+  "provider": "kapso",
+  "description": "Webhook deleted",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "DELETE",
+    "url": "https://api.kapso.ai/platform/v1/whatsapp/phone_numbers/{phone_number_id}/webhooks/{webhook_id}"
+  },
+  "response": {
+    "status": 204
+  }
+}

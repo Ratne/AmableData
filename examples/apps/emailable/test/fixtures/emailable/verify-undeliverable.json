@@ -1,0 +1,38 @@
+{
+  "provider": "emailable",
+  "description": "A mailbox that does not exist on a real domain",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/verify?email=no-such-user-amable-fixture-7f3a%40gmail.com",
+    "match_query": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "accept_all": false,
+      "birth_year": null,
+      "did_you_mean": null,
+      "disposable": false,
+      "domain": "gmail.com",
+      "duration": 0.09,
+      "email": "no-such-user-amable-fixture-7f3a@gmail.com",
+      "first_name": null,
+      "free": true,
+      "full_name": null,
+      "gender": null,
+      "last_name": null,
+      "mailbox_full": false,
+      "mx_record": "gmail-smtp-in.l.google.com",
+      "no_reply": false,
+      "reason": "rejected_email",
+      "role": false,
+      "score": 0,
+      "smtp_provider": "Google",
+      "state": "undeliverable",
+      "tag": null,
+      "user": "no-such-user-amable-fixture-7f3a"
+    }
+  }
+}

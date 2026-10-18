@@ -1,0 +1,53 @@
+{
+  "provider": "kapso",
+  "description": "Numbers of a project that only has the Kapso sandbox number",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.kapso.ai/platform/v1/whatsapp/phone_numbers?per_page=100"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "597907523413541",
+          "business_account_id": "2102230076919824",
+          "calls_enabled": false,
+          "code_verification_status": null,
+          "created_at": "2026-10-18T04:41:47-03:00",
+          "customer_id": null,
+          "display_name": "Sandbox WhatsApp",
+          "display_phone_number": null,
+          "display_phone_number_normalized": null,
+          "inbound_processing_enabled": true,
+          "internal_id": "5dbc4257-b110-4096-90e1-7fac1c6a0ad1",
+          "is_coexistence": false,
+          "is_official_business_account": null,
+          "is_pin_enabled": null,
+          "kind": "sandbox",
+          "meta_app_id": null,
+          "name": "Sandbox WhatsApp",
+          "name_status": null,
+          "phone_number_id": "597907523413541",
+          "quality_rating": null,
+          "status": null,
+          "throughput_tier": null,
+          "updated_at": "2026-10-18T04:41:47-03:00",
+          "username": null,
+          "username_status": null,
+          "verified_name": null,
+          "webhook_verified_at": null,
+          "whatsapp_business_manager_messaging_limit": null
+        }
+      ],
+      "meta": {
+        "page": 1,
+        "per_page": 100,
+        "total_pages": 1,
+        "total_count": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "provider": "kapso",
+  "description": "Sandbox send to a phone that has not joined the sandbox",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "POST",
+    "url": "https://api.kapso.ai/meta/whatsapp/v24.0/{phone_number_id}/messages",
+    "body": {
+      "messaging_product": "whatsapp",
+      "recipient_type": "individual",
+      "to": "15550001111",
+      "type": "text",
+      "text": {
+        "body": "fixture"
+      }
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "Active sandbox session required to send messages"
+    }
+  }
+}

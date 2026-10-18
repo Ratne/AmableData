@@ -1,0 +1,16 @@
+{
+  "provider": "emailable",
+  "description": "Call without an API key",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": {
+    "method": "GET",
+    "url": "https://api.emailable.com/v1/account"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "message": "API key or access token is required."
+    }
+  }
+}
