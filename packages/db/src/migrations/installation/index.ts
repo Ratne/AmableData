@@ -6,6 +6,7 @@ import { m0004Platform } from './0004_platform';
 import { m0005Developers } from './0005_developers';
 import { m0006TenantSlugAliases } from './0006_tenant_slug_aliases';
 import { m0007Apps } from './0007_apps';
+import { m0008TrackingDomains } from './0008_tracking_domains';
 
 /**
  * Ordered list of installation D1 migrations.
@@ -19,4 +20,5 @@ export const installationMigrations: readonly Migration[] = [
   m0005Developers,
   m0006TenantSlugAliases,
   m0007Apps,
+  m0008TrackingDomains,
 ];

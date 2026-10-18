@@ -12,6 +12,7 @@ import {
 } from '@amable/api-types';
 import { verifyWebhook } from '@amable/auth/security';
 import { z } from 'zod';
+import { findTrackingHost, TRACKING_HOST_GATEWAY_OP } from '../analytics/routes-tracking-domains';
 import { findTenantBySlug } from '../auth/store';
 import { bookingGatewayHandlers, bookingGatewayRawHandlers } from '../booking/gateway';
 import type { Env } from '../env';
@@ -158,6 +159,14 @@ async function reportEdgeError(env: Env, executionCtx: ExecutionContext, input: 
   return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } });
 }
 
+/** Custom tracking hostnames are not workspace hostnames: resolved before (and instead of) `resolveTenant`. */
+async function trackingHost(env: Env, ref: GatewayTenantRef): Promise<Response> {
+  await ensureInstallationMigrated(env.DB);
+  const found = 'host' in ref ? await findTrackingHost(env.DB, ref.host) : null;
+  if (found === null) return failure(new GatewayError(404, 'not_found', 'tracking domain not found'));
+  return reply({ ok: true, tenant: found.tenant, value: { site_id: found.site_id } });
+}
+
 export async function handleEdgeGateway(
   request: Request,
   env: Env,
@@ -204,6 +213,7 @@ export async function handleEdgeGateway(
     return failure(new GatewayError(409, 'replayed', 'gateway envelope already used'));
   }
   if (!raw && op === EDGE_ERROR_REPORT_OP) return reportEdgeError(env, executionCtx, input);
+  if (!raw && op === TRACKING_HOST_GATEWAY_OP) return trackingHost(env, ref);
   const handler = raw ? rawHandlers[op] : handlers[op];
   if (handler === undefined || !Object.hasOwn(raw ? rawHandlers : handlers, op)) {
     return failure(new GatewayError(404, 'unknown_op', `unknown gateway op ${op}`));
