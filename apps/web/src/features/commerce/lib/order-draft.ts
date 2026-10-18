@@ -1,3 +1,4 @@
+import type { CustomFieldValues } from '@amable/api-types/crm';
 import type {
   CreateOrderInput,
   CreateSubscriptionInput,
@@ -51,6 +52,8 @@ export interface WizardState {
   readonly promoCode: string;
   readonly shippingMinor: number;
   readonly notes: string;
+  /** Required order custom fields, asked with the contact (the API rejects a draft without them). */
+  readonly customFields: CustomFieldValues;
 }
 
 export const EMPTY_WIZARD: WizardState = {
@@ -60,6 +63,7 @@ export const EMPTY_WIZARD: WizardState = {
   promoCode: '',
   shippingMinor: 0,
   notes: '',
+  customFields: {},
 };
 
 export function toItemInput(line: WizardLine): OrderItemInput {
@@ -96,6 +100,7 @@ export function buildDraftCreate(state: WizardState): CreateOrderInput {
     promo_code: promo === '' ? null : promo,
     shipping_minor: state.shippingMinor,
     ...(notes ? { notes } : {}),
+    ...(Object.keys(state.customFields).length > 0 ? { custom_fields: state.customFields } : {}),
   };
 }
 
@@ -108,6 +113,7 @@ export function buildDraftUpdate(state: WizardState): UpdateOrderInput {
     promo_code: promo === '' ? null : promo,
     shipping_minor: state.shippingMinor,
     notes: notes === '' ? null : notes,
+    ...(Object.keys(state.customFields).length > 0 ? { custom_fields: state.customFields } : {}),
   };
 }
 
@@ -119,6 +125,7 @@ export function draftSignature(state: WizardState): string {
     state.promoCode.trim().toUpperCase(),
     state.shippingMinor,
     state.notes.trim(),
+    state.customFields,
   ]);
 }
 

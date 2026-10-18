@@ -20,7 +20,8 @@ export function listTableLabels(t: Translate): ListTableLabels {
     deleteFailed: t('list.deleteFailed'),
     confirmDeleteTitle: (count, name) =>
       count === 1 ? t('list.confirmDeleteOne', { name }) : t('list.confirmDeleteMany', { count }),
-    confirmDeleteDescription: () => t('list.confirmDeleteBody'),
+    confirmDeleteDescription: (_count, undoable) =>
+      t(undoable ? 'list.confirmDeleteBody' : 'list.confirmDeleteBodyFinal'),
     empty: t('list.empty'),
     loading: t('common.loading'),
   };

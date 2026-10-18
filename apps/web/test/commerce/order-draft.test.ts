@@ -48,6 +48,7 @@ const state: WizardState = {
   promoCode: ' save10 ',
   shippingMinor: 690,
   notes: '',
+  customFields: {},
 };
 
 describe('wizard state → API input', () => {
@@ -71,6 +72,14 @@ describe('wizard state → API input', () => {
     expect(update.notes).toBeNull();
     expect(update.items).toHaveLength(3);
     expect(buildDraftUpdate({ ...state, notes: ' call first ' }).notes).toBe('call first');
+  });
+
+  it('sends the required custom fields asked with the contact', () => {
+    const withFields = { ...state, customFields: { po_number: 'PO-7' } };
+    expect(buildDraftCreate(withFields).custom_fields).toEqual({ po_number: 'PO-7' });
+    expect(buildDraftUpdate(withFields).custom_fields).toEqual({ po_number: 'PO-7' });
+    expect(buildDraftCreate(state)).not.toHaveProperty('custom_fields');
+    expect(draftSignature(withFields)).not.toBe(draftSignature(state));
   });
 
   it('maps plans to subscriptions (quantity only when not 1)', () => {

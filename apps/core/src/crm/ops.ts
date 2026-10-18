@@ -165,6 +165,7 @@ export const crmOps = {
   'tasks.complete': calendar.completeTask,
   'tasks.reopen': calendar.reopenTask,
   'tasks.delete': calendar.deleteTask,
+  'tasks.restore': calendar.restoreTask,
   'appointments.list': calendar.listAppointments,
   'appointments.get': calendar.getAppointment,
   'appointments.create': calendar.createAppointment,
@@ -185,6 +186,7 @@ export const crmOps = {
   'opportunities.create': deals.createOpportunity,
   'opportunities.update': deals.updateOpportunity,
   'opportunities.delete': deals.deleteOpportunity,
+  'opportunities.restore': deals.restoreOpportunity,
   // search
   'search.query': (ctx: CrmContext, input: SearchQuery): SearchResult => executeSearch(ctx, input),
   'search.global': (

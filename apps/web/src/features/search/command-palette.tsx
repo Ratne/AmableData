@@ -98,6 +98,16 @@ export function GlobalSearch({ tenant }: { tenant: string }) {
           to: '/t/$tenant/companies/$companyId',
           params: { tenant, companyId: found.company_id },
         });
+      else if (found?.opportunity_id)
+        await navigate({
+          to: '/t/$tenant/deals/$dealId',
+          params: { tenant, dealId: found.opportunity_id },
+        });
+    } else if (hit.type === 'order') {
+      await navigate({
+        to: '/t/$tenant/orders/$orderId',
+        params: { tenant, orderId: hit.id },
+      });
     }
   };
 

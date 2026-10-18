@@ -216,6 +216,44 @@ describe('contact import', () => {
     ).toThrow(/already completed/);
   });
 
+  it('adds phones and addresses to an existing contact instead of replacing them', () => {
+    const t = createTestTenant();
+    const existing = t.op('contacts.create', {
+      given_name: 'Ada',
+      emails: [{ email: 'ada@example.com' }],
+      phones: [{ number: '+39 333 111 2222', type: 'mobile' }],
+      addresses: [{ type: 'shipping', line1: 'Via Roma', locality: 'Milano', country_code: 'IT' }],
+    });
+    const job = t.op('imports.create', {
+      entity: 'contact',
+      mapping: {
+        Email: 'email',
+        Phone: 'phone',
+        Phone2: 'phone2',
+        Street: 'address.line1',
+        City: 'address.locality',
+        Country: 'address.country_code',
+      },
+    });
+    const [header, ...data] = parseCsv(
+      [
+        'Email,Phone,Phone2,Street,City,Country',
+        'ada@example.com,+393331112222,+39 02 555 0000,Via Roma,milano,it',
+        'ada@example.com,,,Corso Italia,Torino,IT',
+      ].join('\n'),
+    );
+    expect(
+      t.op('imports.rows', { importId: job.id, header: header!, rows: data, firstRowNumber: 1 }),
+    ).toMatchObject({ updated: 2, failed: 0 });
+
+    const ada = t.op('contacts.get', { id: existing.id });
+    expect(ada.phones.map((p) => p.number)).toEqual(['+39 333 111 2222', '+39 02 555 0000']);
+    expect(ada.addresses.map((a) => [a.type, a.line1, a.locality])).toEqual([
+      ['shipping', 'Via Roma', 'Milano'],
+      ['billing', 'Corso Italia', 'Torino'],
+    ]);
+  });
+
   it('rejects a mapping with unknown targets', () => {
     const t = createTestTenant();
     expect(() =>

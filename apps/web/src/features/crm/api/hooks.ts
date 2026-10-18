@@ -173,6 +173,7 @@ export function errorMessage(t: Translate, error: unknown): string {
     if (error.status === 403) return t('crm.error.forbidden');
     if (error.status === 404) return t('crm.error.notFound');
     if (error.status === 409) return error.detail ?? t('crm.error.conflict');
+    if (error.status === 413) return t('crm.error.tooLarge');
     if (error.status === 422 || error.status === 400) {
       const first = error.details[0];
       if (first !== undefined) return `${first.path}: ${first.message}`;

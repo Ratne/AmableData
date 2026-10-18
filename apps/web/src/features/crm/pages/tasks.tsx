@@ -303,6 +303,10 @@ function TaskList() {
                   run
                     .mutateAsync(() => Promise.all(rows.map((row) => api.tasks.remove(row.id))))
                     .then(() => undefined),
+                onUndo: (rows) =>
+                  run
+                    .mutateAsync(() => Promise.all(rows.map((row) => api.tasks.restore(row.id))))
+                    .then(() => undefined),
               }
             : undefined
         }

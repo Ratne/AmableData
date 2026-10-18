@@ -1,4 +1,4 @@
-import type { Contact } from '@amable/api-types/crm';
+import type { Contact, CustomFieldValues } from '@amable/api-types/crm';
 import { Button } from '@amable/ui/ui/button';
 import {
   Dialog,
@@ -21,6 +21,7 @@ import { useWorkspaceCountry } from '../../workspace/api';
 import { TimeZoneSelect } from '../../../components/locale/timezone-select';
 import { useI18n } from '../../../i18n';
 import { crmKeys, useCrm, useCrmMutation } from '../api/hooks';
+import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
 import { TagMultiSelect } from './inputs';
 
 export interface RecordRef {
@@ -57,8 +58,9 @@ export function CreateContactDialog({
   const [timeZone, setTimeZone] = useState('');
   const [language, setLanguage] = useState('');
   const phoneInvalid = phone !== '' && !isE164(phone);
+  const required = useRequiredCustomFields('contacts');
   const create = useCrmMutation({
-    mutationFn: () =>
+    mutationFn: (customFields: CustomFieldValues) =>
       api.contacts.create({
         ...(given.trim() ? { given_name: given.trim() } : {}),
         ...(family.trim() ? { family_name: family.trim() } : {}),
@@ -67,6 +69,7 @@ export function CreateContactDialog({
         ...(timeZone ? { time_zone: timeZone } : {}),
         ...(language ? { preferred_locale: language } : {}),
         ...(companyId ? { company_id: companyId } : {}),
+        ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
       }),
     success: t('crm.contacts.created'),
     onSuccess: (contact) => {
@@ -76,12 +79,14 @@ export function CreateContactDialog({
       setPhone('');
       setTimeZone('');
       setLanguage('');
+      required.reset();
       onCreated(contact);
     },
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    create.mutate(undefined);
+    const customFields = required.collect();
+    if (customFields !== null) create.mutate(customFields);
   };
   const empty = !given.trim() && !family.trim() && !email.trim();
   return (
@@ -149,6 +154,7 @@ export function CreateContactDialog({
               />
             </div>
           </div>
+          <RequiredCustomFields state={required} disabled={create.isPending} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}

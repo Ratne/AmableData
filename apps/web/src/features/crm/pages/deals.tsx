@@ -1,4 +1,4 @@
-import type { Opportunity, Pipeline, Stage } from '@amable/api-types/crm';
+import type { CustomFieldValues, Opportunity, Pipeline, Stage } from '@amable/api-types/crm';
 import {
   cn,
   DashboardButton,
@@ -38,9 +38,10 @@ import {
   usePermissions,
   usePipelines,
 } from '../api/hooks';
-import { formatDate, formatMoney } from '../components/cells';
+import { formatDate, formatMoney, formatTotals } from '../components/cells';
 import { ChoiceSelect, DatePicker, UserSelect } from '../components/inputs';
 import { PageState } from '../components/states';
+import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
 
 const DRAG_TYPE = 'application/x-amable-deal';
 
@@ -135,8 +136,6 @@ function Board({
     >
       {stages.map((stage) => {
         const items = deals.filter((deal) => deal.stage_id === stage.id);
-        const total = items.reduce((sum, deal) => sum + deal.value_minor, 0);
-        const currency = items[0]?.currency ?? 'EUR';
         const onDrop = (event: DragEvent) => {
           event.preventDefault();
           setOver(null);
@@ -172,7 +171,7 @@ function Board({
               <Badge variant="secondary">{items.length}</Badge>
             </header>
             <p className="px-3 pt-1.5 text-xs text-muted-foreground tabular-nums">
-              {formatMoney(locale, total, currency)} · {stage.probability}%
+              {formatTotals(locale, items, 'EUR')} · {stage.probability}%
             </p>
             <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
               {items.map((deal) => (
@@ -214,8 +213,9 @@ function NewDealDialog({
   const [owner, setOwner] = useState('');
   const [close, setClose] = useState('');
   const amount = value.trim() === '' ? 0 : Number(value.replace(',', '.'));
+  const required = useRequiredCustomFields('opportunities');
   const create = useCrmMutation({
-    mutationFn: () =>
+    mutationFn: (customFields: CustomFieldValues) =>
       api.opportunities.create({
         title: title.trim(),
         pipeline_id: pipeline.id,
@@ -224,11 +224,13 @@ function NewDealDialog({
         currency,
         ...(owner ? { owner_id: owner } : {}),
         ...(close ? { expected_close_date: close } : {}),
+        ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
       }),
     success: t('crm.deals.created'),
     onSuccess: () => {
       setTitle('');
       setValue('');
+      required.reset();
       onOpenChange(false);
     },
   });
@@ -236,7 +238,9 @@ function NewDealDialog({
     title.trim() !== '' && Number.isFinite(amount) && amount >= 0 && /^[A-Z]{3}$/.test(currency);
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (valid) create.mutate(undefined);
+    if (!valid) return;
+    const customFields = required.collect();
+    if (customFields !== null) create.mutate(customFields);
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -294,6 +298,7 @@ function NewDealDialog({
               />
             </div>
           </div>
+          <RequiredCustomFields state={required} disabled={create.isPending} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
@@ -404,6 +409,10 @@ export function DealsPage() {
   const remove = useCrmMutation({
     mutationFn: (rows: Opportunity[]) =>
       Promise.all(rows.map((row) => api.opportunities.remove(row.id))),
+  });
+  const restore = useCrmMutation({
+    mutationFn: (rows: Opportunity[]) =>
+      Promise.all(rows.map((row) => api.opportunities.restore(row.id))),
   });
   const stageOf = (id: string) => pipeline?.stages.find((s) => s.id === id);
   const columns: ListTableColumn<Opportunity>[] = [
@@ -516,7 +525,10 @@ export function DealsPage() {
               }
               deletion={
                 can('opportunities:write')
-                  ? { onDelete: (rows) => remove.mutateAsync(rows).then(() => undefined) }
+                  ? {
+                      onDelete: (rows) => remove.mutateAsync(rows).then(() => undefined),
+                      onUndo: (rows) => restore.mutateAsync(rows).then(() => undefined),
+                    }
                   : undefined
               }
             />

@@ -202,6 +202,7 @@ export const en = {
   'list.confirmDeleteOne': 'Delete {name}?',
   'list.confirmDeleteMany': 'Delete {count} items?',
   'list.confirmDeleteBody': 'You can undo right after.',
+  'list.confirmDeleteBodyFinal': 'This cannot be undone.',
   'list.empty': 'Nothing here yet.',
   'editor.insert': 'Insert',
   'editor.insertField': 'Insert field',

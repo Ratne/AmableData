@@ -298,9 +298,9 @@ function serializeOpportunities(ctx: CrmContext, rows: OpportunityRow[]): Opport
   }));
 }
 
-function getOpportunityRow(ctx: CrmContext, id: string): OpportunityRow {
+function getOpportunityRow(ctx: CrmContext, id: string, includeDeleted = false): OpportunityRow {
   const row = ctx.db.all<OpportunityRow>(
-    `SELECT * FROM crm_opportunities WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT * FROM crm_opportunities WHERE id = ? ${includeDeleted ? '' : 'AND deleted_at IS NULL'}`,
     id,
   )[0];
   if (row === undefined) throw notFound('opportunity', id);
@@ -540,4 +540,23 @@ export function deleteOpportunity(
   ctx.db.run(`UPDATE crm_opportunities SET deleted_at = ? WHERE id = ?`, ctx.now(), input.id);
   emit(ctx, 'opportunity.deleted', oppRefs(row));
   return { id: input.id, deleted: true };
+}
+
+/** Undo of a delete; refused once the deal's pipeline or stage is gone. */
+export function restoreOpportunity(ctx: CrmContext, input: { id: string }): Opportunity {
+  const row = getOpportunityRow(ctx, input.id, true);
+  const stage = ctx.db.all(
+    `SELECT 1 FROM crm_pipeline_stages s JOIN crm_pipelines p ON p.id = s.pipeline_id
+     WHERE s.id = ? AND s.deleted_at IS NULL AND p.deleted_at IS NULL`,
+    row.stage_id,
+  );
+  if (stage.length === 0) {
+    throw new CrmError('conflict', 'the pipeline stage of this opportunity no longer exists');
+  }
+  ctx.db.run(
+    `UPDATE crm_opportunities SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
+    ctx.now(),
+    input.id,
+  );
+  return getOpportunity(ctx, { id: input.id });
 }

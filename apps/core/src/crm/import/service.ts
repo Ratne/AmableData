@@ -1,5 +1,6 @@
 import {
   createContactSchema,
+  type ContactPhoneInput,
   type CreateImportInput,
   type CreateContactInput,
   type ImportJob,
@@ -167,10 +168,16 @@ export function importRows(
 
       let contactId: string;
       if (existingId !== null) {
-        const { source_type: _source, emails, ...rest } = data;
-        // Keep the existing email list; only add new addresses from the row.
-        const update =
-          emails === undefined ? rest : { ...rest, emails: mergeEmails(ctx, existingId, emails) };
+        const { source_type: _source, emails, phones, addresses, ...rest } = data;
+        // Lists are never replaced by a row: new emails, phones and addresses are added.
+        const update = {
+          ...rest,
+          ...(emails === undefined ? {} : { emails: mergeEmails(ctx, existingId, emails) }),
+          ...(phones === undefined ? {} : { phones: mergePhones(ctx, existingId, phones) }),
+          ...(addresses === undefined
+            ? {}
+            : { addresses: mergeAddresses(ctx, existingId, addresses) }),
+        };
         contactId = updateContact(
           ctx,
           { id: existingId, data: update },
@@ -222,6 +229,73 @@ function mergeEmails(
   }));
   for (const e of incoming) {
     if (!seen.has(e.email.toLowerCase()) && merged.length < 5) merged.push(e);
+  }
+  return merged;
+}
+
+function mergePhones(
+  ctx: CrmContext,
+  contactId: string,
+  incoming: NonNullable<CreateContactInput['phones']>,
+): NonNullable<CreateContactInput['phones']> {
+  const current = ctx.db.all<{
+    number: string;
+    number_digits: string;
+    extension: string | null;
+    type: string | null;
+  }>(
+    `SELECT number, number_digits, extension, type FROM crm_contact_phones WHERE contact_id = ? ORDER BY position`,
+    contactId,
+  );
+  const seen = new Set(current.map((p) => p.number_digits));
+  const merged: NonNullable<CreateContactInput['phones']> = current.map((p) => ({
+    number: p.number,
+    ...(p.extension === null ? {} : { extension: p.extension }),
+    ...(p.type === null ? {} : { type: p.type as NonNullable<ContactPhoneInput['type']> }),
+  }));
+  for (const p of incoming) {
+    const digits = p.number.replace(/\D/g, '');
+    if (!seen.has(digits) && merged.length < 5) {
+      seen.add(digits);
+      merged.push(p);
+    }
+  }
+  return merged;
+}
+
+const ADDRESS_PARTS = [
+  'line1',
+  'street_number',
+  'line2',
+  'locality',
+  'region',
+  'postal_code',
+  'country_code',
+] as const;
+
+function mergeAddresses(
+  ctx: CrmContext,
+  contactId: string,
+  incoming: NonNullable<CreateContactInput['addresses']>,
+): NonNullable<CreateContactInput['addresses']> {
+  type Row = Record<(typeof ADDRESS_PARTS)[number], string | null> & { type: string };
+  const current = ctx.db.all<Row>(
+    `SELECT type, ${ADDRESS_PARTS.join(', ')} FROM crm_contact_addresses WHERE contact_id = ? ORDER BY position`,
+    contactId,
+  );
+  const key = (a: Partial<Record<(typeof ADDRESS_PARTS)[number], string | null | undefined>>) =>
+    ADDRESS_PARTS.map((part) => (a[part] ?? '').trim().toLowerCase()).join('|');
+  const seen = new Set(current.map(key));
+  const merged: NonNullable<CreateContactInput['addresses']> = current.map((row) => {
+    const out: Record<string, string> = { type: row.type };
+    for (const part of ADDRESS_PARTS) if (row[part] !== null) out[part] = row[part];
+    return out as NonNullable<CreateContactInput['addresses']>[number];
+  });
+  for (const a of incoming) {
+    if (!seen.has(key(a)) && merged.length < 3) {
+      seen.add(key(a));
+      merged.push(a);
+    }
   }
   return merged;
 }

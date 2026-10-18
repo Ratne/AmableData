@@ -57,8 +57,8 @@ import {
 /**
  * Every module of the product, grouped as in the sidebar. Paths are relative
  * to `/t/$tenant`; pages without a real implementation render the placeholder.
- * `permission` hides the item when the active membership lacks it (the server
- * still enforces access on every route).
+ * `permission` hides the item when the active membership lacks it (any of
+ * them, for a list); the server still enforces access on every route.
  */
 
 export interface ModuleDef {
@@ -66,7 +66,7 @@ export interface ModuleDef {
   readonly path: string;
   readonly labelKey: MessageKey;
   readonly icon: LucideIcon;
-  readonly permission?: Permission;
+  readonly permission?: Permission | readonly Permission[];
 }
 
 export interface NavGroupDef {
@@ -321,14 +321,14 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         path: 'reports',
         labelKey: 'nav.reports',
         icon: BarChart3,
-        permission: 'reports:read',
+        permission: ['reports:read', 'reports:sales_read'],
       },
       {
         id: 'report-dashboards',
         path: 'reports/dashboards',
         labelKey: 'nav.reportDashboards',
         icon: Layers,
-        permission: 'reports:read',
+        permission: ['reports:read', 'reports:sales_read'],
       },
     ],
   },

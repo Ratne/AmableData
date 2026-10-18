@@ -1,3 +1,4 @@
+import type { Permission } from '@amable/core';
 import { AppShell, useTenantBranding, type DashboardShellNavSection } from '@amable/ui';
 import { createRoute, Outlet, useMatches, useParams, useRouterState } from '@tanstack/react-router';
 import { useMemo } from 'react';
@@ -48,8 +49,12 @@ function TenantLayout() {
   const me = useMe();
   const membership = me.data?.memberships.find((candidate) => candidate.slug === tenant);
   // Until the session is known (or in UI-only dev without the API) everything is shown; the server enforces access anyway.
-  const allowed = (module: ModuleDef) =>
-    !module.permission || !membership || membership.permissions.includes(module.permission);
+  const allowed = (module: ModuleDef) => {
+    if (module.permission === undefined || !membership) return true;
+    const needed: readonly Permission[] =
+      typeof module.permission === 'string' ? [module.permission] : module.permission;
+    return needed.some((permission) => membership.permissions.includes(permission));
+  };
   const profile = useWorkspaceProfile(tenant);
   const branding = useTenantBranding({
     name: profile.data?.name ?? membership?.name ?? tenant,

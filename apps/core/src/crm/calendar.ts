@@ -67,9 +67,9 @@ function taskToApi(row: TaskRow): Task {
   };
 }
 
-function getTaskRow(ctx: CrmContext, id: string): TaskRow {
+function getTaskRow(ctx: CrmContext, id: string, includeDeleted = false): TaskRow {
   const row = ctx.db.all<TaskRow>(
-    `SELECT * FROM crm_tasks WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT * FROM crm_tasks WHERE id = ? ${includeDeleted ? '' : 'AND deleted_at IS NULL'}`,
     id,
   )[0];
   if (row === undefined) throw notFound('task', id);
@@ -233,6 +233,12 @@ export function deleteTask(ctx: CrmContext, input: { id: string }): { id: string
   ctx.db.run(`UPDATE crm_tasks SET deleted_at = ? WHERE id = ?`, ctx.now(), input.id);
   emit(ctx, 'task.deleted', taskRefs(row));
   return { id: input.id, deleted: true };
+}
+
+export function restoreTask(ctx: CrmContext, input: { id: string }): Task {
+  getTaskRow(ctx, input.id, true);
+  ctx.db.run(`UPDATE crm_tasks SET deleted_at = NULL, updated_at = ? WHERE id = ?`, ctx.now(), input.id);
+  return getTask(ctx, { id: input.id });
 }
 
 // ------------------------------------------------------------- appointments

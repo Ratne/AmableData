@@ -508,9 +508,10 @@ export function receiveMessage(
       row = getRow(ctx, row.id);
     }
   }
-  if (row.status === 'closed') {
+  if (row.status !== 'open') {
+    // A pending conversation waits for the contact: their reply puts it back in the queue.
     ctx.db.run(`UPDATE conv_conversations SET status = 'open' WHERE id = ?`, row.id);
-    emit(ctx, 'conversation.reopened', refs(row));
+    if (row.status === 'closed') emit(ctx, 'conversation.reopened', refs(row));
   }
   const sentAt = input.message.sent_at === undefined ? ctx.now() : Math.min(Date.parse(input.message.sent_at), ctx.now());
   const message = insertMessage(ctx, row, {

@@ -1,4 +1,4 @@
-import type { Activity, Note, RichText, Task } from '@amable/api-types/crm';
+import type { Activity, CustomFieldValues, Note, RichText, Task } from '@amable/api-types/crm';
 import type { JSONContent } from '@amable/editor';
 import { cn } from '@amable/ui';
 import { Badge } from '@amable/ui/ui/badge';
@@ -28,6 +28,7 @@ import {
 import { formatDate, formatMoney } from './cells';
 import { DatePicker, DateTimePicker } from './inputs';
 import { ErrorNotice } from './states';
+import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
 
 const RELOAD_FLAG = 'amb.chunkReload';
 
@@ -521,18 +522,21 @@ export function DealsPanel({ contactId, companyId }: { contactId?: string; compa
     enabled: contactId !== undefined,
   });
   const dealItems = deals.data?.pages.flatMap((p) => p.data) ?? [];
+  const required = useRequiredCustomFields('opportunities');
   const create = useCrmMutation({
-    mutationFn: () =>
+    mutationFn: (customFields: CustomFieldValues) =>
       api.opportunities.create({
         title: title.trim(),
         ...(contactId ? { contact_id: contactId } : {}),
         ...(companyId ? { company_id: companyId } : {}),
         ...(value ? { value_minor: Math.round(Number(value.replace(',', '.')) * 100) } : {}),
+        ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
       }),
     success: t('crm.deals.created'),
     onSuccess: () => {
       setTitle('');
       setValue('');
+      required.reset();
     },
   });
   const stageName = (stageId: string) =>
@@ -544,7 +548,9 @@ export function DealsPanel({ contactId, companyId }: { contactId?: string; compa
           className="flex flex-wrap items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            if (title.trim()) create.mutate(undefined);
+            if (!title.trim()) return;
+            const customFields = required.collect();
+            if (customFields !== null) create.mutate(customFields);
           }}
         >
           <Input
@@ -565,6 +571,11 @@ export function DealsPanel({ contactId, companyId }: { contactId?: string; compa
           <Button type="submit" size="sm" disabled={!title.trim() || create.isPending}>
             <Plus className="size-3.5" aria-hidden /> {t('crm.common.add')}
           </Button>
+          {title.trim() ? (
+            <div className="basis-full">
+              <RequiredCustomFields state={required} disabled={create.isPending} />
+            </div>
+          ) : null}
         </form>
       ) : null}
       {deals.error ? <ErrorNotice error={deals.error} /> : null}

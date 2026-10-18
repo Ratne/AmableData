@@ -249,13 +249,18 @@ export function ImportWizardPage() {
             </p>
           ) : null}
           <div className="grid gap-3 rounded-xl border p-4 sm:grid-cols-3">
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={updateExisting}
-                onCheckedChange={(v) => setUpdateExisting(v === true)}
-              />
-              {t('crm.import.updateExisting')}
-            </label>
+            <div className="grid content-start gap-1">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={updateExisting}
+                  onCheckedChange={(v) => setUpdateExisting(v === true)}
+                />
+                {t('crm.import.updateExisting')}
+              </label>
+              {updateExisting ? (
+                <p className="text-xs text-muted-foreground">{t('crm.import.updateExistingHint')}</p>
+              ) : null}
+            </div>
             <div className="grid gap-1.5">
               <Label>{t('crm.import.applyTags')}</Label>
               <TagMultiSelect

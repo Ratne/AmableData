@@ -318,6 +318,7 @@ export function crmClient(slug: string) {
       complete: (taskId: string) => post<Task>(`/tasks/${id(taskId)}/complete`),
       reopen: (taskId: string) => post<Task>(`/tasks/${id(taskId)}/reopen`),
       remove: (taskId: string) => del(`/tasks/${id(taskId)}`),
+      restore: (taskId: string) => post<Task>(`/tasks/${id(taskId)}/restore`),
     },
     appointments: {
       list: (params: ListParams & { contact_id?: string; from?: string; to?: string } = {}) =>
@@ -356,6 +357,8 @@ export function crmClient(slug: string) {
       update: (opportunityId: string, input: UpdateOpportunityInput) =>
         patch<Opportunity>(`/opportunities/${id(opportunityId)}`, input),
       remove: (opportunityId: string) => del(`/opportunities/${id(opportunityId)}`),
+      restore: (opportunityId: string) =>
+        post<Opportunity>(`/opportunities/${id(opportunityId)}/restore`),
       timeline: (opportunityId: string, params: ListParams = {}) =>
         get<Page<Activity>>(`/opportunities/${id(opportunityId)}/timeline`, params),
     },

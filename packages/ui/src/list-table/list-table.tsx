@@ -97,7 +97,8 @@ export interface ListTableLabels {
   readonly deleted: (count: number, label: string) => string;
   readonly deleteFailed: string;
   readonly confirmDeleteTitle: (count: number, label: string) => string;
-  readonly confirmDeleteDescription: (count: number) => string;
+  /** `undoable`: the deletion offers Undo afterwards. */
+  readonly confirmDeleteDescription: (count: number, undoable: boolean) => string;
   readonly empty: string;
   readonly loading: string;
 }
@@ -115,7 +116,8 @@ export const DEFAULT_LIST_TABLE_LABELS: ListTableLabels = {
   deleteFailed: 'Could not delete. Nothing was changed.',
   confirmDeleteTitle: (count, label) =>
     count === 1 ? `Delete ${label}?` : `Delete ${String(count)} items?`,
-  confirmDeleteDescription: () => 'You can undo right after.',
+  confirmDeleteDescription: (_count, undoable) =>
+    undoable ? 'You can undo right after.' : 'This cannot be undone.',
   empty: 'Nothing here yet.',
   loading: 'Loading…',
 };
@@ -574,7 +576,10 @@ export function ListTable<T>({
           pendingDelete.rows.length,
           pendingDelete.rows[0] ? getRowLabel(pendingDelete.rows[0]) : '',
         )}
-        description={labels.confirmDeleteDescription(pendingDelete.rows.length)}
+        description={labels.confirmDeleteDescription(
+          pendingDelete.rows.length,
+          deletion?.onUndo !== undefined,
+        )}
         confirmLabel={labels.delete}
         cancelLabel={labels.cancel}
         onConfirm={() => void runDelete(pendingDelete.rows)}

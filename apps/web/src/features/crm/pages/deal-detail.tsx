@@ -5,7 +5,7 @@ import type {
   Pipeline,
   UpdateOpportunityInput,
 } from '@amable/api-types/crm';
-import { DashboardButton, DashboardConfirmDialog, PageBody, usePageChrome } from '@amable/ui';
+import { DashboardButton, DashboardConfirmDialog, PageBody, toast, usePageChrome } from '@amable/ui';
 import { Badge } from '@amable/ui/ui/badge';
 import { Input } from '@amable/ui/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@amable/ui/ui/tabs';
@@ -179,8 +179,22 @@ function DealView({ deal }: { deal: Opportunity }) {
   const save = (input: UpdateOpportunityInput) => update.mutateAsync(input);
   const remove = useCrmMutation({
     mutationFn: () => api.opportunities.remove(deal.id),
-    success: t('list.deletedOne', { name: deal.title }),
-    onSuccess: () => void navigate({ to: '/t/$tenant/deals', params: { tenant: slug } }),
+    onSuccess: () => {
+      toast.success(t('list.deletedOne', { name: deal.title }), {
+        action: {
+          label: t('list.undo'),
+          onClick: () => {
+            void api.opportunities.restore(deal.id).then(() =>
+              navigate({
+                to: '/t/$tenant/deals/$dealId',
+                params: { tenant: slug, dealId: deal.id },
+              }),
+            );
+          },
+        },
+      });
+      void navigate({ to: '/t/$tenant/deals', params: { tenant: slug } });
+    },
   });
   const dash = <span className="text-muted-foreground">—</span>;
   const contactLabel = contact.data ? contactName(contact.data, t('crm.contacts.unnamed')) : null;

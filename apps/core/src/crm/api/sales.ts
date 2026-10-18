@@ -117,6 +117,17 @@ export function registerSalesRoutes(app: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => c.json(await callCrm(c, 'tasks.delete', c.req.valid('param')), 200),
   );
+  app.openapi(
+    crmRoute('tasks:write', {
+      method: 'post',
+      path: '/tasks/{id}/restore',
+      tags: tasks,
+      summary: 'Restore a deleted task',
+      request: { params: idParamSchema },
+      responses: { 200: json(taskSchema, 'The task') },
+    }),
+    async (c) => c.json(await callCrm(c, 'tasks.restore', c.req.valid('param')), 200),
+  );
 
   // ---------------------------------------------------------- appointments
   const appts = ['Appointments'];
@@ -382,6 +393,17 @@ export function registerSalesRoutes(app: OpenAPIHono<AppEnv>): void {
       responses: { 200: json(deletedResponseSchema, 'Deleted') },
     }),
     async (c) => c.json(await callCrm(c, 'opportunities.delete', c.req.valid('param')), 200),
+  );
+  app.openapi(
+    crmRoute('opportunities:write', {
+      method: 'post',
+      path: '/opportunities/{id}/restore',
+      tags: opps,
+      summary: 'Restore a deleted opportunity',
+      request: { params: idParamSchema },
+      responses: { 200: json(opportunitySchema, 'The opportunity') },
+    }),
+    async (c) => c.json(await callCrm(c, 'opportunities.restore', c.req.valid('param')), 200),
   );
   app.openapi(
     crmRoute('opportunities:read', {

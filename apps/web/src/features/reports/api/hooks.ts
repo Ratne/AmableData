@@ -10,7 +10,9 @@ import {
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
 import { errorMessage, usePermissions, useTenantMe, useTenantSlug } from '../../crm/api/hooks';
+import { useWorkspaceProfile } from '../../workspace/api';
 import { canCreateReports, canExportReports, canReadReports } from '../lib/export';
+import { browserTimeZone } from '../lib/runner';
 import { reportClient, type ReportClient } from './client';
 
 export const reportKeys = {
@@ -63,11 +65,26 @@ export function useReportEntry(reportId: string) {
   });
 }
 
+/**
+ * Zone of the day buckets: the workspace's, so the report page, the builder
+ * preview and dashboard widgets agree whatever the browser's zone.
+ */
+export function useReportTimeZone(): string | undefined {
+  const { slug } = useReportApi();
+  const profile = useWorkspaceProfile(slug);
+  return profile.data?.timezone ?? browserTimeZone();
+}
+
 export function useReportRun(reportId: string, overrides?: ReportOverrides, enabled = true) {
   const { slug, api } = useReportApi();
+  const timezone = useReportTimeZone();
+  const effective =
+    overrides?.timezone !== undefined || timezone === undefined
+      ? overrides
+      : { ...overrides, timezone };
   return useQuery({
-    queryKey: reportKeys.run(slug, reportId, overrides),
-    queryFn: () => api.run(reportId, overrides),
+    queryKey: reportKeys.run(slug, reportId, effective),
+    queryFn: () => api.run(reportId, effective),
     placeholderData: keepPreviousData,
     enabled,
     retry: false,
@@ -76,10 +93,15 @@ export function useReportRun(reportId: string, overrides?: ReportOverrides, enab
 
 export function useAdHocRun(definition: ReportDefinition | null) {
   const { slug, api } = useReportApi();
+  const timezone = useReportTimeZone();
+  const effective =
+    definition === null || definition.timezone !== undefined || timezone === undefined
+      ? definition
+      : { ...definition, timezone };
   return useQuery({
-    queryKey: reportKeys.adHoc(slug, definition),
-    queryFn: () => api.runAdHoc(definition as ReportDefinition),
-    enabled: definition !== null,
+    queryKey: reportKeys.adHoc(slug, effective),
+    queryFn: () => api.runAdHoc(effective as ReportDefinition),
+    enabled: effective !== null,
     placeholderData: keepPreviousData,
     retry: false,
   });

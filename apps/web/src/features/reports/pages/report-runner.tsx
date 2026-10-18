@@ -11,13 +11,19 @@ import { errorMessage } from '../../crm/api/hooks';
 import { useFieldCatalog } from '../../crm/field-catalog';
 import { QueryBuilder } from '../../search/query-builder';
 import { countConditions } from '../../search/query-model';
-import { useReportApi, useReportEntry, useReportPermissions, useReportRun } from '../api/hooks';
+import {
+  useReportApi,
+  useReportEntry,
+  useReportPermissions,
+  useReportRun,
+  useReportTimeZone,
+} from '../api/hooks';
 import { CsvExportButton } from '../components/csv-export-button';
 import { ReportToolbar } from '../components/report-toolbar';
 import { ReportTable, ReportVisual } from '../components/report-visual';
 import { exportCsvUrl } from '../lib/export';
 import { reportDescription, reportName } from '../lib/labels';
-import { browserTimeZone, runnerFromEntry, runnerOverrides, type RunnerState } from '../lib/runner';
+import { runnerFromEntry, runnerOverrides, type RunnerState } from '../lib/runner';
 import { useStableDebounced } from '../lib/use-debounced';
 
 function RangeLine({
@@ -48,7 +54,7 @@ function Runner({ entry }: { entry: ReportCatalogEntry }) {
   const catalog = useFieldCatalog(spec.filter === 'company' ? 'company' : 'contact');
   const [state, setState] = useState<RunnerState>(() => runnerFromEntry(entry));
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const timezone = useMemo(() => browserTimeZone(), []);
+  const timezone = useReportTimeZone();
   const overrides = useMemo(
     () => runnerOverrides(state, catalog.kinds, { filterable: spec.filter !== null, timezone }),
     [state, catalog.kinds, spec.filter, timezone],

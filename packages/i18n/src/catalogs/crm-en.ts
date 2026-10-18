@@ -32,6 +32,7 @@ export const crmEn = {
   'crm.error.forbiddenTitle': 'Permission needed',
   'crm.error.notFound': 'This record does not exist or was deleted.',
   'crm.error.validation': 'Some values are not valid.',
+  'crm.error.tooLarge': 'The file is too large: up to 50 MB and 100,000 rows. Split it into smaller files.',
 
   'crm.entity.contacts': 'Contacts',
   'crm.entity.companies': 'Companies',
@@ -540,6 +541,7 @@ export const crmEn = {
   'crm.import.ignore': 'Do not import',
   'crm.import.duplicates': 'Each field can be used once: {targets}',
   'crm.import.updateExisting': 'Update contacts with the same email',
+  'crm.import.updateExistingHint': 'Fields in the file overwrite the current ones; emails, phones and addresses are added to the existing ones.',
   'crm.import.applyTags': 'Tag every imported contact',
   'crm.import.listDelimiter': 'Separator for tags and lists',
   'crm.import.start': 'Start import',

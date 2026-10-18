@@ -8,6 +8,10 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowLeft, ArrowRight, Check, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
+import {
+  RequiredCustomFields,
+  useRequiredCustomFields,
+} from '../../crm/custom-fields/required-fields';
 import { CommerceApiError } from '../api/client';
 import {
   commerceKeys,
@@ -67,6 +71,7 @@ export function OrderWizardPage() {
   const settings = useCommerceSettings();
   usePageChrome({ title: t('commerce.wizard.title') });
 
+  const requiredFields = useRequiredCustomFields('orders');
   const [step, setStep] = useState<Step>('contact');
   const [contact, setContact] = useState<PickedContact | null>(null);
   const [state, setState] = useState<WizardState>(EMPTY_WIZARD);
@@ -83,13 +88,14 @@ export function OrderWizardPage() {
     queryFn: () => api.contacts.get(search.contact ?? ''),
   });
   const presetApplied = useRef(false);
+  const askFields = requiredFields.fields.length > 0;
   useEffect(() => {
-    if (preset.data === undefined || presetApplied.current) return;
+    if (preset.data === undefined || !requiredFields.ready || presetApplied.current) return;
     presetApplied.current = true;
     setContact(contactLabel(preset.data));
     setState((s) => ({ ...s, contactId: preset.data.id }));
-    setStep('items');
-  }, [preset.data]);
+    if (!askFields) setStep('items');
+  }, [preset.data, requiredFields.ready, askFields]);
 
   const update = (patch: Partial<WizardState>) => setState((s) => ({ ...s, ...patch }));
   const setLine = (key: string, patch: Partial<WizardLine>) =>
@@ -244,6 +250,11 @@ export function OrderWizardPage() {
                 update({ contactId: picked?.id ?? null });
               }}
             />
+            {requiredFields.fields.length > 0 ? (
+              <div className="mt-4 border-t pt-4">
+                <RequiredCustomFields state={requiredFields} />
+              </div>
+            ) : null}
           </SectionCard>
         ) : null}
 
@@ -607,7 +618,14 @@ export function OrderWizardPage() {
               <Button
                 type="button"
                 disabled={!canNext}
-                onClick={() => setStep(STEPS[stepIndex + 1] ?? 'review')}
+                onClick={() => {
+                  if (step === 'contact') {
+                    const customFields = requiredFields.collect();
+                    if (customFields === null) return;
+                    update({ customFields });
+                  }
+                  setStep(STEPS[stepIndex + 1] ?? 'review');
+                }}
               >
                 {t('common.continue')} <ArrowRight aria-hidden />
               </Button>

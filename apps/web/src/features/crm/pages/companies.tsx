@@ -1,5 +1,5 @@
-import type { Company, CustomFieldValueInput, UpdateCompanyInput } from '@amable/api-types/crm';
-import { DashboardButton, DashboardConfirmDialog, PageBody, usePageChrome } from '@amable/ui';
+import type { Company, CustomFieldValueInput, CustomFieldValues, UpdateCompanyInput } from '@amable/api-types/crm';
+import { DashboardButton, DashboardConfirmDialog, PageBody, toast, usePageChrome } from '@amable/ui';
 import { Avatar, AvatarFallback } from '@amable/ui/ui/avatar';
 import { Button } from '@amable/ui/ui/button';
 import {
@@ -33,6 +33,7 @@ import { InlineEdit, InlineText, InlineUser } from '../components/inline-field';
 import { NotesPanel, TimelinePanel } from '../components/record-panels';
 import { PageState, SectionCard } from '../components/states';
 import { CustomFieldsPanel } from '../custom-fields/custom-fields-panel';
+import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
 import { RecordSearchView, type SearchRow } from './record-search-view';
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -50,22 +51,27 @@ function CreateCompanyDialog({
   const { api } = useCrm();
   const [name, setName] = useState('');
   const [website, setWebsite] = useState('');
+  const required = useRequiredCustomFields('companies');
   const create = useCrmMutation({
-    mutationFn: () =>
+    mutationFn: (customFields: CustomFieldValues) =>
       api.companies.create({
         name: name.trim(),
         ...(website.trim() ? { website: website.trim() } : {}),
+        ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
       }),
     success: t('crm.companies.created'),
     onSuccess: (company) => {
       setName('');
       setWebsite('');
+      required.reset();
       onCreated(company);
     },
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (name.trim()) create.mutate(undefined);
+    if (!name.trim()) return;
+    const customFields = required.collect();
+    if (customFields !== null) create.mutate(customFields);
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -92,6 +98,7 @@ function CreateCompanyDialog({
               onChange={(e) => setWebsite(e.target.value)}
             />
           </div>
+          <RequiredCustomFields state={required} disabled={create.isPending} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
@@ -247,8 +254,22 @@ function CompanyView({ company }: { company: Company }) {
   const save = (input: UpdateCompanyInput) => update.mutateAsync(input);
   const remove = useCrmMutation({
     mutationFn: () => api.companies.remove(company.id),
-    success: t('list.deletedOne', { name: company.name }),
-    onSuccess: () => void navigate({ to: '/t/$tenant/companies', params: { tenant: slug } }),
+    onSuccess: () => {
+      toast.success(t('list.deletedOne', { name: company.name }), {
+        action: {
+          label: t('list.undo'),
+          onClick: () => {
+            void api.companies.restore(company.id).then(() =>
+              navigate({
+                to: '/t/$tenant/companies/$companyId',
+                params: { tenant: slug, companyId: company.id },
+              }),
+            );
+          },
+        },
+      });
+      void navigate({ to: '/t/$tenant/companies', params: { tenant: slug } });
+    },
   });
   const address = company.address;
   const field = (key: 'website' | 'email' | 'phone' | 'phone_extension' | 'fax', label: string) => (

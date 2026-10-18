@@ -205,6 +205,7 @@ export const it: Readonly<Record<MessageKey, string>> = {
   'list.confirmDeleteOne': 'Eliminare {name}?',
   'list.confirmDeleteMany': 'Eliminare {count} elementi?',
   'list.confirmDeleteBody': 'Potrai annullare subito dopo.',
+  'list.confirmDeleteBodyFinal': 'L’operazione non si può annullare.',
   'list.empty': 'Ancora niente qui.',
   'editor.insert': 'Inserisci',
   'editor.insertField': 'Inserisci campo',

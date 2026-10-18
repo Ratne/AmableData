@@ -131,6 +131,10 @@ describe('conversations', () => {
     expect((await installed.owner.get(`${BASE}/conversations/${id}`)).body.data).toMatchObject({ status: 'open', unread: 2 });
     expect((await installed.owner.post(`${BASE}/conversations/${id}/read`, {})).body.data).toMatchObject({ unread: 0 });
 
+    expect((await installed.owner.patch(`${BASE}/conversations/${id}`, { status: 'pending' })).body.data).toMatchObject({ status: 'pending' });
+    await inbound(h, installed, { external_id: 'wamid.in3', from: '+393331234567', text: 'Eccomi' });
+    expect((await installed.owner.get(`${BASE}/conversations/${id}`)).body.data).toMatchObject({ status: 'open', unread: 1 });
+
     const bob = await installed.owner.post(`${BASE}/contacts`, { given_name: 'Bob', phones: [{ number: '+39 347 000 1111' }] });
     const started = await installed.owner.post(`${BASE}/conversations`, { channel: 'emailable:whatsapp', contact_id: bob.body.id, text: 'Promo!' });
     expect(started.status).toBe(201);

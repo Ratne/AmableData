@@ -34,6 +34,7 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
     'Il tuo ruolo non consente questa azione. Chiedi a un admin del workspace.',
   'crm.error.forbiddenTitle': 'Permesso necessario',
   'crm.error.notFound': 'Questo record non esiste o è stato eliminato.',
+  'crm.error.tooLarge': 'Il file è troppo grande: al massimo 50 MB e 100.000 righe. Dividilo in file più piccoli.',
   'crm.error.validation': 'Alcuni valori non sono validi.',
 
   'crm.entity.contacts': 'Contatti',
@@ -543,6 +544,7 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.import.ignore': 'Non importare',
   'crm.import.duplicates': 'Ogni campo si può usare una volta sola: {targets}',
   'crm.import.updateExisting': 'Aggiorna i contatti con la stessa email',
+  'crm.import.updateExistingHint': 'I campi del file sostituiscono quelli attuali; email, telefoni e indirizzi vengono aggiunti a quelli esistenti.',
   'crm.import.applyTags': 'Applica tag a tutti i contatti importati',
   'crm.import.listDelimiter': 'Separatore per tag e liste',
   'crm.import.start': 'Avvia import',

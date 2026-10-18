@@ -34,6 +34,27 @@ export function formatMoney(locale: string, minor: number, currency: string): st
   }
 }
 
+/** Sum of amounts per currency (largest first), never mixing currencies. */
+export function totalsByCurrency(
+  items: readonly { value_minor: number; currency: string }[],
+): { currency: string; minor: number }[] {
+  const sums = new Map<string, number>();
+  for (const item of items) sums.set(item.currency, (sums.get(item.currency) ?? 0) + item.value_minor);
+  return [...sums.entries()]
+    .map(([currency, minor]) => ({ currency, minor }))
+    .sort((a, b) => b.minor - a.minor || a.currency.localeCompare(b.currency));
+}
+
+export function formatTotals(
+  locale: string,
+  items: readonly { value_minor: number; currency: string }[],
+  fallbackCurrency: string,
+): string {
+  const totals = totalsByCurrency(items);
+  if (totals.length === 0) return formatMoney(locale, 0, fallbackCurrency);
+  return totals.map((total) => formatMoney(locale, total.minor, total.currency)).join(' + ');
+}
+
 export function TagBadges({
   ids,
   tagsById,
