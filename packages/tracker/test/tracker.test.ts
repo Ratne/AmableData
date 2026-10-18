@@ -2,7 +2,7 @@ import { gzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTracker } from '../src/tracker';
+import { boot, createTracker } from '../src/tracker';
 import { goalOf, sanitizeName, sanitizeParams, sanitizeValue } from '../src/sanitize';
 import { decorateLink, readHandoff, stripHandoff } from '../src/identity';
 import { isLikelyBot } from '../src/env-checks';
@@ -381,6 +381,23 @@ describe('bundles', () => {
     expect(onDisk, 'run `pnpm --filter @amable/tracker build`').toBe(renderModule(bundles));
     for (const code of Object.values(bundles)) {
       expect(gzipSync(code).length).toBeLessThan(6 * 1024);
+      // v1 was 8588 bytes minified; v2 (forms, link params, action links) may add at most 4 KB.
+      expect(code.length).toBeLessThanOrEqual(8588 + 4096);
     }
+  });
+});
+
+describe('boot', () => {
+  it('installs window.amable and the short amb alias without clobbering an existing amb', () => {
+    const page = openPage();
+    const win = page.win as unknown as Record<string, unknown>;
+    boot(page.win, { cookieless: true, hashRouting: false });
+    expect(typeof win['amable']).toBe('function');
+    expect(win['amb']).toBe(win['amable']);
+    const other = openPage();
+    const own = (): void => undefined;
+    (other.win as unknown as Record<string, unknown>)['amb'] = own;
+    boot(other.win, { cookieless: true, hashRouting: false });
+    expect((other.win as unknown as Record<string, unknown>)['amb']).toBe(own);
   });
 });

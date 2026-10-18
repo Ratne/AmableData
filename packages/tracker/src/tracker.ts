@@ -1,5 +1,16 @@
+import {
+  contactSink,
+  conversionOf,
+  decorateAction,
+  isEmpty,
+  parseDirectLink,
+  readDirectLink,
+  readLinkAttribution,
+  watchForms,
+} from './capture';
 import { isInIframe, isLikelyBot, isLocalHost, isOptedOut, setOptOut } from './env-checks';
 import {
+  COOKIE_VISITOR,
   cookieJar,
   decorateLink,
   readHandoff,
@@ -12,7 +23,9 @@ import {
 import {
   CLICK_ID_PARAMS,
   CONTACT_TOKEN_PARAM,
+  CONVERSION_GOAL,
   SOURCE_PARAMS,
+  type DirectLink,
   type EventPayload,
   type EventType,
   type ExtraValue,
@@ -83,11 +96,25 @@ function currentScript(doc: Document): HTMLScriptElement | null {
   return doc.querySelector<HTMLScriptElement>('script[data-site]');
 }
 
+/** Query params of a URL; the hash-routing build also reads the `#/route?…` part. */
+function queryOf(href: string, hashRouting: boolean): URLSearchParams {
+  const u = new URL(href);
+  const params = new URLSearchParams(u.search);
+  if (hashRouting) {
+    const q = u.hash.indexOf('?');
+    if (q >= 0) new URLSearchParams(u.hash.slice(q + 1)).forEach((v, k) => params.set(k, v));
+  }
+  return params;
+}
+
+const CONTEXT_KEY = 'amb_dl';
+
 /**
  * Boots the tracker on a page. Reads its configuration from the script tag:
  * `data-site` (required), `data-api` (endpoint, default `<script origin>/e`),
  * `data-domain` (cookie domain), `data-allow-localhost`, `data-allow-iframe`,
- * `data-cross-domain` (comma separated hostnames), `data-no-external-links`.
+ * `data-cross-domain` (comma separated hostnames), `data-no-external-links`,
+ * `data-no-forms` (no email/phone capture from form fields).
  */
 export function createTracker(
   win: Window,
@@ -140,14 +167,19 @@ export function createTracker(
   // An email click also carries `_amb_c` (signed contact identity): it is sent
   // once with the first pageview (the server verifies it) and removed too.
   const landing = new URL(loc.href);
+  const landingParams = queryOf(loc.href, options.hashRouting);
+  let linkAttribution = readLinkAttribution(landingParams);
   const handoff = readHandoff(landing, now());
   let cleaned = stripHandoff(landing);
   const rawToken = landing.searchParams.get(CONTACT_TOKEN_PARAM);
   let contactToken =
     rawToken !== null && rawToken.length <= 4096 && /^[\w-]+\.[\w-]+$/.test(rawToken) ? rawToken : undefined;
-  if (rawToken !== null) {
-    landing.searchParams.delete(CONTACT_TOKEN_PARAM);
-    cleaned = landing.toString();
+  // `he` may be a plain email: it must not stay in the address bar nor in pageview URLs.
+  for (const name of [CONTACT_TOKEN_PARAM, 'he']) {
+    if (landing.searchParams.has(name)) {
+      landing.searchParams.delete(name);
+      cleaned = landing.toString();
+    }
   }
   if (cleaned !== undefined) {
     try {
@@ -167,13 +199,26 @@ export function createTracker(
     return u.toString();
   };
 
-  const attribution = (): { clk?: Record<string, string>; src?: Record<string, string> } => {
-    const u = new URL(loc.href);
-    const params = new URLSearchParams(u.search);
-    if (options.hashRouting) {
-      const q = u.hash.indexOf('?');
-      if (q >= 0) new URLSearchParams(u.hash.slice(q + 1)).forEach((v, k) => params.set(k, v));
+  // Direct-link context survives page loads through sessionStorage (cookie builds only).
+  const session = (value?: string): string | null => {
+    try {
+      if (options.cookieless) return null;
+      if (value !== undefined) win.sessionStorage.setItem(CONTEXT_KEY, value);
+      return win.sessionStorage.getItem(CONTEXT_KEY);
+    } catch {
+      // privacy mode or quota
+      return null;
     }
+  };
+  let context: DirectLink = {};
+  const setContext = (next: DirectLink): void => {
+    context = next;
+    if (!isEmpty(next)) session(JSON.stringify(next));
+  };
+  setContext(readDirectLink(landingParams, parseDirectLink(session())));
+
+  const attribution = (): { clk?: Record<string, string>; src?: Record<string, string> } => {
+    const params = queryOf(loc.href, options.hashRouting);
     const clk = pick(params, CLICK_ID_PARAMS);
     const src = pick(params, SOURCE_PARAMS);
     return { ...(clk === undefined ? {} : { clk }), ...(src === undefined ? {} : { src }) };
@@ -208,6 +253,11 @@ export function createTracker(
     if (type === 'pageview' && contactToken !== undefined) {
       payload.ct = contactToken;
       contactToken = undefined;
+    }
+    if (!isEmpty(context)) payload.dl = context;
+    if (type === 'pageview' && linkAttribution !== undefined) {
+      payload.la = linkAttribution;
+      linkAttribution = undefined;
     }
     transport(endpoint, JSON.stringify(payload));
   };
@@ -272,7 +322,28 @@ export function createTracker(
     }
   };
 
-  // --- Clicks: goal attributes, cross-domain decoration, external links
+  // --- Email/phone: form fields (before submit too) and plain `he` emails share one dedupe.
+  const offerContact = contactSink((contact) => send('identify', { data: { ...contact } }));
+  if (!has('data-no-forms')) watchForms(doc, offerContact);
+
+  // --- Action links: `vid` + `rn` so the edge resolves the origin without cookies.
+  // Reads the cookie without sliding the session: DOM mutations are not activity.
+  const decorate = (a: HTMLAnchorElement): boolean =>
+    decorateAction(a, loc.href, context.vid ?? jar?.get(COOKIE_VISITOR), context.n);
+  const decorateActions = (): void => {
+    for (const a of Array.from(doc.querySelectorAll<HTMLAnchorElement>('a[href]'))) decorate(a);
+  };
+  const MO = (win as unknown as { MutationObserver?: typeof MutationObserver }).MutationObserver;
+  if (MO !== undefined) {
+    new MO(decorateActions).observe(doc.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['href', 'data-amb-action'],
+    });
+  }
+
+  // --- Clicks: goal attributes, action links, cross-domain decoration, external links
   doc.addEventListener(
     'click',
     (event) => {
@@ -284,7 +355,7 @@ export function createTracker(
         if (spec !== undefined) goal(spec.name, spec.params);
       }
       const link = target.closest<HTMLAnchorElement>('a[href]');
-      if (link === null) return;
+      if (link === null || decorate(link)) return;
       let url: URL;
       try {
         url = new URL(link.href, loc.href);
@@ -329,6 +400,16 @@ export function createTracker(
         if (data !== undefined) send(name, { data });
         break;
       }
+      case 'conversion': {
+        const data = conversionOf(args[0]);
+        if (data !== undefined) send('goal', { name: CONVERSION_GOAL, data: { ...data } });
+        break;
+      }
+      case 'context': {
+        setContext({ ...context, ...parseDirectLink(JSON.stringify(args[0])) });
+        decorateActions();
+        break;
+      }
       case 'optout':
         setOptOut(win, true);
         break;
@@ -340,7 +421,10 @@ export function createTracker(
     }
   };
 
+  const landingEmail = linkAttribution?.he;
   pageview();
+  if (landingEmail?.includes('@') === true) offerContact({ email: landingEmail });
+  decorateActions();
   for (const args of queued) {
     const [name, ...rest] = args;
     if (typeof name === 'string') command(name, ...rest);
@@ -351,5 +435,7 @@ export function createTracker(
 /** Installs `window.amable` and drains the pre-load queue. */
 export function boot(win: Window, options: BuildOptions): void {
   const handle = createTracker(win, options);
-  (win as unknown as { amable: TrackerHandle['command'] }).amable = handle.command;
+  const w = win as unknown as { amable: TrackerHandle['command']; amb?: TrackerHandle['command'] };
+  w.amable = handle.command;
+  w.amb ??= handle.command;
 }
