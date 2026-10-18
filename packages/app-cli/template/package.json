@@ -9,7 +9,8 @@
     "dev": "npm run build:screens && wrangler dev",
     "deploy": "npm run build:screens && wrangler deploy",
     "validate": "amable-app validate manifest.json",
-    "test:conformance": "amable-app test --manifest manifest.json"
+    "test:conformance": "amable-app test --manifest manifest.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@amable/app-bridge": "^0.1.0",
@@ -20,6 +21,7 @@
     "amable-app": "^0.1.0",
     "esbuild": "^0.28.2",
     "typescript": "~5.9.3",
+    "vitest": "^5.0.4",
     "wrangler": "^4.151.0"
   }
 }

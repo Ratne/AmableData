@@ -20,6 +20,17 @@ in `manifest.json` to `http://localhost:8787`, then in the workspace open
 marked "not verified": that is expected for private apps. Run the conformance suite with
 `npx amable-app test --manifest manifest.json --local`.
 
+## Test
+
+```sh
+npm test
+```
+
+Tests run offline: `fakeCrm()` from `@amable/app-sdk/testing` plays the CRM, and your provider
+answers from recorded responses in `test/fixtures/<provider>/` (how to record them:
+[test/fixtures/README.md](test/fixtures/README.md)). Apps in the Marketplace must keep tests for
+every hook, action, channel and webhook they handle, including the provider's error answers.
+
 ## Deploy
 
 ```sh
