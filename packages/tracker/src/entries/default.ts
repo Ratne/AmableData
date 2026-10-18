@@ -1,3 +1,3 @@
 import { boot } from '../tracker';
 
-boot(window, { cookieless: false, hashRouting: false });
+void boot(window, { cookieless: false, hashRouting: false });

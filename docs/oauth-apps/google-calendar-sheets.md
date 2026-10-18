@@ -1,8 +1,9 @@
 # Google app (Calendar)
 
-One Google OAuth client powers the **booking calendars**: read availability (busy slots)
-and write booking events to the host's Google Calendar (`calendar.events` +
-`calendar.readonly`).
+One Google OAuth client powers the **booking calendars**: it reads the host's busy time
+from Google Calendar (free/busy query, `calendar.readonly`) so those slots are not offered
+on the booking page. Nothing is written to Google Calendar: bookings live in AmableData,
+and confirmations, reschedules and reminders are sent by email.
 
 Form exports to Google Sheets need no app here: each workspace uploads the JSON key of
 its own Google service account in the form connection and shares the spreadsheet with
@@ -21,10 +22,9 @@ plane and no app is needed; an own app, when configured, always takes precedence
    [console.cloud.google.com](https://console.cloud.google.com).
 2. *APIs & Services → Library*: enable **Google Calendar API**.
 3. *APIs & Services → OAuth consent screen*: user type **External**; app name, support
-   email, authorized domain, privacy policy and terms URLs. Add the scopes:
+   email, authorized domain, privacy policy and terms URLs. Add the scope:
 
    ```text
-   https://www.googleapis.com/auth/calendar.events
    https://www.googleapis.com/auth/calendar.readonly
    ```
 
@@ -50,11 +50,12 @@ encrypted with the installation key (`AUTH_ENCRYPTION_KEY`) before being stored 
 
 ## 3. Verification (to let customers connect)
 
-Both scopes are **sensitive**. While the consent screen is in *Testing*, only listed
-test users (max 100) can connect and Google shows an "unverified app" warning. For public
+`calendar.readonly` is a **sensitive** scope. While the consent screen is in *Testing*,
+only listed test users (max 100) can connect and Google shows an "unverified app" warning. For public
 production use, submit the app for **verification**: domain ownership (Search Console),
 brand review, per-scope justification and usually a short demo video of each flow
-(booking created in Calendar). Expect several days to a few weeks.
+(connecting a calendar and a busy slot disappearing from the booking page). Expect
+several days to a few weeks.
 
 ## One project or two?
 
@@ -72,5 +73,5 @@ or a separate one:
 
 - Refresh tokens are used; a revoked grant makes the account show as disconnected and the
   user reconnects from the same settings page.
-- Scope grants follow the feature: a booking calendar connection asks only for the two
-  calendar scopes.
+- Scope grants follow the feature: a booking calendar connection asks only for
+  `calendar.readonly`. Accounts connected earlier with `calendar.events` keep working.

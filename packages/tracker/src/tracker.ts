@@ -10,6 +10,7 @@ import {
 } from './capture';
 import { isInIframe, isLikelyBot, isLocalHost, isOptedOut, setOptOut } from './env-checks';
 import {
+  clearIds,
   COOKIE_VISITOR,
   cookieJar,
   decorateLink,
@@ -120,10 +121,10 @@ export function createTracker(
   win: Window,
   options: BuildOptions,
   transport: Transport = defaultTransport(win),
+  script: HTMLScriptElement | null = currentScript(win.document),
 ): TrackerHandle {
   const doc = win.document;
   const loc = win.location;
-  const script = currentScript(doc);
   const attr = (name: string): string | null => script?.getAttribute(name) ?? null;
   const has = (name: string): boolean => script?.hasAttribute(name) === true;
   const site = attr('data-site') ?? '';
@@ -146,22 +147,13 @@ export function createTracker(
   if (isInIframe(win) && !has('data-allow-iframe')) return disabled('iframe');
   if (isLocalHost(loc) && !has('data-allow-localhost')) return disabled('localhost');
 
-  let endpoint = attr('data-api');
-  if (endpoint === null) {
-    endpoint = script !== null && script.src !== '' ? new URL('/e', script.src).toString() : '/e';
-  }
+  const endpoint = endpointOf(script);
   const crossDomains = (attr('data-cross-domain') ?? '')
     .split(',')
     .map((d) => d.trim().toLowerCase())
     .filter((d) => d !== '');
 
-  const jar = options.cookieless
-    ? undefined
-    : cookieJar(
-        doc,
-        attr('data-domain') ?? rootDomain(doc, loc.hostname),
-        loc.protocol === 'https:',
-      );
+  const jar = options.cookieless ? undefined : jarOf(win, script);
 
   // Cross-domain handoff: adopt the ids carried by the link, then clean the URL.
   // An email click also carries `_amb_c` (signed contact identity): it is sent
@@ -432,10 +424,60 @@ export function createTracker(
   return { enabled: true, command };
 }
 
-/** Installs `window.amable` and drains the pre-load queue. */
-export function boot(win: Window, options: BuildOptions): void {
-  const handle = createTracker(win, options);
-  const w = win as unknown as { amable: TrackerHandle['command']; amb?: TrackerHandle['command'] };
-  w.amable = handle.command;
-  w.amb ??= handle.command;
+/** Ingest endpoint: `data-api`, else `/e` on the script's origin. */
+function endpointOf(script: HTMLScriptElement | null): string {
+  const api = script?.getAttribute('data-api') ?? null;
+  if (api !== null) return api;
+  return script !== null && script.src !== '' ? new URL('/e', script.src).toString() : '/e';
+}
+
+function jarOf(win: Window, script: HTMLScriptElement | null) {
+  const doc = win.document;
+  const loc = win.location;
+  return cookieJar(
+    doc,
+    script?.getAttribute('data-domain') ?? rootDomain(doc, loc.hostname),
+    loc.protocol === 'https:',
+  );
+}
+
+type Command = TrackerHandle['command'];
+
+/**
+ * Installs `window.amable` and drains the pre-load queue. A cookie build first
+ * asks the edge for the site mode (`GET <endpoint>?site=`): on a site set to
+ * cookieless it runs without cookies and expires the ones written before.
+ * When the edge cannot tell within 3 s, the build keeps its cookies.
+ */
+export function boot(win: Window, options: BuildOptions, transport?: Transport): Promise<void> {
+  const script = currentScript(win.document);
+  const w = win as unknown as { amable?: Command & Queued; amb?: Command };
+  const install = (cookieless: boolean): void => {
+    const handle = createTracker(win, { ...options, cookieless }, transport, script);
+    w.amable = handle.command;
+    w.amb ??= handle.command;
+  };
+  const site = script?.getAttribute('data-site');
+  if (options.cookieless || !site || typeof win.fetch !== 'function' || isOptedOut(win) || isLikelyBot(win)) {
+    install(options.cookieless);
+    return Promise.resolve();
+  }
+  // Calls made meanwhile queue up like on the pre-load stub.
+  const q = Array.from(w.amable?.q ?? [], (args) => Array.from(args));
+  w.amable = Object.assign((...args: unknown[]) => void q.push(args), { q });
+  const url = new URL(endpointOf(script), win.location.href);
+  url.searchParams.set('site', site);
+  return Promise.race([
+    win
+      .fetch(url.href, { credentials: 'omit' })
+      .then((r) => (r.ok ? r.json() : null) as Promise<{ cookieless?: unknown } | null>)
+      .then(
+        (body) => body?.cookieless === true,
+        () => false,
+      ),
+    new Promise<boolean>((resolve) => setTimeout(resolve, 3000, false)),
+  ]).then((cookieless) => {
+    if (cookieless) clearIds(jarOf(win, script));
+    install(cookieless);
+  });
 }

@@ -12,6 +12,8 @@ const STRINGS = {
     invalid: 'This unsubscribe link is not valid or has expired.',
     test: 'This is a test email: the unsubscribe link does nothing.',
     error: 'Something went wrong. Please try again in a few minutes.',
+    linkTitle: 'Link unavailable',
+    linkInvalid: 'This link is not valid or has expired.',
   },
   it: {
     title: 'Disiscrizione',
@@ -22,6 +24,8 @@ const STRINGS = {
     invalid: 'Questo link di disiscrizione non è valido o è scaduto.',
     test: 'Questa è un’email di prova: il link di disiscrizione non ha effetto.',
     error: 'Qualcosa è andato storto. Riprova tra qualche minuto.',
+    linkTitle: 'Link non disponibile',
+    linkInvalid: 'Questo link non è valido o è scaduto.',
   },
 } as const;
 
@@ -45,11 +49,17 @@ export function pageText(locale: PageLocale, key: PageMessage, email = ''): stri
   return STRINGS[locale][key].replace('{email}', email);
 }
 
+/** Shown by the click redirect when its token does not resolve to a destination. */
+export function renderLinkErrorPage(locale: PageLocale): string {
+  return renderUnsubscribePage(locale, { message: 'linkInvalid', title: 'linkTitle' });
+}
+
 export function renderUnsubscribePage(
   locale: PageLocale,
-  input: { message: PageMessage; email?: string | null; form?: boolean },
+  input: { message: PageMessage; email?: string | null; form?: boolean; title?: PageMessage },
 ): string {
   const s = STRINGS[locale];
+  const title = escapeHtml(s[input.title ?? 'title']);
   const text = escapeHtml(pageText(locale, input.message, input.email ?? ''));
   const form = input.form
     ? `<form method="post"><input type="hidden" name="confirm" value="1"><button type="submit">${escapeHtml(s.button)}</button></form>`
@@ -60,7 +70,7 @@ export function renderUnsubscribePage(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(s.title)}</title>
+<title>${title}</title>
 <style>
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#111827}
 main{max-width:28rem;margin:12vh auto;padding:2rem;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -69,6 +79,6 @@ button{font:inherit;background:#111827;color:#fff;border:0;border-radius:8px;pad
 @media (prefers-color-scheme:dark){body{background:#0b0d12;color:#e5e7eb}main{background:#151821}button{background:#e5e7eb;color:#111827}}
 </style>
 </head>
-<body><main><h1>${escapeHtml(s.title)}</h1><p>${text}</p>${form}</main></body>
+<body><main><h1>${title}</h1><p>${text}</p>${form}</main></body>
 </html>`;
 }

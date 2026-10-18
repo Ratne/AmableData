@@ -381,8 +381,9 @@ describe('bundles', () => {
     expect(onDisk, 'run `pnpm --filter @amable/tracker build`').toBe(renderModule(bundles));
     for (const code of Object.values(bundles)) {
       expect(gzipSync(code).length).toBeLessThan(6 * 1024);
-      // v1 was 8588 bytes minified; v2 (forms, link params, action links) may add at most 4 KB.
-      expect(code.length).toBeLessThanOrEqual(8588 + 4096);
+      // v1 was 8588 bytes minified; v2 (forms, link params, action links) may add at most 4 KB,
+      // the site mode lookup of the cookie builds 1 KB more.
+      expect(code.length).toBeLessThanOrEqual(8588 + 4096 + 1024);
     }
   });
 });

@@ -522,7 +522,10 @@ export function analyticsApi(tenant: string) {
           post(input),
         ),
       update: (siteId: string, id: string, input: UpdateAlertInput) =>
-        apiFetch<Alert>(sited(siteId, `alerts/${enc(id)}`), patch(input)),
+        apiFetch<{ alert: Alert; webhook_secret: string | null }>(
+          sited(siteId, `alerts/${enc(id)}`),
+          patch(input),
+        ),
       remove: (siteId: string, id: string) =>
         apiFetch<unknown>(sited(siteId, `alerts/${enc(id)}`), del),
       test: (siteId: string, id: string) =>

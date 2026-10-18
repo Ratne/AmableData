@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { pageLocale, pageText, renderUnsubscribePage } from './pages';
+import { pageLocale, pageText, renderLinkErrorPage, renderUnsubscribePage } from './pages';
 
 /**
  * Email recipient endpoints on the customer's tracking domain:
@@ -58,7 +58,7 @@ emailEdgeRoutes.get('/r/:token', async (c) => {
     : null;
   const url = typeof result?.url === 'string' && /^https?:\/\//i.test(result.url) ? result.url : null;
   if (url === null) {
-    return c.html(renderUnsubscribePage(locale, { message: 'invalid' }), 404, {
+    return c.html(renderLinkErrorPage(locale), 404, {
       'cache-control': NO_STORE,
       'content-security-policy': PAGE_CSP,
     });

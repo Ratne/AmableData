@@ -196,6 +196,18 @@ describe('POST /e (browser)', () => {
     expect(next?.kind === 'event' && next.event.vid).not.toBe(vids[0]);
   });
 
+  it('tells the cookie builds whether the site is cookieless', async () => {
+    const env = edgeEnv(ns, new FakeQueue());
+    const ask = (site: string) => analyticsRoutes.request(`/e?site=${site}`, {}, env);
+    const before = await ask(SITE_ID);
+    expect(before.headers.get('access-control-allow-origin')).toBe('*');
+    expect(await before.json()).toEqual({ cookieless: false });
+    siteDb().updateSite({ cookieless: true });
+    clearSiteConfigCache();
+    expect(await (await ask(SITE_ID)).json()).toEqual({ cookieless: true });
+    expect((await ask('nope')).status).toBe(404);
+  });
+
   it('allows localhost only when the site opts in', async () => {
     siteDb().updateSite({ allow_localhost: true });
     const env = edgeEnv(ns);

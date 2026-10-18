@@ -112,6 +112,13 @@ export function writeIds(jar: CookieJar, ids: Ids): Ids {
 }
 
 /** Parses handoff params from a URL; undefined when absent, stale or malformed. */
+/** Expires the ids written by a cookie build (the site switched to cookieless). */
+export function clearIds(jar: CookieJar): void {
+  for (const name of [COOKIE_VISITOR, COOKIE_FIRST_SEEN, COOKIE_SESSION_COUNT, COOKIE_SESSION]) {
+    jar.set(name, '', 0);
+  }
+}
+
 export function readHandoff(url: URL, now: number): Ids | undefined {
   const p = url.searchParams;
   const vid = p.get('_amb_vid');

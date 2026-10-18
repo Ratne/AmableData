@@ -98,6 +98,22 @@ analyticsRoutes.options('/e', (c) => {
 });
 
 /**
+ * Site mode for the cookie builds of the tracker, asked before they write any
+ * cookie: on a site set to cookieless they run without cookies.
+ */
+analyticsRoutes.get('/e', async (c) => {
+  const site = await loadSiteConfig(c.env, c.req.query('site') ?? '', Date.now());
+  const headers = { 'access-control-allow-origin': '*', 'cross-origin-resource-policy': 'cross-origin' };
+  if (site === null) {
+    return c.json({ error: 'unknown_site' }, 404, { ...headers, 'cache-control': 'no-store' });
+  }
+  return c.json({ cookieless: site.cookieless }, 200, {
+    ...headers,
+    'cache-control': 'public, max-age=300',
+  });
+});
+
+/**
  * Browser tracker ingest. The body is JSON sent as text/plain (CORS-simple, works
  * with sendBeacon). Accepted only from the site's hostnames; bots and crawlers
  * are counted separately and never become visitors.

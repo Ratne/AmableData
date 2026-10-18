@@ -66,12 +66,10 @@ function AlertDialog({
         email_recipients: recipients,
         webhook_url: webhook.trim() || null,
       };
-      if (alert) {
-        await api.alerts.update(site.id, alert.id, input);
-        return null;
-      }
-      const created = await api.alerts.create(site.id, input);
-      return created.webhook_secret;
+      const saved = alert
+        ? await api.alerts.update(site.id, alert.id, input)
+        : await api.alerts.create(site.id, input);
+      return saved.webhook_secret;
     },
     {
       invalidate,

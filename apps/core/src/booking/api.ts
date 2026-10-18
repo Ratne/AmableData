@@ -237,7 +237,7 @@ export function registerBookingRoutes(router: OpenAPIHono<AppEnv>): void {
       const start = await runtime.oauth.startConnect({
         tenantId: tenantId(c),
         provider: 'google',
-        scopes: [OAUTH_SCOPES.calendarRead, OAUTH_SCOPES.calendar],
+        scopes: [OAUTH_SCOPES.calendarRead],
         returnUrl: `${appOrigin(c)}/t/${slug}/bookings/calendars?calendar=${encodeURIComponent(calendarId)}`,
       });
       return c.json({ authorize_url: start.authorizeUrl, state: start.state }, 200);

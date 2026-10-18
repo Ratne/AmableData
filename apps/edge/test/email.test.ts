@@ -36,6 +36,9 @@ describe('edge email routes', () => {
     expect(calls).toEqual([{ path: '/edge/email/click', body: { token: TOKEN } }]);
     const bad = await emailEdgeRoutes.request('/r/not-a-token', {}, env, ctx);
     expect(bad.status).toBe(404);
+    const html = await bad.text();
+    expect(html).toContain('This link is not valid or has expired.');
+    expect(html).not.toContain('unsubscribe');
   });
 
   it('serves the open pixel immediately and records it in the background', async () => {
