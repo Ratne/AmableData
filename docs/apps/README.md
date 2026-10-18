@@ -7,38 +7,70 @@ events, answers hooks the CRM calls during its work, and can show screens inside
 
 ```sh
 npx create-amable-app my-app
-cd my-app && npm install && npm run dev
+cd my-app && npm install && npm run dev && npm test
 ```
 
-The generated project ([template](../../packages/app-cli/template)) already does everything
-described under "Plumbing" with [`@amable/app-sdk`](../../packages/app-sdk): you write only the
-app logic. Reference apps: [Emailable](../../examples/apps/emailable) (validation hook, batch,
-settings screen) and [WATI](../../examples/apps/wati) (WhatsApp channel for Conversations).
+The generated project ([template](../../packages/app-cli/template)) already does the plumbing
+(install flow, signatures, keys, tokens, screens) with [`@amable/app-sdk`](../../packages/app-sdk)
+and ships a first test: you write only the app logic. Two reference apps show complete
+integrations with their tests and recorded fixtures:
+
+- [Emailable](../../examples/apps/emailable): email verification. Validation hook and its batch
+  variant, an automation action with outputs, an app-owned custom field, tags, settings screen.
+- [Kapso](../../examples/apps/kapso): WhatsApp. A conversation channel with a 24-hour reply window
+  and templates, provider onboarding through a hosted page, signed provider webhooks, triggers, an
+  automation block whose options come from the app, a full page to manage templates.
 
 ## Contents
 
-1. [API versions](#api-versions)
-2. [The manifest](#the-manifest)
-3. [Install flow (OAuth)](#install-flow-oauth)
-4. [Calls from the CRM and their signature](#calls-from-the-crm-and-their-signature)
-5. [Events (webhooks)](#events-webhooks)
-6. [Contact validation hook](#contact-validation-hook)
-7. [Automation actions and triggers](#automation-actions-and-triggers)
-8. [Form connectors](#form-connectors)
-9. [Conversation channels](#conversation-channels)
-10. [Screens inside the CRM](#screens-inside-the-crm)
-11. [App API: data, entities, timeline](#app-api)
-12. [Privacy](#privacy)
-13. [The CLI](#the-cli)
-14. [Publishing in the Marketplace](#publishing-in-the-marketplace)
+1. [What you can extend](#what-you-can-extend)
+2. [API versions](#api-versions)
+3. [The manifest](#the-manifest)
+4. [Install flow (OAuth)](#install-flow-oauth)
+5. [Calls from the CRM and their signature](#calls-from-the-crm-and-their-signature)
+6. [Events (webhooks)](#events-webhooks)
+7. [Contact validation hook](#contact-validation-hook)
+8. [Automation actions and triggers](#automation-actions-and-triggers)
+9. [Options loaded from the app](#options-loaded-from-the-app)
+10. [Form connectors](#form-connectors)
+11. [Conversation channels](#conversation-channels)
+12. [Screens inside the CRM](#screens-inside-the-crm)
+13. [App API](#app-api)
+14. [Privacy](#privacy)
+15. [Integrating well](#integrating-well)
+16. [Tests and fixtures (required)](#tests-and-fixtures-required)
+17. [The CLI](#the-cli)
+18. [Publishing in the Marketplace](#publishing-in-the-marketplace)
+
+## What you can extend
+
+Everything an app adds is declared in the manifest; the CRM shows nothing that is not there.
+
+| You want to… | What users see | Manifest | Example |
+| --- | --- | --- | --- |
+| Check emails or phones as contacts arrive | Verdicts on forms, imports and new contacts; your field and tags | `extensions.contact_validate` | Emailable |
+| Do something during an automation | A block in the automation editor, with a form and outputs for later steps | `extensions.automation_actions` | Emailable "Verify email", Kapso "Send WhatsApp template" |
+| Start automations from your service | Events in the trigger list | `extensions.automation_triggers` | Kapso "WhatsApp message received" |
+| Fill choices from your service | A select whose options your app lists (templates, lists, pipelines) | `options_endpoint` on an input | Kapso template picker |
+| Send form submissions somewhere | A connector next to the built-in ones in **Forms → Connections** | `extensions.form_connectors` | |
+| Bring a messaging channel into the inbox | Conversations, replies, delivery state, templates when the reply window is closed | `extensions.channels` | Kapso WhatsApp |
+| Show your own UI | Settings, a full page with a sidebar entry, a contact card or button, a dashboard widget | `extensions.ui` | Both |
+| Store values on records | Your fields on contacts, companies, opportunities | `custom_fields` | Emailable "Email status" |
+| Keep app data per record or per install | Nothing directly; exported and erased with the record | App API `entities`, `data` | Both |
+| Add history to a contact | Entries in the contact timeline | App API `timeline` | |
+| React to CRM changes | Nothing directly | `webhooks.events` | |
+
+Anything else goes through the public API within the app's scopes. If an integration needs an
+extension point that does not exist, open an issue describing what the user should see:
+extension points are added to the current API version without breaking existing apps.
 
 ## API versions
 
 Every manifest declares an `api_version` (`YYYY-MM`, today `2026-10`). The CRM sends it back
 in every call (`api_version` in the body, `Amable-Api-Version` header) and answers your API
 requests in that version. A new version ships only for breaking changes; additions (new
-fields, events, scopes) arrive in the current version and your code must ignore what it does
-not know.
+fields, events, scopes, extension points) arrive in the current version and your code must ignore
+what it does not know. The [changelog](CHANGELOG.md) lists them.
 
 When a version is superseded, it keeps being served for **12 months**. Installations list the
 versions they serve in `/.well-known/amable-apps.json` (`api_versions`) together with the
@@ -59,7 +91,7 @@ validate` checks a file against it.
   "id": "my-app",                      // 3-40 chars, a-z 0-9 -, unique in the Marketplace
   "name": "My App",
   "tagline": { "en": "One line", "it": "Una riga" },
-  "description": { "en": "Shown on the app page" },
+  "description": { "en": "Shown on the app page (up to 500 characters)" },
   "developer": { "name": "…", "url": "https://…", "email": "…" },
   "categories": ["data_quality"],      // 1-3 of APP_CATEGORIES
   "icon_url": "https://…/icon.png",
@@ -88,10 +120,14 @@ Rules worth knowing:
   the owner can grant them. Ask for the least you need: admins see the list before installing.
 - **Events** need the scope that reads their data (`contact.*` needs `contacts:read`, `order.*`
   needs `orders:read`, …).
+- **Extensions** need their scope: `contact_validate` needs `contacts:read`, `channels` need
+  `conversations:write`, `form_connectors` need `forms:submissions_read`, custom fields need
+  `contacts:write`; firing triggers needs `automations:trigger`.
 - **Custom fields** are created on install, prefixed `app_<id>_<key>` and owned by the app:
-  only the app writes them (needs `contacts:write`), admins can hide them.
+  only the app writes them, admins can hide them.
 - Apps with a personal-data scope must set `handles_personal_data: true` and provide both
   privacy endpoints.
+- Texts shown to users are localized objects (`{ "en": …, "it": … }`); `en` is required.
 - Changing scopes or extensions in a new version of the manifest makes existing installs ask
   the admin again (`app.scopes_pending`); the app keeps working with the old scopes meanwhile.
 
@@ -120,9 +156,9 @@ An installation proves its own identity with an Ed25519 key published at
 
 ## Calls from the CRM and their signature
 
-Every request the CRM makes to your app (events, hooks, actions, connectors, channel sends,
-privacy) is a `POST` with a JSON body that always includes `installation_id`, `tenant` and
-`api_version`, and these headers:
+Every request the CRM makes to your app (events, hooks, actions, options, connectors, channel
+sends and templates, privacy) is a `POST` with a JSON body that always includes
+`installation_id`, `tenant` and `api_version`, and these headers:
 
 ```text
 Amable-Signature: t=1760000000,v1=<hex HMAC-SHA256 of "t.body" with the webhook secret>
@@ -142,6 +178,16 @@ check the signature and answer `2xx` without side effects (send nothing, charge 
 
 Calls that time out or fail too often open a circuit breaker for that install: the CRM stops
 calling for a few minutes and goes on without you. Paused or uninstalled apps are never called.
+
+| Call | Budget | On failure |
+| --- | --- | --- |
+| `contact.validate` | 1.5 s | the contact goes on without a verdict |
+| `contact.validate` batch | 10 s | items without an answer get no verdict |
+| Automation action | 15 s | retried on `5xx`, `408`, `425`, `429`, timeouts; other `4xx` fail the step |
+| Options, channel templates | 8 s | the editor or composer shows "unavailable" |
+| Channel send | 10 s | the message is marked failed with your `error` |
+| Form connector | 15 s | timeouts and transient statuses are retried |
+| Privacy erasure / data request | 5 s / 8 s | erasure also arrives as the `privacy.erasure_requested` event (retried); a failed data request is reported in the export |
 
 ## Events (webhooks)
 
@@ -171,7 +217,7 @@ public forms and from imports. Request:
 Answer within **1.5 seconds**:
 
 ```json
-{ "valid": false, "reason": "mailbox does not exist",
+{ "valid": false, "reason": "This email address does not receive mail. Did you mean ada@gmail.com?",
   "set_fields": { "email_status": "undeliverable" }, "tags": ["Invalid email"],
   "entity_data": { "score": 12 } }
 ```
@@ -181,9 +227,10 @@ Answer within **1.5 seconds**:
   `app_<id>_` prefix) and `tags` (up to 10) are applied by name.
 - Results are cached per value for `cache_ttl_seconds` (default 7 days).
 - Forms set to **blocking** validation reject the submission when you answer `valid: false`,
-  showing `reason` next to the field: make reasons short and human.
+  showing `reason` next to the field: make reasons short, human and actionable.
 - Imports call `batch_endpoint` (if declared) with `{ "items": [{ "ref", "values" }] }` (up to
-  100) and expect `{ "results": [{ "ref", "valid", … }] }` within 10 seconds.
+  100) and expect `{ "results": [{ "ref", "valid", … }] }` within 10 seconds. Bound your
+  concurrency and answer what is done before the deadline (Emailable's `mapLimited`).
 
 ## Automation actions and triggers
 
@@ -192,25 +239,46 @@ flat JSON-schema subset, see `appInputSchemaSchema`) becomes its form, and strin
 `merge_tags: true` are resolved before the call. The CRM posts:
 
 ```json
-{ "action": "send_sms", "input": { … }, "contact_id": "c_…", "contact": { … },
+{ "action": "send_template", "input": { … }, "contact_id": "c_…",
+  "contact": { "id", "first_name", "last_name", "email", "phone" },
   "automation": { "id", "version_id", "node_id", "step_id" }, "idempotency_key": "…" }
 ```
 
-within 15 seconds. `2xx` is success; the keys listed in `output_keys` are available to later
-steps as `{{steps.<step>.<key>}}`. `5xx`, `408`, `425`, `429` and timeouts are retried; other
-`4xx` fail the step (put a short message in `error`). `contact` is present only with
-`contacts:read`.
+within 15 seconds. Answer `2xx` with `{ "output": { … } }`: the keys listed in `output_keys` are
+available to later steps as `{{steps.<step>.<key>}}`. `5xx`, `408`, `425`, `429` and timeouts
+are retried; other `4xx` fail the step (put a short message in `error`). `contact` is present
+only with `contacts:read`.
+
+Retries reuse `idempotency_key`: an action with side effects (a message, a charge) must remember
+the keys it has done and answer the same output again instead of repeating the effect (Kapso
+keeps them in KV for 3 days).
 
 `automation_triggers` declares events your app can start automations with:
 `POST /apps/events { "key", "contact_id", "event_id"?, "data"? }` (needs `automations:trigger`;
-`event_id` deduplicates).
+`event_id` deduplicates, so pass the provider's event or message id).
+
+## Options loaded from the app
+
+A string input of an action or a connector setting can take its choices from the app, for lists
+that only your service knows (message templates, mailing lists, pipelines of another tool):
+
+```json
+"template": { "type": "string", "title": { "en": "Template" }, "options_endpoint": "/options/templates" }
+```
+
+When the form opens, the CRM posts `{ "kind": "action|connector", "key", "property" }` to the
+endpoint and expects `{ "options": [{ "value", "label", "description"? }] }` (up to 500) within
+8 seconds. The editor shows a select; a saved value your app no longer lists stays visible, and
+when the install is paused or the call fails the editor says so instead of losing the value.
+`options_endpoint` is for string properties without `enum`. Cache the list briefly: the editor
+asks every time it opens.
 
 ## Form connectors
 
 `form_connectors` appear next to the built-in ones in **Forms → Connections**; `settings_schema`
-becomes the settings form. For every accepted submission the CRM posts
-`{ "connector", "settings", "form", "submission", "contact", … }` (the same body as the form
-webhook connector) within 15 seconds, with an idempotency key per submission and connection.
+becomes the settings form (with `options_endpoint` too). For every accepted submission the CRM
+posts `{ "connector", "settings", "form", "submission", "contact", … }` (the same body as the
+form webhook connector) within 15 seconds, with an idempotency key per submission and connection.
 Needs `forms:submissions_read`.
 
 ## Conversation channels
@@ -219,17 +287,42 @@ Needs `forms:submissions_read`.
 
 ```json
 { "key": "whatsapp", "name": { "en": "WhatsApp" }, "kind": "whatsapp",
-  "send_endpoint": "/channels/send", "address_field": "phone" }
+  "send_endpoint": "/channels/send", "address_field": "phone",
+  "reply_window_hours": 24, "templates_endpoint": "/channels/templates" }
 ```
 
 - **Inbound**: post each message you receive from the provider to
   `POST /apps/messages/inbound` with `{ "channel", "external_id", "from", "text", "contact"?, "sent_at"? }`.
   The CRM finds or creates the contact and the conversation; `external_id` deduplicates.
   Needs `conversations:write`.
-- **Outbound**: when an agent replies, the CRM posts
-  `{ "channel", "message": { "id", "text" }, "conversation_id", "to", "contact" }` to
-  `send_endpoint`. Answer `{ "external_id", "status": "sent" }`; later delivery updates go to
-  `POST /apps/messages/status` with `{ "external_id", "status": "delivered|read|failed", "error"? }`.
+- **Replies**: when an agent replies, the CRM posts
+  `{ "channel", "conversation_id", "to", "contact", "message": { "id", "text", "template"? } }` to
+  `send_endpoint` (idempotency key = message id). Answer `{ "external_id", "status": "sent" }`,
+  or a `4xx` with `{ "error" }` that the agent sees on the failed message.
+- **Delivery updates**: post them to `POST /apps/messages/status` with
+  `{ "channel", "external_id", "status": "delivered|read|failed", "error"? }`. A `404` means the
+  message was not sent through the CRM: ignore it.
+- **Messages sent elsewhere**: messages your app sends outside the inbox (an automation step, the
+  provider's own app on the phone) go to `POST /apps/messages/outbound` with
+  `{ "channel", "external_id", "to", "text", "template"?, "status"?, "sent_at"? }` so the thread
+  shows them; the CRM does not send them again, and `external_id` deduplicates
+  (`messages.outbound()` in the SDK).
+
+**Reply window and templates.** Some channels accept free text only for a while after the
+contact's last message (WhatsApp: 24 hours); after that the business must send a pre-approved
+template. With `reply_window_hours`, the CRM refuses free text once the window is closed and the
+composer switches to templates; new conversations start with a template too. Such a channel must
+declare `templates_endpoint`:
+
+- The CRM posts `{ "channel" }` and expects, within 8 seconds,
+  `{ "templates": [{ "id", "name", "language", "category", "text", "params": [{ "key", "example" }] }] }`:
+  only templates that can be sent right now (approved, supported). `text` uses `{{key}}`
+  placeholders for the preview; parameter keys are `A-Za-z0-9_`.
+- A template reply reaches `send_endpoint` as
+  `"message": { "id", "text": "[<template id>]", "template": { "id", "params": { "key": "value" } } }`.
+  Build the provider request from your own copy of the template, refuse missing parameters with a
+  `422`, and answer `text` with the rendered body so the thread shows what the contact received.
+- The window reopens when the contact writes again.
 
 ## Screens inside the CRM
 
@@ -262,7 +355,9 @@ bridge.navigate('/contacts');
 ```
 
 Pages must allow framing by the CRM origin (`Content-Security-Policy: frame-ancestors <host>`)
-and must not rely on third-party cookies.
+and must not rely on third-party cookies. The sandbox allows popups that escape it: to send the
+admin to a provider page (an OAuth or onboarding flow), open the tab synchronously in the click
+handler and set its location once your backend returns the URL, or browsers block it.
 
 ## App API
 
@@ -276,16 +371,158 @@ public API within its scopes, plus:
 | `POST /apps/timeline` | An entry in the contact timeline (`contact_id`, `title`, `body`, `icon`, `url`) |
 | `GET /apps/events?since=` | Missed events |
 | `POST /apps/events` | Fire an app trigger |
+| `POST /apps/messages/inbound`, `/outbound`, `/status` | Conversation channels |
 
-Requests are rate limited per install; `429` answers carry `Retry-After`.
+Requests are rate limited per install; `429` answers carry `Retry-After`. The SDK client
+(`ctx.api` in handlers) wraps all of them.
 
 ## Privacy
 
 Apps that handle personal data must honour erasure and access requests. When a contact is
 erased, the CRM posts `{ "request_id", "contact_id", "email", "phone" }` to `erasure_endpoint`:
-delete everything you hold about that person. For access requests it posts the same to
-`data_request_endpoint` and includes your JSON answer (`{ "data": … }`) in the export it gives the
-contact. Uninstalling deletes the app's data, entity data and custom field values in the CRM.
+delete everything you hold about that person, including at the provider when you created
+something there for them. For access requests it posts the same to `data_request_endpoint` and
+includes your JSON answer (`{ "data": … }`) in the export it gives the contact. Uninstalling
+deletes the app's data, entity data and custom field values in the CRM.
+
+## Integrating well
+
+Workspaces trust an app with their data and their customers. The reference apps follow these
+rules; reviewers check them.
+
+**Never get in the way.**
+
+- Hooks fail open: when the provider is slow, down or not configured, answer `valid: null` and
+  let the CRM go on. Set your own timeout under the CRM's budget and leave room for your work
+  (Emailable waits 1.2 s of the 1.5 s).
+- Tell transient failures from permanent ones. Provider timeouts, `429` and `5xx` become a `5xx`
+  (or `429`) so the CRM retries; a wrong key, no credits, a bad input become a `4xx` with an
+  `error` a user understands ("add your API key in the app settings", not "HTTP 403").
+- Never throw on a test call (`"test": true`), and never cause side effects in one.
+
+**Do things exactly once.**
+
+- Use the idempotency key of actions, connectors and sends; deduplicate provider webhooks on the
+  provider's event or message id (pass it as `external_id` or `event_id`, the CRM deduplicates
+  too).
+- Provider webhooks are retried and batched: process every item, answer `2xx` when done, `5xx`
+  when the CRM was unreachable so the provider retries.
+
+**Every install is a separate customer.**
+
+- Key everything by installation id: stored values, caches, provider resources, webhook URLs
+  (`/provider/webhook/<installation id>`).
+- The workspace's provider credentials go in the App API data store with `secret: true`, never in
+  your own storage, logs or URLs. Prefer the provider's `Authorization` header to keys in query
+  strings, which end up in logs. Show only the last 4 characters in screens.
+- Check a credential against the provider before saving it.
+- Sign provider webhooks with a random secret per install, verify the signature on the raw body,
+  and drop events for resources the install does not own.
+- Delete what you created at the provider (webhooks, links) when the admin disconnects or
+  uninstalls (`app.uninstalled`).
+
+**Keep it light.**
+
+- Cache per isolate with a short TTL what every call needs (credentials: 5 minutes, provider
+  lists: 1 minute) and drop the entry when the admin changes it.
+- Bound concurrency towards the provider; respect its rate limits.
+- Store as little as possible about contacts. When you must (Kapso maps phone numbers to contacts
+  to route opt-out events), set a TTL where you can, and cover it in both privacy endpoints.
+
+**Make it understandable.**
+
+- Explain in the manifest description, the settings screen and the README what the app does,
+  which account it needs, what it costs (credits, messages) and what happens to the data.
+- Localize every text in English and Italian; follow the CRM's `locale` and `theme` in screens.
+- Errors shown to users say what to do next.
+- Know the provider's sandbox: say what it cannot do (Kapso's sandbox cannot use templates) and
+  degrade gracefully instead of failing.
+
+## Tests and fixtures (required)
+
+Providers change their APIs, and the person fixing an app in a year will not have the original
+author's test account. Every app in the catalog therefore ships automated tests that run with no
+network and no credentials, against **recorded answers of the real API**. A pull request without
+them is not reviewed.
+
+**Layout.**
+
+```text
+test/
+  app.test.ts                   tests (vitest)
+  fixtures/<provider>/*.json    one recorded request/answer per file
+  fixtures/<provider>/webhooks/ provider webhook bodies, if any
+scripts/record-fixtures.ts      re-records the live fixtures
+```
+
+**Fixture format** (`Fixture` in `@amable/app-sdk/testing`):
+
+```json
+{
+  "provider": "emailable",
+  "description": "A misspelled domain: Emailable suggests the fix",
+  "source": "live",
+  "recorded_at": "2026-10-18",
+  "request": { "method": "GET", "url": "https://api.emailable.com/v1/verify?email=amable.fixture%40gmial.com", "match_query": true },
+  "response": { "status": 200, "body": { "state": "undeliverable", "did_you_mean": "amable.fixture@gmail.com", "…": "…" } }
+}
+```
+
+- `request.url` may contain `{param}` segments (`…/v24.0/{phone_number_id}/messages`); the
+  query string is ignored unless `match_query` is true.
+- `source: "live"` fixtures come from the real API, recorded by a script you commit. Record
+  errors too: wrong key, missing key, not found, limits.
+- When the real API cannot be called (production-only features, paid operations, flows that
+  need a human), copy the example from the provider's reference with `source: "docs"` and the
+  page in `docs_url`.
+- **Redact before writing**: `redact()` masks keys, tokens and secret-like fields and replaces the
+  strings you list (account emails, names). Use public or made-up addresses and numbers, never
+  real people's. Read the diff before committing; credentials never go in the repository, not even
+  in a test.
+- Recording scripts make only harmless calls, and undo what they create (a webhook created to
+  record the answer is deleted right after).
+
+**The testing kit** (`@amable/app-sdk/testing`) runs the whole Worker in memory:
+
+| Helper | What it does |
+| --- | --- |
+| `fixtureFetch(fixtures)` | A `fetch` that answers from fixtures; `use()` puts error cases first; `calls` and `unmatched` show what the app asked |
+| `fakeCrm()` | The App API in memory: app data, entities, messages, events, timeline, contacts; `on()` adds or overrides routes (e.g. a `503`); `sessionToken()` signs screen tokens |
+| `routeFetch(...)` | Combines them: the CRM's URLs go to `fakeCrm`, the rest to the fixtures |
+| `signedCaller(...)` | Calls your endpoints as the CRM does, signed |
+| `testInstall()`, `memoryKv()` | An installation and a KV store |
+| `redact()` | For recording scripts |
+
+```ts
+const crm = fakeCrm();
+crm.data.set('emailable_api_key', { value: 'live_test', secret: true });
+const provider = fixtureFetch([verifyTypo, account].map((f) => f as Fixture));
+const worker = createWorker({ fetch: routeFetch(crm.fetch, provider.fetch) });
+const install = testInstall({ scopes: manifest.scopes });
+await kvInstallStore(kv).put(install);
+const call = signedCaller({ fetch: (r) => worker.fetch(r, env), baseUrl: manifest.base_url, install });
+
+expect(await call('/hooks/validate', { hook: 'contact.validate', source: 'form', values: { email: 'amable.fixture@gmial.com' } }))
+  .toMatchObject({ status: 200, body: { valid: false } });
+expect(provider.calls[0]?.headers['authorization']).toBe('Bearer live_test');
+```
+
+**What the tests must cover**:
+
+- every endpoint in the manifest, with the provider's success answers and its errors (wrong
+  credentials, limits, timeouts), checking what the app answers the CRM;
+- what the app sends to the provider (URL, headers, body) and to the CRM (`crm.inbound`,
+  `crm.outbound`, `crm.statuses`, `crm.events`, `crm.data`, `crm.entities`);
+- provider webhooks: signature accepted and refused, batches, every event type you handle,
+  retries when the CRM is down;
+- idempotency: the same action or webhook twice does one thing;
+- screens' backend APIs, with a session token from `crm.sessionToken()`;
+- privacy: export and erasure of what you store;
+- the conformance suite (`runConformance`) against the in-memory Worker, so CI catches a broken
+  endpoint before the catalog does.
+
+When the provider changes an answer, record it again (or copy the new docs example) and let the
+failing tests show what to change. The Kapso and Emailable test suites are complete examples.
 
 ## The CLI
 
@@ -298,7 +535,8 @@ amable-app test --manifest manifest.json [--local] [--secret whsec_… --install
 
 `test` runs the same conformance suite as the catalog CI: valid manifest, HTTPS, a JWKS with
 public keys only, every endpoint refusing unsigned calls, and, with the webhook secret of a
-development install, signed calls answering in time (1.5 s for `contact.validate`).
+development install, signed calls answering in time (1.5 s for `contact.validate`) and
+templates and options endpoints answering with a list.
 
 **Local development**: set `base_url` and the derived URLs to `http://localhost:8787` and install
 from **Settings → Apps → Install from URL** with `http://localhost:8787/manifest.json`. Private
@@ -309,7 +547,25 @@ them.
 
 The catalog is the [amable-apps](https://github.com/Ratne/amable-apps) repository. Open a pull
 request adding `apps/<id>/manifest.json`; CI validates it and runs the conformance suite against
-your live `base_url`, then a maintainer reviews the scopes and the privacy policy. On merge the
-signed index is rebuilt and installations pick it up within a day. Updating means a new pull
-request with the new manifest. A listed app can be revoked if it misbehaves: installations then
-pause it everywhere.
+your live `base_url`, then a maintainer reviews the scopes, the privacy policy and the app's
+tests. On merge the signed index is rebuilt and installations pick it up within a day. Updating
+means a new pull request with the new manifest. A listed app can be revoked if it misbehaves:
+installations then pause it everywhere.
+
+Checklist before opening the pull request:
+
+- [ ] `amable-app validate` passes; the description says what the app does, which account it
+      needs and what it costs, in English and Italian.
+- [ ] Scopes are the minimum; `handles_personal_data` and both privacy endpoints are set if any
+      scope reads personal data.
+- [ ] The source is public (link it in `homepage`), with a README explaining setup and privacy.
+- [ ] Tests run offline with recorded fixtures and cover the points above; the recording script
+      is committed; no credential or personal data is in the repository or its history.
+- [ ] `amable-app test` passes against the deployed `base_url`, including signed calls with the
+      secret of a development install.
+- [ ] Hooks fail open within their budget; actions and webhooks are idempotent; errors shown to
+      users say what to do.
+- [ ] Provider credentials live in app data with `secret: true`; provider webhooks are signed
+      per install and deleted on disconnect and uninstall.
+- [ ] Screens work in light and dark theme, in both languages, inside the iframe.
+- [ ] `privacy_url` and `support_url` work.

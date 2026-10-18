@@ -16,3 +16,12 @@ First version.
   `app.data`, `app.entity_data`, UI slots `contact.sidebar`, `contact.actions`, `app.page`,
   `app.settings`, `dashboard.widget`.
 - Privacy endpoints for erasure and data requests.
+
+Additions:
+
+- Conversation channels: `reply_window_hours` and `templates_endpoint` (templates to reopen a
+  conversation after the reply window), `message.template` in channel sends, `text` in the send
+  answer, `POST /apps/messages/outbound` for messages the app sent outside the inbox.
+- `options_endpoint` on string inputs of automation actions and form connectors.
+- `@amable/app-sdk/testing`: fixtures of recorded provider answers, an in-memory CRM, signed calls
+  and screen session tokens for offline tests.
