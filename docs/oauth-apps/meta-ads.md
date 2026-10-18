@@ -1,0 +1,74 @@
+# Meta app (ads)
+
+One Meta app lets workspace users connect their ad accounts to:
+
+- import campaign / ad set / ad structure and daily spend (Marketing API);
+- send server-side conversions to a pixel / dataset (Conversions API), deduplicated with
+  the browser pixel through `event_id`.
+
+Requested scopes (`META_DEFAULT_SCOPES` in `packages/ads-providers/src/meta.ts`):
+`ads_read`, `ads_management`, `business_management`.
+
+## 1. Create the app
+
+1. You need a Facebook account and a [Business Portfolio](https://business.facebook.com)
+   (create one if needed — app review later requires **business verification**).
+2. Go to [developers.facebook.com](https://developers.facebook.com) → *My Apps* →
+   *Create app*. Pick the **Business** app type and attach your business portfolio.
+3. On the app dashboard, add two products:
+   - **Facebook Login for Business** — under *Settings*, add the redirect URI to
+     *Valid OAuth Redirect URIs*:
+
+     ```text
+     https://<your dashboard host>/oauth/ads/callback
+     ```
+
+   - **Marketing API**.
+4. *App settings → Basic*: note the **App ID** and **App secret**. Fill in privacy policy
+   URL, data deletion instructions URL, app icon and category — all required before the
+   app can go live.
+
+## 2. Configure AmableData
+
+```sh
+cd apps/core
+wrangler secret put META_APP_ID
+wrangler secret put META_APP_SECRET
+```
+
+Redeploy (or save the secrets in the dashboard). The Meta card in
+*Analytics → Settings → Ad accounts* becomes available immediately.
+
+## 3. Test before review
+
+While the app is in **Development mode**, the OAuth flow works for people who hold a role
+on the app (*App roles → Roles*: admins, developers, testers) against assets they can
+access. That is enough to connect your own ad account end to end: spend sync, reports and
+outbound conversions with a `test_event_code` (set it on the connection; events then show
+up in Events Manager → Test events without affecting ad delivery).
+
+## 4. App review (to let customers connect)
+
+To let **any** Meta user connect, switch the app to Live and request **Advanced Access**
+for `ads_read`, `ads_management` and `business_management` (*App review → Permissions and
+features*). Meta asks for:
+
+- completed **business verification** of the portfolio that owns the app;
+- a screen recording of the OAuth flow showing why each permission is needed (connect an
+  ad account → spend appears in reports → a conversion is sent);
+- working privacy policy and data deletion URLs.
+
+Review typically takes a few days up to ~2 weeks. Until then the app works only for app
+role holders — fine for a managed cloud where the operator's team tests, not for public
+self-serve connects.
+
+## Operational notes
+
+- User tokens are exchanged for long-lived tokens (~60 days). When a token expires the
+  connection shows **auth expired** and the user reconnects; nothing is lost.
+- Conversions are sent to the dataset/pixel configured on the connection (`pixel_id` or
+  `dataset_id` in the connection metadata). The payload carries hashed identifiers only.
+- Spend is read per campaign, ad set and ad; deleted entities are zeroed on
+  reconciliation.
+- Rate limits are handled with backoff by the outbound queue; failed jobs can be resent
+  from *Settings → Ad accounts → Sent conversions*.
