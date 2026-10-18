@@ -10,9 +10,9 @@ import { fakeEngineNamespace } from '../automation/helpers';
 import { createAppsHarness, resetAppsHarness } from './helpers';
 import { bearer, installApp } from './oauth-helpers';
 
-const watiExtensions: Partial<AppManifestInput> = {
-  id: 'wati',
-  name: 'WATI',
+const whatsappExtensions: Partial<AppManifestInput> = {
+  id: 'kapso',
+  name: 'Kapso',
   scopes: ['contacts:read', 'automations:trigger'],
   privacy: { handles_personal_data: true, erasure_endpoint: '/privacy/erasure', data_request_endpoint: '/privacy/data' },
   custom_fields: [],
@@ -47,7 +47,7 @@ describe('app_action steps in the engine', () => {
   const action = (input: Record<string, unknown>) => ({
     id: 'wa',
     type: 'app_action' as const,
-    app_id: 'wati',
+    app_id: 'kapso',
     action_key: 'send_template',
     input,
   });
@@ -60,15 +60,15 @@ describe('app_action steps in the engine', () => {
       graph: graph([goal('g', [{ type: 'tag_applied', tag_ids: [t] }]), seq('s', [action({ template: 'nope', extra: 1 })])], [edge('g', 's')]),
       settings: {},
     });
-    const schema = watiExtensions.extensions!.automation_actions![0]!.input_schema;
+    const schema = whatsappExtensions.extensions!.automation_actions![0]!.input_schema;
     const none = await h.op('automations.validate', { id: created.id, apps: {} });
     expect(none.issues.map((i) => i.code)).toContain('app_not_installed');
-    const bad = await h.op('automations.validate', { id: created.id, apps: { wati: { send_template: schema as never } } });
+    const bad = await h.op('automations.validate', { id: created.id, apps: { kapso: { send_template: schema as never } } });
     expect(bad.issues.filter((i) => i.severity === 'error').map((i) => [i.code, i.path])).toEqual([
       ['app_input_unknown', 'nodes[1].steps[0].input.extra'],
       ['app_input_enum', 'nodes[1].steps[0].input.template'],
     ]);
-    await expect(h.op('automations.publish', { id: created.id, apps: { wati: {} } })).rejects.toThrow(/unknown_app_action/);
+    await expect(h.op('automations.publish', { id: created.id, apps: { kapso: {} } })).rejects.toThrow(/unknown_app_action/);
   });
 
   it('runs the action with merge tags resolved, then continues; skipped apps do not break the flow', async () => {
@@ -98,7 +98,7 @@ describe('app_action steps in the engine', () => {
     await h.flush();
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
-      appId: 'wati',
+      appId: 'kapso',
       actionKey: 'send_template',
       input: { template: 'welcome', greeting: 'Ciao Ada!' },
       contactId: ada,
@@ -130,7 +130,7 @@ describe('app_action steps in the engine', () => {
     const done = h.tag('Done');
     await h.publish(
       graph(
-        [goal('g', [{ type: 'app_event', app_id: 'wati', key: 'message_received' }]), seq('s', [tagStep('t', done)])],
+        [goal('g', [{ type: 'app_event', app_id: 'kapso', key: 'message_received' }]), seq('s', [tagStep('t', done)])],
         [edge('g', 's')],
       ),
     );
@@ -142,7 +142,7 @@ describe('app_action steps in the engine', () => {
       payload: { contactId: ada, appId, key, name: `app.${appId}.${key}`, data: {} },
     });
     expect(await h.engine.ingest([event('other', 'message_received', 'e1')])).toMatchObject({ matched: 0 });
-    expect(await h.engine.ingest([event('wati', 'message_received', 'e2')])).toMatchObject({ matched: 1 });
+    expect(await h.engine.ingest([event('kapso', 'message_received', 'e2')])).toMatchObject({ matched: 1 });
     await h.flush();
     expect(h.tagsOf(ada)).toContain(done);
   });
@@ -151,12 +151,12 @@ describe('app_action steps in the engine', () => {
 describe('app actions and triggers over HTTP', () => {
   it('calls the app signed, filters the output and skips paused apps', async () => {
     const h = await createAppsHarness();
-    const installed = await installApp(h, watiExtensions);
+    const installed = await installApp(h, whatsappExtensions);
     h.routes.set('https://apps.example.com/actions/send-template', () =>
       Response.json({ output: { message_id: 'wamid.1', secret: 'x' } }),
     );
     const request: AppActionRequest = {
-      appId: 'wati',
+      appId: 'kapso',
       actionKey: 'send_template',
       input: { template: 'welcome' },
       contactId: 'c_1',
@@ -172,7 +172,7 @@ describe('app actions and triggers over HTTP', () => {
       await verifyWebhook({ secrets: [installed.webhookSecret], header: call.headers.get('amable-signature'), rawBody: call.body, nowMs: Date.now() }),
     ).toEqual({ ok: true });
 
-    expect(Object.keys(await appActionCatalog(h.env, 't_acme'))).toEqual(['wati']);
+    expect(Object.keys(await appActionCatalog(h.env, 't_acme'))).toEqual(['kapso']);
     expect(await runAppAction(h.env, 't_acme', { ...request, actionKey: 'nope' })).toEqual({ kind: 'skipped', reason: 'unknown_action' });
     h.routes.set('https://apps.example.com/actions/send-template', () => new Response('busy', { status: 503 }));
     expect(await runAppAction(h.env, 't_acme', request)).toMatchObject({ kind: 'failed', status: 503, transient: true });
@@ -184,7 +184,7 @@ describe('app actions and triggers over HTTP', () => {
   it('lets an app fire its declared triggers for a contact', async () => {
     const h = await createAppsHarness();
     Object.assign(h.env, { ENGINE: fakeEngineNamespace(h.env.TENANT_DB, h.clock) });
-    const installed = await installApp(h, watiExtensions);
+    const installed = await installApp(h, whatsappExtensions);
     const contact = await installed.owner.post('/api/v2/t/acme/contacts', { given_name: 'Ada', emails: [{ email: 'ada@example.com' }] });
     const contactId = String(contact.body.id);
 
@@ -195,7 +195,7 @@ describe('app actions and triggers over HTTP', () => {
       data: { text: 'hello' },
     });
     expect(fired.status).toBe(202);
-    expect(fired.body).toMatchObject({ event_id: 'app:wati:wamid.1', event: 'app.wati.message_received', matched: 0 });
+    expect(fired.body).toMatchObject({ event_id: 'app:kapso:wamid.1', event: 'app.kapso.message_received', matched: 0 });
     const unknown = await bearer(h, 'POST', '/api/v2/t/acme/apps/events', installed.access, { key: 'nope', contact_id: contactId });
     expect(unknown.status).toBe(422);
     const missing = await bearer(h, 'POST', '/api/v2/t/acme/apps/events', installed.access, { key: 'message_received', contact_id: 'c_missing' });
@@ -203,7 +203,7 @@ describe('app actions and triggers over HTTP', () => {
     // Members see what the installed apps add (automation editor).
     const extensions = await installed.owner.get('/api/t/acme/apps/extensions');
     expect(extensions.body.data).toEqual([
-      expect.objectContaining({ app_id: 'wati', status: 'active', extensions: expect.objectContaining({ automation_triggers: expect.any(Array) }) }),
+      expect.objectContaining({ app_id: 'kapso', status: 'active', extensions: expect.objectContaining({ automation_triggers: expect.any(Array) }) }),
     ]);
   });
 });

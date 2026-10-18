@@ -570,7 +570,12 @@ function ConnectionDialog({
             <p className="text-sm text-destructive">{t('forms.connector.appMissing', { app: str(initial['app_id']) })}</p>
           ) : null}
           {type === 'app' && app !== null && app.settings_schema !== null ? (
-            <AppSchemaInputs schema={app.settings_schema as unknown as AppInputSchema} input={settings} onChange={setSettings} />
+            <AppSchemaInputs
+              schema={app.settings_schema as unknown as AppInputSchema}
+              input={settings}
+              source={{ appId: app.app_id, kind: 'connector', key: app.key }}
+              onChange={setSettings}
+            />
           ) : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>

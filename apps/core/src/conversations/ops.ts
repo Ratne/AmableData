@@ -4,6 +4,8 @@ import type {
   ConversationStatus,
   InboundMessageInput,
   ListConversationsQuery,
+  MessageTemplateRef,
+  OutboundMessageInput,
   ListMessagesQuery,
   MessageDirection,
   MessageStatus,
@@ -38,6 +40,7 @@ interface ConversationRow {
   last_message_at: number;
   last_message_preview: string | null;
   last_direction: MessageDirection | null;
+  last_inbound_at: number | null;
   created_at: number;
   updated_at: number;
   contact_given_name?: string | null;
@@ -54,6 +57,7 @@ interface MessageRow {
   status: MessageStatus;
   error: string | null;
   external_id: string | null;
+  template: string | null;
   author_type: ConversationMessage['author']['type'];
   author_id: string | null;
   sent_at: number;
@@ -105,9 +109,20 @@ function toConversation(row: ConversationRow): Conversation {
     last_message_at: toIso(row.last_message_at),
     last_message_preview: row.last_message_preview,
     last_direction: row.last_direction,
+    last_inbound_at: row.last_inbound_at === null ? null : toIso(row.last_inbound_at),
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
+}
+
+function parseTemplate(raw: string | null): MessageTemplateRef | null {
+  if (raw === null) return null;
+  try {
+    const value = JSON.parse(raw) as MessageTemplateRef;
+    return typeof value.id === 'string' ? { id: value.id, params: value.params ?? {} } : null;
+  } catch {
+    return null;
+  }
 }
 
 function toMessage(row: MessageRow): ConversationMessage {
@@ -119,6 +134,7 @@ function toMessage(row: MessageRow): ConversationMessage {
     status: row.status,
     error: row.error,
     external_id: row.external_id,
+    template: parseTemplate(row.template),
     author: { type: row.author_type, id: row.author_id },
     sent_at: toIso(row.sent_at),
     created_at: toIso(row.created_at),
@@ -233,13 +249,24 @@ export function markRead(ctx: CrmContext, input: { id: string }): Conversation {
 function insertMessage(
   ctx: CrmContext,
   conversation: ConversationRow,
-  message: { direction: MessageDirection; text: string; status: MessageStatus; externalId: string | null; authorType: MessageRow['author_type']; authorId: string | null; sentAt: number },
+  message: {
+    direction: MessageDirection;
+    text: string;
+    status: MessageStatus;
+    externalId: string | null;
+    template?: MessageTemplateRef | null;
+    authorType: MessageRow['author_type'];
+    authorId: string | null;
+    sentAt: number;
+    /** Messages the app sent on its own (automations) leave the team's unread count alone. */
+    keepUnread?: boolean;
+  },
 ): MessageRow {
   const id = ctx.newId();
   const now = ctx.now();
   ctx.db.run(
-    `INSERT INTO conv_messages (id, conversation_id, channel, direction, text, status, error, external_id, author_type, author_id, sent_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+    `INSERT INTO conv_messages (id, conversation_id, channel, direction, text, status, error, external_id, template, author_type, author_id, sent_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
     id,
     conversation.id,
     conversation.channel,
@@ -247,6 +274,7 @@ function insertMessage(
     message.text,
     message.status,
     message.externalId,
+    message.template == null ? null : JSON.stringify(message.template),
     message.authorType,
     message.authorId,
     message.sentAt,
@@ -255,16 +283,26 @@ function insertMessage(
   if (message.direction !== 'note') {
     ctx.db.run(
       `UPDATE conv_conversations SET last_message_at = ?, last_message_preview = ?, last_direction = ?,
-         unread = CASE WHEN ? = 'in' THEN unread + 1 ELSE 0 END, updated_at = ? WHERE id = ?`,
+         unread = CASE WHEN ? = 'in' THEN unread + 1 WHEN ? = 1 THEN unread ELSE 0 END,
+         last_inbound_at = CASE WHEN ? = 'in' THEN MAX(COALESCE(last_inbound_at, 0), ?) ELSE last_inbound_at END,
+         updated_at = ? WHERE id = ?`,
       Math.max(message.sentAt, conversation.last_message_at),
       preview(message.text),
       message.direction,
       message.direction,
+      message.keepUnread === true ? 1 : 0,
+      message.direction,
+      message.sentAt,
       now,
       conversation.id,
     );
   }
   return getMessageRow(ctx, id);
+}
+
+function windowOpen(ctx: CrmContext, conversation: ConversationRow, hours: number | null | undefined): boolean {
+  if (hours === null || hours === undefined) return true;
+  return conversation.last_inbound_at !== null && ctx.now() - conversation.last_inbound_at < hours * 3_600_000;
 }
 
 export interface QueuedMessage {
@@ -275,14 +313,30 @@ export interface QueuedMessage {
 }
 
 /** A reply from the team: queued for the worker to send, or an internal note. */
-export function addMessage(ctx: CrmContext, input: { id: string; text: string; note?: boolean | undefined }): QueuedMessage {
+export function addMessage(
+  ctx: CrmContext,
+  input: {
+    id: string;
+    text?: string | undefined;
+    note?: boolean | undefined;
+    template?: MessageTemplateRef | undefined;
+    /** The channel's reply window: free text after it closes is refused. */
+    replyWindowHours?: number | null | undefined;
+  },
+): QueuedMessage {
   const conversation = getRow(ctx, input.id);
   const note = input.note === true;
+  if (!note && input.template === undefined && !windowOpen(ctx, conversation, input.replyWindowHours)) {
+    throw invalid('template', 'the reply window of this channel is closed: send a template to reopen the conversation');
+  }
+  const text = input.text ?? (input.template === undefined ? '' : `[${input.template.id}]`);
+  if (text === '') throw invalid('text', 'text or template is required');
   const row = insertMessage(ctx, conversation, {
     direction: note ? 'note' : 'out',
-    text: input.text,
+    text,
     status: note ? 'note' : 'queued',
     externalId: null,
+    template: note ? null : (input.template ?? null),
     authorType: ctx.actor.type,
     authorId: ctx.actor.id,
     sentAt: ctx.now(),
@@ -340,7 +394,15 @@ function findOrCreateThread(
 /** The team writes first to a contact on a channel. */
 export function startConversation(
   ctx: CrmContext,
-  input: { appId: string; channelKey: string; addressField: AddressField; contactId: string; text: string },
+  input: {
+    appId: string;
+    channelKey: string;
+    addressField: AddressField;
+    contactId: string;
+    text?: string | undefined;
+    template?: MessageTemplateRef | undefined;
+    replyWindowHours?: number | null | undefined;
+  },
 ): QueuedMessage {
   const raw = contactAddress(ctx, input.contactId, input.addressField);
   if (raw === null || raw === '') {
@@ -353,13 +415,13 @@ export function startConversation(
     contactId: input.contactId,
   });
   if (row.contact_id === null) ctx.db.run(`UPDATE conv_conversations SET contact_id = ? WHERE id = ?`, input.contactId, row.id);
-  return addMessage(ctx, { id: row.id, text: input.text });
+  return addMessage(ctx, { id: row.id, text: input.text, template: input.template, replyWindowHours: input.replyWindowHours });
 }
 
 /** Outcome of a send attempt (worker) or a delivery update (app). */
 export function recordDelivery(
   ctx: CrmContext,
-  input: { messageId: string; status: 'sent' | 'delivered' | 'read' | 'failed'; externalId?: string | null; error?: string | null },
+  input: { messageId: string; status: 'sent' | 'delivered' | 'read' | 'failed'; externalId?: string | null; error?: string | null; text?: string | null },
 ): ConversationMessage {
   const message = getMessageRow(ctx, input.messageId);
   if (message.direction !== 'out') throw new CrmError('conflict', 'only outbound messages have a delivery status');
@@ -371,6 +433,17 @@ export function recordDelivery(
     if (taken.length > 0) throw new CrmError('conflict', 'external_id already used by another message');
   }
   ctx.db.run(`UPDATE conv_messages SET status = ?, error = ?, external_id = ? WHERE id = ?`, input.status, error, externalId, message.id);
+  // The app may return the final text of a template message.
+  if (typeof input.text === 'string' && input.text.trim() !== '' && message.template !== null) {
+    const finalText = input.text.slice(0, 4096);
+    ctx.db.run(`UPDATE conv_messages SET text = ? WHERE id = ?`, finalText, message.id);
+    ctx.db.run(
+      `UPDATE conv_conversations SET last_message_preview = ? WHERE id = ? AND last_direction = 'out' AND last_message_at <= ?`,
+      preview(finalText),
+      conversation.id,
+      message.sent_at,
+    );
+  }
   const base = { ...refs(conversation), messageId: message.id };
   if (message.status === 'queued' && input.status !== 'failed') emit(ctx, 'message.sent', { ...base, preview: preview(message.text) });
   if (input.status !== 'sent' && input.status !== message.status) emit(ctx, 'message.status_changed', { ...base, status: input.status, error });
@@ -453,6 +526,49 @@ export function receiveMessage(
   return { conversation: getConversation(ctx, { id: row.id }), message: toMessage(message), duplicate: false };
 }
 
+/**
+ * A message the app sent on its own (an automation step, the team's phone
+ * app): it shows in the thread without being sent again. Same `external_id`
+ * twice is stored once.
+ */
+export function recordOutbound(
+  ctx: CrmContext,
+  input: { appId: string; addressField: AddressField; message: OutboundMessageInput },
+): { conversation: Conversation; message: ConversationMessage; duplicate: boolean } {
+  const channel = channelId(input.appId, input.message.channel);
+  const duplicate = ctx.db.all<MessageRow>(`SELECT * FROM conv_messages WHERE channel = ? AND external_id = ?`, channel, input.message.external_id)[0];
+  if (duplicate !== undefined) {
+    return { conversation: getConversation(ctx, { id: duplicate.conversation_id }), message: toMessage(duplicate), duplicate: true };
+  }
+  const address = normalizeAddress(input.addressField, input.message.to);
+  if (address === '' || (input.addressField === 'phone' && address.replace(/\D/g, '').length < 6)) {
+    throw invalid('to', 'not a valid address for this channel');
+  }
+  const thread = findOrCreateThread(ctx, { appId: input.appId, channelKey: input.message.channel, address, contactId: null });
+  let row = thread.row;
+  if (row.contact_id === null) {
+    const contactId = input.addressField === 'phone' ? findContactByPhone(ctx, address) : input.addressField === 'email' ? findContactByEmail(ctx, address) : null;
+    if (contactId !== null) {
+      ctx.db.run(`UPDATE conv_conversations SET contact_id = ? WHERE id = ?`, contactId, row.id);
+      row = getRow(ctx, row.id);
+    }
+  }
+  const sentAt = input.message.sent_at === undefined ? ctx.now() : Math.min(Date.parse(input.message.sent_at), ctx.now());
+  const message = insertMessage(ctx, row, {
+    direction: 'out',
+    text: input.message.text === '' ? `[${input.message.template?.id ?? 'message'}]` : input.message.text,
+    status: input.message.status,
+    externalId: input.message.external_id,
+    template: input.message.template ?? null,
+    authorType: 'app',
+    authorId: input.appId,
+    sentAt,
+    keepUnread: true,
+  });
+  emit(ctx, 'message.sent', { ...refs(row), messageId: message.id, preview: preview(message.text) });
+  return { conversation: getConversation(ctx, { id: row.id }), message: toMessage(message), duplicate: false };
+}
+
 // ------------------------------------------------------- contact lifecycle
 
 /** Threads of merged contacts move to the survivor. */
@@ -480,4 +596,5 @@ export const conversationOps = {
   'conversations.delivery': recordDelivery,
   'conversations.deliveryByExternalId': recordDeliveryByExternalId,
   'conversations.receive': receiveMessage,
+  'conversations.recordOutbound': recordOutbound,
 } satisfies Record<string, (ctx: CrmContext, input: never) => unknown>;

@@ -8,6 +8,7 @@ import { audit } from '../middleware/audit';
 import { isNewer, parseVersion } from '../platform/updates';
 import { appOriginOf } from '../providers/select';
 import { catalogConfig, catalogSyncState, fetchPrivateManifest, getCatalogApp, listCatalog, runCatalogSync } from './catalog-sync';
+import { callApp } from './call';
 import { AppError } from './errors';
 import { replayAppEvents, rotateWebhookSecret, sendAppEvent } from './events';
 import {
@@ -218,6 +219,48 @@ appsAdminRoutes.get('/extensions', async (c) => {
         extensions: install.manifest.extensions,
       })),
   });
+});
+
+const optionSchema = z.object({
+  value: z.string().min(1).max(200),
+  label: z.string().min(1).max(200),
+  description: z.string().max(500).optional(),
+});
+
+/**
+ * Choices of an input property with `options_endpoint` (an action's template,
+ * a connector's list): asked to the app with a signed call, for the editor.
+ */
+appsAdminRoutes.get('/extensions/:appId/options', async (c) => {
+  const query = z
+    .object({
+      kind: z.enum(['action', 'connector']),
+      key: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+      property: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+    })
+    .safeParse(c.req.query());
+  if (!query.success) throw new AppError(422, 'validation_failed', 'kind, key and property are required');
+  const install = (await tenantInstalls(c.env.DB, getTenant(c).tenant.id)).find(
+    (i) => i.appId === c.req.param('appId') && (i.status === 'active' || i.status === 'paused'),
+  );
+  if (install === undefined) throw new AppError(404, 'not_found', 'app not installed');
+  const { kind, key, property } = query.data;
+  const ext = install.manifest.extensions;
+  const schema =
+    kind === 'action'
+      ? ext.automation_actions?.find((a) => a.key === key)?.input_schema
+      : ext.form_connectors?.find((f) => f.key === key)?.settings_schema;
+  const endpoint = schema?.properties[property]?.options_endpoint;
+  if (endpoint === undefined) throw new AppError(404, 'not_found', 'this property has no options');
+  if (install.status !== 'active') return c.json({ data: [], unavailable: true });
+  const result = await callApp(c.env, install, endpoint, { kind, key, property }, { kind: 'action', timeoutMs: 8_000, maxBytes: 512 * 1024 });
+  const list = (result.body as { options?: unknown } | null)?.options;
+  if (!result.ok || !Array.isArray(list)) return c.json({ data: [], unavailable: true });
+  const data = list.slice(0, 500).flatMap((item) => {
+    const parsed = optionSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return c.json({ data, unavailable: false });
 });
 
 /** Opens an app screen: signed iframe URL with a 5-minute session token. */

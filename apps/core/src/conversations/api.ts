@@ -1,5 +1,7 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi';
 import {
+  channelIdSchema,
+  channelTemplateSchema,
   conversationChannelSchema,
   conversationEnvelopeSchema,
   conversationMessageEnvelopeSchema,
@@ -16,7 +18,7 @@ import {
 import { getAuth, getTenant, type AppEnv } from '../middleware';
 import { actorOf, callCrm, crmRoute, CrmHttpError, json, jsonBody } from '../crm/api/core';
 import type { AddressField } from './ops';
-import { deliverMessage, findChannel, tenantChannels } from './service';
+import { channelTemplates, deliverMessage, findChannel, tenantChannels } from './service';
 
 const tags = ['Conversations'];
 const countsSchema = z.object({ open: z.number().int(), unassigned: z.number().int(), mine: z.number().int(), unread: z.number().int() });
@@ -61,6 +63,30 @@ export function registerConversationRoutes(app: OpenAPIHono<AppEnv>): void {
   );
 
   app.openapi(
+    crmRoute('conversations:read', {
+      method: 'get',
+      path: '/conversations/channels/{channel}/templates',
+      tags,
+      summary: 'Templates the team can send on a channel',
+      description:
+        'Asked to the channel app each time (approvals change). Needed to write first to a contact, or to reopen a conversation once the channel\'s reply window has closed.',
+      request: { params: z.object({ channel: channelIdSchema }) },
+      responses: {
+        200: json(z.object({ data: z.array(channelTemplateSchema) }), 'Templates'),
+        503: json(z.object({ error: z.string(), message: z.string() }), 'The app did not answer'),
+      },
+    }),
+    async (c) => {
+      const [appId = '', key = ''] = c.req.valid('param').channel.split(':');
+      const channel = await findChannel(c.env, getTenant(c).tenant.id, appId, key);
+      if (channel === null) throw new CrmHttpError({ code: 'not_found', status: 404, message: 'this channel is not installed' });
+      const templates = await channelTemplates(c.env, channel);
+      if (templates === null) return c.json({ error: 'app_unavailable', message: 'the channel app did not answer' }, 503);
+      return c.json({ data: templates }, 200);
+    },
+  );
+
+  app.openapi(
     crmRoute('conversations:write', {
       method: 'post',
       path: '/conversations',
@@ -82,6 +108,8 @@ export function registerConversationRoutes(app: OpenAPIHono<AppEnv>): void {
         addressField: channel.def.address_field as AddressField,
         contactId: input.contact_id,
         text: input.text,
+        template: input.template,
+        replyWindowHours: channel.def.reply_window_hours ?? null,
       });
       const message = await deliverMessage(c.env, tenantId, queued, actorOf(c));
       const conversation = await callCrm(c, 'conversations.get', { id: queued.conversation.id });
@@ -159,8 +187,18 @@ export function registerConversationRoutes(app: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       const input = c.req.valid('json');
-      const queued = await callCrm(c, 'conversations.addMessage', { id: c.req.valid('param').id, text: input.text, note: input.note });
-      return c.json({ data: await deliverMessage(c.env, getTenant(c).tenant.id, queued, actorOf(c)) }, 201);
+      const tenantId = getTenant(c).tenant.id;
+      const { id } = c.req.valid('param');
+      const conversation = await callCrm(c, 'conversations.get', { id });
+      const channel = input.note === true ? null : await findChannel(c.env, tenantId, conversation.app_id, conversation.channel_key);
+      const queued = await callCrm(c, 'conversations.addMessage', {
+        id,
+        text: input.text,
+        note: input.note,
+        template: input.template,
+        replyWindowHours: channel?.def.reply_window_hours ?? null,
+      });
+      return c.json({ data: await deliverMessage(c.env, tenantId, queued, actorOf(c)) }, 201);
     },
   );
 }

@@ -1,8 +1,9 @@
+import { replyWindowOpen } from '@amable/api-types';
 import { cn, PageBody, toast, usePageChrome } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
-import { CheckCircle2, Clock, Lock, MessagesSquare, RotateCcw, Send, StickyNote, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, FileText, Lock, MessagesSquare, RotateCcw, Send, StickyNote, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { useMe } from '../../../lib/api';
@@ -12,15 +13,19 @@ import { useDirectory } from '../../crm/api/hooks';
 import {
   channelName,
   useChannels,
+  useChannelTemplates,
   useConversation,
   useInbox,
   useInboxCounts,
   useInboxMutation,
   useThread,
   type Conversation,
+  type ConversationChannel,
   type ConversationMessage,
   type InboxView,
+  type OutgoingMessage,
 } from '../api';
+import { TemplatePicker, templateMessage, type TemplateDraft } from '../template-picker';
 import { INBOX_VIEWS, inboxRoute, isInboxView, type InboxSearch } from '../routes';
 
 function timeLabel(locale: string, iso: string): string {
@@ -93,6 +98,11 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
             <StickyNote className="size-3" /> {t('conversations.note')} · {nameOf(message.author.id)}
           </div>
         ) : null}
+        {message.template !== null ? (
+          <div className="mb-1 flex items-center gap-1 text-xs opacity-80">
+            <FileText className="size-3" /> {t('conversations.templates.sent')}
+          </div>
+        ) : null}
         {message.text}
         <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px] opacity-70')}>
           {message.direction === 'out' && message.author.id !== null ? <span>{nameOf(message.author.id)} ·</span> : null}
@@ -107,24 +117,34 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
   );
 }
 
-function Composer({ conversation }: { conversation: Conversation }) {
+function Composer({ conversation, channel }: { conversation: Conversation; channel: ConversationChannel | undefined }) {
   const { t } = useI18n();
   const [text, setText] = useState('');
   const [note, setNote] = useState(false);
-  const reply = useInboxMutation((api, input: { text: string; note: boolean }) => api.reply(conversation.id, input));
+  const [useTemplate, setUseTemplate] = useState(false);
+  const [draft, setDraft] = useState<TemplateDraft>({ id: '', params: {} });
+  const windowOpen = replyWindowOpen(conversation.last_inbound_at, channel?.reply_window_hours);
+  const templates = useChannelTemplates(channel, channel?.templates === true && (useTemplate || !windowOpen));
+  const templateMode = !note && channel?.templates === true && (useTemplate || !windowOpen);
+  const blocked = !note && !windowOpen && channel?.templates !== true;
+  const reply = useInboxMutation((api, input: OutgoingMessage) => api.reply(conversation.id, input));
+  const outgoing: OutgoingMessage | null = templateMode
+    ? templateMessage(templates.data, draft)
+    : text.trim() === '' || blocked
+      ? null
+      : { text: text.trim(), note };
   const submit = () => {
-    const value = text.trim();
-    if (value === '') return;
-    reply.mutate(
-      { text: value, note },
-      {
-        onSuccess: (result) => {
-          setText('');
-          if (result.data.status === 'failed') toast.error(t('conversations.failed', { error: result.data.error ?? '' }));
-        },
-        onError: () => toast.error(t('common.error')),
+    if (outgoing === null) return;
+    reply.mutate(outgoing, {
+      onSuccess: (result) => {
+        if (templateMode) {
+          setDraft({ id: '', params: {} });
+          setUseTemplate(false);
+        } else setText('');
+        if (result.data.status === 'failed') toast.error(t('conversations.failed', { error: result.data.error ?? '' }));
       },
-    );
+      onError: () => toast.error(t('common.error')),
+    });
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -134,21 +154,38 @@ function Composer({ conversation }: { conversation: Conversation }) {
   };
   return (
     <div className={cn('grid gap-2 border-t border-border p-3', note && 'bg-amber-50/60 dark:bg-amber-950/20')}>
-      <Textarea
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={onKeyDown}
-        rows={3}
-        maxLength={4096}
-        placeholder={note ? t('conversations.notePlaceholder') : t('conversations.replyPlaceholder')}
-        aria-label={note ? t('conversations.note') : t('conversations.reply')}
-      />
+      {!windowOpen && !note ? (
+        <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+          {channel?.templates === true
+            ? t('conversations.window.closed', { hours: String(channel.reply_window_hours ?? 24) })
+            : t('conversations.window.closedNoTemplates', { hours: String(channel?.reply_window_hours ?? 24) })}
+        </p>
+      ) : null}
+      {templateMode && channel !== undefined ? (
+        <TemplatePicker channel={channel} draft={draft} onChange={setDraft} disabled={reply.isPending} />
+      ) : (
+        <Textarea
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={onKeyDown}
+          rows={3}
+          maxLength={4096}
+          disabled={blocked}
+          placeholder={note ? t('conversations.notePlaceholder') : t('conversations.replyPlaceholder')}
+          aria-label={note ? t('conversations.note') : t('conversations.reply')}
+        />
+      )}
       <div className="flex items-center gap-2">
         <Button type="button" variant={note ? 'secondary' : 'ghost'} size="sm" onClick={() => setNote((v) => !v)} aria-pressed={note}>
           <StickyNote /> {t('conversations.note')}
         </Button>
-        <span className="flex-1 text-xs text-(--obsidian-dashboard-shell-text-subtle)">{t('conversations.sendHint')}</span>
-        <Button type="button" size="sm" onClick={submit} disabled={reply.isPending || text.trim() === ''}>
+        {channel?.templates === true && windowOpen && !note ? (
+          <Button type="button" variant={useTemplate ? 'secondary' : 'ghost'} size="sm" onClick={() => setUseTemplate((v) => !v)} aria-pressed={useTemplate}>
+            <FileText /> {t('conversations.templates.label')}
+          </Button>
+        ) : null}
+        <span className="flex-1 text-xs text-(--obsidian-dashboard-shell-text-subtle)">{templateMode ? '' : t('conversations.sendHint')}</span>
+        <Button type="button" size="sm" onClick={submit} disabled={reply.isPending || outgoing === null}>
           {note ? <StickyNote /> : <Send />} {note ? t('conversations.addNote') : t('conversations.send')}
         </Button>
       </div>
@@ -231,7 +268,7 @@ function Thread({ id, canWrite }: { id: string; canWrite: boolean }) {
         </div>
         <div ref={bottom} />
       </div>
-      {canWrite ? <Composer conversation={current} /> : null}
+      {canWrite ? <Composer conversation={current} channel={channels.data?.find((c) => c.id === current.channel)} /> : null}
     </div>
   );
 }

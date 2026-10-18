@@ -1,4 +1,4 @@
-import type { ConversationChannel, ConversationMessage } from '@amable/api-types';
+import { channelTemplateSchema, type ChannelTemplate, type ConversationChannel, type ConversationMessage } from '@amable/api-types';
 import { callApp } from '../apps/call';
 import { tenantInstalls, type AppInstall } from '../apps/store';
 import { tenantOp } from '../apps/tenant';
@@ -32,6 +32,8 @@ export async function tenantChannels(env: Env, tenantId: string): Promise<Conver
       address_field: def.address_field as AddressField,
       icon_url: install.manifest.icon_url,
       paused: install.status === 'paused',
+      reply_window_hours: def.reply_window_hours ?? null,
+      templates: def.templates_endpoint !== undefined,
     })),
   );
 }
@@ -41,6 +43,30 @@ export async function findChannel(env: Env, tenantId: string, appId: string, key
   const install = installs.find((i) => i.appId === appId && usable(i));
   const def = install?.manifest.extensions.channels?.find((c) => c.key === key);
   return install === undefined || def === undefined ? null : { install, def };
+}
+
+export const CHANNEL_TEMPLATES_TIMEOUT_MS = 8_000;
+const MAX_TEMPLATES = 500;
+
+/**
+ * Templates the team can send on a channel, asked to the app each time (they
+ * change when Meta approves or rejects one). Malformed entries are dropped;
+ * `null` when the app does not answer.
+ */
+export async function channelTemplates(env: Env, found: FoundChannel): Promise<ChannelTemplate[] | null> {
+  if (found.def.templates_endpoint === undefined) return [];
+  const result = await callApp(env, found.install, found.def.templates_endpoint, { channel: found.def.key }, {
+    kind: 'channel',
+    timeoutMs: CHANNEL_TEMPLATES_TIMEOUT_MS,
+    maxBytes: 1024 * 1024,
+  });
+  if (!result.ok) return null;
+  const list = (result.body as { templates?: unknown } | null)?.templates;
+  if (!Array.isArray(list)) return null;
+  return list.slice(0, MAX_TEMPLATES).flatMap((item) => {
+    const parsed = channelTemplateSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 /**
@@ -74,7 +100,11 @@ export async function deliverMessage(
       conversation_id: queued.conversation.id,
       to: delivery.to,
       contact,
-      message: { id: queued.message.id, text: queued.message.text },
+      message: {
+        id: queued.message.id,
+        text: queued.message.text,
+        ...(queued.message.template === null ? {} : { template: queued.message.template }),
+      },
     },
     { kind: 'channel', timeoutMs: CHANNEL_SEND_TIMEOUT_MS, idempotencyKey: queued.message.id },
   );
@@ -85,5 +115,6 @@ export async function deliverMessage(
   }
   const externalId = typeof body['external_id'] === 'string' && body['external_id'] !== '' ? body['external_id'].slice(0, 200) : null;
   const status = body['status'] === 'delivered' || body['status'] === 'read' ? body['status'] : 'sent';
-  return tenantOp<ConversationMessage>(env, tenantId, 'conversations.delivery', { messageId: queued.message.id, status, externalId }, actor);
+  const text = typeof body['text'] === 'string' ? body['text'] : null;
+  return tenantOp<ConversationMessage>(env, tenantId, 'conversations.delivery', { messageId: queued.message.id, status, externalId, text }, actor);
 }

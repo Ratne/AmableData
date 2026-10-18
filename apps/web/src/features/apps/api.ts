@@ -65,6 +65,21 @@ export interface AppInputProperty {
   readonly minimum?: number;
   readonly maximum?: number;
   readonly merge_tags?: boolean;
+  /** Choices are asked to the app (`GET /apps/extensions/:app/options`). */
+  readonly options_endpoint?: string;
+}
+
+export interface AppInputOption {
+  readonly value: string;
+  readonly label: string;
+  readonly description?: string;
+}
+
+/** Where an input schema comes from, to ask the app for dynamic options. */
+export interface AppInputSource {
+  readonly appId: string;
+  readonly kind: 'action' | 'connector';
+  readonly key: string;
 }
 
 export interface AppInputSchema {
@@ -156,6 +171,10 @@ export function appsApi(slug: string) {
     authorize: (input: AuthorizeInput) => post<{ redirect_url: string; install: AppInstallView }>('/authorize', input),
     installs: () => apiFetch<{ data: AppInstallView[] }>(`${base}/installs`),
     extensions: () => apiFetch<{ data: InstalledExtensions[] }>(`${base}/extensions`),
+    options: (source: AppInputSource, property: string) =>
+      apiFetch<{ data: AppInputOption[]; unavailable: boolean }>(
+        `${base}/extensions/${encodeURIComponent(source.appId)}/options?${new URLSearchParams({ kind: source.kind, key: source.key, property }).toString()}`,
+      ),
     frame: (input: { app_id: string; key: string; contact_id?: string; theme: 'light' | 'dark' }) => post<FrameSession>('/frames', input),
     install: (id: string, hours = 24) =>
       apiFetch<{ install: AppInstallView; health: AppHealth }>(`${base}/installs/${id}?hours=${String(hours)}`),
@@ -177,6 +196,8 @@ export const appKeys = {
   extensions: (slug: string) => ['apps', slug, 'extensions'] as const,
   frame: (slug: string, appId: string, key: string, contactId: string | null) => ['apps', slug, 'frame', appId, key, contactId] as const,
   install: (slug: string, id: string) => ['apps', slug, 'installs', id] as const,
+  options: (slug: string, source: AppInputSource, property: string) =>
+    ['apps', slug, 'options', source.appId, source.kind, source.key, property] as const,
   events: (slug: string, id: string) => ['apps', slug, 'installs', id, 'events'] as const,
 };
 
@@ -214,4 +235,15 @@ export function authorizeParams(search: Record<string, unknown>): AuthorizeInput
 export function useInstalledExtensions() {
   const { slug, api } = useAppsApi();
   return useQuery({ queryKey: appKeys.extensions(slug), queryFn: api.extensions, staleTime: 60_000 });
+}
+
+/** Choices of an input with `options_endpoint`, asked to the app; disabled otherwise. */
+export function useAppInputOptions(source: AppInputSource | undefined, property: string, enabled: boolean) {
+  const { slug, api } = useAppsApi();
+  return useQuery({
+    queryKey: source === undefined ? ['apps', slug, 'options', 'none'] : appKeys.options(slug, source, property),
+    queryFn: () => api.options(source!, property),
+    enabled: enabled && source !== undefined,
+    staleTime: 60_000,
+  });
 }

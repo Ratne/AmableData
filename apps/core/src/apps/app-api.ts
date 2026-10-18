@@ -2,6 +2,7 @@ import { APP_ENTITY_KINDS, appTriggerEventType, eventReadPermission, type AppEnt
 import {
   inboundMessageSchema,
   messageStatusUpdateSchema,
+  outboundMessageSchema,
   type Conversation,
   type ConversationMessage,
 } from '@amable/api-types';
@@ -276,6 +277,29 @@ appApiRoutes.post('/messages/inbound', async (c) => {
     c.env,
     app.tenantId,
     'conversations.receive',
+    { appId: app.appId, addressField: channel.address_field, message: parsed.data },
+    appActor(app.appId),
+  );
+  return c.json(
+    { conversation_id: result.conversation.id, message_id: result.message.id, contact_id: result.conversation.contact?.id ?? null, duplicate: result.duplicate },
+    result.duplicate ? 200 : 201,
+  );
+});
+
+/**
+ * A message the app sent on its own (an automation step, the team's phone app
+ * in coexistence): it lands in the thread as sent, without being sent again.
+ */
+appApiRoutes.post('/messages/outbound', async (c) => {
+  const app = appOf(c);
+  assertCan(c, 'conversations:write');
+  const parsed = outboundMessageSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new AppError(422, 'validation_failed', parsed.error.issues[0]?.message ?? 'invalid body');
+  const channel = await channelOf(c, app, parsed.data.channel);
+  const result = await tenantOp<{ conversation: Conversation; message: ConversationMessage; duplicate: boolean }>(
+    c.env,
+    app.tenantId,
+    'conversations.recordOutbound',
     { appId: app.appId, addressField: channel.address_field, message: parsed.data },
     appActor(app.appId),
   );

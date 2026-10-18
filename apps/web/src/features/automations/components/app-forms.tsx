@@ -4,9 +4,11 @@ import { Textarea } from '@amable/ui/ui/textarea';
 import { useI18n } from '../../../i18n';
 import {
   text,
+  useAppInputOptions,
   useInstalledExtensions,
   type AppInputProperty,
   type AppInputSchema,
+  type AppInputSource,
   type InstalledExtensions,
 } from '../../apps/api';
 import { ChoiceSelect } from '../../crm/components/inputs';
@@ -28,6 +30,7 @@ function InputField({
   value,
   onChange,
   disabled,
+  source,
 }: {
   name: string;
   property: AppInputProperty;
@@ -35,8 +38,11 @@ function InputField({
   value: unknown;
   onChange: (value: unknown) => void;
   disabled: boolean;
+  source: AppInputSource | undefined;
 }) {
   const { t, locale } = useI18n();
+  const dynamic = property.options_endpoint !== undefined && source !== undefined;
+  const options = useAppInputOptions(source, name, dynamic);
   const label = `${text(property.title, locale)}${required ? ' *' : ''}`;
   const hint = [
     property.description === undefined ? null : text(property.description, locale),
@@ -46,6 +52,33 @@ function InputField({
     .join(' ');
   if (property.type === 'boolean') {
     return <SwitchRow label={label} checked={value === true} disabled={disabled} onChange={(on) => onChange(on)} />;
+  }
+  if (dynamic) {
+    const current = typeof value === 'string' ? value : '';
+    const list = options.data?.data ?? [];
+    const choices = list.map((o) => ({ value: o.value, label: o.label }));
+    // A saved value the app no longer lists stays visible (and editable away).
+    if (current !== '' && !list.some((o) => o.value === current)) choices.unshift({ value: current, label: current });
+    const selected = list.find((o) => o.value === current);
+    const status = options.isPending
+      ? t('auto.app.optionsLoading')
+      : options.isError || options.data?.unavailable === true
+        ? t('auto.app.optionsUnavailable')
+        : list.length === 0
+          ? t('auto.app.optionsEmpty')
+          : null;
+    return (
+      <Field label={label} hint={[selected?.description, status, hint].filter(Boolean).join(' ') || undefined}>
+        <ChoiceSelect
+          value={current}
+          allowEmpty={!required}
+          disabled={disabled}
+          className="w-full"
+          choices={choices}
+          onChange={(v) => onChange(v === '' ? undefined : v)}
+        />
+      </Field>
+    );
   }
   if (property.enum !== undefined) {
     return (
@@ -106,11 +139,14 @@ export function AppSchemaInputs({
   input,
   onChange,
   disabled = false,
+  source,
 }: {
   schema: AppInputSchema;
   input: Readonly<Record<string, unknown>>;
   onChange: (input: Record<string, unknown>) => void;
   disabled?: boolean;
+  /** The app extension the schema belongs to, for inputs with dynamic options. */
+  source?: AppInputSource;
 }) {
   const required = new Set(schema.required ?? []);
   return (
@@ -123,6 +159,7 @@ export function AppSchemaInputs({
           required={required.has(key)}
           value={input[key] ?? property.default}
           disabled={disabled}
+          source={source}
           onChange={(value) => {
             const next: Record<string, unknown> = { ...input };
             if (value === undefined) delete next[key];
@@ -183,7 +220,13 @@ export function AppActionForm({
       ) : null}
       {app?.status === 'paused' ? <p className="text-xs text-muted-foreground">{t('auto.app.paused')}</p> : null}
       {action !== undefined ? (
-        <AppSchemaInputs schema={action.input_schema} input={step.input} disabled={disabled} onChange={(input) => onChange({ ...step, input })} />
+        <AppSchemaInputs
+          schema={action.input_schema}
+          input={step.input}
+          disabled={disabled}
+          source={{ appId: step.app_id, kind: 'action', key: action.key }}
+          onChange={(input) => onChange({ ...step, input })}
+        />
       ) : null}
       {action?.output_keys !== undefined && action.output_keys.length > 0 ? (
         <p className="text-[11px] text-muted-foreground">{t('auto.app.outputs', { keys: action.output_keys.join(', ') })}</p>

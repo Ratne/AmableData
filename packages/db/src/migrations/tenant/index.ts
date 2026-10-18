@@ -11,6 +11,7 @@ import { t0009FormSubmissionsContact } from './0009_form_submissions_contact';
 import { t0010AddressStreetNumber } from './0010_address_street_number';
 import { t0011Apps } from './0011_apps';
 import { t0012Conversations } from './0012_conversations';
+import { t0013ConversationTemplates } from './0013_conversation_templates';
 
 /**
  * Ordered list of tenant-DO SQLite migrations.
@@ -29,4 +30,5 @@ export const tenantMigrations: readonly Migration[] = [
   t0010AddressStreetNumber,
   t0011Apps,
   t0012Conversations,
+  t0013ConversationTemplates,
 ];

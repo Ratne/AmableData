@@ -116,6 +116,16 @@ export function createAmableClient(options: AmableClientOptions) {
         contact?: { given_name?: string; family_name?: string; email?: string };
         sent_at?: string;
       }) => request<{ conversation_id: string; message_id: string; contact_id: string | null; duplicate: boolean }>('POST', '/apps/messages/inbound', input),
+      /** A message you sent outside the inbox (automation step, phone app): shown in the thread, not sent again. */
+      outbound: (input: {
+        channel: string;
+        external_id: string;
+        to: string;
+        text: string;
+        template?: { id: string; params?: Record<string, string> };
+        status?: 'sent' | 'delivered' | 'read' | 'failed';
+        sent_at?: string;
+      }) => request<{ conversation_id: string; message_id: string; contact_id: string | null; duplicate: boolean }>('POST', '/apps/messages/outbound', input),
       status: (input: { channel: string; external_id: string; status: 'sent' | 'delivered' | 'read' | 'failed'; error?: string }) =>
         request<{ message_id: string; status: string }>('POST', '/apps/messages/status', input),
     },

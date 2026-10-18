@@ -81,6 +81,32 @@ describe('app manifest', () => {
     expect(issuesOf({ ...dev, jwks_url: 'https://apps.example.com/jwks.json' }).join()).toMatch(/scheme/);
   });
 
+  it('asks reply-window channels for templates and limits dynamic options to free strings', () => {
+    const channel = { key: 'whatsapp', name: { en: 'WhatsApp' }, kind: 'whatsapp' as const, send_endpoint: '/send', address_field: 'phone' as const };
+    const scopes: AppManifestInput['scopes'] = ['contacts:read', 'contacts:write', 'conversations:write'];
+    expect(issuesOf(manifest({ scopes, extensions: { channels: [{ ...channel, reply_window_hours: 24 }] } }))).toEqual([
+      expect.stringContaining('templates_endpoint'),
+    ]);
+    expect(issuesOf(manifest({ scopes, extensions: { channels: [{ ...channel, reply_window_hours: 24, templates_endpoint: '/templates' }] } }))).toEqual([]);
+
+    const action = (property: Record<string, unknown>) =>
+      manifest({
+        scopes,
+        extensions: {
+          automation_actions: [
+            { key: 'send_template', name: { en: 'Send' }, endpoint: '/send', input_schema: { type: 'object', properties: { template: property } } },
+          ],
+        },
+      } as Partial<AppManifestInput>);
+    expect(issuesOf(action({ type: 'string', title: { en: 'Template' }, options_endpoint: '/options' }))).toEqual([]);
+    expect(issuesOf(action({ type: 'string', title: { en: 'Template' }, enum: ['a'], options_endpoint: '/options' }))).toEqual([
+      expect.stringContaining('options_endpoint'),
+    ]);
+    expect(issuesOf(action({ type: 'number', title: { en: 'Template' }, options_endpoint: '/options' }))).toEqual([
+      expect.stringContaining('options_endpoint'),
+    ]);
+  });
+
   it('requires the scopes behind each extension', () => {
     const noWrite = issuesOf(manifest({ scopes: ['contacts:read'] }));
     expect(noWrite.some((i) => i.startsWith('custom_fields'))).toBe(true);

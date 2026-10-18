@@ -37,9 +37,11 @@ function url(manifest: AppManifest, path: string): string {
 }
 
 /** Every POST endpoint the CRM calls, with a sample body. */
-function endpoints(manifest: AppManifest): Array<{ name: string; path: string; body: Record<string, unknown>; budgetMs?: number }> {
+type Endpoint = { name: string; path: string; body: Record<string, unknown>; budgetMs?: number; listKey?: 'templates' | 'options' };
+
+function endpoints(manifest: AppManifest): Endpoint[] {
   const ext = manifest.extensions;
-  const out: Array<{ name: string; path: string; body: Record<string, unknown>; budgetMs?: number }> = [];
+  const out: Endpoint[] = [];
   if (manifest.webhooks !== undefined) {
     out.push({ name: 'webhooks', path: manifest.webhooks.endpoint, body: { id: 'evt_test', type: 'app.installed', data: {} } });
   }
@@ -73,6 +75,25 @@ function endpoints(manifest: AppManifest): Array<{ name: string; path: string; b
   }
   for (const channel of ext.channels ?? []) {
     out.push({ name: `channel ${channel.key}`, path: channel.send_endpoint, body: { channel: channel.key, test: true } });
+    if (channel.templates_endpoint !== undefined) {
+      out.push({ name: `channel ${channel.key} templates`, path: channel.templates_endpoint, body: { channel: channel.key }, budgetMs: 8_000, listKey: 'templates' });
+    }
+  }
+  const optionSources = [
+    ...(ext.automation_actions ?? []).map((a) => ({ kind: 'action', key: a.key, schema: a.input_schema })),
+    ...(ext.form_connectors ?? []).flatMap((f) => (f.settings_schema === undefined ? [] : [{ kind: 'connector', key: f.key, schema: f.settings_schema }])),
+  ];
+  for (const source of optionSources) {
+    for (const [property, schema] of Object.entries(source.schema.properties)) {
+      if (schema.options_endpoint === undefined) continue;
+      out.push({
+        name: `${source.kind} ${source.key}.${property} options`,
+        path: schema.options_endpoint,
+        body: { kind: source.kind, key: source.key, property },
+        budgetMs: 8_000,
+        listKey: 'options',
+      });
+    }
   }
   return out;
 }
@@ -157,6 +178,15 @@ export async function runConformance(options: ConformanceOptions): Promise<Check
       check(`${endpoint.name} accepts signed calls`, response.ok, `HTTP ${String(response.status)} in ${String(elapsed)} ms`);
       const budget = endpoint.budgetMs === undefined ? undefined : (options.hookBudgetMs ?? endpoint.budgetMs);
       if (budget !== undefined) check(`${endpoint.name} answers within ${String(budget)} ms`, elapsed <= budget, `${String(elapsed)} ms`);
+      if (endpoint.listKey !== undefined && response.ok) {
+        let list: unknown;
+        try {
+          list = (JSON.parse(text) as Record<string, unknown>)[endpoint.listKey];
+        } catch {
+          list = undefined;
+        }
+        check(`${endpoint.name} answer { ${endpoint.listKey}: [...] }`, Array.isArray(list));
+      }
       if (endpoint.name === 'contact.validate' && response.ok) {
         let valid: unknown;
         try {

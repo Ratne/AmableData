@@ -1,8 +1,10 @@
 import type {
+  ChannelTemplate,
   Conversation,
   ConversationChannel,
   ConversationMessage,
   ConversationStatus,
+  MessageTemplateRef,
   Page,
 } from '@amable/api-types';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +13,14 @@ import { apiFetch } from '../../lib/api';
 
 /** Shared inbox: REST v2 `/conversations` of the active workspace. */
 
-export type { Conversation, ConversationChannel, ConversationMessage, ConversationStatus };
+export type { ChannelTemplate, Conversation, ConversationChannel, ConversationMessage, ConversationStatus, MessageTemplateRef };
+
+/** What the composer sends: free text, or an approved template with its parameters. */
+export interface OutgoingMessage {
+  readonly text?: string;
+  readonly note?: boolean;
+  readonly template?: MessageTemplateRef;
+}
 
 export type InboxView = 'open' | 'mine' | 'unassigned' | 'pending' | 'closed';
 
@@ -45,6 +54,7 @@ export function conversationsApi(slug: string) {
     ofContact: (contactId: string) => apiFetch<Page<Conversation>>(`${base}?${new URLSearchParams({ contact_id: contactId, limit: '20' }).toString()}`),
     counts: () => apiFetch<InboxCounts>(`${base}/counts`),
     channels: () => apiFetch<{ data: ConversationChannel[] }>(`${base}/channels`),
+    templates: (channel: string) => apiFetch<{ data: ChannelTemplate[] }>(`${base}/channels/${encodeURIComponent(channel)}/templates`),
     get: (id: string) => apiFetch<{ data: Conversation }>(`${base}/${encodeURIComponent(id)}`),
     messages: (id: string, cursor?: string) =>
       apiFetch<Page<ConversationMessage>>(
@@ -53,9 +63,9 @@ export function conversationsApi(slug: string) {
     update: (id: string, data: { status?: ConversationStatus; assigned_to?: string | null }) =>
       send<{ data: Conversation }>('PATCH', `/${encodeURIComponent(id)}`, data),
     read: (id: string) => send<{ data: Conversation }>('POST', `/${encodeURIComponent(id)}/read`, {}),
-    reply: (id: string, input: { text: string; note?: boolean }) =>
+    reply: (id: string, input: OutgoingMessage) =>
       send<{ data: ConversationMessage }>('POST', `/${encodeURIComponent(id)}/messages`, input),
-    start: (input: { channel: string; contact_id: string; text: string }) =>
+    start: (input: { channel: string; contact_id: string } & OutgoingMessage) =>
       send<{ data: Conversation; message: ConversationMessage }>('POST', '', input),
   };
 }
@@ -66,6 +76,7 @@ export const conversationKeys = {
   ofContact: (slug: string, contactId: string) => ['conversations', slug, 'contact', contactId] as const,
   counts: (slug: string) => ['conversations', slug, 'counts'] as const,
   channels: (slug: string) => ['conversations', slug, 'channels'] as const,
+  templates: (slug: string, channel: string) => ['conversations', slug, 'templates', channel] as const,
   one: (slug: string, id: string) => ['conversations', slug, 'one', id] as const,
   messages: (slug: string, id: string) => ['conversations', slug, 'messages', id] as const,
 };
@@ -95,6 +106,18 @@ export function useInboxCounts(enabled = true) {
 export function useChannels(enabled = true) {
   const { slug, api } = useConversationsApi();
   return useQuery({ queryKey: conversationKeys.channels(slug), queryFn: async () => (await api.channels()).data, staleTime: 60_000, enabled });
+}
+
+/** Approved templates of a channel, asked to its app; only for channels that have them. */
+export function useChannelTemplates(channel: ConversationChannel | undefined, enabled = true) {
+  const { slug, api } = useConversationsApi();
+  return useQuery({
+    queryKey: conversationKeys.templates(slug, channel?.id ?? ''),
+    queryFn: async () => (await api.templates(channel!.id)).data,
+    enabled: enabled && channel?.templates === true,
+    staleTime: 60_000,
+    retry: false,
+  });
 }
 
 export function useConversation(id: string | undefined) {

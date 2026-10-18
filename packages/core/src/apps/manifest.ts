@@ -49,6 +49,9 @@ export const APP_EXTENSION_POINTS = [
   'automation.triggers',
   'form.connectors',
   'conversations.channels',
+  'conversations.templates',
+  'conversations.outbound',
+  'automation.dynamic_options',
   'app.data',
   'app.entity_data',
   'events.replay',
@@ -120,6 +123,12 @@ export const appInputPropertySchema = z.strictObject({
   maximum: z.number().optional(),
   /** Strings may contain merge tags such as `{{contact.first_name}}`, resolved at run time. */
   merge_tags: z.boolean().optional(),
+  /**
+   * Choices that depend on the workspace (its templates, lists, pipelines):
+   * the editor asks the app, with a signed POST to this path, for
+   * `{ options: [{ value, label, description? }] }`.
+   */
+  options_endpoint: relativePath.optional(),
 });
 export type AppInputProperty = z.infer<typeof appInputPropertySchema>;
 
@@ -187,6 +196,13 @@ const channelSchema = z.strictObject({
   send_endpoint: relativePath,
   /** Address the channel uses to reach a contact. */
   address_field: z.enum(['phone', 'email', 'external_id']).default('phone'),
+  /**
+   * Free-form replies are allowed only this long after the contact's last
+   * message (WhatsApp: 24); after that the team must send a template.
+   */
+  reply_window_hours: z.number().int().min(1).max(720).optional(),
+  /** Signed POST answering `{ templates: [...] }`: the approved templates the team can send. */
+  templates_endpoint: relativePath.optional(),
 });
 
 const customFieldSchema = z.strictObject({
@@ -285,6 +301,20 @@ export const appManifestSchema = z
     needs((ext.form_connectors ?? []).length > 0, 'forms:submissions_read', ['extensions', 'form_connectors']);
     needs((ext.channels ?? []).length > 0, 'conversations:write', ['extensions', 'channels']);
     needs(manifest.custom_fields.length > 0, 'contacts:write', ['custom_fields']);
+    (ext.channels ?? []).forEach((channel, i) => {
+      if (channel.reply_window_hours !== undefined && channel.templates_endpoint === undefined) {
+        issue(['extensions', 'channels', i, 'templates_endpoint'], 'a channel with a reply window needs templates to reopen it');
+      }
+    });
+    const inputs = (schema: AppInputSchema | undefined, path: (string | number)[]) => {
+      for (const [key, property] of Object.entries(schema?.properties ?? {})) {
+        if (property.options_endpoint !== undefined && (property.type !== 'string' || property.enum !== undefined)) {
+          issue([...path, key], 'options_endpoint is for string properties without enum');
+        }
+      }
+    };
+    (ext.automation_actions ?? []).forEach((a, i) => inputs(a.input_schema, ['extensions', 'automation_actions', i, 'input_schema', 'properties']));
+    (ext.form_connectors ?? []).forEach((f, i) => inputs(f.settings_schema, ['extensions', 'form_connectors', i, 'settings_schema', 'properties']));
 
     const unique = (keys: string[], path: (string | number)[]) => {
       if (new Set(keys).size !== keys.length) issue(path, 'duplicate keys');

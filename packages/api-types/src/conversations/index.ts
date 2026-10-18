@@ -47,10 +47,46 @@ export const conversationSchema = z.object({
   last_message_at: timestampSchema,
   last_message_preview: z.string().nullable(),
   last_direction: messageDirectionSchema.nullable(),
+  /** Last message from the contact: starts the channel's reply window. */
+  last_inbound_at: timestampSchema.nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 });
 export type Conversation = z.infer<typeof conversationSchema>;
+
+/** A template message: the id the app gave it and the values of its parameters. */
+export const messageTemplateRefSchema = z.strictObject({
+  id: z.string().min(1).max(200),
+  params: z.record(z.string().regex(/^[A-Za-z0-9_]{1,64}$/), z.string().max(1000)).default({}),
+});
+export type MessageTemplateRef = z.infer<typeof messageTemplateRefSchema>;
+
+/** A template the team can send on a channel (from the app's `templates_endpoint`). */
+export const channelTemplateSchema = z.object({
+  id: z.string().min(1).max(200),
+  name: z.string().min(1).max(200),
+  language: z.string().max(20).nullable(),
+  category: z.string().max(40).nullable(),
+  /** Body with `{{param}}` placeholders, for the preview. */
+  text: z.string().max(4096),
+  params: z.array(z.object({ key: z.string().regex(/^[A-Za-z0-9_]{1,64}$/), example: z.string().max(200).nullable() })).max(20),
+});
+export type ChannelTemplate = z.infer<typeof channelTemplateSchema>;
+
+/** Fills `{{key}}` placeholders; missing values stay visible as `{{key}}`. */
+export function renderTemplateText(text: string, params: Readonly<Record<string, string>>): string {
+  return text.replace(/\{\{\s*([A-Za-z0-9_]{1,64})\s*\}\}/g, (match, key: string) => {
+    const value = params[key];
+    return value === undefined || value === '' ? match : value;
+  });
+}
+
+/** True while the contact's last message is recent enough for a free-form reply. */
+export function replyWindowOpen(lastInboundAt: string | null, windowHours: number | null | undefined, nowMs: number = Date.now()): boolean {
+  if (windowHours === null || windowHours === undefined) return true;
+  if (lastInboundAt === null) return false;
+  return nowMs - Date.parse(lastInboundAt) < windowHours * 3_600_000;
+}
 
 export const conversationMessageSchema = z.object({
   id: idSchema,
@@ -60,6 +96,7 @@ export const conversationMessageSchema = z.object({
   status: messageStatusSchema,
   error: z.string().nullable(),
   external_id: z.string().nullable(),
+  template: messageTemplateRefSchema.nullable(),
   author: z.object({ type: z.enum(['user', 'api_key', 'app', 'system', 'contact']), id: z.string().nullable() }),
   sent_at: timestampSchema,
   created_at: timestampSchema,
@@ -86,18 +123,27 @@ export const updateConversationSchema = z
   .refine((v) => v.status !== undefined || v.assigned_to !== undefined, 'nothing to update');
 export type UpdateConversationInput = z.infer<typeof updateConversationSchema>;
 
-export const sendMessageSchema = z.strictObject({
-  text: z.string().trim().min(1).max(MESSAGE_MAX_LENGTH),
-  /** Internal note: visible to the team only, never sent. */
-  note: z.boolean().optional(),
-});
+export const sendMessageSchema = z
+  .strictObject({
+    /** With a template: the rendered preview (the app may return the final text). */
+    text: z.string().trim().min(1).max(MESSAGE_MAX_LENGTH).optional(),
+    /** Internal note: visible to the team only, never sent. */
+    note: z.boolean().optional(),
+    /** Send an approved template instead of free text (required once the reply window is closed). */
+    template: messageTemplateRefSchema.optional(),
+  })
+  .refine((v) => v.text !== undefined || v.template !== undefined, { message: 'text or template is required', path: ['text'] })
+  .refine((v) => !(v.note === true && v.template !== undefined), { message: 'notes cannot be templates', path: ['template'] });
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
-export const startConversationSchema = z.strictObject({
-  channel: channelIdSchema,
-  contact_id: idSchema,
-  text: z.string().trim().min(1).max(MESSAGE_MAX_LENGTH),
-});
+export const startConversationSchema = z
+  .strictObject({
+    channel: channelIdSchema,
+    contact_id: idSchema,
+    text: z.string().trim().min(1).max(MESSAGE_MAX_LENGTH).optional(),
+    template: messageTemplateRefSchema.optional(),
+  })
+  .refine((v) => v.text !== undefined || v.template !== undefined, { message: 'text or template is required', path: ['text'] });
 export type StartConversationInput = z.infer<typeof startConversationSchema>;
 
 export const conversationChannelSchema = z.object({
@@ -110,8 +156,25 @@ export const conversationChannelSchema = z.object({
   address_field: z.enum(['phone', 'email', 'external_id']),
   icon_url: z.string().nullable(),
   paused: z.boolean(),
+  /** Hours after the contact's last message during which free text is allowed; null = always. */
+  reply_window_hours: z.number().int().nullable(),
+  /** The app serves templates (`GET /conversations/channels/{channel}/templates`). */
+  templates: z.boolean(),
 });
 export type ConversationChannel = z.infer<typeof conversationChannelSchema>;
+
+/** Body of `POST /apps/messages/outbound`: a message the app sent outside the inbox (automation, phone app). */
+export const outboundMessageSchema = z.strictObject({
+  channel: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+  external_id: z.string().min(1).max(200),
+  /** Address of the recipient. */
+  to: z.string().trim().min(1).max(200),
+  text: z.string().max(MESSAGE_MAX_LENGTH),
+  template: messageTemplateRefSchema.optional(),
+  status: z.enum(MESSAGE_DELIVERY_STATUSES).default('sent'),
+  sent_at: z.iso.datetime({ offset: true }).optional(),
+});
+export type OutboundMessageInput = z.infer<typeof outboundMessageSchema>;
 
 /** Body of `POST /apps/messages/inbound` (an app posting a message it received). */
 export const inboundMessageSchema = z.strictObject({
