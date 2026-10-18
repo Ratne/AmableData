@@ -3,34 +3,15 @@ import type {
   FunnelGraph,
   FunnelHeatmap,
   FunnelNode,
-  FunnelPage,
   HeatmapMetric,
 } from '@amable/api-types';
 import { liveEdges, liveNodes, weightShare } from './state';
 
 /**
- * Placeholder data of the builder until the funnel API is wired: a sample
- * graph, the AmableCRM pages offered by the palette and a deterministic
- * heatmap propagated through the graph.
+ * Sample data for tests and local previews (the builder itself runs on the
+ * funnel API): a valid sample graph and a deterministic heatmap propagated
+ * through the graph.
  */
-
-export interface MockResource {
-  readonly id: string;
-  readonly name: string;
-  readonly type: 'lander' | 'offer';
-}
-
-export const MOCK_RESOURCES: readonly MockResource[] = [
-  { id: 'pg_quiz', name: 'Quiz lander', type: 'lander' },
-  { id: 'pg_advertorial', name: 'Advertorial', type: 'lander' },
-  { id: 'pg_optin', name: 'Opt-in page', type: 'lander' },
-  { id: 'pg_checkout', name: 'Checkout', type: 'offer' },
-  { id: 'pg_upsell', name: 'Upsell offer', type: 'offer' },
-];
-
-export function resourcePage(resource: MockResource, id: string): FunnelPage {
-  return { id, name: resource.name, amable_page_id: resource.id, weight: 100, paused: false };
-}
 
 const T0 = Date.UTC(2026, 9, 15, 10);
 
@@ -130,14 +111,14 @@ export function mockFunnelGraph(id: string): FunnelGraph {
     },
   ];
   const edges: FunnelEdge[] = [
-    { id: 'e1', from: 'n1', to: 'n2', via: { type: 'weight', weight: 100 } },
+    { id: 'e1', from: 'n1', to: 'n2', via: { type: 'default' } },
     { id: 'e2', from: 'n2', to: 'n3', via: { type: 'route', route_id: 'r1' } },
     { id: 'e3', from: 'n2', to: 'n8', via: { type: 'default' } },
     { id: 'e4', from: 'n3', to: 'n4', via: { type: 'weight', weight: 50 } },
     { id: 'e5', from: 'n3', to: 'n8', via: { type: 'weight', weight: 50 } },
-    { id: 'e6', from: 'n4', to: 'n5', via: { type: 'action', actions: [1, 2] } },
-    { id: 'e7', from: 'n8', to: 'n5', via: { type: 'action', actions: [1] } },
-    { id: 'e8', from: 'n5', to: 'n6', via: { type: 'action', actions: [1] } },
+    { id: 'e6', from: 'n4', to: 'n5', via: { type: 'default' } },
+    { id: 'e7', from: 'n8', to: 'n5', via: { type: 'default' } },
+    { id: 'e8', from: 'n5', to: 'n6', via: { type: 'default' } },
     { id: 'e9', from: 'n6', to: 'n7', via: { type: 'default' } },
   ];
   return {

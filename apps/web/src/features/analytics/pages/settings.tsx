@@ -19,6 +19,7 @@ import {
   type SettingsSearch,
   type SettingsTab,
 } from '../routes';
+import { AdsTab } from '../settings/ads-tab';
 import { AlertsTab } from '../settings/alerts-tab';
 import { DomainsTab } from '../settings/domains-tab';
 import { IntegrationsTab } from '../settings/integrations-tab';
@@ -149,6 +150,8 @@ export function AnalyticsSettingsPage() {
         return <PredictionTab tenant={tenant} site={site} canConfigure={permissions.configure} />;
       case 'domains':
         return <DomainsTab tenant={tenant} site={site} canConfigure={permissions.configure} />;
+      case 'ads':
+        return <AdsTab tenant={tenant} site={site} canConfigure={permissions.configure} />;
     }
   };
 

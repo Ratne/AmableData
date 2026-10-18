@@ -4,6 +4,12 @@ import { rootRoute } from '../../routes/root';
 import { tenantRoute } from '../../routes/tenant';
 import { validateAnalyticsSearch, type AnalyticsSearch } from './lib/query-state';
 import { searchString } from './lib/search';
+import {
+  validateCohortSearch,
+  validateJourneySearch,
+  validateLtvSearch,
+  validatePerformanceSearch,
+} from './reports-ads/search';
 
 /*
  * Web analytics pages under /t/$tenant/analytics, each in its own lazily
@@ -32,6 +38,7 @@ export const SETTINGS_TABS = [
   'integrations',
   'prediction',
   'domains',
+  'ads',
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
@@ -43,9 +50,29 @@ export interface SettingsSearch extends AnalyticsSearch {
   readonly integration?: string;
   readonly state?: string;
   readonly code?: string;
+  /** Ad platform of an OAuth return on the `ads` tab (dev fake provider). */
+  readonly platform?: string;
+}
+
+/** Query of the fixed OAuth redirect page of the ad platforms. */
+export interface AdsOAuthSearch {
+  readonly state?: string;
+  readonly code?: string;
+  readonly error?: string;
 }
 
 const str = searchString;
+
+function adsOAuthSearch(raw: Record<string, unknown>): AdsOAuthSearch {
+  const state = str(raw['state']);
+  const code = str(raw['code']);
+  const error = str(raw['error']);
+  return {
+    ...(state ? { state } : {}),
+    ...(code ? { code } : {}),
+    ...(error ? { error } : {}),
+  };
+}
 
 function settingsSearch(raw: Record<string, unknown>): SettingsSearch {
   const tab = raw['tab'];
@@ -61,6 +88,8 @@ function settingsSearch(raw: Record<string, unknown>): SettingsSearch {
   if (integration) out.integration = integration;
   if (state) out.state = state;
   if (code) out.code = code;
+  const platform = str(raw['platform']);
+  if (platform) out.platform = platform;
   return out;
 }
 
@@ -135,22 +164,29 @@ export const analyticsFunnelBuilderRoute = createRoute({
 export const analyticsPerformanceRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/performance',
-  validateSearch: validateAnalyticsSearch,
+  validateSearch: validatePerformanceSearch,
   component: lazyRouteComponent(() => import('./pages/performance'), 'AnalyticsPerformancePage'),
 });
 
 export const analyticsLtvRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/ltv',
-  validateSearch: validateAnalyticsSearch,
+  validateSearch: validateLtvSearch,
   component: lazyRouteComponent(() => import('./pages/ltv'), 'AnalyticsLtvPage'),
 });
 
 export const analyticsCohortsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/cohorts',
-  validateSearch: validateAnalyticsSearch,
+  validateSearch: validateCohortSearch,
   component: lazyRouteComponent(() => import('./pages/cohorts'), 'AnalyticsCohortsPage'),
+});
+
+export const analyticsJourneysRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/journeys',
+  validateSearch: validateJourneySearch,
+  component: lazyRouteComponent(() => import('./pages/journeys'), 'AnalyticsJourneysPage'),
 });
 
 export const analyticsSourcesRoute = createRoute({
@@ -167,6 +203,13 @@ export const analyticsSettingsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/settings'), 'AnalyticsSettingsPage'),
 });
 
+export const analyticsFunnelsV2Route = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/funnels-v2',
+  validateSearch: validateAnalyticsSearch,
+  component: lazyRouteComponent(() => import('./pages/funnels-v2'), 'AnalyticsFunnelsV2Page'),
+});
+
 /** Every workspace analytics route, for `featureRoutes` in the app router. */
 export const analyticsRoutes = [
   analyticsDashboardRoute,
@@ -179,8 +222,10 @@ export const analyticsRoutes = [
   analyticsPerformanceRoute,
   analyticsLtvRoute,
   analyticsCohortsRoute,
+  analyticsJourneysRoute,
   analyticsSourcesRoute,
   analyticsSettingsRoute,
+  analyticsFunnelsV2Route,
 ] as const;
 
 /** Public read-only dashboard of a share link, attached to the root route (no shell, no auth). */
@@ -190,5 +235,13 @@ export const analyticsShareRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/public-share'), 'PublicSharePage'),
 });
 
+/** Fixed OAuth redirect of the ad platforms; the workspace slug is the prefix of `state`. */
+export const analyticsAdsOAuthRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'oauth/ads/callback',
+  validateSearch: adsOAuthSearch,
+  component: lazyRouteComponent(() => import('./pages/ads-oauth-callback'), 'AdsOAuthCallbackPage'),
+});
+
 /** Root-level analytics routes (outside the workspace shell). */
-export const analyticsPublicRoutes = [analyticsShareRoute] as const;
+export const analyticsPublicRoutes = [analyticsShareRoute, analyticsAdsOAuthRoute] as const;

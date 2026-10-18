@@ -15,6 +15,7 @@ import {
   Eye,
   FileText,
   Filter,
+  Footprints,
   FormInput,
   Gauge,
   Globe,
@@ -268,6 +269,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         permission: 'analytics:read',
       },
       {
+        id: 'funnels-v2',
+        path: 'analytics/funnels-v2',
+        labelKey: 'analytics.funnelsV2.title',
+        icon: Workflow,
+        permission: 'analytics:read',
+      },
+      {
         id: 'performance',
         path: 'analytics/performance',
         labelKey: 'analytics.performance.title',
@@ -286,6 +294,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         path: 'analytics/cohorts',
         labelKey: 'analytics.cohorts.title',
         icon: Grid3x3,
+        permission: 'analytics:read',
+      },
+      {
+        id: 'journeys',
+        path: 'analytics/journeys',
+        labelKey: 'analytics.journeys.title',
+        icon: Footprints,
         permission: 'analytics:read',
       },
       {

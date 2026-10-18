@@ -17,6 +17,7 @@ import {
 import { KpiRow } from '../components/kpi-row';
 import { MainChart } from '../components/main-chart';
 import { panelClass } from '../components/ui';
+import { AdsDashboardWidgets } from '../reports-ads/dashboard-widgets';
 
 /** Shown until the site's first event: where to find the snippet. */
 function InstallBanner({ tenant, site }: { tenant: string; site: Site }) {
@@ -53,6 +54,7 @@ export function AnalyticsDashboardPage() {
           <InstallBanner tenant={tenant} site={site} />
           <KpiRow />
           <MainChart />
+          <AdsDashboardWidgets />
           <div className="grid grid-cols-1 gap-[7px] xl:grid-cols-2">
             <SourcesCard />
             <PagesCard />

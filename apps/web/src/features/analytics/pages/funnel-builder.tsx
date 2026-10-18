@@ -1,7 +1,8 @@
-import type { HeatmapMetric } from '@amable/api-types';
+import type { FunnelGraph, FunnelGraphUpdate, HeatmapMetric, Site } from '@amable/api-types';
 import {
   cn,
   DashboardButton,
+  DashboardFilterMenu,
   DashboardPopover,
   DashboardPopoverContent,
   DashboardPopoverTrigger,
@@ -10,13 +11,18 @@ import {
 } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
+import { Skeleton } from '@amable/ui/ui/skeleton';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { ReactFlowProvider } from '@xyflow/react';
 import {
+  Archive,
   ArchiveRestore,
   ArrowLeft,
   CircleAlert,
   CircleCheck,
+  GitMerge,
+  Link2,
   Route as RouteIcon,
   Save,
   Undo2,
@@ -24,15 +30,33 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useI18n } from '../../../i18n';
+import { analyticsErrorMessage } from '../api';
+import {
+  ApiBodyError,
+  funnelKeys,
+  funnelsApi,
+  useAmablePages,
+  useFunnelGraph,
+  useFunnelHeatmap,
+  useTrafficSources,
+} from '../api-funnels';
+import { RangeControls } from '../components/controls';
+import { EmptyNote, ErrorState } from '../components/ui';
 import { FunnelCanvas, type BuilderSelection } from '../funnel-builder/canvas';
 import { HeatmapControls, heatCells } from '../funnel-builder/heatmap';
-import { mockFunnelGraph, mockHeatmap, resourcePage } from '../funnel-builder/mock';
+import { LinkBuilderDialog } from '../funnel-builder/link-builder';
 import { KIND_META } from '../funnel-builder/nodes/kind-meta';
 import { FunnelPalette, type PaletteItem } from '../funnel-builder/palette';
 import { EdgePanel } from '../funnel-builder/panels/edge-panel';
 import { NodePanel } from '../funnel-builder/panels/node-panel';
 import {
+  BuilderResourcesProvider,
+  pageResources,
+  resourcePage,
+} from '../funnel-builder/resources';
+import {
   builderReducer,
+  canSave,
   createNode,
   deletedNodes,
   draftIssues,
@@ -40,24 +64,42 @@ import {
   isDirty,
   issuesByTarget,
   liveNodes,
-  toGraph,
+  parseSaveFailure,
+  toGraphUpdate,
   tracePath,
   type BuilderIssue,
   type Position,
 } from '../funnel-builder/state';
+import { useAnalyticsQueryState, type AnalyticsState } from '../lib/query-state';
 import { analyticsFunnelBuilderRoute, type FunnelBuilderSearch } from '../routes';
 
-function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
+const ALL_SOURCES = 'all';
+
+function Builder({
+  tenant,
+  site,
+  initial,
+  controls,
+}: {
+  tenant: string;
+  site: Site;
+  initial: FunnelGraph;
+  controls: AnalyticsState;
+}) {
   const { t, locale } = useI18n();
   const search = useSearch({ from: analyticsFunnelBuilderRoute.id });
   const navigate = useNavigate();
-  const [state, dispatch] = useReducer(builderReducer, funnelId, (id) =>
-    initBuilder(mockFunnelGraph(id)),
-  );
+  const queryClient = useQueryClient();
+  const funnelId = initial.id;
+  const [state, dispatch] = useReducer(builderReducer, initial, initBuilder);
   const [selection, setSelection] = useState<BuilderSelection>(null);
+  const [linksFor, setLinksFor] = useState<{ nodeId?: string } | null>(null);
+  const [heatSource, setHeatSource] = useState(ALL_SOURCES);
+  const sources = useTrafficSources(tenant, site.id);
   const draft = state.draft;
   const metric = search.heatmap ?? null;
   const tracing = search.trace === '1';
+  const conflict = state.conflict ?? null;
 
   const setSearch = (patch: Partial<FunnelBuilderSearch>) =>
     void navigate({
@@ -69,9 +111,11 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
 
   const issues = useMemo(() => draftIssues(state), [state]);
   const dirty = isDirty(state);
-  const saveable = dirty && issues.length === 0;
   const message = useCallback(
-    (issue: BuilderIssue) => t(`analytics.funnelBuilder.error.${issue.code}`),
+    (issue: BuilderIssue) =>
+      issue.code === 'invalid_config' && issue.message
+        ? `${t('analytics.funnelBuilder.error.invalid_config')} (${issue.message})`
+        : t(`analytics.funnelBuilder.error.${issue.code}`),
     [t],
   );
   const grouped = useMemo(() => {
@@ -81,9 +125,23 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
     return { nodes: texts(nodes), edges: texts(edges), graph: [...new Set(graph.map(message))] };
   }, [issues, message]);
 
+  const heatmap = useFunnelHeatmap(
+    tenant,
+    site.id,
+    funnelId,
+    state.saved.version,
+    metric
+      ? {
+          metric,
+          from: controls.range.from,
+          to: controls.range.to,
+          ...(heatSource !== ALL_SOURCES ? { source: heatSource } : {}),
+        }
+      : null,
+  );
   const heat = useMemo(
-    () => (metric ? heatCells(mockHeatmap(draft, metric), locale) : null),
-    [draft, metric, locale],
+    () => (metric && heatmap.data ? heatCells(heatmap.data, locale) : null),
+    [heatmap.data, metric, locale],
   );
   const trace = useMemo(
     () => (tracing && selection?.kind === 'node' ? tracePath(draft, selection.id) : null),
@@ -105,7 +163,7 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
       );
       if (node.kind === 'page_group' && 'resource' in item) {
         node.label = item.resource.name;
-        node.config.page_type = item.resource.type;
+        node.config.page_type = item.pageType;
       }
       dispatch({ type: 'add_node', node });
       setSelection({ kind: 'node', id: node.id });
@@ -113,14 +171,52 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
     [draft, selection],
   );
 
+  const api = funnelsApi(tenant);
+  const saveMutation = useMutation({
+    mutationFn: (update: FunnelGraphUpdate) => api.funnels.save(site.id, funnelId, update),
+    onSuccess: (graph) => {
+      dispatch({ type: 'saved', graph });
+      queryClient.setQueryData(funnelKeys.graph(tenant, site.id, funnelId), graph);
+      void queryClient.invalidateQueries({ queryKey: [...funnelKeys.graphs(tenant, site.id), 'list'] });
+      toast.success(t('analytics.funnelBuilder.saved'));
+    },
+    onError: async (error) => {
+      if (!(error instanceof ApiBodyError)) {
+        toast.error(analyticsErrorMessage(t, error));
+        return;
+      }
+      const failure = parseSaveFailure(draft, error.status, error.body);
+      if (failure.kind === 'invalid') {
+        dispatch({ type: 'rejected', issues: failure.issues });
+        toast.error(t('analytics.funnelBuilder.saveInvalid'));
+      } else if (failure.kind === 'conflict') {
+        try {
+          dispatch({ type: 'conflict', remote: await api.funnels.get(site.id, funnelId) });
+          toast.error(t('analytics.funnelBuilder.conflict.toast'));
+        } catch (reload) {
+          toast.error(analyticsErrorMessage(t, reload));
+        }
+      } else {
+        toast.error(analyticsErrorMessage(t, error));
+      }
+    },
+  });
+  const statusMutation = useMutation({
+    mutationFn: (action: 'archive' | 'restore') =>
+      action === 'archive'
+        ? api.funnels.archive(site.id, funnelId)
+        : api.funnels.restore(site.id, funnelId),
+    onSuccess: (graph) => {
+      if (!isDirty(state)) dispatch({ type: 'saved', graph });
+      queryClient.setQueryData(funnelKeys.graph(tenant, site.id, funnelId), graph);
+      void queryClient.invalidateQueries({ queryKey: [...funnelKeys.graphs(tenant, site.id), 'list'] });
+    },
+    onError: (error) => toast.error(analyticsErrorMessage(t, error)),
+  });
+
+  const saveable = canSave(state) && !saveMutation.isPending;
   const save = () => {
-    if (!saveable) return;
-    const graph = toGraph(state);
-    dispatch({
-      type: 'saved',
-      graph: { ...graph, version: state.saved.version + 1, updated_at: Date.now() },
-    });
-    toast.success(t('analytics.funnelBuilder.saved'));
+    if (saveable) saveMutation.mutate(toGraphUpdate(state));
   };
   const discard = () => {
     dispatch({ type: 'discard' });
@@ -146,14 +242,16 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
     selection?.kind === 'edge' ? draft.edges.find((e) => e.id === selection.id) : undefined;
   const removed = deletedNodes(draft);
   const kindLabel = (kind: keyof typeof KIND_META) => t(`analytics.funnelBuilder.kind.${kind}`);
+  const archived = state.saved.status === 'archived';
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="funnel-builder">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-1.5">
         <Button asChild variant="ghost" size="sm" className="h-8 px-2">
           <Link
-            to="/t/$tenant/analytics/funnels"
+            to="/t/$tenant/analytics/funnels-v2"
             params={{ tenant }}
+            search={{ site: site.id }}
             aria-label={t('analytics.funnelBuilder.back')}
           >
             <ArrowLeft className="size-4" aria-hidden />
@@ -173,7 +271,9 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
           )}
           data-testid="funnel-builder-status"
         >
-          {dirty ? t('analytics.funnelBuilder.unsaved') : t('analytics.funnelBuilder.upToDate')}
+          {dirty
+            ? t('analytics.funnelBuilder.unsaved')
+            : t('analytics.funnelBuilder.savedVersion', { version: state.saved.version })}
         </span>
         <span
           className={cn(
@@ -196,6 +296,20 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
           metric={metric}
           onChange={(m: HeatmapMetric | null) => setSearch({ heatmap: m ?? undefined })}
         />
+        {metric ? (
+          <>
+            <RangeControls controls={controls} showInterval={false} />
+            <DashboardFilterMenu
+              label={t('analytics.funnelBuilder.heatmap.source')}
+              value={heatSource}
+              options={[
+                { value: ALL_SOURCES, label: t('analytics.funnelBuilder.heatmap.allSources') },
+                ...(sources.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+              ]}
+              onValueChange={setHeatSource}
+            />
+          </>
+        ) : null}
         <DashboardButton
           variant={tracing ? 'primary' : 'ghost'}
           size="sm"
@@ -205,6 +319,10 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
         >
           <RouteIcon aria-hidden />
           {t('analytics.funnelBuilder.pathTrace')}
+        </DashboardButton>
+        <DashboardButton variant="ghost" size="sm" onClick={() => setLinksFor({})}>
+          <Link2 aria-hidden />
+          {t('analytics.funnelBuilder.links.button')}
         </DashboardButton>
         <DashboardPopover>
           <DashboardPopoverTrigger asChild>
@@ -252,12 +370,58 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
           data-testid="funnel-builder-save"
         >
           <Save aria-hidden />
-          {t('analytics.funnelBuilder.save')}
+          {saveMutation.isPending ? t('analytics.funnelBuilder.saving') : t('analytics.funnelBuilder.save')}
         </DashboardButton>
       </div>
-      <p className="shrink-0 border-b bg-muted/30 px-4 py-1 text-[11px] text-muted-foreground">
-        {t('analytics.funnelBuilder.mockNotice')}
-      </p>
+      {conflict ? (
+        <div
+          role="alert"
+          className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-warning/10 px-4 py-1.5 text-xs"
+          data-testid="funnel-builder-conflict"
+        >
+          <GitMerge className="size-3.5 text-warning" aria-hidden />
+          <span className="min-w-0 flex-1">
+            {t('analytics.funnelBuilder.conflict.body', { version: conflict.version })}
+          </span>
+          <DashboardButton
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              dispatch({ type: 'resolve_conflict', keep: 'theirs' });
+              setSelection(null);
+            }}
+          >
+            {t('analytics.funnelBuilder.conflict.reload')}
+          </DashboardButton>
+          <DashboardButton
+            variant="primary"
+            size="sm"
+            onClick={() => dispatch({ type: 'resolve_conflict', keep: 'mine' })}
+          >
+            {t('analytics.funnelBuilder.conflict.keepMine')}
+          </DashboardButton>
+        </div>
+      ) : null}
+      {archived ? (
+        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/30 px-4 py-1 text-[11px] text-muted-foreground">
+          <Archive className="size-3.5" aria-hidden />
+          <span className="flex-1">{t('analytics.funnelBuilder.archivedNotice')}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            disabled={statusMutation.isPending}
+            onClick={() => statusMutation.mutate('restore')}
+          >
+            {t('analytics.funnelsV2.restore')}
+          </Button>
+        </div>
+      ) : null}
+      {metric && heatmap.error ? (
+        <div className="shrink-0 border-b px-4">
+          <ErrorState error={heatmap.error} compact />
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1">
         <FunnelPalette
@@ -313,6 +477,7 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
                   node={selectedNode}
                   dispatch={dispatch}
                   issues={grouped.nodes.get(selectedNode.id) ?? []}
+                  onLinks={() => setLinksFor({ nodeId: selectedNode.id })}
                 />
               ) : selectedEdge ? (
                 <EdgePanel
@@ -327,18 +492,58 @@ function Builder({ tenant, funnelId }: { tenant: string; funnelId: string }) {
           </aside>
         ) : null}
       </div>
+      {linksFor ? (
+        <LinkBuilderDialog
+          tenant={tenant}
+          site={site}
+          graph={state.saved}
+          dirty={dirty}
+          {...(linksFor.nodeId !== undefined ? { initialNodeId: linksFor.nodeId } : {})}
+          onClose={() => setLinksFor(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
-/** `/t/$tenant/analytics/funnels/$funnelId/builder` — visual funnel builder (sample data). */
+/** `/t/$tenant/analytics/funnels/$funnelId/builder` — visual funnel builder of a site's funnel graph. */
 export function AnalyticsFunnelBuilderPage() {
   const { t } = useI18n();
   const { tenant, funnelId } = useParams({ from: analyticsFunnelBuilderRoute.id });
   usePageChrome({ title: t('analytics.funnelBuilder.title') });
+  const controls = useAnalyticsQueryState(tenant);
+  const site = controls.site;
+  const graph = useFunnelGraph(tenant, site?.id ?? null, funnelId);
+  const pages = useAmablePages(tenant);
+  const resources = useMemo(() => pageResources(pages.data ?? []), [pages.data]);
+
+  const error = controls.sites.error ?? graph.error;
+  if (error)
+    return (
+      <div className="p-4">
+        <ErrorState error={error} />
+      </div>
+    );
+  if (controls.sites.isPending || (site && graph.isPending))
+    return (
+      <div className="grid gap-3 p-4">
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-[60vh] w-full" />
+      </div>
+    );
+  if (!site || !graph.data)
+    return <EmptyNote>{t('analytics.funnelsV2.noSite')}</EmptyNote>;
   return (
     <ReactFlowProvider>
-      <Builder key={funnelId} tenant={tenant} funnelId={funnelId} />
+      <BuilderResourcesProvider pages={resources}>
+        <Builder
+          key={`${site.id}:${funnelId}`}
+          tenant={tenant}
+          site={site}
+          initial={graph.data}
+          controls={controls}
+        />
+      </BuilderResourcesProvider>
     </ReactFlowProvider>
   );
 }

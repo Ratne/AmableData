@@ -6,6 +6,7 @@ import {
   type FunnelGraph,
   type FunnelGraphError,
   type FunnelGraphErrorCode,
+  type FunnelGraphInput,
   type FunnelGraphUpdate,
   type FunnelNode,
   type FunnelNodeKind,
@@ -24,6 +25,10 @@ export interface BuilderState {
   readonly draft: FunnelGraph;
   /** Draft replaced by the last discard, so the discard can be undone. */
   readonly discarded: FunnelGraph | null;
+  /** Errors of the last rejected save (HTTP 422); cleared by the next draft edit. */
+  readonly rejected?: readonly BuilderIssue[];
+  /** Newer server version met by a save (HTTP 409), until the user picks a side. */
+  readonly conflict?: FunnelGraph | null;
 }
 
 export type GraphValidator = (graph: ValidatableGraph) => FunnelGraphError[];
@@ -42,19 +47,23 @@ export type BuilderAction =
   | { type: 'rename'; name: string }
   | { type: 'discard' }
   | { type: 'undo_discard' }
-  | { type: 'saved'; graph: FunnelGraph };
+  | { type: 'saved'; graph: FunnelGraph }
+  | { type: 'rejected'; issues: readonly BuilderIssue[] }
+  | { type: 'conflict'; remote: FunnelGraph }
+  /** `theirs` reloads the server version; `mine` keeps the draft on top of it. */
+  | { type: 'resolve_conflict'; keep: 'mine' | 'theirs' };
 
 /** Source handle of the fallback exit of condition nodes. */
 export const DEFAULT_HANDLE = 'default';
 
-/** Edge types each source kind may emit (`external_url` is terminal). */
+/** Edge types each source kind may emit, as enforced by `validateGraph` (`external_url` is terminal). */
 export const ALLOWED_VIA: Readonly<Record<FunnelNodeKind, readonly FunnelEdgeVia['type'][]>> = {
-  traffic: ['weight', 'default'],
-  rotator: ['weight', 'default'],
+  traffic: ['default'],
+  rotator: ['weight'],
   page_group: ['action', 'default'],
   condition: ['route', 'default'],
   external_url: [],
-  action_proxy: ['action', 'default'],
+  action_proxy: ['default'],
   tag: ['default'],
   webhook: ['default'],
 };
@@ -140,11 +149,11 @@ export function defaultVia(
 ): FunnelEdgeVia | null {
   const outgoing = graph.edges.filter((e) => e.from === from.id);
   switch (from.kind) {
-    case 'traffic':
     case 'rotator':
       return { type: 'weight', weight: 100 };
-    case 'page_group':
-    case 'action_proxy': {
+    case 'page_group': {
+      // The first exit is the mandatory fallback; the next ones are numbered actions.
+      if (!outgoing.some((e) => e.via.type === 'default')) return { type: 'default' };
       const used = new Set(outgoing.flatMap((e) => (e.via.type === 'action' ? e.via.actions : [])));
       let n = 1;
       while (used.has(n)) n += 1;
@@ -163,6 +172,8 @@ export function defaultVia(
       if (picked !== undefined) return { type: 'route', route_id: picked.id };
       return outgoing.some((e) => e.via.type === 'default') ? null : { type: 'default' };
     }
+    case 'traffic':
+    case 'action_proxy':
     case 'tag':
     case 'webhook':
       return outgoing.length > 0 ? null : { type: 'default' };
@@ -176,7 +187,7 @@ function sameVia(a: FunnelEdgeVia, b: FunnelEdgeVia): boolean {
 }
 
 function withDraft(state: BuilderState, draft: FunnelGraph): BuilderState {
-  return { ...state, draft, discarded: null };
+  return { ...state, draft, discarded: null, rejected: [] };
 }
 
 function mapNodes(state: BuilderState, id: string, fn: (node: FunnelNode) => FunnelNode) {
@@ -259,6 +270,17 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       return { ...state, draft: state.discarded, discarded: null };
     case 'saved':
       return initBuilder(action.graph);
+    case 'rejected':
+      return { ...state, rejected: [...action.issues] };
+    case 'conflict':
+      return { ...state, conflict: clone(action.remote) };
+    case 'resolve_conflict': {
+      const remote = state.conflict;
+      if (remote === undefined || remote === null) return state;
+      if (action.keep === 'theirs') return initBuilder(remote);
+      // The draft stays as is and is saved against the server version next time.
+      return { ...state, saved: remote, conflict: null, rejected: [], discarded: null };
+    }
   }
 }
 
@@ -338,12 +360,132 @@ export function draftIssues(
       message: error.message,
     });
   }
+  for (const issue of state.rejected ?? []) {
+    if (!issues.some((i) => sameIssue(i, issue))) issues.push(issue);
+  }
   return issues;
 }
 
-/** Save is allowed only with a real diff and a valid graph. */
+function sameIssue(a: BuilderIssue, b: BuilderIssue): boolean {
+  return (
+    a.code === b.code && a.node_id === b.node_id && a.edge_id === b.edge_id && a.message === b.message
+  );
+}
+
+// ------------------------------------------------------------- server replies
+
+/** Field detail of a `validation_failed` reply (`path` like `nodes.3.config.url`). */
+export interface ValidationDetail {
+  readonly path: string;
+  readonly message: string;
+}
+
+/** What went wrong with a save, from the HTTP status and the JSON error body. */
+export type SaveFailure =
+  | { readonly kind: 'conflict' }
+  | { readonly kind: 'invalid'; readonly issues: readonly BuilderIssue[] }
+  | { readonly kind: 'other' };
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** Structural errors of `validateGraph` (`invalid_graph` reply) as builder issues. */
+export function graphErrorIssues(errors: readonly FunnelGraphError[]): BuilderIssue[] {
+  return errors.map((e) => ({
+    code: e.code,
+    ...(e.node_id !== undefined ? { node_id: e.node_id } : {}),
+    ...(e.edge_id !== undefined ? { edge_id: e.edge_id } : {}),
+    message: e.message,
+  }));
+}
+
+/** Schema errors (`validation_failed` details) pinned to the node or edge at their path. */
+export function detailIssues(
+  graph: Pick<FunnelGraph, 'nodes' | 'edges'>,
+  details: readonly ValidationDetail[],
+): BuilderIssue[] {
+  return details.map((d) => {
+    const [section, index] = d.path.split('.');
+    const i = Number(index);
+    const node = section === 'nodes' && Number.isInteger(i) ? graph.nodes[i] : undefined;
+    const edge = section === 'edges' && Number.isInteger(i) ? graph.edges[i] : undefined;
+    return {
+      code: 'invalid_config' as const,
+      ...(node ? { node_id: node.id } : {}),
+      ...(edge ? { edge_id: edge.id } : {}),
+      message: d.message,
+    };
+  });
+}
+
+/** Classifies a failed `PUT /funnels-v2/{id}` (409 stale version, 422 invalid graph or schema). */
+export function parseSaveFailure(
+  graph: Pick<FunnelGraph, 'nodes' | 'edges'>,
+  status: number,
+  body: unknown,
+): SaveFailure {
+  if (status === 409) return { kind: 'conflict' };
+  const json = record(body);
+  if (status !== 422 || json === null) return { kind: 'other' };
+  if (json['error'] === 'invalid_graph' && Array.isArray(json['errors'])) {
+    const errors = (json['errors'] as unknown[]).flatMap((raw) => {
+      const e = record(raw);
+      if (e === null || typeof e['code'] !== 'string' || typeof e['message'] !== 'string') return [];
+      return [
+        {
+          code: e['code'] as FunnelGraphErrorCode,
+          message: e['message'],
+          ...(typeof e['node_id'] === 'string' ? { node_id: e['node_id'] } : {}),
+          ...(typeof e['edge_id'] === 'string' ? { edge_id: e['edge_id'] } : {}),
+        },
+      ];
+    });
+    return { kind: 'invalid', issues: graphErrorIssues(errors) };
+  }
+  const details = Array.isArray(json['details'])
+    ? (json['details'] as unknown[]).flatMap((raw) => {
+        const d = record(raw);
+        return d && typeof d['path'] === 'string' && typeof d['message'] === 'string'
+          ? [{ path: d['path'], message: d['message'] }]
+          : [];
+      })
+    : [];
+  const message = typeof json['message'] === 'string' ? json['message'] : 'invalid funnel';
+  return {
+    kind: 'invalid',
+    issues: details.length > 0 ? detailIssues(graph, details) : [{ code: 'invalid_config', message }],
+  };
+}
+
+/** Body of `POST /funnels-v2` for a new funnel: traffic entry straight to an external URL. */
+export function blankFunnelInput(name: string, url: string): FunnelGraphInput {
+  return {
+    name,
+    nodes: [
+      { id: 'n1', kind: 'traffic', position: { x: 0, y: 0 }, config: {} },
+      {
+        id: 'n2',
+        kind: 'external_url',
+        position: { x: 320, y: 0 },
+        config: { url, append_data: true },
+      },
+    ],
+    edges: [{ id: 'e1', from: 'n1', to: 'n2', via: { type: 'default' } }],
+    default_cost_minor: null,
+    ip_anonymize: false,
+  };
+}
+
+/** Save is allowed only with a real diff, a valid graph and no unresolved conflict. */
 export function canSave(state: BuilderState, validator: GraphValidator = validateGraph): boolean {
-  return isDirty(state) && draftIssues(state, validator).length === 0;
+  return (
+    isDirty(state) &&
+    (state.conflict === undefined || state.conflict === null) &&
+    draftIssues(state, validator).length === 0
+  );
 }
 
 export function issuesByTarget(issues: readonly BuilderIssue[]) {

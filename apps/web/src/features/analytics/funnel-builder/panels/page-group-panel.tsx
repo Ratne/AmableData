@@ -6,7 +6,7 @@ import { Switch } from '@amable/ui/ui/switch';
 import { Pause, Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '../../../../i18n';
 import { Segmented } from '../../components/ui';
-import { MOCK_RESOURCES } from '../mock';
+import { usePageResources } from '../resources';
 import { nextId } from '../state';
 import { Field, KeyValueEditor, NumberInput, selectClass, SwitchRow } from './form-bits';
 
@@ -24,7 +24,9 @@ function PageRow({
   onRemove: () => void;
 }) {
   const { t, locale } = useI18n();
+  const resources = usePageResources();
   const source = page.amable_page_id !== undefined ? 'amable' : 'url';
+  const known = resources.some((r) => r.id === page.amable_page_id);
   const pct = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 });
   return (
     <li className={cn('grid gap-2 rounded-lg border p-2', page.paused && 'opacity-60')}>
@@ -66,13 +68,21 @@ function PageRow({
           value={page.url ?? ''}
           onChange={(e) => onChange({ ...page, url: e.target.value })}
         />
+      ) : resources.length === 0 ? (
+        <Input
+          className="h-8"
+          placeholder={t('analytics.funnelBuilder.panel.pageId')}
+          aria-label={t('analytics.funnelBuilder.panel.pageId')}
+          value={page.amable_page_id ?? ''}
+          onChange={(e) => onChange({ ...page, amable_page_id: e.target.value.trim() })}
+        />
       ) : (
         <select
           className={selectClass}
           aria-label={t('analytics.funnelBuilder.panel.pickPage')}
           value={page.amable_page_id ?? ''}
           onChange={(e) => {
-            const picked = MOCK_RESOURCES.find((r) => r.id === e.target.value);
+            const picked = resources.find((r) => r.id === e.target.value);
             onChange({
               ...page,
               amable_page_id: e.target.value,
@@ -81,7 +91,10 @@ function PageRow({
           }}
         >
           <option value="">{t('analytics.funnelBuilder.panel.pickPage')}</option>
-          {MOCK_RESOURCES.map((r) => (
+          {!known && page.amable_page_id ? (
+            <option value={page.amable_page_id}>{page.amable_page_id}</option>
+          ) : null}
+          {resources.map((r) => (
             <option key={r.id} value={r.id}>
               {r.name}
             </option>

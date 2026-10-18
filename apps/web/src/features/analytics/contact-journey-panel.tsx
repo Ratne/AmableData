@@ -1,4 +1,4 @@
-import type { ContactJourney, JourneyItem, JourneyItemKind } from '@amable/api-types';
+import type { ContactJourney, JourneyItem, JourneyItemKind, TouchKind } from '@amable/api-types';
 import { cn } from '@amable/ui';
 import { Skeleton } from '@amable/ui/ui/skeleton';
 import { Link, useParams } from '@tanstack/react-router';
@@ -123,6 +123,130 @@ function TimelineItem({ item }: { item: JourneyItem }) {
         ) : null}
       </div>
     </li>
+  );
+}
+
+/** Funnel / ad touch of the contact's visitors and their identity-merge groups. */
+interface JourneyFunnelTouch {
+  readonly id: string;
+  /** Epoch ms or ISO. */
+  readonly ts: number | string;
+  readonly visitor_id: string;
+  readonly kind: TouchKind;
+  readonly funnel_name: string | null;
+  readonly node_id: string;
+  readonly traffic_source_name: string | null;
+  readonly campaign: string | null;
+  readonly campaign_name: string | null;
+  readonly external_click_id: string | null;
+}
+
+/** Optional identity-graph fields of the contact activity (present when the server sends them). */
+interface JourneyIdentityFields {
+  readonly merged_visitor_ids?: readonly string[];
+  readonly funnel_touches?: readonly JourneyFunnelTouch[];
+  readonly tags?: readonly string[];
+}
+
+const isoOf = (ts: number | string) => (typeof ts === 'number' ? new Date(ts).toISOString() : ts);
+
+function IdentityExtras({ tenant, journey }: { tenant: string; journey: ContactJourney }) {
+  const { t } = useI18n();
+  const f = useFormatters();
+  const extras = journey as ContactJourney & JourneyIdentityFields;
+  const merged = extras.merged_visitor_ids ?? [];
+  const touches = extras.funnel_touches ?? [];
+  const tags = extras.tags ?? [];
+  if (merged.length === 0 && touches.length === 0 && tags.length === 0) return null;
+  const siteId = journey.sites[0]?.site_id;
+  return (
+    <>
+      {touches.length > 0 ? (
+        <Section title={t('analytics.journeys.contact.touches')}>
+          <ol className="flex flex-col gap-1 text-xs">
+            {[...touches].reverse().slice(0, 12).map((touch) => (
+              <li key={touch.id} className="flex items-baseline justify-between gap-2">
+                <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+                  <StatusPill tone="neutral">
+                    {t(`analytics.journeys.contact.kind.${touch.kind}`)}
+                  </StatusPill>
+                  <span className="truncate font-medium">
+                    {touch.funnel_name ?? touch.node_id}
+                  </span>
+                  <span className="truncate text-muted-foreground">
+                    {[
+                      touch.traffic_source_name,
+                      touch.campaign_name ?? touch.campaign,
+                      touch.funnel_name ? touch.node_id : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  {touch.external_click_id ? (
+                    <span
+                      className="font-mono text-[10.5px] text-muted-foreground"
+                      title={`${t('analytics.journeys.contact.clickId')}: ${touch.external_click_id}`}
+                    >
+                      {shortId(touch.external_click_id)}
+                    </span>
+                  ) : null}
+                </span>
+                <time
+                  dateTime={isoOf(touch.ts)}
+                  className="shrink-0 text-[11px] text-muted-foreground"
+                >
+                  {f.dateTime(isoOf(touch.ts))}
+                </time>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      ) : null}
+      {merged.length > 0 || tags.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {merged.length > 0 ? (
+            <Section title={t('analytics.journeys.contact.mergedVisitors')}>
+              <div className="flex flex-wrap gap-1" title={t('analytics.journeys.contact.mergedHint')}>
+                {merged.map((visitorId) =>
+                  siteId ? (
+                    <Link
+                      key={visitorId}
+                      to="/t/$tenant/analytics/visitors/$visitorId"
+                      params={{ tenant, visitorId }}
+                      search={{ site: siteId }}
+                      className="rounded bg-foreground/[0.05] px-1.5 py-0.5 font-mono text-[11px] hover:bg-primary/10 hover:text-primary"
+                    >
+                      {shortId(visitorId)}
+                    </Link>
+                  ) : (
+                    <span
+                      key={visitorId}
+                      className="rounded bg-foreground/[0.05] px-1.5 py-0.5 font-mono text-[11px]"
+                    >
+                      {shortId(visitorId)}
+                    </span>
+                  ),
+                )}
+              </div>
+            </Section>
+          ) : null}
+          {tags.length > 0 ? (
+            <Section title={t('analytics.journeys.contact.tags')}>
+              <div className="flex flex-wrap gap-1">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[11px]"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -261,6 +385,8 @@ function JourneyBody({ tenant, journey }: { tenant: string; journey: ContactJour
           )}
         </Section>
       </div>
+
+      <IdentityExtras tenant={tenant} journey={journey} />
 
       {journey.visitors.length > 0 ? (
         <Section title={t('analytics.journey.visitorIds')}>

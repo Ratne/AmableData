@@ -1,18 +1,19 @@
-import type { FunnelNodeKind } from '@amable/api-types';
+import type { FunnelNodeKind, PageType } from '@amable/api-types';
 import { cn } from '@amable/ui';
+import { Input } from '@amable/ui/ui/input';
 import { Files } from 'lucide-react';
 import { useState, type DragEvent, type ReactNode } from 'react';
 import { useI18n } from '../../../i18n';
 import { Segmented } from '../components/ui';
-import { MOCK_RESOURCES, type MockResource } from './mock';
 import { KIND_META, PALETTE_KINDS } from './nodes/kind-meta';
+import { usePageResources, type PageResource } from './resources';
 
 export const PALETTE_MIME = 'application/x-amable-funnel-node';
 
 /** What a palette tile creates: an empty node or a page group with an existing page. */
 export type PaletteItem =
   | { readonly kind: FunnelNodeKind }
-  | { readonly kind: 'page_group'; readonly resource: MockResource };
+  | { readonly kind: 'page_group'; readonly resource: PageResource; readonly pageType: PageType };
 
 function Tile({
   item,
@@ -50,7 +51,7 @@ function Tile({
   );
 }
 
-/** Left rail: node kinds and the existing pages, draggable onto the canvas or clickable. */
+/** Left rail: node kinds and the AmableCRM pages, draggable onto the canvas or clickable. */
 export function FunnelPalette({
   hasTraffic,
   onAdd,
@@ -59,7 +60,11 @@ export function FunnelPalette({
   onAdd: (item: PaletteItem) => void;
 }) {
   const { t } = useI18n();
-  const [type, setType] = useState<'lander' | 'offer'>('lander');
+  const pages = usePageResources();
+  const [type, setType] = useState<PageType>('lander');
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? pages.filter((p) => p.name.toLowerCase().includes(needle)) : pages;
   const heading =
     'px-2 pt-1 pb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase';
   return (
@@ -94,10 +99,24 @@ export function FunnelPalette({
           value={type}
           onChange={setType}
         />
-        {MOCK_RESOURCES.filter((r) => r.type === type).map((resource) => (
+        {pages.length > 6 ? (
+          <Input
+            className="mx-2 mb-1 h-7 w-[calc(100%-1rem)] text-xs"
+            placeholder={t('analytics.funnelBuilder.palette.search')}
+            aria-label={t('analytics.funnelBuilder.palette.search')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        ) : null}
+        {pages.length === 0 ? (
+          <p className="px-2 py-1 text-[11px] leading-snug text-muted-foreground">
+            {t('analytics.funnelBuilder.palette.noPages')}
+          </p>
+        ) : null}
+        {shown.map((resource) => (
           <Tile
             key={resource.id}
-            item={{ kind: 'page_group', resource }}
+            item={{ kind: 'page_group', resource, pageType: type }}
             icon={<Files className="size-3" />}
             label={resource.name}
             tone={KIND_META.page_group.tone}

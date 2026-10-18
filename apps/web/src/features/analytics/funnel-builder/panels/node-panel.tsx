@@ -1,14 +1,14 @@
 import type { FunnelGraph, FunnelNode } from '@amable/api-types';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
-import { Trash2 } from 'lucide-react';
+import { Link2, Trash2 } from 'lucide-react';
 import { useI18n } from '../../../../i18n';
 import type { BuilderAction } from '../state';
 import { ConditionPanel } from './condition-panel';
 import { ExternalUrlPanel } from './external-url-panel';
 import { Field } from './form-bits';
 import { PageGroupPanel } from './page-group-panel';
-import { RotatorPanel, WeightList } from './rotator-panel';
+import { RotatorPanel } from './rotator-panel';
 import { TagPanel } from './tag-panel';
 import { WebhookPanel } from './webhook-panel';
 
@@ -18,11 +18,14 @@ export function NodePanel({
   node,
   dispatch,
   issues,
+  onLinks,
 }: {
   graph: FunnelGraph;
   node: FunnelNode;
   dispatch: (action: BuilderAction) => void;
   issues: readonly string[];
+  /** Opens the link builder on this node. */
+  onLinks?: () => void;
 }) {
   const { t } = useI18n();
   const onChange = (next: FunnelNode) => dispatch({ type: 'update_node', node: next });
@@ -31,12 +34,9 @@ export function NodePanel({
     switch (node.kind) {
       case 'traffic':
         return (
-          <>
-            <p className="text-xs text-muted-foreground">
-              {t('analytics.funnelBuilder.panel.trafficInfo')}
-            </p>
-            <WeightList graph={graph} nodeId={node.id} dispatch={dispatch} />
-          </>
+          <p className="text-xs text-muted-foreground">
+            {t('analytics.funnelBuilder.panel.trafficEntryInfo')}
+          </p>
         );
       case 'rotator':
         return <RotatorPanel node={node} onChange={onChange} graph={graph} dispatch={dispatch} />;
@@ -90,6 +90,12 @@ export function NodePanel({
         </Field>
       </div>
       {body()}
+      {onLinks && (node.kind === 'traffic' || node.kind === 'page_group') ? (
+        <Button variant="outline" size="sm" className="h-8 justify-self-start" onClick={onLinks}>
+          <Link2 className="size-3.5" aria-hidden />
+          {t('analytics.funnelBuilder.links.open')}
+        </Button>
+      ) : null}
       <Button
         variant="outline"
         size="sm"

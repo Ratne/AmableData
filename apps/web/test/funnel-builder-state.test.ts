@@ -1,7 +1,16 @@
-import type { FunnelGraph, FunnelGraphError, FunnelNodeOf } from '@amable/api-types';
+import {
+  funnelGraphInputSchema,
+  funnelGraphSchema,
+  funnelGraphUpdateSchema,
+  validateGraph,
+  type FunnelGraph,
+  type FunnelGraphError,
+  type FunnelNodeOf,
+} from '@amable/api-types';
 import { describe, expect, it } from 'vitest';
 import { mockFunnelGraph, mockHeatmap } from '../src/features/analytics/funnel-builder/mock';
 import {
+  blankFunnelInput,
   builderReducer,
   canSave,
   createNode,
@@ -9,8 +18,10 @@ import {
   draftIssues,
   initBuilder,
   isDirty,
+  issuesByTarget,
   liveEdges,
   liveNodes,
+  parseSaveFailure,
   toGraph,
   toGraphUpdate,
   tracePath,
@@ -46,7 +57,7 @@ function graph(): FunnelGraph {
         },
       },
     ],
-    edges: [{ id: 'e1', from: 'n1', to: 'n2', via: { type: 'weight', weight: 100 } }],
+    edges: [{ id: 'e1', from: 'n1', to: 'n2', via: { type: 'default' } }],
     default_cost_minor: null,
     ip_anonymize: false,
     status: 'active',
@@ -76,12 +87,31 @@ describe('funnel builder state', () => {
     );
     expect(s.draft.nodes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3']);
     const added = s.draft.edges.filter((e) => e.from === 'n2');
+    // The first exit of a page group is its mandatory fallback, then numbered actions.
     expect(added.map((e) => e.via)).toEqual([
+      { type: 'default' },
       { type: 'action', actions: [1] },
-      { type: 'action', actions: [2] },
     ]);
     expect(added.map((e) => e.id)).toEqual(['e2', 'e3']);
     expect(isDirty(s)).toBe(true);
+  });
+
+  it('derives vias the validator accepts (single traffic exit, weighted rotator)', () => {
+    const start = initBuilder(graph());
+    const rot = createNode('rotator', { x: 0, y: 0 }, ['n1', 'n2']);
+    const s = run(
+      start,
+      { type: 'add_node', node: rot },
+      { type: 'connect', from: 'n1', to: 'n3' },
+      { type: 'connect', from: 'n3', to: 'n2' },
+    );
+    // The traffic node already has its exit; the rotator gets a weight.
+    expect(s.draft.edges.filter((e) => e.from === 'n1')).toHaveLength(1);
+    expect(s.draft.edges.find((e) => e.from === 'n3')?.via).toEqual({ type: 'weight', weight: 100 });
+    expect(run(s, { type: 'update_edge', id: 'e1', via: { type: 'weight', weight: 5 } }).draft.edges[0]?.via).toEqual({
+      type: 'default',
+    });
+    expect(draftIssues(initBuilder(mockFunnelGraph('demo')))).toEqual([]);
   });
 
   it('routes condition handles to their route or to the default exit', () => {
@@ -113,9 +143,12 @@ describe('funnel builder state', () => {
   });
 
   it('updates node config and edge via', () => {
+    const offer = createNode('page_group', { x: 600, y: 0 }, ['n1', 'n2']);
     const s = run(
       initBuilder(graph()),
-      { type: 'update_edge', id: 'e1', via: { type: 'weight', weight: 40 } },
+      { type: 'add_node', node: offer },
+      { type: 'connect', from: 'n2', to: 'n3' },
+      { type: 'update_edge', id: 'e2', via: { type: 'action', actions: [3, 4] } },
       { type: 'rename', name: 'Renamed' },
     );
     const node = s.draft.nodes[1] as FunnelNodeOf<'page_group'>;
@@ -124,7 +157,7 @@ describe('funnel builder state', () => {
       node: { ...node, config: { ...node.config, page_type: 'offer' } },
     });
     expect((next.draft.nodes[1] as FunnelNodeOf<'page_group'>).config.page_type).toBe('offer');
-    expect(next.draft.edges[0]?.via).toEqual({ type: 'weight', weight: 40 });
+    expect(next.draft.edges[1]?.via).toEqual({ type: 'action', actions: [3, 4] });
     expect(next.draft.name).toBe('Renamed');
   });
 
@@ -221,5 +254,118 @@ describe('funnel builder state', () => {
     const flow = mockHeatmap(g, 'flow_pct');
     expect(flow.nodes.find((n) => n.node_id === 'n1')?.value).toBe(100);
     for (const n of visits.nodes) expect(n.conversions).toBeLessThanOrEqual(n.visits);
+  });
+});
+
+describe('funnel builder <-> API', () => {
+  it('sends a body the update schema accepts, without stored-only members', () => {
+    const dirty = run(initBuilder(mockFunnelGraph('demo')), { type: 'rename', name: 'Live' });
+    const body = toGraphUpdate(dirty);
+    expect(funnelGraphUpdateSchema.safeParse(body).success).toBe(true);
+    expect(body).not.toHaveProperty('id');
+    expect(body).not.toHaveProperty('status');
+    expect(body).not.toHaveProperty('created_at');
+    expect(body.version).toBe(1);
+  });
+
+  it('builds a blank funnel the create schema and the validator accept', () => {
+    const input = blankFunnelInput('New', 'https://shop.example.com/');
+    expect(validateGraph(funnelGraphInputSchema.parse(input))).toEqual([]);
+  });
+
+  it('loads a server graph (defaults filled in) as a clean baseline', () => {
+    const stored = funnelGraphSchema.parse({
+      ...toGraph(initBuilder(graph())),
+      nodes: [
+        { id: 'n1', kind: 'traffic' },
+        {
+          id: 'n2',
+          kind: 'page_group',
+          config: {
+            page_type: 'lander',
+            pages: [{ id: 'p1', name: 'Quiz', url: 'https://example.com/q', weight: 100 }],
+          },
+        },
+      ],
+    });
+    const state = initBuilder(stored);
+    expect(isDirty(state)).toBe(false);
+    expect(state.draft.nodes[0]?.position).toEqual({ x: 0, y: 0 });
+    expect(canSave(state, valid)).toBe(false);
+  });
+
+  it('pins a 422 invalid_graph reply on nodes and edges until the next edit', () => {
+    const dirty = run(initBuilder(graph()), { type: 'rename', name: 'Changed' });
+    const failure = parseSaveFailure(dirty.draft, 422, {
+      error: 'invalid_graph',
+      errors: [
+        { code: 'missing_fallback', node_id: 'n2', message: 'the page group needs a default exit' },
+        { code: 'edge_unknown_node', edge_id: 'e1', node_id: 'n1', message: 'unknown' },
+        { code: 'bogus' },
+      ],
+    });
+    expect(failure.kind).toBe('invalid');
+    if (failure.kind !== 'invalid') return;
+    expect(failure.issues).toHaveLength(2);
+    const rejected = run(dirty, { type: 'rejected', issues: failure.issues });
+    const issues = draftIssues(rejected, valid);
+    const byTarget = issuesByTarget(issues);
+    expect(byTarget.nodes.get('n2')?.map((i) => i.code)).toEqual(['missing_fallback']);
+    expect(byTarget.nodes.get('n1')?.map((i) => i.code)).toEqual(['edge_unknown_node']);
+    expect(canSave(rejected, valid)).toBe(false);
+    // Any edit clears the server verdict.
+    const edited = run(rejected, { type: 'move_node', id: 'n2', position: { x: 1, y: 1 } });
+    expect(draftIssues(edited, valid)).toEqual([]);
+    expect(canSave(edited, valid)).toBe(true);
+  });
+
+  it('maps 422 validation_failed details to the node or edge at their path', () => {
+    const g = graph();
+    const failure = parseSaveFailure(g, 422, {
+      error: 'validation_failed',
+      message: 'nodes.1.config.pages.0.url: Invalid URL',
+      details: [
+        { path: 'nodes.1.config.pages.0.url', message: 'Invalid URL' },
+        { path: 'edges.0.via.weight', message: 'Too small' },
+        { path: 'name', message: 'Required' },
+      ],
+    });
+    expect(failure).toEqual({
+      kind: 'invalid',
+      issues: [
+        { code: 'invalid_config', node_id: 'n2', message: 'Invalid URL' },
+        { code: 'invalid_config', edge_id: 'e1', message: 'Too small' },
+        { code: 'invalid_config', message: 'Required' },
+      ],
+    });
+    expect(parseSaveFailure(g, 422, { error: 'validation_failed', message: 'bad' })).toEqual({
+      kind: 'invalid',
+      issues: [{ code: 'invalid_config', message: 'bad' }],
+    });
+    expect(parseSaveFailure(g, 500, null)).toEqual({ kind: 'other' });
+  });
+
+  it('handles a 409: reload theirs, or keep mine and save over their version', () => {
+    expect(parseSaveFailure(graph(), 409, { error: 'conflict' })).toEqual({ kind: 'conflict' });
+    const mine = run(initBuilder(graph()), { type: 'rename', name: 'Mine' });
+    const theirs: FunnelGraph = { ...graph(), name: 'Theirs', version: 4, updated_at: T0 + 1 };
+    const conflicted = run(mine, { type: 'conflict', remote: theirs });
+    expect(conflicted.conflict?.version).toBe(4);
+    expect(canSave(conflicted, valid)).toBe(false);
+
+    const reloaded = run(conflicted, { type: 'resolve_conflict', keep: 'theirs' });
+    expect(reloaded.draft.name).toBe('Theirs');
+    expect(isDirty(reloaded)).toBe(false);
+    expect(reloaded.conflict ?? null).toBeNull();
+
+    const kept = run(conflicted, { type: 'resolve_conflict', keep: 'mine' });
+    expect(kept.draft.name).toBe('Mine');
+    expect(kept.conflict).toBeNull();
+    expect(canSave(kept, valid)).toBe(true);
+    expect(toGraphUpdate(kept).version).toBe(4);
+
+    const saved = run(kept, { type: 'saved', graph: { ...toGraph(kept), version: 5 } });
+    expect(isDirty(saved)).toBe(false);
+    expect(saved.saved.version).toBe(5);
   });
 });
