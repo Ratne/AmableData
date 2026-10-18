@@ -20,6 +20,7 @@ import {
   type SettingsTab,
 } from '../routes';
 import { AlertsTab } from '../settings/alerts-tab';
+import { DomainsTab } from '../settings/domains-tab';
 import { IntegrationsTab } from '../settings/integrations-tab';
 import { KeysTab } from '../settings/keys-tab';
 import { PredictionTab } from '../settings/prediction-tab';
@@ -146,6 +147,8 @@ export function AnalyticsSettingsPage() {
         );
       case 'prediction':
         return <PredictionTab tenant={tenant} site={site} canConfigure={permissions.configure} />;
+      case 'domains':
+        return <DomainsTab tenant={tenant} site={site} canConfigure={permissions.configure} />;
     }
   };
 

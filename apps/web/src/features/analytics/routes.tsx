@@ -1,3 +1,4 @@
+import { HEATMAP_METRICS, type HeatmapMetric } from '@amable/api-types';
 import { createRoute, lazyRouteComponent } from '@tanstack/react-router';
 import { rootRoute } from '../../routes/root';
 import { tenantRoute } from '../../routes/tenant';
@@ -15,6 +16,13 @@ export interface FunnelsSearch extends AnalyticsSearch {
   readonly funnel?: string;
 }
 
+export interface FunnelBuilderSearch extends AnalyticsSearch {
+  /** Heatmap overlay metric; absent = heatmap off. */
+  readonly heatmap?: HeatmapMetric;
+  /** `1` highlights the paths through the selected node. */
+  readonly trace?: '1';
+}
+
 export const SETTINGS_TABS = [
   'sites',
   'tracking',
@@ -23,6 +31,7 @@ export const SETTINGS_TABS = [
   'sharing',
   'integrations',
   'prediction',
+  'domains',
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
@@ -58,6 +67,17 @@ function settingsSearch(raw: Record<string, unknown>): SettingsSearch {
 function funnelsSearch(raw: Record<string, unknown>): FunnelsSearch {
   const funnel = str(raw['funnel']);
   return { ...validateAnalyticsSearch(raw), ...(funnel ? { funnel } : {}) };
+}
+
+function funnelBuilderSearch(raw: Record<string, unknown>): FunnelBuilderSearch {
+  const heatmap = raw['heatmap'];
+  return {
+    ...validateAnalyticsSearch(raw),
+    ...(typeof heatmap === 'string' && (HEATMAP_METRICS as readonly string[]).includes(heatmap)
+      ? { heatmap: heatmap as HeatmapMetric }
+      : {}),
+    ...(str(raw['trace']) === '1' ? { trace: '1' as const } : {}),
+  };
 }
 
 export const analyticsDashboardRoute = createRoute({
@@ -102,6 +122,44 @@ export const analyticsFunnelsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/funnels'), 'AnalyticsFunnelsPage'),
 });
 
+export const analyticsFunnelBuilderRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/funnels/$funnelId/builder',
+  validateSearch: funnelBuilderSearch,
+  component: lazyRouteComponent(
+    () => import('./pages/funnel-builder'),
+    'AnalyticsFunnelBuilderPage',
+  ),
+});
+
+export const analyticsPerformanceRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/performance',
+  validateSearch: validateAnalyticsSearch,
+  component: lazyRouteComponent(() => import('./pages/performance'), 'AnalyticsPerformancePage'),
+});
+
+export const analyticsLtvRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/ltv',
+  validateSearch: validateAnalyticsSearch,
+  component: lazyRouteComponent(() => import('./pages/ltv'), 'AnalyticsLtvPage'),
+});
+
+export const analyticsCohortsRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/cohorts',
+  validateSearch: validateAnalyticsSearch,
+  component: lazyRouteComponent(() => import('./pages/cohorts'), 'AnalyticsCohortsPage'),
+});
+
+export const analyticsSourcesRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/sources',
+  validateSearch: validateAnalyticsSearch,
+  component: lazyRouteComponent(() => import('./pages/sources'), 'AnalyticsSourcesPage'),
+});
+
 export const analyticsSettingsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/settings',
@@ -117,6 +175,11 @@ export const analyticsRoutes = [
   analyticsVisitorsRoute,
   analyticsVisitorRoute,
   analyticsFunnelsRoute,
+  analyticsFunnelBuilderRoute,
+  analyticsPerformanceRoute,
+  analyticsLtvRoute,
+  analyticsCohortsRoute,
+  analyticsSourcesRoute,
   analyticsSettingsRoute,
 ] as const;
 
