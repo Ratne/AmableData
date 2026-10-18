@@ -80,6 +80,17 @@ export type {
   SearchStatRow,
   VisitorListQuery,
 } from './store/index';
+export type {
+  AdConnectionInput,
+  AdConnectionRecord,
+  AdEntityQuery,
+  AdEntityRecord,
+  AdSpendQuery,
+} from './store/ad-entities';
+export type { TouchQuery, ConversionInput, ConversionRecord, ConversionQuery } from './store/touches';
+export type { OutboundEnqueueInput, OutboundOutcome, OutboundQuery } from './store/outbound';
+export type { IdentityKeyRef } from './store/identity';
+export type { UpdateFunnelGraphOutcome } from './store/funnel-graphs';
 export { crmTransactionId } from './store/crm';
 export { enrichServerEvent, type EdgeSiteConfig, type RequestContext } from './enrich';
 export type { EnrichedEvent, BotHit } from './types';
