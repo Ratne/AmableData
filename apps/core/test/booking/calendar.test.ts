@@ -220,5 +220,34 @@ describe('BookingCalendar core', () => {
     scopes = [OAUTH_SCOPES.calendarRead];
     await a.bookingChanged(bookingId, [], change(ref, event));
     expect(await a.eventState(bookingId)).toMatchObject({ pending: false, lastError: expect.stringContaining('reconnect') });
+    expect(calendars.cores.get('ten_1:cal_1')?.lastSync()).toMatchObject({ needsReconnect: true });
+
+    // The failed write above shows on the other calendar until a write succeeds.
+    const coreB = calendars.cores.get('ten_1:cal_2');
+    expect(coreB?.lastSync().writeError).toBeNull();
+    failNext = 1;
+    scopes = [OAUTH_SCOPES.calendarRead, OAUTH_SCOPES.calendar];
+    await b.bookingChanged(bookingId, [], change(refB, event));
+    expect(coreB?.lastSync()).toMatchObject({ writeError: 'Google answered 503', needsReconnect: false });
+    calendars.clock.now += 61_000;
+    await coreB?.fireDue();
+    expect(coreB?.lastSync().writeError).toBeNull();
+  });
+
+  it('flags read-only Google connections on sync until they are reconnected', async () => {
+    let scopes: OAuthScope[] = [OAUTH_SCOPES.calendarRead];
+    const oauth: OAuthTokenProvider = {
+      available: true,
+      startConnect: () => Promise.reject(new Error('unused')),
+      finishConnect: () => Promise.reject(new Error('unused')),
+      getAccessToken: () => Promise.resolve({ accessToken: 'real', expiresAt: Date.now() + 3600_000, scopes, stub: false }),
+      revoke: () => Promise.resolve(),
+    };
+    const calendars = fakeCalendars({ oauth, fetch: () => Promise.resolve(Response.json({ calendars: {} })) });
+    const stub = calendars.namespace.get(calendars.namespace.idFromName('ten_1:cal_1'));
+    const ref = { ...REF, googleAccountId: 'acc_1', googleCalendarId: 'primary' };
+    expect(await stub.sync(ref)).toMatchObject({ status: 'ok', needsReconnect: true });
+    scopes = [OAUTH_SCOPES.calendarRead, OAUTH_SCOPES.calendar];
+    expect(await stub.sync(ref)).toMatchObject({ status: 'ok', needsReconnect: false, writeError: null });
   });
 });

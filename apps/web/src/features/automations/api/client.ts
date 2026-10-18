@@ -119,6 +119,8 @@ export function automationClient(slug: string) {
         },
       ),
     engineSettings: () => request<{ time_zone: string }>(`${base}/automationSettings`),
+    updateEngineSettings: (input: { time_zone: string }) =>
+      request<{ time_zone: string }>(`${base}/automationSettings`, { method: 'PUT', json: input }),
 
     contacts: (q: string) =>
       request<Page<Contact>>(`${base}/contacts`, { query: { q, limit: 20 } }),

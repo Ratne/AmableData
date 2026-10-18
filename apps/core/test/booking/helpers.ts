@@ -62,6 +62,7 @@ export function fakeCalendars(options: { oauth?: OAuthTokenProvider; fetch?: (in
           change?: Parameters<CalendarCore['bookingChanged']>[2],
         ) => c.bookingChanged(id, structuredClone(jobs), change === undefined ? undefined : structuredClone(change)),
         eventState: (id: string) => Promise.resolve(c.eventState(id)),
+        status: () => Promise.resolve(c.lastSync()),
         touch: () => Promise.resolve(c.bump()),
         version: () => Promise.resolve(c.version()),
         fetch: () => Promise.resolve(new Response('ws', { status: 200 })),

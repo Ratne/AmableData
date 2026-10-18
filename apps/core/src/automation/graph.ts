@@ -22,7 +22,7 @@ export const TRIGGER_EVENTS: Record<GoalTrigger['type'], readonly string[]> = {
   lead_score: ['contact.score_changed'],
   api: ['automation.api_goal'],
   web_goal: ['analytics.goal'],
-  appointment_booked: ['booking.created', 'appointment.created'],
+  appointment_booked: ['appointment.booked', 'appointment.created'],
   opportunity_stage_changed: ['opportunity.stage_changed'],
   date_anniversary: ['automation.date_anniversary'],
   app_event: ['app.event'],

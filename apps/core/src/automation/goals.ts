@@ -90,7 +90,9 @@ export function triggerMatches(trigger: GoalTrigger, event: EngineEvent): boolea
         (trigger.site_id === undefined || str(p, 'siteId') === trigger.site_id)
       );
     case 'appointment_booked':
-      if (event.type === 'appointment.created') return trigger.include_crm_appointments === true;
+      if (event.type === 'appointment.created') {
+        return trigger.include_crm_appointments === true && str(p, 'source') !== 'booking';
+      }
       return anyOf(trigger.event_type_ids, str(p, 'eventTypeId'));
     case 'opportunity_stage_changed':
       return (

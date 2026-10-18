@@ -51,7 +51,7 @@ export const membersEn = {
   'members.error.stepUp': 'Confirmation with the second factor is required',
   'members.error.rateLimited': 'Too many invitations: try again later',
   'members.error.notFound': 'It no longer exists: the list has been refreshed',
-  'audit.hint': 'Sign-ins, security changes, members, API keys, apps and settings, newest first. Entries never contain secrets.',
+  'audit.hint': 'Changes made in this workspace: members, roles, API keys, apps, settings and data, newest first. Sign-ins and account security events belong to each person’s account and are not listed here. Entries never contain secrets.',
   'audit.empty': 'Nothing recorded yet.',
   'audit.more': 'Load older entries',
   'audit.col.when': 'When',

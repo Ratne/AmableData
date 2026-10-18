@@ -485,6 +485,8 @@ export const analyticsEn = {
   'analytics.alerts.deleteTitle': 'Delete the alert “{name}”?',
   'analytics.alerts.secretTitle': 'Webhook signing secret',
   'analytics.alerts.secretHint': 'Use it to verify the Amable-Signature header of every delivery.',
+  'analytics.alerts.rotate': 'New secret',
+  'analytics.alerts.rotateHint': 'The secret is shown only once. Lost it? Issue a new one: the old one stops working at once.',
 
   'analytics.share.title': 'Share {site}',
   'analytics.share.hint':
@@ -809,7 +811,7 @@ export const analyticsEn = {
   'analytics.funnelBuilder.panel.trafficInfo':
     'Entry point of the funnel: split the traffic with weighted connections.',
   'analytics.funnelBuilder.panel.proxyInfo':
-    'Forwards action N to its exit N without deciding anything.',
+    'Passes the visitor to its single exit and keeps the action number, so a following page node with “Map incoming action to page number” opens page N.',
   'analytics.funnelBuilder.panel.stickiness': 'Stickiness',
   'analytics.funnelBuilder.panel.stickiness.none': 'None: random on every visit',
   'analytics.funnelBuilder.panel.stickiness.sticky': 'Sticky: same destination on return',

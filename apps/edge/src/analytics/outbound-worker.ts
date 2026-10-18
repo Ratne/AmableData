@@ -382,9 +382,10 @@ export type ConversionOutboundRequest = z.input<typeof conversionOutboundRequest
 
 // ------------------------------------------------------------------- worker
 
-export const OUTBOUND_MAX_ATTEMPTS = 5;
 /** Delay before the next attempt, indexed by the attempts already made − 1. */
 export const OUTBOUND_BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 12 * 3_600_000] as const;
+/** The first attempt plus one retry after each backoff delay. */
+export const OUTBOUND_MAX_ATTEMPTS = OUTBOUND_BACKOFF_MS.length + 1;
 export const OUTBOUND_BATCH_SIZE = 50;
 
 export function outboundRetryDelay(attempts: number): number {

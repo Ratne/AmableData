@@ -167,14 +167,17 @@ export function TimeZoneSelect({
   onChange,
   emptyLabel,
   disabled,
+  allowTenant = true,
 }: {
   value: string | undefined;
   onChange: (value: string | undefined) => void;
   emptyLabel: string;
   disabled?: boolean;
+  /** Offer `tenant` (the workspace zone) as a choice. */
+  allowTenant?: boolean;
 }) {
   const listId = useId();
-  const zones = useMemo(() => ['tenant', ...timeZones()], []);
+  const zones = useMemo(() => (allowTenant ? ['tenant', ...timeZones()] : timeZones()), [allowTenant]);
   return (
     <>
       <Input

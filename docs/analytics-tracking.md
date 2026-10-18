@@ -239,7 +239,7 @@ An approved conversion with a mapped event becomes one job per connection in
 - Gates, recorded as `skipped` jobs without PII: no consent, zero revenue when the source skips
   it, the source throttle, blacklisted keys, non-approved status.
 - The DO alarm sends due jobs in batches; retryable errors back off 1 min, 5 min, 30 min, 2 h,
-  12 h (5 attempts), permanent errors fail at once, `auth_expired` flags the connection and holds
+  12 h (6 attempts in total), permanent errors fail at once, `auth_expired` flags the connection and holds
   the queue. Platforms that need the click to settle (Google Ads) wait 6 hours. Failed jobs can be
   re-sent one by one or in bulk from the outbound log.
 

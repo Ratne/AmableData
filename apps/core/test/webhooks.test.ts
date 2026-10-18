@@ -106,6 +106,18 @@ describe('fan-out and delivery', () => {
     expect(queue.filter((q) => q.message.kind === 'webhooks.deliver')).toHaveLength(3);
   });
 
+  it('delivers bookings as appointment.booked, also to endpoints saved with the retired booking.created', async () => {
+    const service = new WebhookService(await deps());
+    const { endpoint } = await service.create('t_acme', {
+      url: 'https://a.example.com/h',
+      event_types: ['booking.created'],
+      createdBy: null,
+    });
+    expect(endpoint.event_types).toEqual(['appointment.booked']);
+    await h.env.DB.prepare(`UPDATE webhook_endpoints SET event_types = ?`).bind('["booking.created"]').run();
+    expect(await service.fanout('t_acme', [event(1, 'appointment.booked')])).toBe(1);
+  });
+
   it('publishes nothing without active endpoints and chunks the fan-out', async () => {
     const service = new WebhookService(await deps());
     await service.publish('t_acme', [event(1)]);

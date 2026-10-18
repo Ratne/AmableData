@@ -135,6 +135,7 @@ export function bookingClient(slug: string) {
         post<BookingCalendar>(`${calendar(calendarId)}/google/finish`, input),
       googleDisconnect: (calendarId: string) => del<BookingCalendar>(`${calendar(calendarId)}/google`),
       sync: (calendarId: string) => post<BookingSyncResult>(`${calendar(calendarId)}/sync`),
+      syncStatus: (calendarId: string) => get<BookingSyncResult>(`${calendar(calendarId)}/sync`),
     },
     eventTypes: {
       list: () => get<{ data: BookingEventType[] }>('/bookingEventTypes'),

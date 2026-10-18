@@ -199,7 +199,12 @@ export function SecurityPage() {
           </>
         ) : (
           <>
-            <SecondFactorForm state={enrollment} basePath="/api/me/2fa" onVerified={mfaChanged} />
+            <SecondFactorForm
+              state={enrollment}
+              basePath="/api/me/2fa"
+              onVerified={mfaChanged}
+              onCancelled={() => setEnrollment(null)}
+            />
             <Button variant="ghost" onClick={() => setEnrollment(null)}>
               {t('common.cancel')}
             </Button>

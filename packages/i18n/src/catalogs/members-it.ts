@@ -54,7 +54,7 @@ export const membersIt: Readonly<Record<MembersMessageKey, string>> = {
   'members.error.stepUp': 'Serve la conferma con il secondo fattore',
   'members.error.rateLimited': 'Troppi inviti: riprova più tardi',
   'members.error.notFound': 'Non esiste più: l’elenco è stato aggiornato',
-  'audit.hint': 'Accessi, modifiche di sicurezza, membri, chiavi API, app e impostazioni, dal più recente. Le voci non contengono mai segreti.',
+  'audit.hint': 'Modifiche fatte in questo workspace: membri, ruoli, chiavi API, app, impostazioni e dati, dal più recente. Accessi ed eventi di sicurezza dell’account appartengono all’account di ogni persona e non compaiono qui. Le voci non contengono mai segreti.',
   'audit.empty': 'Ancora nessuna voce registrata.',
   'audit.more': 'Carica voci precedenti',
   'audit.col.when': 'Quando',

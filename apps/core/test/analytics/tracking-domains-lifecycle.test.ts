@@ -6,6 +6,7 @@ import {
   probeZoneDomain,
   runScheduledTrackingDomains,
   TRACKING_DOMAIN_CHECKS_PER_TICK,
+  TRACKING_DOMAIN_ERROR_RECHECK_MS,
   TRACKING_DOMAIN_RECHECK_MS,
 } from '../../src/analytics/routes-tracking-domains';
 import type { Env } from '../../src/env';
@@ -205,6 +206,20 @@ describe('zone domains (no custom hostname provider)', () => {
     expect(activated).toBe(true);
     expect((await owner.request('DELETE', `${BASE}/sites/${siteId}`)).status).toBe(200);
     expect(await statusOf(id)).toBeNull();
+  });
+
+  it('re-checks a domain in error on its own, hourly, once the route is fixed', async () => {
+    overrideCustomHostnames(() => null);
+    overrideZoneProbe(() => Promise.resolve({ status: 'error', error: 'not_tracking_worker (HTTP 404)' }));
+    const siteId = await createSite('zerr.test');
+    const res = await owner.post(`${BASE}/tracking-domains`, { site_id: siteId, hostname: 'go.zerr.test', kind: 'zone' });
+    const id = String(res.body['id']);
+    expect(await statusOf(id)).toBe('error');
+    overrideZoneProbe(() => Promise.resolve({ status: 'active', error: null }));
+    await runScheduledTrackingDomains(h.env, h.clock.now + TRACKING_DOMAIN_RECHECK_MS + 60_000);
+    expect(await statusOf(id)).toBe('error');
+    await runScheduledTrackingDomains(h.env, h.clock.now + TRACKING_DOMAIN_ERROR_RECHECK_MS + 60_000);
+    expect(await statusOf(id)).toBe('active');
   });
 
   it('maps the probe outcomes: active, wrong service, unreachable', async () => {

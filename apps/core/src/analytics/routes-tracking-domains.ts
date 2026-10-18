@@ -296,11 +296,13 @@ export async function removeSiteTrackingDomains(
 /** Per cron tick: at most this many provider calls, each domain re-checked at most every interval. */
 export const TRACKING_DOMAIN_CHECKS_PER_TICK = 5;
 export const TRACKING_DOMAIN_RECHECK_MS = 10 * 60_000;
+/** Domains in `error` usually wait for a DNS fix, so they are re-checked less often. */
+export const TRACKING_DOMAIN_ERROR_RECHECK_MS = 60 * 60_000;
 
 /**
  * Cron: finishes the removals deferred by a site deletion, then refreshes the
- * status of the pending domains least recently checked, so a domain becomes
- * active without the customer pressing "check".
+ * status of the pending and failed domains least recently checked, so a domain
+ * becomes active (or recovers) without the customer pressing "check".
  */
 export async function runScheduledTrackingDomains(
   env: Env,
@@ -334,10 +336,11 @@ export async function runScheduledTrackingDomains(
   if (budget <= 0) return { removed, checked };
   const pending = await env.DB.prepare(
     `SELECT * FROM tracking_domains
-      WHERE status IN ('pending_dns', 'pending_ssl') AND (checked_at IS NULL OR checked_at <= ?)
+      WHERE (status IN ('pending_dns', 'pending_ssl') AND (checked_at IS NULL OR checked_at <= ?))
+         OR (status = 'error' AND COALESCE(error, '') <> ? AND (checked_at IS NULL OR checked_at <= ?))
       ORDER BY COALESCE(checked_at, 0), id LIMIT ?`,
   )
-    .bind(now - TRACKING_DOMAIN_RECHECK_MS, budget)
+    .bind(now - TRACKING_DOMAIN_RECHECK_MS, SITE_DELETED, now - TRACKING_DOMAIN_ERROR_RECHECK_MS, budget)
     .all<TrackingDomainRow>();
   for (const row of pending.results) {
     try {

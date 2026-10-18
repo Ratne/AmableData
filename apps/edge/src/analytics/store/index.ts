@@ -514,6 +514,10 @@ export class AnalyticsStore {
     const r = config.updateAlert(this.db, id, patch, webhookSecret, this.now());
     return r === null ? null : { alert: config.publicAlert(r.alert), webhook_secret: r.newSecret };
   }
+  rotateAlertSecret(id: string, secret: string): { alert: Alert; webhook_secret: string } | null {
+    const a = config.rotateAlertSecret(this.db, id, secret, this.now());
+    return a === null ? null : { alert: config.publicAlert(a), webhook_secret: secret };
+  }
   deleteAlert(id: string): boolean {
     return config.deleteAlert(this.db, id);
   }

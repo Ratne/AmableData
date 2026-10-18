@@ -79,6 +79,8 @@ export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
   'booking.google.disconnected': 'Google Calendar scollegato',
   'booking.google.notConnected': 'Non collegato',
   'booking.google.syncNow': 'Sincronizza ora gli impegni',
+  'booking.google.needsReconnect': 'Le prenotazioni non vengono scritte su Google Calendar: scollega e ricollega Google per consentirlo.',
+  'booking.google.writeError': 'Ultima prenotazione non scritta su Google Calendar: {error}',
   'booking.google.sync.ok': 'Impegni aggiornati',
   'booking.google.sync.stub': 'Modalità sviluppo: Google non è stato contattato',
   'booking.google.sync.not_connected': 'Nessun account Google collegato',

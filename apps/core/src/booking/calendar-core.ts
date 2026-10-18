@@ -29,6 +29,16 @@ export interface SyncResult {
   busyCount: number;
   syncedAt: number | null;
   message: string | null;
+  /** Last failed booking write to Google Calendar, until a write succeeds. */
+  writeError?: string | null;
+  /** The connection cannot write events (granted before `calendar.events`): reconnect Google. */
+  needsReconnect?: boolean;
+}
+
+interface WriteError {
+  message: string;
+  at: number;
+  reconnect: boolean;
 }
 
 export interface ReminderJob {
@@ -91,7 +101,9 @@ export function googleEventId(bookingId: string): string {
   return `bk${[...new TextEncoder().encode(bookingId)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
-type WriteOutcome = { ok: true } | { ok: false; retry: boolean; error: string };
+type WriteOutcome = { ok: true } | { ok: false; retry: boolean; error: string; reconnect?: boolean };
+
+const MISSING_WRITE_SCOPE = 'missing calendar.events scope: reconnect Google';
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
@@ -146,8 +158,18 @@ export class CalendarCore {
 
   lastSync(): SyncResult {
     const raw = this.meta('last_sync');
-    if (raw === null) return { status: 'not_connected', busyCount: 0, syncedAt: null, message: null };
-    return JSON.parse(raw) as SyncResult;
+    const base: SyncResult = raw === null ? { status: 'not_connected', busyCount: 0, syncedAt: null, message: null } : (JSON.parse(raw) as SyncResult);
+    return this.withWrites(base);
+  }
+
+  private withWrites(result: SyncResult): SyncResult {
+    const raw = this.meta('write_error');
+    const error = raw === null || raw === '' ? null : (JSON.parse(raw) as WriteError);
+    return { ...result, writeError: error?.message ?? null, needsReconnect: error?.reconnect ?? false };
+  }
+
+  private setWriteError(error: WriteError | null): void {
+    this.setMeta('write_error', error === null ? '' : JSON.stringify(error));
   }
 
   private replaceBusy(intervals: readonly Interval[]): void {
@@ -160,7 +182,7 @@ export class CalendarCore {
   private record(result: SyncResult, account: string | null): SyncResult {
     this.setMeta('last_sync', JSON.stringify(result));
     this.setMeta('sync_account', account ?? '');
-    return result;
+    return this.withWrites(result);
   }
 
   /** Refreshes the external busy time from Google Calendar (stub tokens: recorded as `stub`, nothing fetched). */
@@ -168,6 +190,7 @@ export class CalendarCore {
     const now = this.deps.now();
     const before = this.busyCount();
     if (ref.googleAccountId === null) {
+      this.setWriteError(null);
       this.replaceBusy([]);
       const result = this.record({ status: 'not_connected', busyCount: 0, syncedAt: now, message: null }, null);
       if (before > 0) this.bump();
@@ -184,6 +207,11 @@ export class CalendarCore {
       this.replaceBusy([]);
       if (before > 0) this.bump();
       return this.record({ status: 'stub', busyCount: 0, syncedAt: now, message: 'skipped (dev stub)' }, ref.googleAccountId);
+    }
+    if (!token.scopes.includes(OAUTH_SCOPES.calendar)) {
+      this.setWriteError({ message: MISSING_WRITE_SCOPE, at: now, reconnect: true });
+    } else if (this.withWrites({ status: 'ok', busyCount: 0, syncedAt: null, message: null }).needsReconnect === true) {
+      this.setWriteError(null);
     }
     if (!token.scopes.includes(OAUTH_SCOPES.calendarRead) && !token.scopes.includes(OAUTH_SCOPES.calendar)) {
       return this.record({ status: 'error', busyCount: before, syncedAt: now, message: 'missing calendar scope' }, ref.googleAccountId);
@@ -313,7 +341,7 @@ export class CalendarCore {
     if (token === null) return { token: null, outcome: { ok: false, retry: false, error: 'the Google account is no longer connected' } };
     if (token.stub) return { token: null, outcome: { ok: true } };
     if (!token.scopes.includes(OAUTH_SCOPES.calendar)) {
-      return { token: null, outcome: { ok: false, retry: false, error: 'missing calendar.events scope: reconnect Google' } };
+      return { token: null, outcome: { ok: false, retry: false, error: MISSING_WRITE_SCOPE, reconnect: true } };
     }
     return { token: token.accessToken };
   }
@@ -396,6 +424,7 @@ export class CalendarCore {
     }
     const attempts = row.attempts + 1;
     if (outcome.ok) {
+      if (this.withWrites({ status: 'ok', busyCount: 0, syncedAt: null, message: null }).writeError !== null) this.setWriteError(null);
       if (written.accountId === null) this.deps.db.run(`DELETE FROM calendar_events WHERE booking_id = ?`, bookingId);
       else {
         this.deps.db.run(
@@ -420,6 +449,7 @@ export class CalendarCore {
       outcome.error.slice(0, 500),
       bookingId,
     );
+    this.setWriteError({ message: outcome.error.slice(0, 500), at: this.deps.now(), reconnect: outcome.reconnect === true });
     console.error('[booking] calendar event write failed', bookingId, outcome.error);
   }
 

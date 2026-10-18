@@ -102,6 +102,21 @@ describe('API keys', () => {
     expect((await h.client().get('/api/t/acme/audit', auth)).status).toBe(401);
   });
 
+  it('answers 429 with Retry-After, not 401, once a key exceeds its rate limit', async () => {
+    const { h, client } = await setup();
+    await stepUp(h, client);
+    const created = await client.post('/api/t/acme/api-keys', { name: 'k', scopes: ['audit:read'] });
+    const auth = { authorization: `Bearer ${created.body.key as string}` };
+    expect((await h.client().get('/api/t/acme/audit', auth)).status).toBe(200);
+    await h.env.DB.prepare(`UPDATE rate_limits SET count = 100000 WHERE key LIKE ?`)
+      .bind(`%:${created.body.id as string}:%`)
+      .run();
+    const limited = await h.client().get('/api/t/acme/audit', auth);
+    expect(limited.status).toBe(429);
+    expect(limited.body.error).toBe('rate_limited');
+    expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+
   it('rejects malformed and unknown keys', async () => {
     const { h } = await setup();
     const res = await h.client().get('/api/t/acme/audit', { authorization: 'Bearer amb_live_nope' });

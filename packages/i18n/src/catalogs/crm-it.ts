@@ -40,6 +40,7 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.entity.contacts': 'Contatti',
   'crm.entity.companies': 'Aziende',
   'crm.entity.opportunities': 'Opportunità',
+  'crm.entity.orders': 'Ordini',
 
   'crm.field.name': 'Nome completo',
   'crm.field.given_name': 'Nome',

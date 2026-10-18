@@ -77,6 +77,8 @@ export const bookingEn = {
   'booking.google.disconnected': 'Google Calendar disconnected',
   'booking.google.notConnected': 'Not connected',
   'booking.google.syncNow': 'Sync busy time now',
+  'booking.google.needsReconnect': 'Bookings are not written to Google Calendar: disconnect and connect Google again to allow it.',
+  'booking.google.writeError': 'Last booking not written to Google Calendar: {error}',
   'booking.google.sync.ok': 'Busy time updated',
   'booking.google.sync.stub': 'Development mode: Google was not contacted',
   'booking.google.sync.not_connected': 'No Google account connected',

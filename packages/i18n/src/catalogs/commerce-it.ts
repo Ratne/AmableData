@@ -126,7 +126,7 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
     'La fattura viene annullata e l’eventuale codice promo torna disponibile.',
   'commerce.order.deleteDraft': 'Elimina bozza',
   'commerce.order.deleteDraftConfirm': 'Eliminare questa bozza?',
-  'commerce.order.deleteDraftBody': 'La bozza non ha ancora numero né fattura; verrà rimossa.',
+  'commerce.order.deleteDraftBody': 'La bozza non è ancora stata finalizzata né fatturata, quindi verrà rimossa. Il suo numero d’ordine non viene riutilizzato.',
   'commerce.order.deleted': 'Bozza eliminata',
 
   'commerce.timeline.created': 'Creato',

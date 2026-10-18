@@ -482,6 +482,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.alerts.deleteTitle': 'Eliminare l’avviso “{name}”?',
   'analytics.alerts.secretTitle': 'Segreto di firma del webhook',
   'analytics.alerts.secretHint': 'Usalo per verificare l’header Amable-Signature di ogni invio.',
+  'analytics.alerts.rotate': 'Nuovo segreto',
+  'analytics.alerts.rotateHint': 'Il segreto si vede una sola volta. Perso? Generane uno nuovo: il vecchio smette subito di funzionare.',
 
   'analytics.share.title': 'Condividi {site}',
   'analytics.share.hint':
@@ -809,7 +811,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.panel.trafficInfo':
     'Punto di ingresso del funnel: ripartisci il traffico con connessioni pesate.',
   'analytics.funnelBuilder.panel.proxyInfo':
-    'Inoltra l’azione N alla sua uscita N senza decidere nulla.',
+    'Passa il visitatore alla sua unica uscita mantenendo il numero di azione: un nodo pagina successivo con “Associa l’azione in ingresso al numero di pagina” apre la pagina N.',
   'analytics.funnelBuilder.panel.stickiness': 'Persistenza',
   'analytics.funnelBuilder.panel.stickiness.none': 'Nessuna: casuale a ogni visita',
   'analytics.funnelBuilder.panel.stickiness.sticky': 'Sticky: stessa destinazione al ritorno',

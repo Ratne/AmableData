@@ -72,13 +72,24 @@ function syncToApi(result: SyncResult): BookingSyncResult {
     busy_count: result.busyCount,
     synced_at: result.syncedAt === null ? null : toIso(result.syncedAt),
     message: result.message,
+    write_error: result.writeError ?? null,
+    needs_reconnect: result.needsReconnect ?? false,
   };
 }
+
+const UNAVAILABLE_SYNC: BookingSyncResult = {
+  status: 'unavailable',
+  busy_count: 0,
+  synced_at: null,
+  message: 'calendar service unavailable',
+  write_error: null,
+  needs_reconnect: false,
+};
 
 async function syncCalendar(c: Ctx, calendarId: string): Promise<BookingSyncResult> {
   const ref = await callCrm(c, 'booking.calendarForWorker', { id: calendarId });
   const stub = calendarStub(c.env, tenantId(c), calendarId);
-  if (stub === null) return { status: 'unavailable', busy_count: 0, synced_at: null, message: 'calendar service unavailable' };
+  if (stub === null) return UNAVAILABLE_SYNC;
   return syncToApi((await stub.sync(doRef(tenantId(c), ref))) as SyncResult);
 }
 
@@ -305,6 +316,22 @@ export function registerBookingRoutes(router: OpenAPIHono<AppEnv>): void {
       responses: { 200: json(bookingSyncResultSchema, 'Sync result') },
     }),
     async (c) => c.json(await syncCalendar(c, c.req.valid('param').calendarId), 200),
+  );
+  router.openapi(
+    crmRoute('booking:read', {
+      method: 'get',
+      path: '/bookingCalendars/{calendarId}/sync',
+      tags: calendarsTag,
+      summary: 'Last busy time sync and booking write status (Google is not contacted)',
+      request: { params: bookingCalendarParamSchema },
+      responses: { 200: json(bookingSyncResultSchema, 'Sync status') },
+    }),
+    async (c) => {
+      const { calendarId } = c.req.valid('param');
+      await callCrm(c, 'booking.getCalendar', { id: calendarId });
+      const stub = calendarStub(c.env, tenantId(c), calendarId);
+      return c.json(stub === null ? UNAVAILABLE_SYNC : syncToApi((await stub.status()) as SyncResult), 200);
+    },
   );
 
   // ---------------------------------------------------------- event types

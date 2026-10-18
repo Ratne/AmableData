@@ -96,6 +96,10 @@ export const en = {
   'auth.reset.submit': 'Set password',
   'auth.reset.done': 'Password updated. Sign in with your new password.',
   'auth.reset.invalid': 'This reset link is invalid or has expired.',
+  'auth.email.title': 'Confirm your new email',
+  'auth.email.done': 'Email updated. You were signed out everywhere: sign in with the new address.',
+  'auth.email.invalid': 'This confirmation link is invalid or has expired. Request the change again from your security settings.',
+  'auth.email.taken': 'Another account already uses this email address.',
   'auth.password.tooShort': 'Use at least 12 characters.',
   'auth.password.tooLong': 'That password is too long.',
   'auth.password.breached':

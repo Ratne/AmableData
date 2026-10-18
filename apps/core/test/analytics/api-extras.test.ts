@@ -217,6 +217,15 @@ describe('saved views and configuration', () => {
     expect(JSON.stringify(list.body)).not.toContain('whsec_');
     const id = String((created.body['alert'] as Record<string, unknown>)['id']);
     expect((await owner.post(`${BASE}/alerts/${id}/test?site_id=${siteId}`)).body).toEqual({ queued: true });
+
+    expect((await viewer.post(`${BASE}/alerts/${id}/webhook-secret?site_id=${siteId}`)).status).toBe(403);
+    const rotated = await owner.post(`${BASE}/alerts/${id}/webhook-secret?site_id=${siteId}`);
+    expect(rotated.status).toBe(200);
+    expect(String(rotated.body['webhook_secret'])).toMatch(/^whsec_[0-9a-f]{64}$/);
+    expect(rotated.body['webhook_secret']).not.toBe(created.body['webhook_secret']);
+    const noHook = await owner.post(`${BASE}/alerts?site_id=${siteId}`, { name: 'b', goal: 'lead', email_recipients: ['viewer@example.com'] });
+    const noHookId = String((noHook.body['alert'] as Record<string, unknown>)['id']);
+    expect((await owner.post(`${BASE}/alerts/${noHookId}/webhook-secret?site_id=${siteId}`)).status).toBe(404);
   });
 
   it('connects the development integrations without any network', async () => {

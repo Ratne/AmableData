@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { authApi, errorMessage, takeFragmentToken, useT } from '../api';
+import { authApi, AuthApiError, errorMessage, takeFragmentToken, useT } from '../api';
 import { AuthCard, Button, Field, Notice, Turnstile } from '../components';
 
 /** /auth/magic#token=… — consumes the magic link (first factor), then the 2FA challenge. */
@@ -126,7 +126,7 @@ export function ResetPasswordPage() {
 /** /auth/email#token=… — confirms an email change requested from the security settings. */
 export function EmailConfirmPage() {
   const t = useT();
-  const [state, setState] = useState<'working' | 'done' | 'error'>('working');
+  const [state, setState] = useState<'working' | 'done' | 'invalid' | 'taken'>('working');
   const started = useRef(false);
 
   useEffect(() => {
@@ -134,18 +134,20 @@ export function EmailConfirmPage() {
     started.current = true;
     const token = takeFragmentToken();
     if (token === null) {
-      setState('error');
+      setState('invalid');
       return;
     }
     authApi('/api/auth/email/confirm', { body: { token } })
       .then(() => setState('done'))
-      .catch(() => setState('error'));
+      .catch((err: unknown) => setState(err instanceof AuthApiError && err.code === 'email_taken' ? 'taken' : 'invalid'));
   }, []);
 
   return (
-    <AuthCard title={t('auth.login.title')}>
+    <AuthCard title={t('auth.email.title')}>
       {state === 'working' && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
-      {state === 'error' && <Notice tone="error">{t('auth.reset.invalid')}</Notice>}
+      {state === 'done' && <Notice>{t('auth.email.done')}</Notice>}
+      {state === 'invalid' && <Notice tone="error">{t('auth.email.invalid')}</Notice>}
+      {state === 'taken' && <Notice tone="error">{t('auth.email.taken')}</Notice>}
       {state !== 'working' && <Button onClick={() => window.location.assign('/login')}>{t('auth.login.submit')}</Button>}
     </AuthCard>
   );

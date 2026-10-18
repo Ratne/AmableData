@@ -286,6 +286,14 @@ export function updateAlert(
   };
 }
 
+/** New webhook secret for an alert with a webhook URL; null when the alert is missing or has no webhook. */
+export function rotateAlertSecret(db: SqlDb, id: string, secret: string, now: number): StoredAlert | null {
+  const current = getAlert(db, id, now);
+  if (current === null || current.webhook_url === null) return null;
+  db.run(`UPDATE alerts SET webhook_secret = ?, updated_at = ? WHERE id = ?`, secret, now, id);
+  return getAlert(db, id, now);
+}
+
 export function deleteAlert(db: SqlDb, id: string): boolean {
   const existed = first<{ id: string }>(db, `SELECT id FROM alerts WHERE id = ?`, id) !== undefined;
   db.run(`DELETE FROM alerts WHERE id = ?`, id);

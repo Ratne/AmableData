@@ -17,7 +17,12 @@ import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { useDirectory } from '../../crm/api/hooks';
 import { ChoiceSelect } from '../../crm/components/inputs';
-import { automationKeys, useAutomationApi, useAutomationMutation } from '../api/hooks';
+import {
+  automationKeys,
+  useAutomationApi,
+  useAutomationMutation,
+  useAutomationPermissions,
+} from '../api/hooks';
 import { clean } from '../lib/clean';
 import { Field, SendWindowEditor, SwitchRow, TimeZoneSelect } from './form-bits';
 
@@ -113,6 +118,7 @@ export function SettingsDialog({
               onChange={(time_zone) => setSettings(clean({ ...settings, time_zone }))}
             />
           </Field>
+          <WorkspaceTimeZone open={open} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -126,6 +132,55 @@ export function SettingsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Tenant-wide fallback zone (`/automationSettings`), shared by every automation. */
+function WorkspaceTimeZone({ open }: { open: boolean }) {
+  const { t } = useI18n();
+  const { slug, api } = useAutomationApi();
+  const { canManageSettings } = useAutomationPermissions();
+  const current = useQuery({
+    queryKey: automationKeys.engineSettings(slug),
+    queryFn: () => api.engineSettings(),
+    enabled: open,
+  });
+  const [zone, setZone] = useState<string | undefined>(undefined);
+  const save = useAutomationMutation({
+    mutationFn: (time_zone: string) => api.updateEngineSettings({ time_zone }),
+    invalidate: [automationKeys.engineSettings(slug)],
+    success: t('auto.settings.workspaceZoneSaved'),
+    onSuccess: () => setZone(undefined),
+  });
+  const saved = current.data?.time_zone;
+  const value = zone ?? saved;
+  return (
+    <Field label={t('auto.goal.tenantZone')} hint={t('auto.settings.workspaceZoneHint')}>
+      <div className="flex gap-2">
+        <div className="min-w-0 flex-1">
+          <TimeZoneSelect
+            value={value}
+            emptyLabel={saved ?? 'UTC'}
+            disabled={!canManageSettings || current.isPending}
+            allowTenant={false}
+            onChange={setZone}
+          />
+        </div>
+        {canManageSettings ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            disabled={save.isPending || value === undefined || value === saved}
+            onClick={() => {
+              if (value !== undefined) save.mutate(value);
+            }}
+          >
+            {t('auto.save')}
+          </Button>
+        ) : null}
+      </div>
+    </Field>
   );
 }
 

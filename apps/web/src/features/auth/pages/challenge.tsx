@@ -21,10 +21,13 @@ export function SecondFactorForm({
   state,
   basePath,
   onVerified,
+  onCancelled,
 }: {
   state: ChallengeState;
   basePath: string;
   onVerified: (body: Record<string, unknown>) => void;
+  /** Signed-in flows (security settings, step-up): where Back goes once the challenge is void; default /login. */
+  onCancelled?: () => void;
 }) {
   const t = useT();
   const enrolling = !state.enrolled;
@@ -88,7 +91,9 @@ export function SecondFactorForm({
     return (
       <div className="space-y-4">
         <Notice tone="error">{error}</Notice>
-        <Button onClick={() => window.location.assign('/login')}>{t('common.back')}</Button>
+        <Button onClick={() => (onCancelled === undefined ? window.location.assign('/login') : onCancelled())}>
+          {t('common.back')}
+        </Button>
       </div>
     );
   }

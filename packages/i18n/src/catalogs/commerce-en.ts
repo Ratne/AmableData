@@ -127,7 +127,7 @@ export const commerceEn = {
   'commerce.order.cancelBody': 'The invoice is voided and any promo code redemption is released.',
   'commerce.order.deleteDraft': 'Delete draft',
   'commerce.order.deleteDraftConfirm': 'Delete this draft?',
-  'commerce.order.deleteDraftBody': 'The draft has no number or invoice yet; it will be removed.',
+  'commerce.order.deleteDraftBody': 'The draft has not been finalized or invoiced yet, so it will be removed. Its order number is not reused.',
   'commerce.order.deleted': 'Draft deleted',
 
   'commerce.timeline.created': 'Created',

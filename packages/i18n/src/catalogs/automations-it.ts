@@ -334,6 +334,9 @@ export const automationsIt: Readonly<Record<AutomationsMessageKey, string>> = {
   'auto.settings.reentry.multiple': 'Un contatto può rientrare dopo essere uscito',
   'auto.settings.sendWindow': 'Fascia di invio predefinita per le email',
   'auto.settings.timeZone': 'Fuso orario di riserva',
+  'auto.settings.workspaceZoneHint':
+    'Vale per tutte le automazioni: si usa quando né il contatto né l’automazione hanno un fuso orario. Per cambiarlo serve il permesso sulle impostazioni.',
+  'auto.settings.workspaceZoneSaved': 'Fuso orario del workspace salvato',
   'auto.settings.saved': 'Impostazioni salvate',
   'auto.settings.publishHint': 'Le modifiche valgono per i nuovi contatti dopo la pubblicazione.',
 

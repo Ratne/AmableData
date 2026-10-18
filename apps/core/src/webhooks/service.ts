@@ -11,10 +11,19 @@ import {
 import { AUTOMATION_EVENT_TYPES, EVENT_TYPES } from '@amable/core';
 import { recordAppMetric } from '../apps/metrics';
 
+/** Retired names still accepted on input and stored subscriptions, mapped to the event actually sent. */
+const WEBHOOK_TYPE_ALIASES: Readonly<Record<string, string>> = { 'booking.created': 'appointment.booked' };
+
 /** Every event type an endpoint can subscribe to (`*` = all). */
 export const WEBHOOK_EVENT_TYPES: readonly string[] = [
   ...new Set<string>([...EVENT_TYPES, ...AUTOMATION_EVENT_TYPES, 'webhook.test']),
-].sort();
+]
+  .filter((t) => !(t in WEBHOOK_TYPE_ALIASES))
+  .sort();
+
+function normalizeTypes(types: readonly string[]): string[] {
+  return [...new Set(types.map((t) => WEBHOOK_TYPE_ALIASES[t] ?? t))];
+}
 
 /** Seconds before retry n (after the first failed attempt). */
 export const RETRY_DELAYS_S = [30, 120, 600, 1800, 3600, 3 * 3600, 6 * 3600, 12 * 3600] as const;
@@ -142,7 +151,7 @@ const iso = (ms: number | null): string | null => (ms === null ? null : new Date
 
 function parseTypes(raw: string): string[] {
   const parsed: unknown = JSON.parse(raw);
-  return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : [];
+  return Array.isArray(parsed) ? normalizeTypes(parsed.filter((t): t is string => typeof t === 'string')) : [];
 }
 
 function toEndpoint(row: EndpointRow): WebhookEndpoint {
@@ -207,7 +216,7 @@ export function validateEndpointUrl(url: string, allowLoopback = false): string 
 }
 
 function validateTypes(types: readonly string[]): void {
-  const unknown = types.filter((t) => t !== '*' && !WEBHOOK_EVENT_TYPES.includes(t));
+  const unknown = normalizeTypes(types).filter((t) => t !== '*' && !WEBHOOK_EVENT_TYPES.includes(t));
   if (unknown.length > 0) {
     throw new WebhookError(422, 'validation_failed', `unknown event types: ${unknown.join(', ')}`);
   }
@@ -312,7 +321,7 @@ export class WebhookService {
         tenantId,
         input.url,
         input.description ?? '',
-        JSON.stringify([...new Set(input.event_types)]),
+        JSON.stringify(normalizeTypes(input.event_types)),
         sealed,
         secret.slice(-4),
         input.createdBy,
@@ -347,7 +356,7 @@ export class WebhookService {
         input.description ?? row.description,
         input.event_types === undefined
           ? row.event_types
-          : JSON.stringify([...new Set(input.event_types)]),
+          : JSON.stringify(normalizeTypes(input.event_types)),
         status,
         status === 'disabled' ? (row.status === 'disabled' ? row.disabled_reason : 'manual') : null,
         reenabled ? 0 : row.consecutive_failures,

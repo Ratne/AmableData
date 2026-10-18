@@ -51,6 +51,7 @@ export function StepUpProvider() {
             state={challenge}
             basePath="/api/auth/step-up"
             onVerified={() => finish(true)}
+            onCancelled={() => finish(false)}
           />
         ) : null}
       </DialogContent>

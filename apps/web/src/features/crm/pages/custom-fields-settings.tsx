@@ -48,6 +48,7 @@ const ENTITIES = [
   'contacts',
   'companies',
   'opportunities',
+  'orders',
 ] as const satisfies readonly CustomFieldEntityPath[];
 
 export function slugifyKey(label: string): string {

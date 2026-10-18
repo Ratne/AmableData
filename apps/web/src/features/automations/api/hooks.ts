@@ -17,6 +17,7 @@ export const automationKeys = {
   enrollments: (slug: string, id: string) =>
     ['automations', slug, 'detail', id, 'enrollments'] as const,
   references: (slug: string, path: string) => ['automations', slug, 'references', path] as const,
+  engineSettings: (slug: string) => ['automations', slug, 'engine-settings'] as const,
 };
 
 export function useAutomationApi(): { slug: string; api: AutomationClient } {
@@ -34,6 +35,7 @@ export function useAutomationPermissions() {
     canWrite: can('automations:write'),
     canPublish: can('automations:publish'),
     canTrigger: can('automations:trigger'),
+    canManageSettings: can('settings:manage'),
   };
 }
 

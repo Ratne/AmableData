@@ -98,6 +98,10 @@ export const it: Readonly<Record<MessageKey, string>> = {
   'auth.reset.submit': 'Imposta password',
   'auth.reset.done': 'Password aggiornata. Accedi con la nuova password.',
   'auth.reset.invalid': 'Questo link di reset non è valido o è scaduto.',
+  'auth.email.title': 'Conferma la nuova email',
+  'auth.email.done': 'Email aggiornata. Sei stato disconnesso ovunque: accedi con il nuovo indirizzo.',
+  'auth.email.invalid': 'Questo link di conferma non è valido o è scaduto. Richiedi di nuovo il cambio dalle impostazioni di sicurezza.',
+  'auth.email.taken': 'Un altro account usa già questo indirizzo email.',
   'auth.password.tooShort': 'Usa almeno 12 caratteri.',
   'auth.password.tooLong': 'Questa password è troppo lunga.',
   'auth.password.breached':

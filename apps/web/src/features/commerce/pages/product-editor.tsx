@@ -58,7 +58,11 @@ export function ProductEditorPage() {
     return (
       <PageState isPending={settings.isPending} error={null}>
         {() => (
-          <ProductForm product={null} defaultCurrency={settings.data?.default_currency ?? 'EUR'} />
+          <ProductForm
+            product={null}
+            defaultCurrency={settings.data?.default_currency ?? 'EUR'}
+            defaultTaxBps={settings.data?.default_tax_rate_bps ?? 0}
+          />
         )}
       </PageState>
     );
@@ -71,6 +75,7 @@ export function ProductEditorPage() {
             key={product.data.updated_at}
             product={product.data}
             defaultCurrency={product.data.currency}
+            defaultTaxBps={product.data.tax_rate_bps}
           />
         ) : null
       }
@@ -81,9 +86,11 @@ export function ProductEditorPage() {
 function ProductForm({
   product,
   defaultCurrency,
+  defaultTaxBps,
 }: {
   product: Product | null;
   defaultCurrency: string;
+  defaultTaxBps: number;
 }) {
   const { t } = useI18n();
   const { slug, api } = useCommerce();
@@ -107,7 +114,7 @@ function ProductForm({
   const [description, setDescription] = useState(product?.description ?? '');
   const [price, setPrice] = useState<number | null>(product?.price_minor ?? null);
   const [currency, setCurrency] = useState(product?.currency ?? defaultCurrency);
-  const [tax, setTax] = useState<number | null>(product?.tax_rate_bps ?? 0);
+  const [tax, setTax] = useState<number | null>(product?.tax_rate_bps ?? defaultTaxBps);
   const [active, setActive] = useState(product?.active ?? true);
 
   const currencyValid = isCurrencyCode(currency);

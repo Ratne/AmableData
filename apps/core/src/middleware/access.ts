@@ -47,7 +47,10 @@ function bearerToken(c: Context): string | null {
   return match?.[1] ?? null;
 }
 
-async function resolveApiKey(c: Context<AppEnv>, token: string): Promise<AuthContext | null> {
+async function resolveApiKey(
+  c: Context<AppEnv>,
+  token: string,
+): Promise<AuthContext | { rateLimited: true; retryAfterMs: number } | null> {
   if (!looksLikeApiKey(token)) return null;
   const key = await findApiKeyByHash(c.env.DB, await hashApiKey(token));
   if (key === null || key.createdBy === null) return null;
@@ -55,7 +58,7 @@ async function resolveApiKey(c: Context<AppEnv>, token: string): Promise<AuthCon
   if (creator === null || creator.disabledAt !== null) return null;
   const services = c.get('services');
   const limit = await services.apiLimiter.consume(RATE_RULES.apiKey, key.id);
-  if (!limit.allowed) return null;
+  if (!limit.allowed) return { rateLimited: true, retryAfterMs: limit.retryAfterMs };
   await defer(c, touchApiKey(c.env.DB, key.id, services.now()));
   return {
     kind: 'api_key',
@@ -204,6 +207,11 @@ export function requireAuth(options: { apiKey?: boolean } = {}): MiddlewareHandl
       }
       const auth = await resolveApiKey(c, bearer);
       if (auth === null) return jsonError(c, 401, 'invalid_api_key');
+      if ('rateLimited' in auth) {
+        c.header('Retry-After', String(Math.max(1, Math.ceil(auth.retryAfterMs / 1000))));
+        c.header('RateLimit-Policy', `${String(RATE_RULES.apiKey.limit)};w=60`);
+        return jsonError(c, 429, 'rate_limited');
+      }
       c.set('auth', auth);
       return next();
     }

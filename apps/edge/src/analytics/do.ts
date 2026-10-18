@@ -341,6 +341,9 @@ export class AnalyticsDO extends DurableObject<Env> {
   updateAlert(id: string, patch: UpdateAlertInput, webhookSecret: string | null): { alert: Alert; webhook_secret: string | null } | null {
     return this.store.updateAlert(id, patch, webhookSecret);
   }
+  rotateAlertSecret(id: string, secret: string): { alert: Alert; webhook_secret: string } | null {
+    return this.store.rotateAlertSecret(id, secret);
+  }
   deleteAlert(id: string): boolean {
     return this.store.deleteAlert(id);
   }

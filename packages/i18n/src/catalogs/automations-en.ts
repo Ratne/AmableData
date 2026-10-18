@@ -331,6 +331,9 @@ export const automationsEn = {
   'auto.settings.reentry.multiple': 'A contact can enter again after leaving',
   'auto.settings.sendWindow': 'Default send window for emails',
   'auto.settings.timeZone': 'Fallback time zone',
+  'auto.settings.workspaceZoneHint':
+    'Shared by every automation: used when neither the contact nor the automation has a time zone. Changing it needs the settings permission.',
+  'auto.settings.workspaceZoneSaved': 'Workspace time zone saved',
   'auto.settings.saved': 'Settings saved',
   'auto.settings.publishHint': 'Changes apply to new contacts after publishing.',
 

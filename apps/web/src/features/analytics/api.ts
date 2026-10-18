@@ -530,6 +530,11 @@ export function analyticsApi(tenant: string) {
         apiFetch<unknown>(sited(siteId, `alerts/${enc(id)}`), del),
       test: (siteId: string, id: string) =>
         apiFetch<{ queued: true }>(sited(siteId, `alerts/${enc(id)}/test`), post()),
+      rotateSecret: (siteId: string, id: string) =>
+        apiFetch<{ alert: Alert; webhook_secret: string }>(
+          sited(siteId, `alerts/${enc(id)}/webhook-secret`),
+          post(),
+        ),
     },
     shares: {
       create: (siteId: string, name: string) =>

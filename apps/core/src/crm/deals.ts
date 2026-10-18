@@ -550,11 +550,25 @@ export function restoreOpportunity(ctx: CrmContext, input: { id: string }): Oppo
      WHERE s.id = ? AND s.deleted_at IS NULL AND p.deleted_at IS NULL`,
     row.stage_id,
   );
+  let target = { pipelineId: row.pipeline_id, stageId: row.stage_id };
   if (stage.length === 0) {
-    throw new CrmError('conflict', 'the pipeline stage of this opportunity no longer exists');
+    // Stage (or pipeline) deleted meanwhile: first stage of the same kind, in its pipeline if alive, else the default one.
+    const fallback = ctx.db.all<{ pipeline_id: string; id: string }>(
+      `SELECT s.pipeline_id, s.id FROM crm_pipeline_stages s JOIN crm_pipelines p ON p.id = s.pipeline_id
+       WHERE s.deleted_at IS NULL AND p.deleted_at IS NULL AND s.kind = ?
+       ORDER BY p.id = ? DESC, p.is_default DESC, p.position, s.position LIMIT 1`,
+      row.status,
+      row.pipeline_id,
+    )[0];
+    if (fallback === undefined) {
+      throw new CrmError('conflict', 'the pipeline stage of this opportunity no longer exists');
+    }
+    target = { pipelineId: fallback.pipeline_id, stageId: fallback.id };
   }
   ctx.db.run(
-    `UPDATE crm_opportunities SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
+    `UPDATE crm_opportunities SET deleted_at = NULL, pipeline_id = ?, stage_id = ?, updated_at = ? WHERE id = ?`,
+    target.pipelineId,
+    target.stageId,
     ctx.now(),
     input.id,
   );

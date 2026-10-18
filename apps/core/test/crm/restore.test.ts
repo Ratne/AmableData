@@ -25,13 +25,15 @@ describe('undo of deletes', () => {
     expect(() => t.op('opportunities.restore', { id: 'missing' })).toThrow(/not found/);
   });
 
-  it('refuses to restore a deal whose pipeline was deleted meanwhile', () => {
+  it('restores a deal whose pipeline was deleted meanwhile into the default pipeline', () => {
     const t = createTestTenant();
-    t.op('pipelines.create', { name: 'Sales' });
+    const sales = t.op('pipelines.create', { name: 'Sales' });
     const other = t.op('pipelines.create', { name: 'Partners' });
     const deal = t.op('opportunities.create', { title: 'Deal', pipeline_id: other.id });
     t.op('opportunities.delete', { id: deal.id });
     t.op('pipelines.delete', { id: other.id });
-    expect(() => t.op('opportunities.restore', { id: deal.id })).toThrow(/no longer exists/);
+    const restored = t.op('opportunities.restore', { id: deal.id });
+    expect(restored.pipeline_id).toBe(sales.id);
+    expect(restored.stage_id).toBe(sales.stages.find((s) => s.kind === 'open')?.id);
   });
 });

@@ -123,6 +123,10 @@ export const bookingSyncResultSchema = z.object({
   busy_count: z.number().int(),
   synced_at: timestampSchema.nullable(),
   message: z.string().nullable(),
+  /** Last failed write of a booking to Google Calendar (null once a write succeeds). */
+  write_error: z.string().nullable(),
+  /** Connected before bookings were written: reconnect Google to grant `calendar.events`. */
+  needs_reconnect: z.boolean(),
 });
 export type BookingSyncResult = z.infer<typeof bookingSyncResultSchema>;
 

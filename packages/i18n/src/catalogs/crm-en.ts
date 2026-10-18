@@ -37,6 +37,7 @@ export const crmEn = {
   'crm.entity.contacts': 'Contacts',
   'crm.entity.companies': 'Companies',
   'crm.entity.opportunities': 'Deals',
+  'crm.entity.orders': 'Orders',
 
   'crm.field.name': 'Full name',
   'crm.field.given_name': 'First name',

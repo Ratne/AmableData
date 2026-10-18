@@ -3,7 +3,7 @@ import { DashboardButton, ListTable, PageBody, PageToolbar, type ListTableColumn
 import { Button } from '@amable/ui/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@amable/ui/ui/dialog';
 import { Input } from '@amable/ui/ui/input';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarCog, Link2, Link2Off, Plus, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
@@ -37,6 +37,32 @@ function useGoogleCallback(): void {
   }, [finish]);
 }
 
+/** Google column: account, plus a warning when bookings cannot be written to Google Calendar. */
+function GoogleCell({ calendar }: { calendar: BookingCalendar }) {
+  const { t } = useI18n();
+  const { slug, api } = useBooking();
+  const status = useQuery({
+    queryKey: bookingKeys.calendarSync(slug, calendar.id),
+    queryFn: () => api.calendars.syncStatus(calendar.id),
+    enabled: calendar.google.connected,
+    staleTime: 60_000,
+  });
+  if (!calendar.google.connected) return <Pill tone="neutral">{t('booking.google.notConnected')}</Pill>;
+  const write = status.data;
+  return (
+    <span className="flex flex-col gap-1">
+      <Pill tone="success">{calendar.google.account_email ?? t('booking.google.connectedShort')}</Pill>
+      {write?.needs_reconnect ? (
+        <span className="text-xs text-amber-700 dark:text-amber-300">{t('booking.google.needsReconnect')}</span>
+      ) : write?.write_error ? (
+        <span className="text-xs text-amber-700 dark:text-amber-300" title={write.write_error}>
+          {t('booking.google.writeError', { error: write.write_error })}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function CalendarsPage() {
   const { t } = useI18n();
   const { slug, api } = useBooking();
@@ -53,6 +79,7 @@ export function CalendarsPage() {
   const sync = useBookingMutation({
     mutationFn: (id: string) => api.calendars.sync(id),
     success: (result) => t(`booking.google.sync.${result.status}`),
+    onSuccess: (result, id) => queryClient.setQueryData(bookingKeys.calendarSync(slug, id), result),
   });
   const connect = useBookingMutation({
     mutationFn: (id: string) => api.calendars.googleConnect(id),
@@ -71,9 +98,8 @@ export function CalendarsPage() {
     {
       id: 'google',
       header: t('booking.field.google'),
-      cell: (c) =>
-        c.google.connected ? <Pill tone="success">{c.google.account_email ?? t('booking.google.connectedShort')}</Pill> : <Pill tone="neutral">{t('booking.google.notConnected')}</Pill>,
-      hideBelow: 'lg',
+      cell: (c) => <GoogleCell calendar={c} />,
+      hideBelow: 'md',
     },
   ];
 

@@ -12,6 +12,7 @@ export const bookingKeys = {
   root: (slug: string) => ['booking', slug] as const,
   me: (slug: string) => ['booking', slug, 'me'] as const,
   calendars: (slug: string) => ['booking', slug, 'calendars'] as const,
+  calendarSync: (slug: string, calendarId: string) => ['booking', slug, 'calendars', calendarId, 'sync'] as const,
   eventTypes: (slug: string) => ['booking', slug, 'eventTypes'] as const,
   eventType: (slug: string, id: string) => ['booking', slug, 'eventType', id] as const,
   embed: (slug: string, id: string) => ['booking', slug, 'eventType', id, 'embed'] as const,

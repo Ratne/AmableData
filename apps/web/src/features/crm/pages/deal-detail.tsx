@@ -184,12 +184,17 @@ function DealView({ deal }: { deal: Opportunity }) {
         action: {
           label: t('list.undo'),
           onClick: () => {
-            void api.opportunities.restore(deal.id).then(() =>
-              navigate({
-                to: '/t/$tenant/deals/$dealId',
-                params: { tenant: slug, dealId: deal.id },
-              }),
-            );
+            api.opportunities
+              .restore(deal.id)
+              .then(() =>
+                navigate({
+                  to: '/t/$tenant/deals/$dealId',
+                  params: { tenant: slug, dealId: deal.id },
+                }),
+              )
+              .catch((error: unknown) =>
+                toast.error(error instanceof Error ? error.message : t('common.error')),
+              );
           },
         },
       });

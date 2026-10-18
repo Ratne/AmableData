@@ -33,7 +33,7 @@ export interface CrmEventPayloads {
   'task.completed': TaskRefs;
   'task.reopened': TaskRefs;
   'task.deleted': TaskRefs;
-  'appointment.created': AppointmentRefs;
+  'appointment.created': AppointmentRefs & { source: string };
   'appointment.updated': AppointmentRefs;
   'appointment.cancelled': AppointmentRefs;
   'appointment.deleted': AppointmentRefs;

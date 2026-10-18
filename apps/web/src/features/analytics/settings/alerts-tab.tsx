@@ -81,6 +81,17 @@ function AlertDialog({
     },
   );
 
+  const rotate = useAnalyticsMutation(
+    tenant,
+    async () => (alert ? (await api.alerts.rotateSecret(site.id, alert.id)).webhook_secret : null),
+    {
+      invalidate,
+      onSuccess: (webhookSecret) => {
+        if (webhookSecret) setSecret(webhookSecret);
+      },
+    },
+  );
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (valid) save.mutate(undefined);
@@ -152,6 +163,19 @@ function AlertDialog({
                 onChange={(event) => setWebhook(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">{t('analytics.alerts.webhookHint')}</p>
+              {alert?.webhook_url ? (
+                <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>{t('analytics.alerts.rotateHint')}</span>
+                  <DashboardButton
+                    variant="secondary"
+                    size="sm"
+                    disabled={rotate.isPending}
+                    onClick={() => rotate.mutate(undefined)}
+                  >
+                    {t('analytics.alerts.rotate')}
+                  </DashboardButton>
+                </div>
+              ) : null}
             </div>
             <label className="flex items-center justify-between gap-4 rounded-lg border p-3 text-sm">
               {t('analytics.alerts.enabled')}

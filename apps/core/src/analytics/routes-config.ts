@@ -291,6 +291,23 @@ export function registerConfigRoutes(api: OpenAPIHono<AppEnv>): void {
   );
   api.openapi(
     crmRoute('analytics:configure', {
+      method: 'post',
+      path: '/alerts/{id}/webhook-secret',
+      tags,
+      summary: 'Issue a new webhook secret for an alert (the old one stops verifying at once)',
+      request: { params: idParam, query: siteQuery },
+      responses: { 200: json(alertWithSecretSchema, 'Alert and its new webhook secret (shown once)') },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const rotated = await (await siteOf(c)).stub.rotateAlertSecret(id, randomSecret());
+      if (rotated === null) throw new CrmError('not_found', 'alert not found or without webhook');
+      await audit(c, 'analytics.alert_secret_rotated', { target: id });
+      return c.json(rotated, 200);
+    },
+  );
+  api.openapi(
+    crmRoute('analytics:configure', {
       method: 'delete',
       path: '/alerts/{id}',
       tags,

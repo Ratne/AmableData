@@ -385,7 +385,7 @@ export function createAppointment(
     now,
   );
   const row = getAppointmentRow(ctx, id);
-  emit(ctx, 'appointment.created', appointmentRefs(row), {
+  emit(ctx, 'appointment.created', { ...appointmentRefs(row), source: row.source }, {
     title: row.title,
     startAt: toIso(row.start_at),
   });
