@@ -2,6 +2,7 @@ import type { RealtimeEvent } from '@amable/api-types';
 import { first, type SqlDb } from '../db/sql';
 import { HOUR_MS } from '../time';
 import type { BotHit, EnrichedEvent } from '../types';
+import { identityKeyRefs, isBlacklisted, recordIdentity, signalsFromEvent, visitorForKeys } from './identity';
 
 /** Inactivity after which a cookieless/server visitor starts a new session. */
 export const SESSION_TIMEOUT_MS = 30 * 60_000;
@@ -456,6 +457,10 @@ function ingestOne(
     e.ts,
   );
   if (inserted.length === 0) return 'duplicate';
+  const signals = signalsFromEvent(e);
+  const keys = signals === null ? [] : identityKeyRefs(signals);
+  // GDPR: events carrying a blacklisted email/phone are dropped.
+  if (isBlacklisted(db, keys)) return 'skipped';
   markDirty(db, e.ts);
 
   let vid: string | null = e.vid === '' ? null : e.vid;
@@ -467,6 +472,7 @@ function ingestOne(
         e.payment.email,
       )?.id ?? null;
   }
+  if (vid === null) vid = visitorForKeys(db, keys);
   if (vid === null) {
     if (e.type !== 'payment') return 'skipped';
     ingestPayment(db, e, null, null, opts, out);
@@ -487,6 +493,7 @@ function ingestOne(
     );
     out.pending = true;
   }
+  if (signals !== null) recordIdentity(db, vid, { ...signals, sessionId: session?.id ?? null }, event.ts, event.ts);
 
   switch (event.type) {
     case 'pageview':

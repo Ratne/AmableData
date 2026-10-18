@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { routePath } from 'hono/route';
 import { consumeAnalyticsBatch } from './analytics/pipeline';
+import { directLinkViews, linkRoutes } from './analytics/link-routes';
 import { analyticsRoutes } from './analytics/routes';
 import { bookingEdgeRoutes } from './booking/routes';
 import { formsEdgeRoutes } from './forms/routes';
@@ -47,7 +48,11 @@ app.use('*', async (c, next) => {
 });
 
 /** Web analytics: `POST /e`, `POST /e/server`, tracker scripts `/s.js` and variants. */
+app.use('/e', directLinkViews);
 app.route('/', analyticsRoutes);
+
+/** Funnel tracking links `/go/…`, action links `/a/:n`, postbacks `/pb`, `/pb/event`. */
+app.route('/', linkRoutes);
 
 /** Hosted forms + embed widget, booking pages + embed widget, landing page fallback URLs and media. */
 app.route('/', formsEdgeRoutes);

@@ -125,6 +125,34 @@ export function contactsBrief(
     });
 }
 
+/** Emails and phone numbers of live contacts (identity keys of their web visitors). */
+export function contactIdentities(
+  ctx: CrmContext,
+  input: { ids: string[] },
+): Array<{ id: string; emails: string[]; phones: string[] }> {
+  const ids = [...new Set(input.ids)].slice(0, 500);
+  if (ids.length === 0) return [];
+  const json = JSON.stringify(ids);
+  const live = ctx.db.all<{ id: string }>(
+    `SELECT id FROM crm_contacts WHERE deleted_at IS NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY id`,
+    json,
+  );
+  const emails = ctx.db.all<{ contact_id: string; email: string }>(
+    `SELECT contact_id, email_normalized AS email FROM crm_contact_emails
+     WHERE contact_id IN (SELECT value FROM json_each(?)) ORDER BY position`,
+    json,
+  );
+  const phones = ctx.db.all<{ contact_id: string; number: string }>(
+    `SELECT contact_id, number FROM crm_contact_phones WHERE contact_id IN (SELECT value FROM json_each(?)) ORDER BY position`,
+    json,
+  );
+  return live.map(({ id }) => ({
+    id,
+    emails: emails.filter((e) => e.contact_id === id).map((e) => e.email),
+    phones: phones.filter((p) => p.contact_id === id).map((p) => p.number),
+  }));
+}
+
 export interface CrmJourneyFacts {
   exists: boolean;
   orders: Array<{
@@ -205,5 +233,6 @@ export const analyticsCrmOps = {
   'analytics.outboxSince': outboxSince,
   'analytics.contactsByEmail': contactsByEmail,
   'analytics.contactsBrief': contactsBrief,
+  'analytics.contactIdentities': contactIdentities,
   'analytics.contactJourneyFacts': contactJourneyFacts,
 } satisfies Record<string, (ctx: CrmContext, input: never) => unknown>;

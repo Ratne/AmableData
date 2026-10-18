@@ -1,6 +1,13 @@
+import type { GatewayClientInfo, GatewayResponse, GatewayTenantInfo } from '@amable/api-types';
 import type { PublishedPage } from '@amable/builder';
 import { z } from 'zod';
-import { GatewayError, type GatewayHandlers, type GatewayRawHandlers } from '../public/context';
+import type { Env } from '../env';
+import {
+  createGatewayContext,
+  GatewayError,
+  type GatewayHandlers,
+  type GatewayRawHandlers,
+} from '../public/context';
 
 /** Public ops reachable from the edge worker: published pages, sitemap, media files. */
 
@@ -64,3 +71,45 @@ export const pagesGatewayRawHandlers: GatewayRawHandlers = {
     });
   },
 };
+
+/** Installation op of the edge funnel routes (see `apps/edge/src/analytics/links/hosted-pages.ts`). */
+export const PAGE_PUBLIC_URL_GATEWAY_OP = 'pages.publicUrl';
+
+const publicUrlInput = z.strictObject({
+  tenant_id: z.string().min(1).max(64),
+  page_id: z.string().min(1).max(64),
+});
+
+/**
+ * Public URL of a published page, used as a funnel destination: its own host,
+ * else the `/p/<slug>` fallback on the edge origin. The tenant travels in the
+ * input (the edge only knows the tenant id of the analytics site).
+ */
+export async function handlePagePublicUrlOp(
+  env: Env,
+  executionCtx: ExecutionContext,
+  client: GatewayClientInfo,
+  input: unknown,
+): Promise<{ status: number; body: GatewayResponse<{ url: string }> }> {
+  const fail = (error: GatewayError) => ({ status: error.status, body: { ok: false as const, error: error.toBody() } });
+  const parsed = publicUrlInput.safeParse(input);
+  if (!parsed.success) return fail(new GatewayError(400, 'bad_request', 'invalid input'));
+  const tenant = await env.DB.prepare(`SELECT id, slug, name FROM tenants WHERE id = ?`)
+    .bind(parsed.data.tenant_id)
+    .first<GatewayTenantInfo>();
+  if (tenant === null) return fail(new GatewayError(404, 'not_found', 'tenant not found'));
+  const ctx = createGatewayContext({ env, executionCtx, tenant, client });
+  try {
+    const page = await ctx.crm('pages.get', { id: parsed.data.page_id });
+    if (page.status !== 'published') return fail(new GatewayError(404, 'not_found', 'page not published'));
+    const path = encodeURI(page.path);
+    const url =
+      page.host !== null
+        ? `https://${page.host}${path}`
+        : `${(env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '')}/p/${tenant.slug}${path === '/' ? '' : path}`;
+    return { status: 200, body: { ok: true, tenant, value: { url } } };
+  } catch (error) {
+    if (error instanceof GatewayError) return fail(error.status === 404 ? error : new GatewayError(404, 'not_found', 'page not found'));
+    throw error;
+  }
+}

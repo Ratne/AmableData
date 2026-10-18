@@ -1,4 +1,4 @@
-import { first, type SqlDb } from '../db/sql';
+import { first, type SqlDb, type SqlValue } from '../db/sql';
 import { dayKey, dayStart, HOUR_MS, nextDay } from '../time';
 
 export interface RollupTotals {
@@ -113,4 +113,127 @@ export function refreshRollups(db: SqlDb, timeZone: string, currency: string): n
     db.run(`DELETE FROM rollup_dirty WHERE grain = 'hour'`);
     return hours.length;
   });
+}
+
+// ------------------------------------------------- funnel click-log by ad entity
+
+/** Funnel hits of one local day per traffic source, ad entity, funnel and node. */
+export interface TouchDayRollup {
+  day: string;
+  source: string | null;
+  campaign: string | null;
+  adset: string | null;
+  ad: string | null;
+  funnel: string;
+  node: string;
+  entrances: number;
+  views: number;
+  clicks: number;
+  /** Cost carried by the entrances. */
+  cost: number;
+}
+
+interface TouchRollupState {
+  signature: string;
+  lastRowid: number;
+  lastId: string | null;
+  count: number;
+  rows: Map<string, TouchDayRollup>;
+}
+
+const touchRollups = new WeakMap<SqlDb, Map<string, TouchRollupState>>();
+
+/**
+ * Daily rollup of the click-log, kept in memory per database and time zone.
+ * Touches are append-only, so later calls only aggregate the rows added since
+ * (rowid watermark); any delete (retention), rowid reuse or change of the
+ * adset / ad slot mapping (`slots.signature`) rebuilds it. Day-aligned report
+ * ranges read it instead of scanning the touches.
+ */
+export function touchDayRollups(
+  db: SqlDb,
+  timeZone: string,
+  slots: { signature: string; sql: (level: 'adset' | 'ad', params: SqlValue[]) => string },
+): Iterable<TouchDayRollup> {
+  let byZone = touchRollups.get(db);
+  if (byZone === undefined) {
+    byZone = new Map();
+    touchRollups.set(db, byZone);
+  }
+  const head = first<{ n: number; max: number | null }>(db, `SELECT COUNT(*) AS n, MAX(rowid) AS max FROM touches`);
+  const count = head?.n ?? 0;
+  const maxRowid = head?.max ?? 0;
+  const lastId = first<{ id: string }>(db, `SELECT id FROM touches WHERE rowid = ?`, maxRowid)?.id ?? null;
+  let state = byZone.get(timeZone);
+  const appendOnly =
+    state !== undefined &&
+    state.signature === slots.signature &&
+    maxRowid >= state.lastRowid &&
+    count - state.count === maxRowid - state.lastRowid &&
+    (maxRowid > state.lastRowid || lastId === state.lastId);
+  if (state === undefined || !appendOnly) {
+    state = { signature: slots.signature, lastRowid: 0, lastId: null, count: 0, rows: new Map() };
+    byZone.set(timeZone, state);
+  }
+  if (maxRowid > state.lastRowid || state.count !== count) {
+    const params: SqlValue[] = [];
+    const adset = slots.sql('adset', params);
+    const ad = slots.sql('ad', params);
+    params.push(state.lastRowid, maxRowid);
+    const quarter = new Map<number, string>();
+    for (const r of db.all<{
+      source: string | null;
+      campaign: string | null;
+      adset: string | null;
+      ad: string | null;
+      funnel: string;
+      node: string;
+      qh: number;
+      entrances: number;
+      views: number;
+      clicks: number;
+      cost: number;
+    }>(
+      `SELECT t.traffic_source_id AS source, t.campaign AS campaign, ${adset} AS adset, ${ad} AS ad,
+         t.funnel_id AS funnel, t.node_id AS node, t.ts / 900000 AS qh,
+         SUM(t.kind = 'entrance') AS entrances, SUM(t.kind = 'view') AS views,
+         SUM(t.kind IN ('click', 'action')) AS clicks,
+         SUM(CASE WHEN t.kind = 'entrance' THEN COALESCE(t.cost_minor, 0) ELSE 0 END) AS cost
+       FROM touches t WHERE t.rowid > ? AND t.rowid <= ?
+       GROUP BY 1, 2, 3, 4, 5, 6, 7`,
+      ...params,
+    )) {
+      let day = quarter.get(r.qh);
+      if (day === undefined) {
+        day = dayKey(r.qh * 900_000, timeZone);
+        quarter.set(r.qh, day);
+      }
+      const key = JSON.stringify([day, r.source, r.campaign, r.adset, r.ad, r.funnel, r.node]);
+      const cur = state.rows.get(key);
+      if (cur === undefined) {
+        state.rows.set(key, {
+          day,
+          source: r.source,
+          campaign: r.campaign,
+          adset: r.adset,
+          ad: r.ad,
+          funnel: r.funnel,
+          node: r.node,
+          entrances: r.entrances,
+          views: r.views,
+          clicks: r.clicks,
+          cost: r.cost,
+        });
+      } else {
+        cur.entrances += r.entrances;
+        cur.views += r.views;
+        cur.clicks += r.clicks;
+        cur.cost += r.cost;
+      }
+    }
+    state.lastRowid = maxRowid;
+    state.lastId = lastId;
+    state.count = count;
+  }
+  return state.rows.values();
 }

@@ -7,6 +7,7 @@ import {
   type OutboundKind,
   type OutboundPayload,
   type OutboundStatus,
+  type TrafficSource,
 } from '@amable/api-types';
 import { z } from 'zod';
 import { first, type SqlDb, type SqlValue } from '../db/sql';
@@ -210,4 +211,189 @@ export function listOutbound(db: SqlDb, q: OutboundQuery = {}): OutboundConversi
       limit,
     )
     .map(toJob);
+}
+
+// ------------------------------------------------- event mapping and gating
+
+/** Conversion event of this CRM (`sale`, `lead`, `event:N`) → kind of outbound job. */
+export function outboundKindOf(event: string): OutboundKind {
+  if (event === 'sale') return 'purchase';
+  if (event === 'lead') return 'lead';
+  return 'custom';
+}
+
+export interface OutboundRoute {
+  connection_id: string;
+  platform: AdPlatform;
+  /** Platform event name (`Purchase`, `CompletePayment`) or Google conversion action id. */
+  platform_event: string;
+}
+
+/** Where a conversion of the source goes, or null when the source sends nothing for this event. */
+export function outboundRouteFor(source: TrafficSource, event: string): OutboundRoute | null {
+  const { ad_connection_id: connectionId, platform, mapping } = source.conversion;
+  if (connectionId === null || connectionId === undefined || connectionId === '') return null;
+  if (platform === null || platform === undefined) return null;
+  const entry = mapping.find((m) => m.event === event);
+  return entry === undefined ? null : { connection_id: connectionId, platform, platform_event: entry.platform_event };
+}
+
+export const OUTBOUND_SKIP_REASONS = ['no_consent', 'not_approved', 'zero_revenue', 'throttled', 'blacklisted'] as const;
+export type OutboundSkipReason = (typeof OUTBOUND_SKIP_REASONS)[number];
+
+export interface OutboundGateInput {
+  revenue_minor: number;
+  status?: 'approved' | 'pending' | 'rejected' | undefined;
+  consent: boolean;
+  blacklisted?: boolean | undefined;
+  /** Uniform in [0, 1); drawn only when the source throttles. */
+  rng: () => number;
+}
+
+/** Why the conversion must not reach the platform, or null when it can be sent. */
+export function outboundGate(source: TrafficSource, input: OutboundGateInput): OutboundSkipReason | null {
+  if (!input.consent) return 'no_consent';
+  if (input.status !== undefined && input.status !== 'approved') return 'not_approved';
+  if (input.blacklisted === true) return 'blacklisted';
+  if (source.skip_zero_revenue_postbacks && input.revenue_minor === 0) return 'zero_revenue';
+  const throttle = source.postback_throttle_pct ?? 0;
+  if (throttle > 0 && input.rng() * 100 < throttle) return 'throttled';
+  return null;
+}
+
+/** Value reported to the platform: the source's outgoing revenue modifier applied. */
+export function outboundValueMinor(source: TrafficSource, revenueMinor: number): number {
+  const pct = source.revenue_modifier_pct ?? 0;
+  return pct === 0 ? revenueMinor : Math.round((revenueMinor * (100 + pct)) / 100);
+}
+
+/** Click-id parameters each platform matches conversions on; the first is the one a source's external field maps to. */
+export const PLATFORM_CLICK_ID_KEYS: Readonly<Record<AdPlatform, readonly string[]>> = {
+  meta: ['fbclid', 'fbc', 'fbp'],
+  google: ['gclid', 'gbraid', 'wbraid'],
+  tiktok: ['ttclid', 'ttp'],
+};
+
+/** Click ids captured by the tracker on the visitor's sessions, oldest first (later values win when merged). */
+export function sessionClickIds(db: SqlDb, visitorId: string): Record<string, string>[] {
+  return db
+    .all<{ click_ids: string }>(
+      `SELECT click_ids FROM sessions WHERE visitor_id = ? AND click_ids IS NOT NULL ORDER BY started_at, id`,
+      visitorId,
+    )
+    .flatMap((r) => {
+      try {
+        const parsed = JSON.parse(r.click_ids) as unknown;
+        if (parsed === null || typeof parsed !== 'object') return [];
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(parsed)) if (typeof v === 'string') out[k] = v;
+        return [out];
+      } catch {
+        return [];
+      }
+    });
+}
+
+// ------------------------------------------------------ closing and resend
+
+const PII_PATHS = `'$.email', '$.phone', '$.ip', '$.user_agent'`;
+
+/** Settles the job; once closed (sent/failed/skipped) its payload loses email, phone, IP and user agent. */
+export function finishOutbound(
+  db: SqlDb,
+  id: string,
+  outcome: OutboundOutcome,
+  now: number,
+): OutboundConversionJob | null {
+  settleOutbound(db, id, outcome, now);
+  db.run(
+    `UPDATE outbound_conversions SET payload = json_remove(payload, ${PII_PATHS})
+     WHERE id = ? AND status <> 'pending'`,
+    id,
+  );
+  return getOutbound(db, id);
+}
+
+/** Earliest `next_attempt_at` of the pending jobs, for alarm scheduling. */
+export function nextOutboundAttemptAt(db: SqlDb): number | null {
+  return (
+    first<{ t: number | null }>(db, `SELECT MIN(next_attempt_at) AS t FROM outbound_conversions WHERE status = 'pending'`)
+      ?.t ?? null
+  );
+}
+
+/** Puts failed jobs back in the queue with a fresh attempt budget; other statuses are left alone. */
+export function resendOutbound(db: SqlDb, ids: readonly string[], now: number): number {
+  if (ids.length === 0) return 0;
+  return db.all<{ id: string }>(
+    `UPDATE outbound_conversions SET status = 'pending', attempts = 0, next_attempt_at = ?, last_error = NULL,
+       updated_at = ?
+     WHERE status = 'failed' AND id IN (SELECT value FROM json_each(?)) RETURNING id`,
+    now,
+    now,
+    JSON.stringify(ids),
+  ).length;
+}
+
+export const outboundResendFilterSchema = z.object({
+  platform: z.enum(AD_PLATFORMS).optional(),
+  connection_id: z.string().min(1).max(64).optional(),
+  /** `created_at` range, epoch ms (from inclusive, to exclusive). */
+  from: z.number().int().optional(),
+  to: z.number().int().optional(),
+});
+export type OutboundResendFilter = z.input<typeof outboundResendFilterSchema>;
+
+/** Bulk resend of every failed job matching the filter. */
+export function resendFailedOutbound(
+  db: SqlDb,
+  filter: z.output<typeof outboundResendFilterSchema>,
+  now: number,
+): number {
+  const where = [`status = 'failed'`];
+  const params: SqlValue[] = [];
+  const add = (sql: string, v: SqlValue | undefined): void => {
+    if (v === undefined) return;
+    where.push(sql);
+    params.push(v);
+  };
+  add('platform = ?', filter.platform);
+  add('connection_id = ?', filter.connection_id);
+  add('created_at >= ?', filter.from);
+  add('created_at < ?', filter.to);
+  return db.all<{ id: string }>(
+    `UPDATE outbound_conversions SET status = 'pending', attempts = 0, next_attempt_at = ?, last_error = NULL,
+       updated_at = ?
+     WHERE ${where.join(' AND ')} RETURNING id`,
+    now,
+    now,
+    ...params,
+  ).length;
+}
+
+export type OutboundStats = Record<OutboundStatus, number>;
+
+/** Job counts per status (log header), same filters as `listOutbound` minus status. */
+export function outboundStats(db: SqlDb, q: Omit<OutboundQuery, 'status' | 'limit'> = {}): OutboundStats {
+  const where: string[] = [];
+  const params: SqlValue[] = [];
+  const add = (sql: string, v: SqlValue | undefined): void => {
+    if (v === undefined) return;
+    where.push(sql);
+    params.push(v);
+  };
+  add('platform = ?', q.platform);
+  add('connection_id = ?', q.connection_id);
+  add('event_id = ?', q.event_id);
+  add('created_at >= ?', q.from);
+  add('created_at < ?', q.to);
+  const out: OutboundStats = { pending: 0, sent: 0, failed: 0, skipped: 0 };
+  for (const row of db.all<{ status: OutboundStatus; n: number }>(
+    `SELECT status, COUNT(*) AS n FROM outbound_conversions ${where.length === 0 ? '' : `WHERE ${where.join(' AND ')}`}
+     GROUP BY status`,
+    ...params,
+  )) {
+    out[row.status] = row.n;
+  }
+  return out;
 }

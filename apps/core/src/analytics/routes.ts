@@ -17,8 +17,14 @@ import type { Hono, MiddlewareHandler } from 'hono';
 import { createCrmRouter, crmRoute, json, jsonBody } from '../crm/api/core';
 import { audit, requireAuth, requireTenant, type AppEnv } from '../middleware';
 import { publicAnalyticsApi, siteKeyApi } from './public';
+import { registerAdsRoutes } from './routes-ads';
+import { registerAdsReportRoutes } from './routes-ads-reports';
 import { registerConfigRoutes } from './routes-config';
+import { registerFunnelRoutes } from './routes-funnels';
+import { registerOutboundRoutes } from './routes-outbound';
+import { registerSourceRoutes } from './routes-sources';
 import { registerReportRoutes } from './routes-reports';
+import { registerTrackingDomainRoutes } from './routes-tracking-domains';
 import { siteStub } from '@amable/app-edge/analytics';
 import { generateTraffic, liveTraffic } from './dev-traffic';
 import { syncIntegration } from './integrations';
@@ -217,6 +223,12 @@ analyticsApi.openapi(
 
 registerReportRoutes(analyticsApi);
 registerConfigRoutes(analyticsApi);
+registerFunnelRoutes(analyticsApi);
+registerSourceRoutes(analyticsApi);
+registerOutboundRoutes(analyticsApi);
+registerTrackingDomainRoutes(analyticsApi);
+registerAdsRoutes(analyticsApi);
+registerAdsReportRoutes(analyticsApi);
 
 /** OpenAPI 3.1 document of the analytics endpoints. */
 export function analyticsOpenApiDocument(): ReturnType<typeof analyticsApi.getOpenAPI31Document> {

@@ -6,7 +6,8 @@
   "license": "AGPL-3.0-only",
   "exports": {
     ".": "./src/index.ts",
-    "./analytics": "./src/analytics/rpc.ts"
+    "./analytics": "./src/analytics/rpc.ts",
+    "./funnel-engine": "./src/analytics/funnel-engine/index.ts"
   },
   "scripts": {
     "dev": "pnpm --filter @amable/tracker build && wrangler dev",

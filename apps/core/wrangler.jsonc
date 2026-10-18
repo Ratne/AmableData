@@ -80,10 +80,23 @@
   // deploy, which removes every /api/dev/* route.
   // EDGE_ORIGIN: public origin of the edge worker, used in tracking snippets.
   // EMAIL_ALLOW_UNVERIFIED_DOMAIN: local sends without a verified domain (ignored outside dev).
+  // Custom tracking domains (Cloudflare for SaaS custom hostnames on the zone serving
+  // the edge worker; dev uses a fake provider): CF_ZONE_ID = that zone,
+  // CF_API_TOKEN = token with "SSL and Certificates: Edit" (Wrangler secret),
+  // TRACKING_CNAME_TARGET = hostname customers point their CNAME at (default: EDGE_ORIGIN host).
   "vars": {
     "ENVIRONMENT": "dev",
     "EDGE_ORIGIN": "http://localhost:8788",
     "EMAIL_ALLOW_UNVERIFIED_DOMAIN": "true",
+    // "CF_ZONE_ID": "<zone id>",
+    // "TRACKING_CNAME_TARGET": "track.example.net",
+    // Ad platform OAuth apps: secrets via `wrangler secret put <NAME>` (a platform
+    // without them is unavailable outside dev, where a fake client is used).
+    // META_APP_ID, META_APP_SECRET; GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET,
+    // GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_LOGIN_CUSTOMER_ID (optional manager
+    // account); TIKTOK_APP_ID, TIKTOK_APP_SECRET.
+    // Redirect URI registered on those apps (default: <APP_ORIGIN>/oauth/ads/callback):
+    // "ADS_OAUTH_REDIRECT_URI": "https://app.example.com/oauth/ads/callback",
   },
 
   "dev": { "port": 8787 },

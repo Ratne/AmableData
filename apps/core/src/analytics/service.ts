@@ -204,7 +204,8 @@ export function rangeOf(c: Ctx, params: AnalyticsQueryParams): AnalyticsRange {
 
 export function unwrap<T>(result: AnalyticsResult<T>): T {
   if (result.ok) return result.value;
-  const code = result.error.code === 'not_found' ? 'not_found' : 'validation_failed';
+  const code =
+    result.error.code === 'not_found' || result.error.code === 'conflict' ? result.error.code : 'validation_failed';
   throw new CrmError(code, result.error.message);
 }
 

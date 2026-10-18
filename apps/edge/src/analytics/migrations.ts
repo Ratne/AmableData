@@ -522,4 +522,28 @@ export const analyticsMigrations: readonly Migration[] = [
       `CREATE INDEX conversion_log_funnel ON conversion_log (funnel_id, ts) WHERE funnel_id IS NOT NULL`,
     ],
   },
+  {
+    id: 4,
+    name: 'analytics_funnel_sessions',
+    statements: [
+      // Routing state of a visitor in a funnel (current page, rotator history) and
+      // the tracking fields captured at its entrance. Never holds data-buffer params.
+      `CREATE TABLE funnel_sessions (
+        visitor_id TEXT NOT NULL,
+        funnel_id TEXT NOT NULL,
+        current_node_id TEXT,
+        current_page_id TEXT,
+        rotations TEXT NOT NULL DEFAULT '{}',
+        traffic_source_id TEXT,
+        campaign TEXT,
+        external_click_id TEXT,
+        fields TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (visitor_id, funnel_id)
+      )`,
+      `CREATE INDEX funnel_sessions_recent ON funnel_sessions (visitor_id, updated_at)`,
+      `CREATE INDEX funnel_sessions_updated ON funnel_sessions (updated_at)`,
+    ],
+  },
 ];

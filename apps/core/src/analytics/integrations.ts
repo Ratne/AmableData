@@ -1,4 +1,10 @@
-import type { Integration, IntegrationProvider } from '@amable/api-types';
+import {
+  createFakeProvider,
+  createProvider,
+  type AdsProvider as AdPlatformClient,
+  type ProviderConfig,
+} from '@amable/ads-providers';
+import type { AdPlatform, Integration, IntegrationProvider } from '@amable/api-types';
 import {
   siteStub,
   type AdSpendRow,
@@ -259,6 +265,75 @@ export async function syncIntegration(
   }
   await stub.saveIntegration(next);
   return next;
+}
+
+// ------------------------------------------------------------ ad platforms
+
+/**
+ * OAuth apps of the installation for the ad platforms (Wrangler secrets). A
+ * platform without credentials is unavailable outside dev/test, where the
+ * deterministic fake client of `@amable/ads-providers` stands in (no network).
+ */
+export interface AdPlatformSecretsEnv {
+  ENVIRONMENT?: string;
+  META_APP_ID?: string;
+  META_APP_SECRET?: string;
+  GOOGLE_ADS_CLIENT_ID?: string;
+  GOOGLE_ADS_CLIENT_SECRET?: string;
+  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
+  /** Optional manager (MCC) account, digits. */
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
+  TIKTOK_APP_ID?: string;
+  TIKTOK_APP_SECRET?: string;
+}
+
+export interface AdPlatformClients {
+  readonly fake: boolean;
+  /** Client of a platform, or null when the installation has no app for it. */
+  client(platform: AdPlatform): AdPlatformClient | null;
+}
+
+const trimmed = (v: string | undefined): string => v?.trim() ?? '';
+
+export function adPlatformCredentials(
+  env: AdPlatformSecretsEnv,
+  platform: AdPlatform,
+): Omit<ProviderConfig, 'fetch' | 'now'> | null {
+  const pair = (clientId: string | undefined, clientSecret: string | undefined) =>
+    trimmed(clientId) !== '' && trimmed(clientSecret) !== ''
+      ? { clientId: trimmed(clientId), clientSecret: trimmed(clientSecret) }
+      : null;
+  switch (platform) {
+    case 'meta':
+      return pair(env.META_APP_ID, env.META_APP_SECRET);
+    case 'tiktok':
+      return pair(env.TIKTOK_APP_ID, env.TIKTOK_APP_SECRET);
+    case 'google': {
+      const base = pair(env.GOOGLE_ADS_CLIENT_ID, env.GOOGLE_ADS_CLIENT_SECRET);
+      const developerToken = trimmed(env.GOOGLE_ADS_DEVELOPER_TOKEN);
+      if (base === null || developerToken === '') return null;
+      const loginCustomerId = trimmed(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, '');
+      return { ...base, developerToken, ...(loginCustomerId === '' ? {} : { loginCustomerId }) };
+    }
+  }
+}
+
+export function adPlatformClientsFor(
+  env: AdPlatformSecretsEnv,
+  deps: { fetch?: typeof fetch; now?: () => number } = {},
+): AdPlatformClients {
+  if (env.ENVIRONMENT === 'dev' || env.ENVIRONMENT === 'test') {
+    return { fake: true, client: (platform) => createFakeProvider(platform, 'dev') };
+  }
+  const fetchFn = deps.fetch ?? ((input, init) => fetch(input, init));
+  const now = deps.now ?? Date.now;
+  return {
+    fake: false,
+    client(platform) {
+      const credentials = adPlatformCredentials(env, platform);
+      return credentials === null ? null : createProvider(platform, { ...credentials, fetch: fetchFn, now });
+    },
+  };
 }
 
 /** Daily sync of every connected integration of the given sites (cron). */

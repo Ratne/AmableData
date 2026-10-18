@@ -10,6 +10,7 @@ import type {
 import { first, type SqlDb, type SqlValue } from '../db/sql';
 import { dayKey } from '../time';
 import { keyTouches, personKey, touchesOf, visitorIdsOf } from './attribution';
+import { journeyIdentityExtras, type JourneyFunnelTouch } from './identity';
 import { timeToConversion } from './insights';
 import { loadModel, predictVisitors } from './prediction';
 import { filterSql, type ResolvedRange } from './query';
@@ -390,6 +391,11 @@ export interface ContactActivity {
   touches: Array<{ ts: number; channel: string; source: string | null; referrer_host: string | null; campaign: string | null }>;
   prediction: Prediction | null;
   items: JourneyItem[];
+  /** Visitors merged with the contact's visitors by the identity graph (not linked to the contact). */
+  merged_visitor_ids?: string[];
+  /** Funnel / ad touches of the contact's visitors and their merge groups (chronological). */
+  funnel_touches?: JourneyFunnelTouch[];
+  tags?: string[];
 }
 
 export function contactActivity(
@@ -515,6 +521,7 @@ export function contactActivity(
     .reduce((a, p) => a + p.amount_minor - p.refunded_minor, 0);
   const minFirstSeen = ids.length === 0 ? null : Math.min(...ids.map((v) => v.first_seen));
   const latest = visitorIds.at(-1);
+  const extras = journeyIdentityExtras(db, visitorIds, limit);
   return {
     site_id: siteId,
     currency,
@@ -556,5 +563,8 @@ export function contactActivity(
     prediction:
       latest === undefined ? null : (predictVisitors(db, loadModel(db), [latest], now).get(latest) ?? null),
     items: items.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, limit),
+    merged_visitor_ids: extras.visitor_ids.filter((id) => !visitorIds.includes(id)),
+    funnel_touches: extras.funnel_touches,
+    tags: extras.tags,
   };
 }

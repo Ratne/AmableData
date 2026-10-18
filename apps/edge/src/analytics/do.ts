@@ -73,6 +73,9 @@ import {
   type CrmApplyResult,
   type CrmFact,
   type IdentityKeyRef,
+  type IdentityMergeSettings,
+  type VisitorIdentityGraph,
+  type VisitorIdentityInput,
   type IngestResult,
   type IntegrationProviderId,
   type IntegrationRow,
@@ -87,7 +90,34 @@ import {
   type TouchQuery,
   type VisitorListQuery,
 } from './store/index';
+import type { TrackingQualityQuery } from './store/index';
+import type {
+  CohortQuery,
+  CohortReport,
+  JourneyQuery,
+  JourneyReport,
+  LtvQuery,
+  LtvReport,
+  PerformanceQuery,
+  PerformanceReport,
+  TrackingQuality,
+} from '@amable/api-types';
 import { withEdgeErrorReporting } from '../errors';
+import {
+  coreProviderResolver,
+  type ConversionOutboundRequest,
+  type EnqueueForConversionResult,
+  type OutboundRunResult,
+  type ProviderResolver,
+} from './outbound-worker';
+import type { OutboundResendFilter, OutboundStats } from './store/outbound';
+import type {
+  FunnelLinkContext,
+  FunnelLinkQuery,
+  FunnelSessionRecord,
+  FunnelStepInput,
+  FunnelStepResult,
+} from './store/funnel-sessions';
 import { DAY_MS } from './time';
 import type { BotHit, EnrichedEvent } from './types';
 
@@ -448,6 +478,17 @@ export class AnalyticsDO extends DurableObject<Env> {
     return this.store.listConversions(query);
   }
 
+  // ---- funnel link routing (/go, /a/:n, direct links)
+  funnelLinkContext(query: FunnelLinkQuery): AnalyticsResult<FunnelLinkContext> {
+    return this.store.funnelLinkContext(query);
+  }
+  getFunnelSession(visitorId: string, funnelId?: string | null): FunnelSessionRecord | null {
+    return this.store.getFunnelSession(visitorId, funnelId);
+  }
+  recordFunnelStep(step: FunnelStepInput): AnalyticsResult<FunnelStepResult> {
+    return this.store.recordFunnelStep(step);
+  }
+
   upsertAdConnection(input: AdConnectionInput): AnalyticsResult<AdConnectionRecord> {
     return this.store.upsertAdConnection(input);
   }
@@ -486,6 +527,47 @@ export class AnalyticsDO extends DurableObject<Env> {
     return this.store.listOutbound(query);
   }
 
+  // ---- outbound conversions: enqueue from traffic source mapping, sending, resend
+  async enqueueConversionOutbound(input: ConversionOutboundRequest): Promise<AnalyticsResult<EnqueueForConversionResult>> {
+    const result = await this.store.enqueueConversionOutbound(input);
+    await this.scheduleOutboundAlarm();
+    return result;
+  }
+  async resendOutbound(ids: string[]): Promise<{ requeued: number }> {
+    const result = this.store.resendOutbound(ids);
+    await this.scheduleOutboundAlarm();
+    return result;
+  }
+  async resendFailedOutbound(filter?: OutboundResendFilter): Promise<AnalyticsResult<{ requeued: number }>> {
+    const result = this.store.resendFailedOutbound(filter);
+    await this.scheduleOutboundAlarm();
+    return result;
+  }
+  outboundStats(query?: Omit<OutboundQuery, 'status' | 'limit'>): OutboundStats {
+    return this.store.outboundStats(query);
+  }
+  /** Sends the due jobs now (the alarm does the same on its own). */
+  async processOutbound(now?: number): Promise<OutboundRunResult | null> {
+    const site = this.store.getSite();
+    if (site === null) return null;
+    const result = await this.store.processOutbound(this.outboundResolver(site), now ?? Date.now());
+    await this.scheduleOutboundAlarm();
+    return result;
+  }
+
+  protected outboundResolver(site: SiteRecord): ProviderResolver {
+    return coreProviderResolver(this.env, { tenantId: site.tenantId, siteId: site.site.id });
+  }
+
+  /** Brings the alarm forward to the next due outbound job; never pushes it back. */
+  private async scheduleOutboundAlarm(): Promise<void> {
+    const next = this.store.nextOutboundAttemptAt();
+    if (next === null) return;
+    const at = Math.max(next, Date.now() + OUTBOUND_MIN_ALARM_GAP_MS);
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+  }
+
   upsertIdentityKeys(keys: IdentityKey[]): AnalyticsResult<{ added: number }> {
     return this.store.upsertIdentityKeys(keys);
   }
@@ -514,6 +596,35 @@ export class AnalyticsDO extends DurableObject<Env> {
     return this.store.listBlacklist();
   }
 
+  // ---- identity merge
+  identifyVisitors(items: VisitorIdentityInput[]): AnalyticsResult<{ added: number; merged: number; skipped: number }> {
+    return this.store.identifyVisitors(items);
+  }
+  mergeVisitors(originVisitorId: string, childVisitorId: string): AnalyticsResult<VisitorIdentityGraph> {
+    return this.store.mergeVisitors(originVisitorId, childVisitorId);
+  }
+  unmergeVisitors(childVisitorId: string): AnalyticsResult<{ child: VisitorIdentityGraph; origin: VisitorIdentityGraph }> {
+    return this.store.unmergeVisitors(childVisitorId);
+  }
+  reprocessVisitors(range: { from: number; to: number }): AnalyticsResult<{ keys: number; merges: number; visitors: number }> {
+    return this.store.reprocessVisitors(range);
+  }
+  visitorIdentityGraph(visitorId: string): VisitorIdentityGraph | null {
+    return this.store.visitorIdentityGraph(visitorId);
+  }
+  resolveVisitorGroup(visitorId: string): string[] {
+    return this.store.resolveVisitorGroup(visitorId);
+  }
+  getIdentitySettings(): IdentityMergeSettings {
+    return this.store.getIdentitySettings();
+  }
+  updateIdentitySettings(patch: Partial<IdentityMergeSettings>): AnalyticsResult<IdentityMergeSettings> {
+    return this.store.updateIdentitySettings(patch);
+  }
+  blacklistVisitorKeys(visitorId: string): number {
+    return this.store.blacklistVisitorKeys(visitorId);
+  }
+
   knownVisitors(ids: string[]): string[] {
     return this.store.knownVisitors(ids);
   }
@@ -527,14 +638,42 @@ export class AnalyticsDO extends DurableObject<Env> {
     return this.store.hasCoreWork();
   }
 
+  // ---------------------------------------------------- ad attribution reports
+  adsPerformanceReport(query: PerformanceQuery): AnalyticsResult<PerformanceReport> {
+    return this.store.adsPerformanceReport(query);
+  }
+  adsLtvReport(query: LtvQuery): AnalyticsResult<LtvReport> {
+    return this.store.adsLtvReport(query);
+  }
+  adsCohortReport(query: CohortQuery): AnalyticsResult<CohortReport> {
+    return this.store.adsCohortReport(query);
+  }
+  adsJourneyReport(query: JourneyQuery): AnalyticsResult<JourneyReport> {
+    return this.store.adsJourneyReport(query);
+  }
+  trackingQuality(range: TrackingQualityQuery): AnalyticsResult<TrackingQuality> {
+    return this.store.trackingQuality(range);
+  }
+
   /** Daily: retention (archive + purge raw rows), then retrain the conversion model. */
   override async alarm(): Promise<void> {
     await withEdgeErrorReporting(this.env, { source: 'durable_object', module: 'analytics', route: 'alarm' }, async () => {
-      if (this.store.getSite() === null) return;
-      const sink = this.env.FILES === undefined ? null : r2ArchiveSink(this.env.FILES);
-      await this.store.retention(sink);
-      this.store.trainPrediction();
-      await this.ctx.storage.setAlarm(Date.now() + DAY_MS);
+      const site = this.store.getSite();
+      if (site === null) return;
+      // The alarm also wakes up for outbound jobs: daily work runs only when its own deadline passed.
+      let dailyAt = (await this.ctx.storage.get<number>(DAILY_WORK_AT_KEY)) ?? 0;
+      if (Date.now() >= dailyAt) {
+        const sink = this.env.FILES === undefined ? null : r2ArchiveSink(this.env.FILES);
+        await this.store.retention(sink);
+        this.store.trainPrediction();
+        dailyAt = Date.now() + DAY_MS;
+        await this.ctx.storage.put(DAILY_WORK_AT_KEY, dailyAt);
+      }
+      await this.store.processOutbound(this.outboundResolver(site), Date.now());
+      const nextOutbound = this.store.nextOutboundAttemptAt();
+      await this.ctx.storage.setAlarm(
+        nextOutbound === null ? dailyAt : Math.min(dailyAt, Math.max(nextOutbound, Date.now() + OUTBOUND_MIN_ALARM_GAP_MS)),
+      );
     });
   }
 
@@ -589,6 +728,10 @@ export class AnalyticsDO extends DurableObject<Env> {
     this.store.releaseSyncLease(holder);
   }
 }
+
+/** Storage key of the next retention + training run (the alarm also fires for outbound jobs). */
+const DAILY_WORK_AT_KEY = 'daily_work_at';
+const OUTBOUND_MIN_ALARM_GAP_MS = 1_000;
 
 function emptySnapshot(): AnalyticsRealtime {
   return {

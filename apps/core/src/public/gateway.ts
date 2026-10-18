@@ -6,19 +6,26 @@ import {
   EDGE_GATEWAY_RAW_PATH,
   EDGE_GATEWAY_SIGNATURE_HEADER,
   EDGE_GATEWAY_TOLERANCE_SECONDS,
+  type GatewayClientInfo,
   type GatewayResponse,
   type GatewayTenantInfo,
   type GatewayTenantRef,
 } from '@amable/api-types';
 import { verifyWebhook } from '@amable/auth/security';
 import { z } from 'zod';
+import { ADS_TOKEN_GATEWAY_OP, handleAdsTokenOp } from '../analytics/ads-sync';
 import { findTrackingHost, TRACKING_HOST_GATEWAY_OP } from '../analytics/routes-tracking-domains';
 import { findTenantBySlug } from '../auth/store';
 import { bookingGatewayHandlers, bookingGatewayRawHandlers } from '../booking/gateway';
 import type { Env } from '../env';
 import { formsGatewayHandlers, formsGatewayRawHandlers } from '../forms/gateway';
 import { ensureInstallationMigrated } from '../migrate';
-import { pagesGatewayHandlers, pagesGatewayRawHandlers } from '../pages/gateway';
+import {
+  handlePagePublicUrlOp,
+  PAGE_PUBLIC_URL_GATEWAY_OP,
+  pagesGatewayHandlers,
+  pagesGatewayRawHandlers,
+} from '../pages/gateway';
 import { reportError } from '../platform/telemetry';
 import {
   createGatewayContext,
@@ -167,6 +174,25 @@ async function trackingHost(env: Env, ref: GatewayTenantRef): Promise<Response> 
   return reply({ ok: true, tenant: found.tenant, value: { site_id: found.site_id } });
 }
 
+/** Ad platform token for the edge outbound queue: the tenant travels in the input, not in the envelope. */
+async function adsToken(env: Env, input: unknown): Promise<Response> {
+  await ensureInstallationMigrated(env.DB);
+  const { status, body } = await handleAdsTokenOp(env, input);
+  return reply(body, status);
+}
+
+/** Public URL of a builder page for the edge funnel routes: the tenant travels in the input. */
+async function pagePublicUrl(
+  env: Env,
+  executionCtx: ExecutionContext,
+  client: GatewayClientInfo,
+  input: unknown,
+): Promise<Response> {
+  await ensureInstallationMigrated(env.DB);
+  const { status, body } = await handlePagePublicUrlOp(env, executionCtx, client, input);
+  return reply(body, status);
+}
+
 export async function handleEdgeGateway(
   request: Request,
   env: Env,
@@ -214,6 +240,8 @@ export async function handleEdgeGateway(
   }
   if (!raw && op === EDGE_ERROR_REPORT_OP) return reportEdgeError(env, executionCtx, input);
   if (!raw && op === TRACKING_HOST_GATEWAY_OP) return trackingHost(env, ref);
+  if (!raw && op === ADS_TOKEN_GATEWAY_OP) return adsToken(env, input);
+  if (!raw && op === PAGE_PUBLIC_URL_GATEWAY_OP) return pagePublicUrl(env, executionCtx, client, input);
   const handler = raw ? rawHandlers[op] : handlers[op];
   if (handler === undefined || !Object.hasOwn(raw ? rawHandlers : handlers, op)) {
     return failure(new GatewayError(404, 'unknown_op', `unknown gateway op ${op}`));

@@ -50,6 +50,7 @@ export const SOURCE_PARAM_NAMES = [
 ] as const;
 
 const trackerIdSchema = z.string().regex(/^[A-Za-z0-9-]{8,64}$/);
+const contextIdSchema = z.string().regex(/^[\w-]{1,64}$/);
 const extraValueSchema = z.union([z.string().max(1024), z.number().finite(), z.boolean()]);
 
 function boundedRecord<T extends z.ZodType>(value: T, maxKeys: number) {
@@ -81,6 +82,27 @@ export const trackerEventSchema = z.object({
   data: boundedRecord(extraValueSchema, 20).optional(),
   /** Signed contact token (`_amb_c` of an email click), sent once with the landing pageview. */
   ct: z.string().max(4096).optional(),
+  /** Funnel context of the session: funnel, traffic source, node, page and funnel visitor id. */
+  dl: z
+    .object({
+      f: contextIdSchema.optional(),
+      ts: contextIdSchema.optional(),
+      n: contextIdSchema.optional(),
+      p: contextIdSchema.optional(),
+      vid: contextIdSchema.optional(),
+    })
+    .optional()
+    .catch(undefined),
+  /** Email/SMS link params of the landing URL (first pageview only). */
+  la: z
+    .object({
+      /** Lower-cased email or SHA-256 hex. */
+      he: z.string().max(320).optional(),
+      sl: z.string().max(128).optional(),
+      el: z.string().max(128).optional(),
+    })
+    .optional()
+    .catch(undefined),
 });
 export type TrackerEvent = z.infer<typeof trackerEventSchema>;
 

@@ -60,8 +60,18 @@ import {
 import type { z } from 'zod';
 import * as adData from './ad-entities';
 import * as funnelGraphs from './funnel-graphs';
+import * as funnelSessions from './funnel-sessions';
 import * as identity from './identity';
 import * as outbound from './outbound';
+import {
+  conversionOutboundRequestSchema,
+  enqueueForConversion,
+  processOutboundBatch,
+  type ConversionOutboundRequest,
+  type EnqueueForConversionResult,
+  type OutboundRunResult,
+  type ProviderResolver,
+} from '../outbound-worker';
 import * as touches from './touches';
 import * as trafficSources from './traffic-sources';
 import { attributeRevenue, attributeRevenueByModel, isAttributionDimension } from './attribution';
@@ -112,6 +122,26 @@ import { ingestBatch, type IngestResult } from './ingest';
 import { breakdown, overview, resolveRange, timeseries, type ResolvedRange } from './query';
 import { runRetention, type ArchiveSink, type RetentionResult } from './retention';
 import { refreshRollups } from './rollups';
+import { cohortReport } from './reports-cohort';
+import { journeyReport, trackingQuality, trackingQualityQuerySchema, type TrackingQualityQuery } from './reports-journey';
+import { ltvReport } from './reports-ltv';
+import { performanceContext, performanceReport, type PerformanceContext } from './reports-performance';
+import { reportWindow, type ReportWindow } from './reports-shared';
+import {
+  cohortQuerySchema,
+  journeyQuerySchema,
+  ltvQuerySchema,
+  performanceQuerySchema,
+  type CohortQuery,
+  type CohortReport,
+  type JourneyQuery,
+  type JourneyReport,
+  type LtvQuery,
+  type LtvReport,
+  type PerformanceQuery,
+  type PerformanceReport,
+  type TrackingQuality,
+} from '@amable/api-types';
 import {
   deleteSite,
   edgeConfig,
@@ -137,8 +167,25 @@ export type { ContactVisitor, SyncCursor } from './registry';
 export { crmTransactionId } from './crm';
 export type { AdConnectionInput, AdConnectionRecord, AdEntityQuery, AdEntityRecord, AdSpendQuery } from './ad-entities';
 export type { ConversionInput, ConversionQuery, ConversionRecord, ConversionStatus, TouchQuery } from './touches';
+export type {
+  FunnelLinkContext,
+  FunnelLinkQuery,
+  FunnelSessionInput,
+  FunnelSessionRecord,
+  FunnelStepInput,
+  FunnelStepResult,
+} from './funnel-sessions';
 export type { OutboundEnqueueInput, OutboundOutcome, OutboundQuery } from './outbound';
+export type { OutboundResendFilter, OutboundSkipReason, OutboundStats } from './outbound';
 export type { IdentityKeyRef } from './identity';
+export type { TrackingQualityQuery } from './reports-journey';
+export type {
+  IdentityMergeSettings,
+  JourneyFunnelTouch,
+  VisitorIdentityGraph,
+  VisitorIdentityInput,
+} from './identity';
+export { resolveVisitorGroup, resolveVisitorGroups, visitorOrigins, VISITOR_ORIGIN_CTE } from './identity';
 
 export type AnalyticsResult<T> =
   | { ok: true; value: T }
@@ -774,6 +821,46 @@ export class AnalyticsStore {
     return outbound.listOutbound(this.db, query);
   }
 
+  // --- outbound conversions: enqueue from traffic source mapping, sending, resend
+  async enqueueConversionOutbound(
+    input: ConversionOutboundRequest,
+    rng: () => number = Math.random,
+  ): Promise<AnalyticsResult<EnqueueForConversionResult>> {
+    const req = parse(conversionOutboundRequestSchema, input);
+    if (!req.ok) return req;
+    const { conversion_id: conversionId, pii, click_ids: clickIds, consent } = req.value;
+    const conversion = conversionId === undefined ? (req.value.conversion ?? null) : this.getConversion(conversionId);
+    if (conversion === null) return notFound('conversion');
+    const source = conversion.traffic_source_id === null ? null : this.getTrafficSource(conversion.traffic_source_id);
+    return {
+      ok: true,
+      value: await enqueueForConversion(this, { conversion, source, pii, clickIds, consent, rng }),
+    };
+  }
+  sessionClickIds(visitorId: string): Record<string, string>[] {
+    return outbound.sessionClickIds(this.db, visitorId);
+  }
+  finishOutbound(id: string, outcome: outbound.OutboundOutcome): OutboundConversionJob | null {
+    return this.db.transaction(() => outbound.finishOutbound(this.db, id, outcome, this.now()));
+  }
+  nextOutboundAttemptAt(): number | null {
+    return outbound.nextOutboundAttemptAt(this.db);
+  }
+  resendOutbound(ids: readonly string[]): { requeued: number } {
+    return { requeued: outbound.resendOutbound(this.db, ids.slice(0, 1000), this.now()) };
+  }
+  resendFailedOutbound(filter: outbound.OutboundResendFilter = {}): AnalyticsResult<{ requeued: number }> {
+    const f = parse(outbound.outboundResendFilterSchema, filter);
+    if (!f.ok) return f;
+    return { ok: true, value: { requeued: outbound.resendFailedOutbound(this.db, f.value, this.now()) } };
+  }
+  outboundStats(query: Omit<outbound.OutboundQuery, 'status' | 'limit'> = {}): outbound.OutboundStats {
+    return outbound.outboundStats(this.db, query);
+  }
+  processOutbound(resolver: ProviderResolver, now: number = this.now(), limit?: number): Promise<OutboundRunResult> {
+    return processOutboundBatch(this, resolver, now, limit);
+  }
+
   // --- identity keys, merges, tags, blacklist
   upsertIdentityKeys(keys: readonly IdentityKey[]): AnalyticsResult<{ added: number }> {
     const all = parseAll(identityKeySchema, keys);
@@ -809,11 +896,158 @@ export class AnalyticsStore {
     return identity.listBlacklist(this.db);
   }
 
+  // ---- identity merge (origin ← child links; visitor rows are never rewritten)
+  /** Normalized email/phone keys of known visitors (CRM contacts), merging on match. */
+  identifyVisitors(
+    items: readonly identity.VisitorIdentityInput[],
+  ): AnalyticsResult<{ added: number; merged: number; skipped: number }> {
+    const all = parseAll(identity.visitorIdentityInputSchema, items);
+    if (!all.ok) return all;
+    return { ok: true, value: this.db.transaction(() => identity.identifyVisitors(this.db, all.value, this.now())) };
+  }
+  /** Merges the child's group into the origin's group (mechanism `manual`). */
+  mergeVisitors(originVisitorId: string, childVisitorId: string): AnalyticsResult<identity.VisitorIdentityGraph> {
+    const r = this.db.transaction(() =>
+      identity.mergeVisitorsManually(this.db, originVisitorId, childVisitorId, this.now()),
+    );
+    if (!r.ok) {
+      return r.reason === 'not_found'
+        ? notFound('visitor')
+        : { ok: false, error: { code: 'conflict', message: 'visitors already merged' } };
+    }
+    const graph = identity.visitorIdentityGraph(this.db, r.merge.origin_visitor_id);
+    return graph === null ? notFound('visitor') : { ok: true, value: graph };
+  }
+  /** Disconnects the visitor from its origin; both profiles become whole again. */
+  unmergeVisitors(childVisitorId: string): AnalyticsResult<{ child: identity.VisitorIdentityGraph; origin: identity.VisitorIdentityGraph }> {
+    const r = this.db.transaction(() => identity.unmergeVisitor(this.db, childVisitorId, this.now()));
+    if (r === null) return notFound('merge');
+    const child = identity.visitorIdentityGraph(this.db, childVisitorId);
+    const origin = identity.visitorIdentityGraph(this.db, r.origin_visitor_id);
+    return child === null || origin === null ? notFound('visitor') : { ok: true, value: { child, origin } };
+  }
+  /** Rebuilds merges from the identity keys first seen in [from, to) (epoch ms). */
+  reprocessVisitors(range: { from: number; to: number }): AnalyticsResult<{ keys: number; merges: number; visitors: number }> {
+    if (!Number.isFinite(range.from) || !Number.isFinite(range.to) || range.from >= range.to) {
+      return { ok: false, error: { code: 'validation_failed', message: 'range: from must be before to' } };
+    }
+    return { ok: true, value: this.db.transaction(() => identity.reprocessIdentities(this.db, range, this.now())) };
+  }
+  visitorIdentityGraph(visitorId: string): identity.VisitorIdentityGraph | null {
+    return identity.visitorIdentityGraph(this.db, visitorId);
+  }
+  /** Origin first, then the visitors merged into it. */
+  resolveVisitorGroup(visitorId: string): string[] {
+    return identity.resolveVisitorGroup(this.db, visitorId);
+  }
+  getIdentitySettings(): identity.IdentityMergeSettings {
+    return identity.getMergeSettings(this.db);
+  }
+  updateIdentitySettings(
+    patch: z.input<typeof identity.identityMergeSettingsPatchSchema>,
+  ): AnalyticsResult<identity.IdentityMergeSettings> {
+    const body = parse(identity.identityMergeSettingsPatchSchema, patch);
+    if (!body.ok) return body;
+    return { ok: true, value: identity.setMergeSettings(this.db, body.value) };
+  }
+  /** GDPR: future events carrying the email/phone keys of the visitor's group are dropped. */
+  blacklistVisitorKeys(visitorId: string): number {
+    return this.db.transaction(() => identity.blacklistVisitorKeys(this.db, visitorId, this.now()));
+  }
+
+  // ---- funnel link routing (sessions of the link routes)
+  /** Site, funnel, source, visitor session and tags for one link hit; null when the site is unknown. */
+  funnelLinkContext(query: funnelSessions.FunnelLinkQuery): AnalyticsResult<funnelSessions.FunnelLinkContext> {
+    const q = parse(funnelSessions.funnelLinkQuerySchema, query);
+    if (!q.ok) return q;
+    const site = getSiteRecord(this.db);
+    if (site === null || site.deleted) return notFound('site');
+    const { funnel_id: funnelId, traffic_source_id: sourceId, visitor_id: visitorId, latest_session: latest } = q.value;
+    const session =
+      visitorId === undefined
+        ? null
+        : (funnelSessions.getFunnelSession(this.db, visitorId, funnelId) ??
+          (latest && funnelId !== undefined ? funnelSessions.getFunnelSession(this.db, visitorId) : null));
+    const graphId = session?.funnel_id ?? funnelId;
+    const srcId = sourceId ?? session?.traffic_source_id ?? undefined;
+    return {
+      ok: true,
+      value: {
+        tenant_id: site.tenantId,
+        currency: site.site.currency,
+        timezone: site.site.timezone,
+        graph: graphId === undefined ? null : funnelGraphs.getFunnelGraph(this.db, graphId),
+        source: srcId === undefined ? null : trafficSources.getTrafficSource(this.db, srcId),
+        session,
+        tags: visitorId === undefined ? [] : identity.visitorTags(this.db, visitorId),
+      },
+    };
+  }
+  getFunnelSession(visitorId: string, funnelId?: string | null): funnelSessions.FunnelSessionRecord | null {
+    return funnelSessions.getFunnelSession(this.db, visitorId, funnelId);
+  }
+  /** One routing step: its touches, the visitor's new session state and the tag effects, atomically. */
+  recordFunnelStep(step: funnelSessions.FunnelStepInput): AnalyticsResult<funnelSessions.FunnelStepResult> {
+    const s = parse(funnelSessions.funnelStepInputSchema, step);
+    if (!s.ok) return s;
+    const { touches: list, session, tags } = s.value;
+    return {
+      ok: true,
+      value: this.db.transaction(() => {
+        let inserted = 0;
+        for (const t of list) if (touches.insertTouch(this.db, t)) inserted += 1;
+        if (session !== null && session !== undefined) funnelSessions.saveFunnelSession(this.db, session, this.now());
+        const current =
+          tags === null || tags === undefined
+            ? []
+            : tags.add.length + tags.remove.length > 0
+              ? identity.applyVisitorTags(this.db, tags.visitor_id, tags.add, tags.remove, this.now())
+              : identity.visitorTags(this.db, tags.visitor_id);
+        return { inserted, tags: current };
+      }),
+    };
+  }
+
+  // --- ad attribution reports (click-log + ad spend + conversions and payments)
+  private adsReportOf<S extends z.ZodType<{ from: string; to: string; timezone?: string | undefined }>, T>(
+    schema: S,
+    input: unknown,
+    run: (ctx: PerformanceContext, q: z.output<S>) => T,
+  ): AnalyticsResult<T> {
+    const site = getSiteRecord(this.db);
+    if (site === null || site.deleted) return notFound('site');
+    const q = parse(schema, input);
+    if (!q.ok) return q;
+    let window: ReportWindow;
+    try {
+      window = reportWindow(q.value, site.site.timezone);
+    } catch (error) {
+      return { ok: false, error: { code: 'invalid_range', message: error instanceof Error ? error.message : 'invalid range' } };
+    }
+    return { ok: true, value: run(performanceContext(this.db, window, site.site.currency), q.value) };
+  }
+  adsPerformanceReport(query: PerformanceQuery): AnalyticsResult<PerformanceReport> {
+    return this.adsReportOf(performanceQuerySchema, query, performanceReport);
+  }
+  adsLtvReport(query: LtvQuery): AnalyticsResult<LtvReport> {
+    return this.adsReportOf(ltvQuerySchema, query, ltvReport);
+  }
+  adsCohortReport(query: CohortQuery): AnalyticsResult<CohortReport> {
+    return this.adsReportOf(cohortQuerySchema, query, cohortReport);
+  }
+  adsJourneyReport(query: JourneyQuery): AnalyticsResult<JourneyReport> {
+    return this.adsReportOf(journeyQuerySchema, query, journeyReport);
+  }
+  trackingQuality(range: TrackingQualityQuery): AnalyticsResult<TrackingQuality> {
+    return this.adsReportOf(trackingQualityQuerySchema, range, (ctx) => trackingQuality(ctx));
+  }
+
   // --- retention (+ nightly prediction training)
   async retention(sink: ArchiveSink | null): Promise<(RetentionResult & { anonymous_touches: number }) | null> {
     const site = getSiteRecord(this.db);
     if (site === null) return null;
     const result = await runRetention(this.db, sink, site.site.id, site.site.retention_days, this.now());
+    identity.flagMergedTouchesIdentified(this.db);
     return { ...result, anonymous_touches: touches.purgeAnonymousTouches(this.db, this.now()) };
   }
 

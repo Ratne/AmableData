@@ -70,7 +70,7 @@ const payload: OutboundPayload = {
 
 describe('migration 3', () => {
   it('is appended as id 3', () => {
-    expect(analyticsMigrations.map((m) => m.id)).toEqual([1, 2, 3]);
+    expect(analyticsMigrations.map((m) => m.id).slice(0, 3)).toEqual([1, 2, 3]);
   });
 
   it('exposes every new store method as a DO RPC', () => {

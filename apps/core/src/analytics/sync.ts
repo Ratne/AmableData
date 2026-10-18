@@ -29,6 +29,8 @@ import { lookbackBound } from './crm-ops';
  *    automation engine's dispatch flag is never touched) and turns them into
  *    site facts: visitor ↔ contact links (form submissions, bookings), CRM
  *    payments and refunds (revenue), subscription lifecycle goals, merges;
+ *    the emails and phones of linked contacts become identity keys of their
+ *    visitors (cross-device merge on the site);
  * 2. drains each site's queues: identities to resolve (identify emails,
  *    `_amb_c` email-click tokens), automation events of identified visitors
  *    (web goals → `analytics.goal` on the Engine DO), goal alerts.
@@ -144,19 +146,58 @@ class FactBatch {
   }
 }
 
+interface IdentifiedVisitor {
+  siteId: string;
+  visitorId: string;
+  contactId: string;
+  ts: number;
+}
+
+/** Sends the emails and phones of the contacts as identity keys of their visitors (merge + retro-link on the edge). */
+async function sendContactIdentities(ports: SyncPorts, identified: readonly IdentifiedVisitor[]): Promise<void> {
+  if (identified.length === 0) return;
+  const contacts = await ports.crm<Array<{ id: string; emails: string[]; phones: string[] }>>(
+    'analytics.contactIdentities',
+    { ids: [...new Set(identified.map((i) => i.contactId))] },
+  );
+  const byId = new Map(contacts.map((c) => [c.id, c]));
+  const bySite = new Map<string, Array<{ visitor_id: string; email: string | null; phone: string | null; ts: number }>>();
+  for (const i of identified) {
+    const c = byId.get(i.contactId);
+    if (c === undefined) continue;
+    const list = bySite.get(i.siteId) ?? [];
+    const rows = Math.max(c.emails.length, c.phones.length);
+    for (let n = 0; n < rows; n += 1) {
+      list.push({ visitor_id: i.visitorId, email: c.emails[n] ?? null, phone: c.phones[n] ?? null, ts: i.ts });
+    }
+    bySite.set(i.siteId, list);
+  }
+  for (const [siteId, items] of bySite) {
+    if (items.length > 0) await siteStub(ports.ns, siteId).identifyVisitors(items);
+  }
+}
+
 async function applyBatch(
   ports: SyncPorts,
   tenantId: string,
   batch: FactBatch,
 ): Promise<number> {
   const links: ContactVisitor[] = [];
+  const identified: IdentifiedVisitor[] = [];
   for (const [siteId, facts] of batch.bySite) {
     const result = await siteStub(ports.ns, siteId).applyCrmFacts(facts);
     for (const l of result?.linked ?? []) {
       links.push({ siteId, visitorId: l.visitorId, contactId: l.contactId, linkedAt: l.ts, source: l.source });
+      identified.push({ siteId, visitorId: l.visitorId, contactId: l.contactId, ts: l.ts });
+    }
+    for (const f of facts) {
+      if (f.kind === 'payment' && f.visitorId !== null && f.contactId !== null) {
+        identified.push({ siteId, visitorId: f.visitorId, contactId: f.contactId, ts: f.ts });
+      }
     }
   }
   if (links.length > 0) await tenantSitesStub(ports.ns, tenantId).registerLinks(links);
+  await sendContactIdentities(ports, identified);
   return links.length;
 }
 

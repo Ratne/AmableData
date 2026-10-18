@@ -1,3 +1,4 @@
+import { runScheduledAdsSync } from './analytics/ads-sync';
 import { runScheduledAnalytics } from './analytics/runtime';
 import { app } from './app';
 import { runAppsCron } from './apps/cron';
@@ -62,6 +63,8 @@ const handler = {
     return withErrorReporting(env, 'cron', controller.cron, async () => {
       // Web analytics: CRM → analytics sync of every tenant, daily ad / search integrations.
       await runScheduledAnalytics(env);
+      // Ad platforms: hourly spend of the current day, daily reconciliation, token refresh.
+      await runScheduledAdsSync(env);
       // Outgoing webhooks: delivery log retention.
       await webhookService(env).prune();
       // R2 backups: installation D1 + each tenant's DOs, once a day, a few per tick.

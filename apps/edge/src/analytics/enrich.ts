@@ -127,7 +127,8 @@ export function identityFromData(
   const { user_id, email, name, ...rest } = data;
   const userId = text(user_id);
   const mail = text(email, 320);
-  if (userId === null && mail === null) return null;
+  // A phone-only identify (form capture) keeps the phone in the traits.
+  if (userId === null && mail === null && text(rest['phone'], 64) === null) return null;
   return {
     userId,
     email: mail === null ? null : mail.toLowerCase(),
@@ -263,6 +264,43 @@ export async function enrichTrackerEvent(
       break;
   }
   return event;
+}
+
+/** Funnel page reached directly from an ad (`?f=…&ts=…&n=…[&p=…]`, no redirect). */
+export interface DirectLinkView {
+  funnelId: string;
+  trafficSourceId: string;
+  nodeId: string;
+  pageId: string | null;
+  /** Funnel visitor id: the tracker visitor of the page. */
+  visitorId: string;
+  sessionId: string;
+  url: URL;
+}
+
+/**
+ * Direct-link landing of a browser pageview. The tracker resends its funnel
+ * context with every event, so only the landing itself counts: the page URL
+ * must carry `f` and `ts`, and no `vid` (pages reached through an entrance
+ * redirect already have their view).
+ */
+export function directLinkView(payload: TrackerEvent): DirectLinkView | null {
+  const dl = payload.dl;
+  if (payload.type !== 'pageview' || dl?.f === undefined || dl.ts === undefined || dl.n === undefined) return null;
+  if (payload.vid === undefined || payload.cl === 1) return null;
+  const url = parseUrl(payload.url);
+  if (url === null) return null;
+  const q = url.searchParams;
+  if (q.get('f') !== dl.f || q.get('ts') !== dl.ts || q.has('vid')) return null;
+  return {
+    funnelId: dl.f,
+    trafficSourceId: dl.ts,
+    nodeId: dl.n,
+    pageId: dl.p ?? null,
+    visitorId: payload.vid,
+    sessionId: payload.sid ?? payload.vid,
+    url,
+  };
 }
 
 /** Enriches a server SDK event (`crawler` is handled before, as a bot hit). */
