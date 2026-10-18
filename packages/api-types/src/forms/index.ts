@@ -246,9 +246,8 @@ function isJsonObjectText(text: string): boolean {
   }
 }
 
+/** The spreadsheet is written as the service account whose JSON key is the connection secret. */
 export const googleSheetsConfigSchema = z.strictObject({
-  /** Google account connected through the installation's OAuth service. */
-  account_id: z.string().trim().min(1).max(255),
   spreadsheet_id: z.string().trim().regex(/^[A-Za-z0-9_-]{10,200}$/, 'invalid spreadsheet id'),
   sheet_name: z.string().trim().min(1).max(100).default('Sheet1'),
   /** Empty: submission date then every field, in form order. */
@@ -316,7 +315,13 @@ const connectionCommon = {
 
 export const createConnectionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('webhook'), ...connectionCommon, config: webhookConfigSchema }),
-  z.strictObject({ type: z.literal('google_sheets'), ...connectionCommon, config: googleSheetsConfigSchema }),
+  z.strictObject({
+    type: z.literal('google_sheets'),
+    ...connectionCommon,
+    config: googleSheetsConfigSchema,
+    /** JSON key of the Google service account (encrypted at rest, never returned). */
+    secret: z.string().trim().min(1).max(10_000),
+  }),
   z.strictObject({
     type: z.literal('email_notification'),
     ...connectionCommon,
@@ -338,8 +343,8 @@ export const updateConnectionSchema = z.strictObject({
   enabled: z.boolean().optional(),
   /** Full replacement, validated against the connection type. */
   config: z.record(z.string(), z.unknown()).optional(),
-  /** New API key (DocuSeal). */
-  secret: z.string().trim().min(1).max(500).optional(),
+  /** New API key (DocuSeal) or service account key (Google Sheets). */
+  secret: z.string().trim().min(1).max(10_000).optional(),
 });
 export type UpdateConnectionInput = z.infer<typeof updateConnectionSchema>;
 
@@ -351,7 +356,7 @@ export const formConnectionSchema = z.object({
   enabled: z.boolean(),
   config: z.record(z.string(), z.unknown()),
   has_secret: z.boolean(),
-  /** Last characters of the secret, to recognize it. */
+  /** Last characters of the secret, to recognize it; the service account email for Google Sheets. */
   secret_hint: z.string().nullable(),
   last_delivery: z
     .object({ status: deliveryStatusSchema, at: timestampSchema })

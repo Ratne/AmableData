@@ -1,5 +1,6 @@
 import { googleSheetsConfigSchema, type GoogleSheetsConfig } from '@amable/api-types';
 import { safeFetch } from '@amable/auth/security';
+import { parseServiceAccountKey, serviceAccountToken } from './google-service-account';
 import { mergeContext, valueFields, zodConfig } from './merge';
 import { failure, httpResult, type Connector, type ConnectorContext } from './types';
 
@@ -33,36 +34,31 @@ export function sheetRow(ctx: ConnectorContext<GoogleSheetsConfig>): string[] {
 }
 
 /**
- * Appends one row per submission. The access token comes from the
- * installation's OAuth service; the dev stub token is never sent to Google
- * (the delivery is recorded as skipped).
+ * Appends one row per submission as a Google service account: the workspace
+ * uploads the account's JSON key (stored encrypted as the connection secret)
+ * and shares the spreadsheet with the account's email as Editor.
  */
 export const googleSheetsConnector: Connector<GoogleSheetsConfig> = {
   type: 'google_sheets',
-  secret: 'none',
-  oauthProvider: 'google',
-  available: (runtime) => runtime.oauth.available,
+  secret: 'api_key',
+  oauthProvider: null,
+  available: () => true,
+  checkSecret(secret) {
+    const parsed = parseServiceAccountKey(secret);
+    return parsed.ok ? { ok: true, hint: parsed.key.clientEmail } : parsed;
+  },
   parseConfig: zodConfig(googleSheetsConfigSchema),
   async run(ctx) {
     const config = ctx.connection.config;
-    const token = await ctx.runtime.oauth.getAccessToken({
-      tenantId: ctx.tenantId,
-      provider: 'google',
-      accountId: config.account_id,
-    });
+    const request = `POST ${SHEETS_API}/${config.spreadsheet_id}/values:append (${config.sheet_name})`;
+    const parsed = ctx.connection.secret === null ? null : parseServiceAccountKey(ctx.connection.secret);
+    if (parsed === null) return failure('add the service account key in the connection', false, request);
+    if (!parsed.ok) return failure(parsed.message, false, request);
+    const fetchFn = (input: string, init?: RequestInit) => ctx.runtime.fetch(input, init);
+    const token = await serviceAccountToken(parsed.key, { fetch: fetchFn, nowMs: Date.now() });
+    if (!token.ok) return failure(token.message, token.retryable, request);
     const range = encodeURIComponent(`'${config.sheet_name.replace(/'/g, "''")}'!A1`);
     const url = `${SHEETS_API}/${encodeURIComponent(config.spreadsheet_id)}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-    const request = `POST ${SHEETS_API}/${config.spreadsheet_id}/values:append (${config.sheet_name})`;
-    if (token === null) return failure('Google account not connected', false, request);
-    if (token.stub) {
-      return {
-        status: 'skipped',
-        retryable: false,
-        statusCode: null,
-        request,
-        response: 'skipped (dev stub): the development OAuth token is never sent to Google',
-      };
-    }
     try {
       const response = await safeFetch(
         url,
@@ -71,9 +67,19 @@ export const googleSheetsConnector: Connector<GoogleSheetsConfig> = {
           headers: { authorization: `Bearer ${token.accessToken}`, 'content-type': 'application/json' },
           body: JSON.stringify({ values: [sheetRow(ctx)] }),
         },
-        { fetchFn: (input, init) => ctx.runtime.fetch(input, init), timeoutMs: 10_000, maxBytes: 64 * 1024 },
+        { fetchFn, timeoutMs: 10_000, maxBytes: 64 * 1024 },
       );
-      return httpResult(response.status, request, new TextDecoder().decode(response.body));
+      const body = new TextDecoder().decode(response.body);
+      if (response.status === 403) {
+        return failure(`share the spreadsheet with ${parsed.key.clientEmail} as Editor (Google answered 403)`, false, request);
+      }
+      if (response.status === 404) {
+        return failure('spreadsheet not found: check its id (Google answered 404)', false, request);
+      }
+      if (response.status === 400 && body.includes('Unable to parse range')) {
+        return failure(`no sheet named "${config.sheet_name}" in the spreadsheet`, false, request);
+      }
+      return httpResult(response.status, request, body);
     } catch (error) {
       return failure(`request failed: ${error instanceof Error ? error.message : String(error)}`, true, request);
     }

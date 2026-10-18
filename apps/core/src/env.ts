@@ -66,7 +66,7 @@ export interface Env {
   /** Sender of system emails through SYSTEM_EMAIL (domain onboarded to Email Sending). */
   SYSTEM_EMAIL_FROM?: string;
   SYSTEM_EMAIL_FROM_NAME?: string;
-  /** Own Google OAuth client (Sheets, Calendar); redirect URI `<APP_ORIGIN>/oauth/google/callback`. */
+  /** Own Google OAuth client (booking calendars); redirect URI `<APP_ORIGIN>/oauth/google/callback`. */
   GOOGLE_OAUTH_CLIENT_ID?: string;
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
   // --- Platform link (managed offering; apps/core/src/platform) -------------

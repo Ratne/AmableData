@@ -45,6 +45,7 @@ import type { Env } from '../env';
 import { audit, getAuth, getTenant, type AppEnv } from '../middleware';
 import { appConnectorCatalog, appConnectorIssues } from './connectors/app';
 import { connectorCatalog, connectorOf } from './connectors/registry';
+import type { Connector } from './connectors/types';
 import { decryptSubmission, encryptSecret, secretHint } from './crypto';
 import { processSubmission, testConnection } from './process';
 import { formsRuntime } from './runtime';
@@ -244,6 +245,13 @@ async function configIssues(env: Env, tenantId: string, type: ConnectorType, raw
     if (issues.length > 0) throw invalidMany(issues);
   }
   return parsed.data as Record<string, unknown>;
+}
+
+function checkedSecretHint(connector: Connector<unknown> | null, secret: string): string {
+  const checked = connector?.checkSecret?.(secret);
+  if (checked === undefined) return secretHint(secret);
+  if (!checked.ok) throw new CrmError('validation_failed', checked.message, [{ path: 'secret', message: checked.message }]);
+  return checked.hint;
 }
 
 /** Forms REST v2 routes (relative to `/api/v2/t/{slug}`). */
@@ -540,7 +548,8 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
       const box = c.get('services').secretBox;
       let secret: string | null = null;
       if (connector.secret === 'generated') secret = `whsec_${randomToken(24)}`;
-      if (body.type === 'docuseal') secret = body.secret;
+      if (body.type === 'docuseal' || body.type === 'google_sheets') secret = body.secret;
+      const hint = secret === null ? null : checkedSecretHint(connector, secret);
       const connection = await callCrm(c, 'forms.createConnection', {
         id,
         formId,
@@ -549,7 +558,7 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
         enabled: body.enabled ?? true,
         config: await configIssues(c.env, tenantId, body.type, body.config),
         secretCiphertext: secret === null ? null : await encryptSecret(box, tenantId, id, secret),
-        secretHint: secret === null ? null : secretHint(secret),
+        secretHint: hint,
       });
       await audit(c, 'forms.connection_created', { target: id, details: { form_id: formId, type: body.type } });
       const response: FormConnectionWithSecret = {
@@ -588,8 +597,8 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
         ...(body.secret === undefined
           ? {}
           : {
+              secretHint: checkedSecretHint(connector, body.secret),
               secretCiphertext: await encryptSecret(c.get('services').secretBox, tenantId, connectionId, body.secret),
-              secretHint: secretHint(body.secret),
             }),
       });
       await audit(c, 'forms.connection_updated', {

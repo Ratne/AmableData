@@ -48,6 +48,11 @@ export interface Connector<C> {
   /** `generated`: we create a signing secret (shown once); `api_key`: provided by the user. */
   readonly secret: 'none' | 'generated' | 'api_key';
   readonly oauthProvider: 'google' | null;
+  /**
+   * `api_key` connectors that can check the key before it is stored; `hint`
+   * replaces the default last characters (e.g. the service account email).
+   */
+  checkSecret?(secret: string): { ok: true; hint: string } | { ok: false; message: string };
   available(runtime: FormsRuntime): boolean;
   /** Validates a stored or submitted config; throws a ZodError-like `issues` list via `safeParse`. */
   parseConfig(raw: unknown): { success: true; data: C } | { success: false; issues: Array<{ path: string; message: string }> };

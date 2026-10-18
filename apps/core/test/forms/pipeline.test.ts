@@ -1,7 +1,7 @@
 import { createStaticTurnstile, verifyWebhook, WEBHOOK_SIGNATURE_HEADER } from '@amable/auth';
-import type { OAuthTokenProvider } from '@amable/core';
 import type { SubmitPayloadInput } from '@amable/forms';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { clearServiceAccountTokens, GOOGLE_TOKEN_URL } from '../../src/forms/connectors/google-service-account';
 import { decryptSubmission, encryptSecret } from '../../src/forms/crypto';
 import { formsGatewayHandlers } from '../../src/forms/gateway';
 import { processSubmission } from '../../src/forms/process';
@@ -15,9 +15,13 @@ import {
   gatewayCtx,
   inspectableTenantDb,
   leadDefinition,
+  serviceAccountKey,
   useFormsFakes,
   type RuntimeFakes,
 } from './helpers';
+
+const base64urlBytes = (text: string) =>
+  Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
 const TENANT = { id: 't_acme', slug: 'acme' };
 
@@ -249,29 +253,72 @@ describe('connections', () => {
     expect(deliveries(id)).toMatchObject([{ status: 'failed', response: expect.stringContaining('blocked URL') }]);
   });
 
-  it('skips Google Sheets with the dev OAuth stub and appends rows with a real token', async () => {
-    await addConnection('google_sheets', { account_id: 'acc_1', spreadsheet_id: 'sheet_ABCDEFGHIJK', sheet_name: 'Leads' });
-    const skipped = await submit({ first_name: 'Ada', email: 'ada@example.com' });
-    expect(fakes.fetch.requests).toHaveLength(0);
-    expect(deliveries(skipped.submission_id)).toMatchObject([{ status: 'skipped', response: expect.stringContaining('dev stub') }]);
-
-    const realToken: OAuthTokenProvider = {
-      available: true,
-      startConnect: () => Promise.reject(new Error('unused')),
-      finishConnect: () => Promise.reject(new Error('unused')),
-      getAccessToken: () => Promise.resolve({ accessToken: 'ya29.token', expiresAt: h.clock.now + 60_000, scopes: [], stub: false }),
-      revoke: () => Promise.resolve(),
-    };
+  it('appends Google Sheets rows as the service account of the uploaded key', async () => {
+    clearServiceAccountTokens();
+    const { json, publicKey } = await serviceAccountKey('forms@acme-crm.iam.gserviceaccount.com');
+    await addConnection('google_sheets', { spreadsheet_id: 'sheet_ABCDEFGHIJK', sheet_name: 'Leads' }, json);
     overrideFormsRuntime(null);
-    fakes = useFormsFakes({ oauth: realToken });
+    fakes = useFormsFakes({
+      respond: (req) =>
+        req.url === GOOGLE_TOKEN_URL
+          ? Response.json({ access_token: 'ya29.token', expires_in: 3600, token_type: 'Bearer' })
+          : Response.json({ updates: { updatedRows: 1 } }),
+    });
     const sent = await submit({ first_name: '=HYPERLINK("http://evil")', email: 'eve@example.com' });
-    const request = fakes.fetch.requests[0];
-    expect(request?.url).toContain('https://sheets.googleapis.com/v4/spreadsheets/sheet_ABCDEFGHIJK/values/');
-    expect(request?.headers.get('authorization')).toBe('Bearer ya29.token');
-    const row = (JSON.parse(request?.body ?? '{}') as { values: string[][] }).values[0];
+    const [tokenRequest, append] = fakes.fetch.requests;
+    const assertion = new URLSearchParams(tokenRequest?.body).get('assertion') ?? '';
+    const [header = '', claims = '', signature = ''] = assertion.split('.');
+    const verified = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      publicKey,
+      base64urlBytes(signature),
+      new TextEncoder().encode(`${header}.${claims}`),
+    );
+    expect(verified).toBe(true);
+    expect(JSON.parse(new TextDecoder().decode(base64urlBytes(claims)))).toMatchObject({
+      iss: 'forms@acme-crm.iam.gserviceaccount.com',
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
+      aud: GOOGLE_TOKEN_URL,
+    });
+    expect(append?.url).toContain('https://sheets.googleapis.com/v4/spreadsheets/sheet_ABCDEFGHIJK/values/');
+    expect(append?.headers.get('authorization')).toBe('Bearer ya29.token');
+    const row = (JSON.parse(append?.body ?? '{}') as { values: string[][] }).values[0];
     expect(row?.[1]).toBe(`'=HYPERLINK("http://evil")`);
     expect(row?.[2]).toBe('eve@example.com');
     expect(deliveries(sent.submission_id)).toMatchObject([{ status: 'success' }]);
+
+    await submit({ first_name: 'Ada', email: 'ada@example.com' });
+    expect(fakes.fetch.requests.filter((r) => r.url === GOOGLE_TOKEN_URL)).toHaveLength(1);
+  });
+
+  it('tells which email to share the spreadsheet with when Google answers 403', async () => {
+    clearServiceAccountTokens();
+    const { json } = await serviceAccountKey('forms@acme-crm.iam.gserviceaccount.com');
+    await addConnection('google_sheets', { spreadsheet_id: 'sheet_ABCDEFGHIJK', sheet_name: 'Leads' }, json);
+    overrideFormsRuntime(null);
+    fakes = useFormsFakes({
+      respond: (req) =>
+        req.url === GOOGLE_TOKEN_URL
+          ? Response.json({ access_token: 'ya29.token', expires_in: 3600 })
+          : Response.json({ error: { code: 403, status: 'PERMISSION_DENIED' } }, { status: 403 }),
+    });
+    const { submission_id: id } = await submit({ first_name: 'Ada', email: 'ada@example.com' });
+    expect(deliveries(id)).toMatchObject([
+      { status: 'failed', response: expect.stringContaining('share the spreadsheet with forms@acme-crm.iam.gserviceaccount.com') },
+    ]);
+  });
+
+  it('fails Google Sheets without retrying when Google refuses the key', async () => {
+    clearServiceAccountTokens();
+    const { json } = await serviceAccountKey('revoked@acme-crm.iam.gserviceaccount.com');
+    await addConnection('google_sheets', { spreadsheet_id: 'sheet_ABCDEFGHIJK', sheet_name: 'Leads' }, json);
+    overrideFormsRuntime(null);
+    fakes = useFormsFakes({
+      respond: () => Response.json({ error: 'invalid_grant', error_description: 'Invalid JWT Signature.' }, { status: 400 }),
+    });
+    const { submission_id: id } = await submit({ first_name: 'Ada', email: 'ada@example.com' });
+    expect(fakes.fetch.requests).toHaveLength(1);
+    expect(deliveries(id)).toMatchObject([{ status: 'failed', response: expect.stringContaining('Invalid JWT Signature') }]);
   });
 
   it('notifies staff by email without sensitive fields', async () => {

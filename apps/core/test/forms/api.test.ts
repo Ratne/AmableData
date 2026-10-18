@@ -12,7 +12,7 @@ import {
   type Harness,
   type TestClient,
 } from '../helpers/harness';
-import { collectWaits, gatewayCtx, inspectableTenantDb, leadDefinition, useFormsFakes } from './helpers';
+import { collectWaits, gatewayCtx, inspectableTenantDb, leadDefinition, serviceAccountKey, useFormsFakes } from './helpers';
 
 const BASE = '/api/v2/t/acme';
 
@@ -151,6 +151,28 @@ describe('forms REST v2 permissions by role', () => {
     expect(audits.results.map((r) => r.action)).toEqual(
       expect.arrayContaining(['forms.form_created', 'forms.connection_created', 'forms.connection_tested']),
     );
+  });
+
+  it('stores the Google service account key and shows only its email', async () => {
+    await stepUp(h, clients.owner);
+    const path = `${BASE}/forms/${formId}/connections`;
+    const config = { spreadsheet_id: 'sheet_ABCDEFGHIJK', sheet_name: 'Leads' };
+    const missing = await clients.owner.post(path, { type: 'google_sheets', name: 'Sheet', config });
+    expect(missing.status).toBe(422);
+    const notAKey = await clients.owner.post(path, { type: 'google_sheets', name: 'Sheet', config, secret: '{"type":"authorized_user"}' });
+    expect(notAKey.status).toBe(422);
+    expect((notAKey.body['details'] as Array<{ path: string }>)[0]?.path).toBe('secret');
+
+    const { json } = await serviceAccountKey('forms@acme-crm.iam.gserviceaccount.com');
+    const created = await clients.owner.post(path, { type: 'google_sheets', name: 'Sheet', config, secret: json });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ has_secret: true, secret_hint: 'forms@acme-crm.iam.gserviceaccount.com', signing_secret: null });
+    const list = await clients.viewer.get(path);
+    expect(JSON.stringify(list.body)).not.toContain('PRIVATE KEY');
+
+    const other = await serviceAccountKey('other@acme-crm.iam.gserviceaccount.com');
+    const updated = await clients.owner.patch(`${path}/${String(created.body['id'])}`, { secret: other.json });
+    expect(updated.body).toMatchObject({ secret_hint: 'other@acme-crm.iam.gserviceaccount.com' });
   });
 
   it('returns the embed snippet on the edge origin, duplicates and archives', async () => {

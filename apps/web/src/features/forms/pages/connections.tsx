@@ -236,6 +236,24 @@ export function ConnectionsPage() {
   );
 }
 
+/** Accepts the spreadsheet URL as well as its bare id. */
+function spreadsheetId(value: string): string {
+  const trimmed = value.trim();
+  return /\/spreadsheets\/d\/([A-Za-z0-9_-]+)/.exec(trimmed)?.[1] ?? trimmed;
+}
+
+/** `client_email` of a Google service account JSON key, or null when the text is not one. */
+function serviceAccountEmail(content: string): string | null {
+  try {
+    const key = JSON.parse(content) as { type?: unknown; client_email?: unknown; private_key?: unknown };
+    return key.type === 'service_account' && typeof key.client_email === 'string' && typeof key.private_key === 'string'
+      ? key.client_email
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function ConnectionSummary({ connection }: { connection: FormConnection }) {
   const { t } = useI18n();
   const c = connection.config;
@@ -307,6 +325,15 @@ function ConnectionDialog({
       .join('\n'),
   );
   const [apiKey, setApiKey] = useState('');
+  const [keyError, setKeyError] = useState(false);
+  const serviceAccount = apiKey === '' ? connection?.secret_hint ?? null : serviceAccountEmail(apiKey);
+  const loadKey = async (file: File | undefined) => {
+    if (file === undefined) return;
+    const content = await file.text();
+    const email = serviceAccountEmail(content);
+    setKeyError(email === null);
+    setApiKey(email === null ? '' : content);
+  };
   const [bodyTemplate, setBodyTemplate] = useState(str(initial['body_template']));
   const [mapConfirm, setMapConfirm] = useState(false);
   const bodyValid = parseBodyTemplate(bodyTemplate).ok;
@@ -340,8 +367,7 @@ function ConnectionDialog({
         };
       case 'google_sheets':
         return {
-          account_id: str(config['account_id']).trim(),
-          spreadsheet_id: str(config['spreadsheet_id']).trim(),
+          spreadsheet_id: spreadsheetId(str(config['spreadsheet_id'])),
           sheet_name: str(config['sheet_name'], 'Sheet1').trim(),
           columns: clean.map(([source, column]) => ({ source, column: column.trim() })),
         };
@@ -380,7 +406,7 @@ function ConnectionDialog({
           ...(apiKey.trim() === '' ? {} : { secret: apiKey.trim() }),
         });
       }
-      const input = { type, name: name.trim(), config: built, ...(type === 'docuseal' ? { secret: apiKey.trim() } : {}) } as CreateConnectionInput;
+      const input = { type, name: name.trim(), config: built, ...(type === 'docuseal' || type === 'google_sheets' ? { secret: apiKey.trim() } : {}) } as CreateConnectionInput;
       const created = await api.connections.create(formId, input);
       if (created.signing_secret !== null) onSecret(created.signing_secret);
       return created;
@@ -484,11 +510,44 @@ function ConnectionDialog({
           ) : null}
           {type === 'google_sheets' ? (
             <>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label={t('forms.connections.account')} hint={t('forms.connections.accountHint')}>
-                  {(id) => <Input id={id} required value={str(config['account_id'])} onChange={(e) => set({ account_id: e.target.value })} />}
-                </Field>
-                <Field label={t('forms.connections.spreadsheet')}>
+              <details className="rounded-lg border p-3 text-sm">
+                <summary className="cursor-pointer font-medium">{t('forms.connections.sheetsSetup')}</summary>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
+                  {(['1', '2', '3', '4', '5'] as const).map((step) => (
+                    <li key={step}>{t(`forms.connections.sheetsSetup.${step}`)}</li>
+                  ))}
+                </ol>
+              </details>
+              <Field
+                label={t('forms.connections.serviceKey')}
+                hint={connection?.has_secret ? t('forms.connections.serviceKeyKeep') : t('forms.connections.serviceKeyHint')}
+              >
+                {(id) => (
+                  <div className="grid gap-1.5">
+                    <Input
+                      id={id}
+                      type="file"
+                      accept="application/json,.json"
+                      required={connection === null && apiKey === ''}
+                      onChange={(e) => void loadKey(e.target.files?.[0])}
+                    />
+                    {keyError ? <p className="text-xs text-destructive">{t('forms.connections.serviceKeyInvalid')}</p> : null}
+                  </div>
+                )}
+              </Field>
+              {serviceAccount !== null ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted p-3 text-sm">
+                  <div className="min-w-0">
+                    <p>{t('forms.connections.shareWith')}</p>
+                    <code className="break-all text-xs">{serviceAccount}</code>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void navigator.clipboard.writeText(serviceAccount)}>
+                    {t('common.copy')}
+                  </Button>
+                </div>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+                <Field label={t('forms.connections.spreadsheet')} hint={t('forms.connections.spreadsheetHint')}>
                   {(id) => <Input id={id} required value={str(config['spreadsheet_id'])} onChange={(e) => set({ spreadsheet_id: e.target.value })} />}
                 </Field>
                 <Field label={t('forms.connections.sheet')}>

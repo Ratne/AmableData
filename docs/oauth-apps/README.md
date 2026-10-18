@@ -1,9 +1,8 @@
 # Third-party OAuth apps
 
 Some features let a workspace user connect an external account with OAuth: ad platforms
-(spend import and server-side conversions) and Google (calendar bookings, form exports to
-Sheets). The OAuth **apps** those flows run through belong to whoever operates the
-installation:
+(spend import and server-side conversions) and Google (calendar bookings). The OAuth
+**apps** those flows run through belong to whoever operates the installation:
 
 - **Managed cloud** — the operator creates one app per platform and sets the secrets on
   every installation it runs. Customers only click "Connect".
@@ -18,7 +17,7 @@ platform's review process:
 | [Meta ads](meta-ads.md) | Spend import, Conversions API | `META_APP_ID`, `META_APP_SECRET` | `<APP_ORIGIN>/oauth/ads/callback` |
 | [Google Ads](google-ads.md) | Spend import, click conversions | `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, optional `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | `<APP_ORIGIN>/oauth/ads/callback` |
 | [TikTok ads](tiktok-ads.md) | Spend import, Events API | `TIKTOK_APP_ID`, `TIKTOK_APP_SECRET` | `<APP_ORIGIN>/oauth/ads/callback` |
-| [Google Calendar and Sheets](google-calendar-sheets.md) | Booking calendars, form → Sheets export | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | `<APP_ORIGIN>/oauth/google/callback` |
+| [Google Calendar](google-calendar-sheets.md) | Booking calendars | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | `<APP_ORIGIN>/oauth/google/callback` |
 
 ## How configuration works
 
@@ -46,7 +45,7 @@ platform's review process:
 ## What is stored, and where
 
 - Ad platform tokens stay server-side in the installation; the browser never sees them.
-  Google Calendar/Sheets grants are encrypted with the installation key
+  Google Calendar grants are encrypted with the installation key
   (`AUTH_ENCRYPTION_KEY`) before being stored.
 - Conversion payloads sent to ad platforms carry identifiers only as SHA-256 hashes;
   plaintext email or phone is never sent or persisted. See
