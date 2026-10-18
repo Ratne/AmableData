@@ -1,7 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { FakeAnalyticsNamespace } from '../../../edge/test/helpers';
 import {
   findTrackingHost,
+  overrideZoneProbe,
+  probeZoneDomain,
   runScheduledTrackingDomains,
   TRACKING_DOMAIN_CHECKS_PER_TICK,
   TRACKING_DOMAIN_RECHECK_MS,
@@ -141,5 +143,84 @@ describe('site deletion', () => {
     expect(res.removed).toBe(1);
     expect(await statusOf(id)).toBeNull();
     expect(deleted.at(-1)).toMatch(/^devch_/);
+  });
+});
+
+describe('zone domains (no custom hostname provider)', () => {
+  afterEach(() => {
+    overrideZoneProbe(null);
+    overrideCustomHostnames(provider);
+  });
+
+  it('connects, verifies and resolves a zone domain while cname creation is unavailable', async () => {
+    overrideCustomHostnames(() => null);
+    overrideZoneProbe(() => Promise.resolve({ status: 'pending_dns', error: 'hostname_unreachable' }));
+    const siteId = await createSite('zone.test');
+    const refused = await owner.post(`${BASE}/tracking-domains`, {
+      site_id: siteId,
+      hostname: 'c.zone.test',
+      kind: 'cname',
+    });
+    expect(refused.status).toBe(503);
+    const res = await owner.post(`${BASE}/tracking-domains`, {
+      site_id: siteId,
+      hostname: 'go.zone.test',
+      kind: 'zone',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body['kind']).toBe('zone');
+    expect(res.body['status']).toBe('pending_dns');
+    const id = String(res.body['id']);
+    const list = await owner.get(`${BASE}/tracking-domains?site_id=${siteId}`);
+    expect(list.body['options']).toEqual({ cname_available: false, target: 'edge.amable.test' });
+    expect(await findTrackingHost(h.env.DB, 'go.zone.test')).toBeNull();
+    // The route and record are in place: the probe sees the worker.
+    overrideZoneProbe(() => Promise.resolve({ status: 'active', error: null }));
+    const checked = await owner.post(`${BASE}/tracking-domains/${id}/check`, {});
+    expect(checked.body['status']).toBe('active');
+    expect((await findTrackingHost(h.env.DB, 'go.zone.test'))?.site_id).toBe(siteId);
+  });
+
+  it('is re-checked by the cron and removed with the site, all without a provider', async () => {
+    overrideCustomHostnames(() => null);
+    overrideZoneProbe(() => Promise.resolve({ status: 'error', error: 'not_tracking_worker (HTTP 404)' }));
+    const siteId = await createSite('zcron.test');
+    const res = await owner.post(`${BASE}/tracking-domains`, {
+      site_id: siteId,
+      hostname: 'go.zcron.test',
+      kind: 'zone',
+    });
+    const id = String(res.body['id']);
+    expect(await statusOf(id)).toBe('error');
+    // A fixed route: the user presses check, then the cron keeps it green.
+    overrideZoneProbe(() => Promise.resolve({ status: 'pending_dns', error: 'hostname_unreachable' }));
+    await owner.post(`${BASE}/tracking-domains/${id}/check`, {});
+    expect(await statusOf(id)).toBe('pending_dns');
+    overrideZoneProbe(() => Promise.resolve({ status: 'active', error: null }));
+    let activated = false;
+    for (let tick = 1; tick <= 6 && !activated; tick += 1) {
+      await runScheduledTrackingDomains(h.env, h.clock.now + tick * (TRACKING_DOMAIN_RECHECK_MS + 60_000));
+      activated = (await statusOf(id)) === 'active';
+    }
+    expect(activated).toBe(true);
+    expect((await owner.request('DELETE', `${BASE}/sites/${siteId}`)).status).toBe(200);
+    expect(await statusOf(id)).toBeNull();
+  });
+
+  it('maps the probe outcomes: active, wrong service, unreachable', async () => {
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+    expect(await probeZoneDomain(() => json({ service: 'amable-edge' }), 'x.test')).toEqual({
+      status: 'active',
+      error: null,
+    });
+    expect((await probeZoneDomain(() => json({ service: 'something-else' }), 'x.test')).status).toBe('error');
+    expect((await probeZoneDomain(() => Promise.resolve(new Response('<html>', { status: 404 })), 'x.test')).status).toBe(
+      'error',
+    );
+    expect(await probeZoneDomain(() => Promise.reject(new Error('dns')), 'x.test')).toEqual({
+      status: 'pending_dns',
+      error: 'hostname_unreachable',
+    });
   });
 });

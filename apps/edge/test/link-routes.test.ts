@@ -1,4 +1,8 @@
-import { trackerEventSchema } from '@amable/api-types';
+import {
+  TRACKING_DOMAIN_CHECK_PATH,
+  TRACKING_DOMAIN_CHECK_SERVICE,
+  trackerEventSchema,
+} from '@amable/api-types';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { directLinkView, identityFromData } from '../src/analytics/enrich';
@@ -371,5 +375,17 @@ describe('direct links', () => {
     const res = await h.get('/a/1?vid=visitor-direct-1&rn=lander');
     expect(res.headers.get('location')).toContain('https://offer.example.net/o?aff=1');
     expect(h.touches('visitor-direct-1').map((t) => t.kind)).toEqual(['entrance', 'view', 'click', 'view']);
+  });
+});
+
+describe('tracking domain check endpoint', () => {
+  it('answers with the worker marker on any host, known or not', async () => {
+    const h = linkHarness();
+    for (const host of [HOST, 'not-registered.example']) {
+      const res = await h.get(TRACKING_DOMAIN_CHECK_PATH, {}, host);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(await res.json()).toEqual({ service: TRACKING_DOMAIN_CHECK_SERVICE });
+    }
   });
 });

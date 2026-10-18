@@ -1,9 +1,13 @@
 import { z } from '@hono/zod-openapi';
 import {
   createTrackingDomainSchema,
+  TRACKING_DOMAIN_CHECK_PATH,
+  TRACKING_DOMAIN_CHECK_SERVICE,
+  trackingDomainOptionsSchema,
   trackingDomainSchema,
   type GatewayTenantInfo,
   type TrackingDomain,
+  type TrackingDomainKind,
   type TrackingDomainStatus,
 } from '@amable/api-types';
 import type { OpenAPIHono } from '@hono/zod-openapi';
@@ -16,6 +20,7 @@ import { audit, getTenant, HttpError, type AppEnv } from '../middleware';
 import {
   customHostnames,
   CustomHostnameError,
+  trackingCnameTarget,
   type CustomHostnameProvider,
   type CustomHostnameState,
 } from '../platform/custom-hostnames';
@@ -57,6 +62,7 @@ interface TrackingDomainRow {
   tenant_id: string;
   site_id: string;
   hostname: string;
+  kind: TrackingDomainKind;
   status: TrackingDomainStatus;
   provider_id: string | null;
   cname_target: string;
@@ -73,6 +79,7 @@ function toTrackingDomain(row: TrackingDomainRow): TrackingDomain {
     id: row.id,
     site_id: row.site_id,
     hostname: row.hostname,
+    kind: row.kind,
     status: row.status,
     dns: {
       cname_name: row.hostname,
@@ -170,6 +177,76 @@ async function writeState(
     .run();
 }
 
+// ------------------------------------------------------------- zone domains
+
+/** Outcome of probing a `zone` domain (no `pending_ssl`: the zone's own certificate applies). */
+export interface ZoneProbeResult {
+  status: 'active' | 'pending_dns' | 'error';
+  error: string | null;
+}
+
+type ZoneProbe = (hostname: string) => Promise<ZoneProbeResult>;
+
+let zoneProbeOverride: ZoneProbe | null = null;
+
+/** Test hook. */
+export function overrideZoneProbe(next: ZoneProbe | null): void {
+  zoneProbeOverride = next;
+}
+
+const ZONE_PROBE_TIMEOUT_MS = 8_000;
+
+/**
+ * A `zone` domain is verified by fetching the edge marker endpoint on it: DNS,
+ * proxy and certificate come from the zone itself, so one successful answer
+ * from the right worker is the whole proof. Network failures stay `pending_dns`
+ * (record missing or not propagated); a wrong answer is a config `error`
+ * (another service, or the worker route is missing).
+ */
+export async function probeZoneDomain(
+  fetchFn: (input: string, init?: RequestInit) => Promise<Response>,
+  hostname: string,
+): Promise<ZoneProbeResult> {
+  let response: Response;
+  try {
+    response = await fetchFn(`https://${hostname}${TRACKING_DOMAIN_CHECK_PATH}`, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(ZONE_PROBE_TIMEOUT_MS),
+    });
+  } catch {
+    return { status: 'pending_dns', error: 'hostname_unreachable' };
+  }
+  if (response.ok) {
+    const body = (await response.json().catch(() => null)) as { service?: string } | null;
+    if (body?.service === TRACKING_DOMAIN_CHECK_SERVICE) return { status: 'active', error: null };
+  }
+  return { status: 'error', error: `not_tracking_worker (HTTP ${String(response.status)})` };
+}
+
+/** In dev the probe succeeds immediately, like the fake custom hostname provider. */
+function zoneProbe(env: Env): ZoneProbe {
+  if (zoneProbeOverride !== null) return zoneProbeOverride;
+  if (env.ENVIRONMENT === 'dev') return () => Promise.resolve({ status: 'active', error: null });
+  return (hostname) => probeZoneDomain((input, init) => fetch(input, init), hostname);
+}
+
+async function writeZoneState(
+  db: D1Database,
+  now: number,
+  row: TrackingDomainRow,
+  result: ZoneProbeResult,
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE tracking_domains
+         SET status = ?, error = ?, checked_at = ?,
+             activated_at = CASE WHEN ? = 'active' THEN COALESCE(activated_at, ?) ELSE activated_at END
+       WHERE id = ? AND tenant_id = ?`,
+    )
+    .bind(result.status, result.error, now, result.status, now, row.id, row.tenant_id)
+    .run();
+}
+
 /** Marks a domain whose site is gone and whose custom hostname could not be removed yet. */
 const SITE_DELETED = 'site_deleted';
 
@@ -229,8 +306,9 @@ export async function runScheduledTrackingDomains(
   env: Env,
   now: number,
 ): Promise<{ removed: number; checked: number }> {
+  // `zone` domains are verified without it; only custom hostnames need the provider.
   const hostnames = customHostnames(env);
-  if (hostnames === null) return { removed: 0, checked: 0 };
+  const probe = zoneProbe(env);
   let budget = TRACKING_DOMAIN_CHECKS_PER_TICK;
   let removed = 0;
   let checked = 0;
@@ -242,7 +320,10 @@ export async function runScheduledTrackingDomains(
   for (const row of orphans.results) {
     budget -= 1;
     try {
-      if (row.provider_id !== null) await hostnames.delete(row.provider_id);
+      if (row.provider_id !== null) {
+        if (hostnames === null) throw new CustomHostnameError('provider unavailable');
+        await hostnames.delete(row.provider_id);
+      }
       await removeRow(env.DB, row);
       removed += 1;
     } catch (error) {
@@ -260,9 +341,17 @@ export async function runScheduledTrackingDomains(
     .all<TrackingDomainRow>();
   for (const row of pending.results) {
     try {
-      const state =
-        row.provider_id === null ? await hostnames.create(row.hostname) : await hostnames.get(row.provider_id);
-      await writeState(env.DB, now, row, state);
+      if (row.kind === 'zone') {
+        await writeZoneState(env.DB, now, row, await probe(row.hostname));
+      } else if (hostnames !== null) {
+        const state =
+          row.provider_id === null ? await hostnames.create(row.hostname) : await hostnames.get(row.provider_id);
+        await writeState(env.DB, now, row, state);
+      } else {
+        // No provider for a `cname` row: yield the selection window to the others.
+        await env.DB.prepare(`UPDATE tracking_domains SET checked_at = ? WHERE id = ?`).bind(now, row.id).run();
+        continue;
+      }
       checked += 1;
     } catch (error) {
       await env.DB.prepare(`UPDATE tracking_domains SET checked_at = ? WHERE id = ?`).bind(now, row.id).run();
@@ -309,7 +398,10 @@ export function registerTrackingDomainRoutes(api: OpenAPIHono<AppEnv>): void {
       summary: 'Custom tracking domains of a site',
       request: { query: siteQuery },
       responses: {
-        200: json(z.object({ data: z.array(trackingDomainSchema) }), 'Tracking domains'),
+        200: json(
+          z.object({ data: z.array(trackingDomainSchema), options: trackingDomainOptionsSchema }),
+          'Tracking domains',
+        ),
       },
     }),
     async (c) => {
@@ -320,7 +412,17 @@ export function registerTrackingDomainRoutes(api: OpenAPIHono<AppEnv>): void {
       )
         .bind(getTenant(c).tenant.id, siteId)
         .all<TrackingDomainRow>();
-      return c.json({ data: rows.results.map(toTrackingDomain) }, 200);
+      const hostnames = customHostnames(c.env);
+      return c.json(
+        {
+          data: rows.results.map(toTrackingDomain),
+          options: {
+            cname_available: hostnames !== null,
+            target: hostnames?.cnameTarget ?? trackingCnameTarget(c.env),
+          },
+        },
+        200,
+      );
     },
   );
 
@@ -339,8 +441,10 @@ export function registerTrackingDomainRoutes(api: OpenAPIHono<AppEnv>): void {
       const input = c.req.valid('json');
       const hostname = input.hostname.replace(/\.$/, '');
       await siteRecord(c, input.site_id);
-      const hostnames = provider(c);
-      if (isReservedTrackingHost(c.env, hostname, hostnames.cnameTarget)) {
+      // `zone` domains need no provider: the zone of the account serves them.
+      const hostnames = input.kind === 'cname' ? provider(c) : null;
+      const target = hostnames?.cnameTarget ?? trackingCnameTarget(c.env);
+      if (isReservedTrackingHost(c.env, hostname, target)) {
         throw new CrmError(
           'validation_failed',
           'this hostname cannot be used as a tracking domain',
@@ -353,17 +457,10 @@ export function registerTrackingDomainRoutes(api: OpenAPIHono<AppEnv>): void {
       const id = `td_${nextId().toLowerCase()}`;
       try {
         await c.env.DB.prepare(
-          `INSERT INTO tracking_domains (id, tenant_id, site_id, hostname, status, cname_target, created_at)
-           VALUES (?, ?, ?, ?, 'pending_dns', ?, ?)`,
+          `INSERT INTO tracking_domains (id, tenant_id, site_id, hostname, kind, status, cname_target, created_at)
+           VALUES (?, ?, ?, ?, ?, 'pending_dns', ?, ?)`,
         )
-          .bind(
-            id,
-            tenantId,
-            input.site_id,
-            hostname,
-            hostnames.cnameTarget,
-            c.get('services').now(),
-          )
+          .bind(id, tenantId, input.site_id, hostname, input.kind, target, c.get('services').now())
           .run();
       } catch (error) {
         if (error instanceof Error && /UNIQUE/i.test(error.message)) {
@@ -371,17 +468,23 @@ export function registerTrackingDomainRoutes(api: OpenAPIHono<AppEnv>): void {
         }
         throw error;
       }
-      let state: CustomHostnameState;
-      try {
-        state = await hostnames.create(hostname);
-      } catch (error) {
-        await c.env.DB.prepare(`DELETE FROM tracking_domains WHERE id = ?`).bind(id).run();
-        throw providerFailure(error);
+      if (hostnames === null) {
+        const now = c.get('services').now();
+        await writeZoneState(c.env.DB, now, await rowOf(c, id), await zoneProbe(c.env)(hostname));
+      } else {
+        let state: CustomHostnameState;
+        try {
+          state = await hostnames.create(hostname);
+        } catch (error) {
+          await c.env.DB.prepare(`DELETE FROM tracking_domains WHERE id = ?`).bind(id).run();
+          throw providerFailure(error);
+        }
+        await applyState(c, await rowOf(c, id), state);
       }
-      const row = await applyState(c, await rowOf(c, id), state);
+      const row = await rowOf(c, id);
       await audit(c, 'analytics.tracking_domain_created', {
         target: id,
-        details: { hostname, site_id: input.site_id },
+        details: { hostname, site_id: input.site_id, kind: input.kind },
       });
       return c.json(toTrackingDomain(row), 201);
     },
@@ -410,6 +513,10 @@ export function registerTrackingDomainRoutes(api: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       const row = await rowOf(c, c.req.valid('param').id);
+      if (row.kind === 'zone') {
+        await writeZoneState(c.env.DB, c.get('services').now(), row, await zoneProbe(c.env)(row.hostname));
+        return c.json(toTrackingDomain(await rowOf(c, row.id)), 200);
+      }
       const hostnames = provider(c);
       let state: CustomHostnameState | null;
       try {

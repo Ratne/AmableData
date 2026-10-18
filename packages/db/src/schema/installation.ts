@@ -191,6 +191,8 @@ export const trackingDomains = sqliteTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     siteId: text('site_id').notNull(),
     hostname: text('hostname').notNull().unique(),
+    /** 'cname' (custom hostname at the provider) | 'zone' (zone of the same account). */
+    kind: text('kind').notNull().default('cname'),
     /** 'pending_dns' | 'pending_ssl' | 'active' | 'error'. */
     status: text('status').notNull().default('pending_dns'),
     /** Id of the custom hostname at the provider. */

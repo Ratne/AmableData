@@ -1,4 +1,8 @@
-import type { CreateTrackingDomainInput, TrackingDomain } from '@amable/api-types';
+import type {
+  CreateTrackingDomainInput,
+  TrackingDomain,
+  TrackingDomainOptions,
+} from '@amable/api-types';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
 import { analyticsKeys, tenantBase } from './api';
@@ -15,7 +19,9 @@ export function trackingDomainsApi(tenant: string) {
   const base = `${tenantBase(tenant)}/tracking-domains`;
   return {
     list: (siteId: string) =>
-      apiFetch<{ data: TrackingDomain[] }>(`${base}?site_id=${enc(siteId)}`),
+      apiFetch<{ data: TrackingDomain[]; options: TrackingDomainOptions }>(
+        `${base}?site_id=${enc(siteId)}`,
+      ),
     get: (id: string) => apiFetch<TrackingDomain>(`${base}/${enc(id)}`),
     create: (input: CreateTrackingDomainInput) =>
       apiFetch<TrackingDomain>(base, { method: 'POST', body: JSON.stringify(input) }),

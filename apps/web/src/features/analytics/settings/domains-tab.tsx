@@ -1,4 +1,10 @@
-import type { Site, TrackingDomain, TrackingDomainStatus } from '@amable/api-types';
+import type {
+  Site,
+  TrackingDomain,
+  TrackingDomainKind,
+  TrackingDomainOptions,
+  TrackingDomainStatus,
+} from '@amable/api-types';
 import type { MessageKey } from '@amable/i18n';
 import { DashboardButton, DashboardConfirmDialog, toast } from '@amable/ui';
 import {
@@ -47,17 +53,58 @@ function domainErrorToast(t: (key: MessageKey) => string, error: unknown): boole
   return true;
 }
 
+function KindChoice({
+  kind,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  kind: TrackingDomainKind;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 ${
+        selected ? 'border-primary/50 bg-primary/[0.04]' : 'border-foreground/10'
+      } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+    >
+      <input
+        type="radio"
+        name="amb-tracking-kind"
+        className="mt-0.5"
+        checked={selected}
+        disabled={disabled}
+        onChange={onSelect}
+      />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm font-medium">{t(`analytics.domains.kind.${kind}`)}</span>
+        <span className="text-xs text-muted-foreground">
+          {disabled
+            ? t('analytics.domains.kind.cnameUnavailable')
+            : t(`analytics.domains.kindHint.${kind}`)}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function AddDomainDialog({
   tenant,
   site,
+  options,
   onClose,
 }: {
   tenant: string;
   site: Site;
+  options: TrackingDomainOptions;
   onClose: () => void;
 }) {
   const { t } = useI18n();
   const [hostname, setHostname] = useState('');
+  const [kind, setKind] = useState<TrackingDomainKind>('zone');
   const value = hostname
     .trim()
     .toLowerCase()
@@ -66,7 +113,7 @@ function AddDomainDialog({
   const valid = HOSTNAME_RE.test(value);
   const create = useAnalyticsMutation(
     tenant,
-    () => trackingDomainsApi(tenant).create({ site_id: site.id, hostname: value }),
+    () => trackingDomainsApi(tenant).create({ site_id: site.id, hostname: value, kind }),
     {
       invalidate: [trackingDomainKeys.list(tenant, site.id)],
       success: 'analytics.domains.added',
@@ -105,6 +152,15 @@ function AddDomainDialog({
                 {t('analytics.domains.error.invalid')}
               </span>
             ) : null}
+          </div>
+          <div className="flex flex-col gap-2">
+            <KindChoice kind="zone" selected={kind === 'zone'} disabled={false} onSelect={() => setKind('zone')} />
+            <KindChoice
+              kind="cname"
+              selected={kind === 'cname'}
+              disabled={!options.cname_available}
+              onSelect={() => setKind('cname')}
+            />
           </div>
           <DialogFooter>
             <DashboardButton variant="secondary" onClick={onClose}>
@@ -208,10 +264,24 @@ function DomainItem({
       </div>
       {domain.error ? (
         <p className="rounded-md bg-destructive/[0.07] px-2.5 py-1.5 text-xs text-destructive">
-          {domain.error}
+          {zoneErrorText(t, domain.error)}
         </p>
       ) : null}
-      {active ? null : (
+      {active ? null : domain.kind === 'zone' ? (
+        <div className="rounded-lg bg-foreground/[0.03] px-3 py-1">
+          <p className="pt-2 text-xs text-muted-foreground">
+            {t('analytics.domains.zoneInstructions')}
+          </p>
+          <div className="divide-y divide-foreground/[0.06]">
+            <DnsRecordRow
+              type="CNAME"
+              name={domain.dns.cname_name}
+              value={domain.dns.cname_target}
+            />
+            <DnsRecordRow type="ROUTE" name={`${domain.hostname}/*`} value="amable-edge" />
+          </div>
+        </div>
+      ) : (
         <div className="rounded-lg bg-foreground/[0.03] px-3 py-1">
           <p className="pt-2 text-xs text-muted-foreground">
             {t('analytics.domains.instructions')}
@@ -230,6 +300,13 @@ function DomainItem({
       )}
     </li>
   );
+}
+
+/** The two machine errors of the zone probe become readable; anything else is shown as-is. */
+function zoneErrorText(t: (key: MessageKey) => string, error: string): string {
+  if (error.startsWith('hostname_unreachable')) return t('analytics.domains.zoneError.unreachable');
+  if (error.startsWith('not_tracking_worker')) return t('analytics.domains.zoneError.notWorker');
+  return error;
 }
 
 /** Settings tab `domains`: custom tracking hostnames of the site (CNAME to the edge). */
@@ -288,8 +365,13 @@ export function DomainsTab({
           ))}
         </ul>
       )}
-      {adding ? (
-        <AddDomainDialog tenant={tenant} site={site} onClose={() => setAdding(false)} />
+      {adding && domains.data ? (
+        <AddDomainDialog
+          tenant={tenant}
+          site={site}
+          options={domains.data.options}
+          onClose={() => setAdding(false)}
+        />
       ) : null}
       <DashboardConfirmDialog
         open={deleting !== null}

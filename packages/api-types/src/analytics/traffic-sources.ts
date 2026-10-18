@@ -147,10 +147,27 @@ export type TrafficSourceTemplateDef = z.infer<typeof trafficSourceTemplateSchem
 export const TRACKING_DOMAIN_STATUSES = ['pending_dns', 'pending_ssl', 'active', 'error'] as const;
 export type TrackingDomainStatus = (typeof TRACKING_DOMAIN_STATUSES)[number];
 
+/**
+ * How the hostname reaches the edge worker:
+ * - `cname`: the DNS stays elsewhere; the owner adds a CNAME and the platform
+ *   zone adopts the hostname (custom hostnames API issues the certificate);
+ * - `zone`: the domain is a zone on the same Cloudflare account as the edge
+ *   worker; a proxied record plus a worker route serve it, and the platform
+ *   only verifies that the edge answers there.
+ */
+export const TRACKING_DOMAIN_KINDS = ['cname', 'zone'] as const;
+export type TrackingDomainKind = (typeof TRACKING_DOMAIN_KINDS)[number];
+
+/** Path the edge worker answers on every hostname, probed to verify `zone` domains. */
+export const TRACKING_DOMAIN_CHECK_PATH = '/.well-known/amable-tracking';
+/** Marker the check endpoint returns (`service`). */
+export const TRACKING_DOMAIN_CHECK_SERVICE = 'amable-edge';
+
 export const trackingDomainSchema = z.object({
   id: z.string(),
   site_id: z.string(),
   hostname: z.string(),
+  kind: z.enum(TRACKING_DOMAIN_KINDS),
   status: z.enum(TRACKING_DOMAIN_STATUSES),
   /** DNS records the customer must create. */
   dns: z.object({
@@ -175,5 +192,15 @@ export const createTrackingDomainSchema = z.strictObject({
       /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/,
       'invalid hostname',
     ),
+  kind: z.enum(TRACKING_DOMAIN_KINDS).default('cname'),
 });
 export type CreateTrackingDomainInput = z.infer<typeof createTrackingDomainSchema>;
+
+/** What the installation supports, returned with the domain list. */
+export const trackingDomainOptionsSchema = z.object({
+  /** False without custom hostname credentials: only `zone` domains can be added. */
+  cname_available: z.boolean(),
+  /** Host the CNAME (or the proxied record of a `zone` domain) points at. */
+  target: z.string(),
+});
+export type TrackingDomainOptions = z.infer<typeof trackingDomainOptionsSchema>;

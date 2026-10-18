@@ -721,6 +721,20 @@ export const analyticsEn = {
   'analytics.domains.deleteBody':
     'Links and snippets using this hostname stop working. You can remove the DNS records afterwards.',
   'analytics.domains.deleted': 'Domain deleted.',
+  'analytics.domains.kind.zone': 'Domain on this Cloudflare account (recommended)',
+  'analytics.domains.kindHint.zone':
+    'The domain is a zone of the account that runs the tracking worker: one DNS record and one worker route, no extra certificates.',
+  'analytics.domains.kind.cname': 'DNS stays elsewhere (CNAME)',
+  'analytics.domains.kindHint.cname':
+    'The domain owner only adds a CNAME; the certificate is issued automatically.',
+  'analytics.domains.kind.cnameUnavailable':
+    'Not configured on this installation: the domain must be a zone of this Cloudflare account.',
+  'analytics.domains.zoneInstructions':
+    'On the Cloudflare account of the tracking worker: add the domain as a zone, create the proxied CNAME record, then add the worker route to the tracking worker.',
+  'analytics.domains.zoneError.unreachable':
+    'The hostname does not answer yet: check that the zone is active and the record is proxied.',
+  'analytics.domains.zoneError.notWorker':
+    'The hostname answers, but not from the tracking worker: check the worker route.',
   'analytics.domains.status.pending_dns': 'Waiting for DNS',
   'analytics.domains.status.pending_ssl': 'Issuing certificate',
   'analytics.domains.status.active': 'Active',

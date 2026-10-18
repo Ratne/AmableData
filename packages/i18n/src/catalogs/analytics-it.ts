@@ -720,6 +720,20 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.domains.deleteBody':
     'I link e gli snippet che usano questo hostname smettono di funzionare. Dopo potrai rimuovere i record DNS.',
   'analytics.domains.deleted': 'Dominio eliminato.',
+  'analytics.domains.kind.zone': 'Dominio su questo account Cloudflare (consigliato)',
+  'analytics.domains.kindHint.zone':
+    'Il dominio è una zona dell’account che esegue il worker di tracciamento: un record DNS e una route del worker, nessun certificato extra.',
+  'analytics.domains.kind.cname': 'Il DNS resta altrove (CNAME)',
+  'analytics.domains.kindHint.cname':
+    'Il proprietario del dominio aggiunge solo un CNAME; il certificato viene emesso in automatico.',
+  'analytics.domains.kind.cnameUnavailable':
+    'Non configurato su questa installazione: il dominio deve essere una zona di questo account Cloudflare.',
+  'analytics.domains.zoneInstructions':
+    'Sull’account Cloudflare del worker di tracciamento: aggiungi il dominio come zona, crea il record CNAME proxied, poi aggiungi la route del worker al worker di tracciamento.',
+  'analytics.domains.zoneError.unreachable':
+    'L’hostname non risponde ancora: controlla che la zona sia attiva e il record sia proxied.',
+  'analytics.domains.zoneError.notWorker':
+    'L’hostname risponde, ma non dal worker di tracciamento: controlla la route del worker.',
   'analytics.domains.status.pending_dns': 'In attesa del DNS',
   'analytics.domains.status.pending_ssl': 'Emissione certificato',
   'analytics.domains.status.active': 'Attivo',

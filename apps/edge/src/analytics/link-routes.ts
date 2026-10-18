@@ -1,4 +1,12 @@
-import { MAX_FUNNEL_ACTION, trackerEventSchema, type FunnelGraph, type FunnelNodeOf, type TrackerEvent } from '@amable/api-types';
+import {
+  MAX_FUNNEL_ACTION,
+  TRACKING_DOMAIN_CHECK_PATH,
+  TRACKING_DOMAIN_CHECK_SERVICE,
+  trackerEventSchema,
+  type FunnelGraph,
+  type FunnelNodeOf,
+  type TrackerEvent,
+} from '@amable/api-types';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import type { Env } from '../env';
@@ -546,6 +554,12 @@ export function createLinkRoutes(options: LinkRoutesOptions = {}): Hono<{ Bindin
     hostedPages: options.hostedPages ?? ((env) => (tenantId, pageId) => resolveHostedPageUrl(env, tenantId, pageId)),
   };
   const app = new Hono<{ Bindings: Env }>();
+  // Answers on every hostname (including ones not yet registered): the core
+  // probes it to verify that a `zone` tracking domain reaches this worker.
+  app.get(TRACKING_DOMAIN_CHECK_PATH, (c) => {
+    c.header('cache-control', 'no-store');
+    return c.json({ service: TRACKING_DOMAIN_CHECK_SERVICE });
+  });
   // Tracking hostnames: no prefix; shared edge host: `/s/{siteId}/…`.
   for (const prefix of ['', SITE_PATH_PREFIX]) {
     app.get(`${prefix}/go/${LINK_PARAM}`, (c) => entrance(c, deps));

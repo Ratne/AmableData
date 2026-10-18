@@ -241,11 +241,24 @@ An approved conversion with a mapped event becomes one job per connection in
 
 ## Custom tracking domains
 
-A site can serve its links on its own hostname (`track.customer.com` CNAME → the tracking target).
-The core provisions the hostname (custom hostnames API; a fake provider in dev advances
-`pending_dns → pending_ssl → active`) and keeps a global index; the edge resolves active hostnames
-to the site (cached per isolate). Links on a custom domain have no `/s/{siteId}` prefix and a root
-visitor cookie; the shared edge host keeps one cookie path per site.
+A site can serve its links on its own hostname, in one of two ways (`kind` of the domain):
+
+- **`zone`** (default in the UI, no extra configuration): the domain is a zone of the same
+  Cloudflare account as the edge worker. The owner adds the zone, a proxied CNAME record for the
+  hostname and a worker route (`host/*` → the edge worker); the certificate is the zone's own.
+  The core verifies the domain by probing `GET /.well-known/amable-tracking` on it, which the edge
+  answers on every host with `{ "service": "amable-edge" }`: one good answer proves DNS, proxy,
+  certificate and route at once (`pending_dns → active`; a wrong answer is an `error`). In dev the
+  probe succeeds immediately.
+- **`cname`** (needs `CF_ZONE_ID` + `CF_API_TOKEN`, see `apps/core/wrangler.jsonc`): the DNS stays
+  wherever it is and the owner only adds a CNAME; the core provisions a custom hostname on the
+  platform zone (custom hostnames API; a fake provider in dev advances
+  `pending_dns → pending_ssl → active`), which issues the certificate.
+
+Either way the installation D1 keeps the global hostname index; the edge resolves active hostnames
+to the site (cached per isolate), and a cron re-checks pending domains a few per tick. Links on a
+custom domain have no `/s/{siteId}` prefix and a root visitor cookie; the shared edge host keeps
+one cookie path per site.
 
 ## Reports
 

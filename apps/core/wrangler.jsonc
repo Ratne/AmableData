@@ -80,10 +80,13 @@
   // deploy, which removes every /api/dev/* route.
   // EDGE_ORIGIN: public origin of the edge worker, used in tracking snippets.
   // EMAIL_ALLOW_UNVERIFIED_DOMAIN: local sends without a verified domain (ignored outside dev).
-  // Custom tracking domains (Cloudflare for SaaS custom hostnames on the zone serving
-  // the edge worker; dev uses a fake provider): CF_ZONE_ID = that zone,
-  // CF_API_TOKEN = token with "SSL and Certificates: Edit" (Wrangler secret),
-  // TRACKING_CNAME_TARGET = hostname customers point their CNAME at (default: EDGE_ORIGIN host).
+  // Custom tracking domains. Domains added as zones of the same Cloudflare account
+  // ("zone" kind: proxied record + worker route, verified by probing the edge) need
+  // NO configuration here. The "cname" kind (DNS elsewhere, Cloudflare for SaaS custom
+  // hostnames on the zone serving the edge worker; dev uses a fake provider) needs:
+  // CF_ZONE_ID = that zone, CF_API_TOKEN = token with "SSL and Certificates: Edit"
+  // (Wrangler secret), TRACKING_CNAME_TARGET = hostname customers point their CNAME
+  // at (default: EDGE_ORIGIN host).
   "vars": {
     "ENVIRONMENT": "dev",
     "EDGE_ORIGIN": "http://localhost:8788",
