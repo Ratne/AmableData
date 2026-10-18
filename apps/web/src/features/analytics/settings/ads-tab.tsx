@@ -1,11 +1,13 @@
 import {
   AD_PLATFORMS,
   OUTBOUND_STATUSES,
+  OUTBOUND_TARGETS,
   type AdConnection,
   type AdConnectionStatus,
   type AdPlatform,
   type OutboundConversionJob,
   type OutboundStatus,
+  type OutboundTarget,
   type Site,
 } from '@amable/api-types';
 import type { MessageKey } from '@amable/i18n';
@@ -19,10 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@amable/ui/ui/dialog';
+import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { CalendarClock, Plug, RefreshCw, Send, Unplug } from 'lucide-react';
+import { CalendarClock, Crosshair, Plug, RefreshCw, Send, Unplug } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { ApiError } from '../../../lib/api';
@@ -208,6 +211,93 @@ function BackfillDialog({
   );
 }
 
+/** Platforms whose server-side conversions need a dataset/pixel ID set on the connection. */
+const PIXEL_PLATFORMS: readonly AdPlatform[] = ['meta', 'tiktok'];
+const PIXEL_ID = /^[A-Za-z0-9_-]{4,64}$/;
+const TEST_CODE = /^[A-Za-z0-9_-]{1,64}$/;
+
+function PixelDialog({
+  tenant,
+  site,
+  connection,
+  onClose,
+}: {
+  tenant: string;
+  site: Site;
+  connection: AdConnection;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const [pixel, setPixel] = useState(connection.pixel_id ?? '');
+  const [testCode, setTestCode] = useState(connection.test_event_code ?? '');
+  const pixelValue = pixel.trim();
+  const testValue = testCode.trim();
+  const valid =
+    (pixelValue === '' || PIXEL_ID.test(pixelValue)) && (testValue === '' || TEST_CODE.test(testValue));
+  const platform = connection.platform === 'tiktok' ? 'tiktok' : 'meta';
+  const save = useAnalyticsMutation(
+    tenant,
+    () =>
+      funnelsApi(tenant).ads.settings(site.id, connection.id, {
+        pixel_id: pixelValue || null,
+        test_event_code: testValue || null,
+      }),
+    {
+      invalidate: [funnelKeys.ads(tenant, site.id)],
+      success: 'analytics.ads.pixel.saved',
+      onSuccess: onClose,
+    },
+  );
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (valid) save.mutate(undefined);
+  };
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>{t('analytics.ads.pixel.title')}</DialogTitle>
+            <DialogDescription>{t(`analytics.ads.pixel.hint.${platform}`)}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="amb-ads-pixel">{t(`analytics.ads.pixel.id.${platform}`)}</Label>
+            <Input
+              id="amb-ads-pixel"
+              className="font-mono"
+              value={pixel}
+              maxLength={64}
+              autoFocus
+              aria-invalid={pixelValue !== '' && !PIXEL_ID.test(pixelValue)}
+              onChange={(event) => setPixel(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="amb-ads-test-code">{t('analytics.ads.pixel.testCode')}</Label>
+            <Input
+              id="amb-ads-test-code"
+              className="font-mono"
+              value={testCode}
+              maxLength={64}
+              aria-invalid={testValue !== '' && !TEST_CODE.test(testValue)}
+              onChange={(event) => setTestCode(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">{t('analytics.ads.pixel.testCodeHint')}</p>
+          </div>
+          <DialogFooter>
+            <DashboardButton variant="secondary" onClick={onClose}>
+              {t('common.cancel')}
+            </DashboardButton>
+            <DashboardButton type="submit" variant="primary" disabled={!valid || save.isPending}>
+              {t('common.save')}
+            </DashboardButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ConnectionsPanel({
   tenant,
   site,
@@ -222,6 +312,7 @@ function ConnectionsPanel({
   const now = useNow(60_000);
   const connections = useAdConnections(tenant, site.id);
   const [backfilling, setBackfilling] = useState<AdConnection | null>(null);
+  const [pixelOf, setPixelOf] = useState<AdConnection | null>(null);
   const [disconnecting, setDisconnecting] = useState<AdConnection | null>(null);
   const api = funnelsApi(tenant);
   const connect = useAnalyticsMutation(
@@ -317,13 +408,32 @@ function ConnectionsPanel({
                               : t('analytics.common.never'),
                           })}
                         </span>
+                        {PIXEL_PLATFORMS.includes(c.platform) && c.status !== 'disconnected' ? (
+                          c.pixel_id ? (
+                            <span className="text-[11px] text-muted-foreground">
+                              {t(`analytics.ads.pixel.id.${c.platform === 'tiktok' ? 'tiktok' : 'meta'}`)}:{' '}
+                              <span className="font-mono">{c.pixel_id}</span>
+                              {c.test_event_code ? ` · ${t('analytics.ads.pixel.testMode')}` : ''}
+                            </span>
+                          ) : (
+                            <span className="rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
+                              {t('analytics.ads.pixel.missing')}
+                            </span>
+                          )
+                        ) : null}
                         {c.last_error ? (
                           <span className="rounded bg-destructive/[0.07] px-2 py-1 text-[11px] text-destructive">
                             {c.last_error}
                           </span>
                         ) : null}
                         {canConfigure && c.status !== 'disconnected' ? (
-                          <span className="flex gap-1">
+                          <span className="flex flex-wrap gap-1">
+                            {PIXEL_PLATFORMS.includes(c.platform) ? (
+                              <DashboardButton variant="ghost" size="sm" onClick={() => setPixelOf(c)}>
+                                <Crosshair aria-hidden />
+                                {t('analytics.ads.pixel.button')}
+                              </DashboardButton>
+                            ) : null}
                             <DashboardButton
                               variant="ghost"
                               size="sm"
@@ -357,6 +467,14 @@ function ConnectionsPanel({
           site={site}
           connection={backfilling}
           onClose={() => setBackfilling(null)}
+        />
+      ) : null}
+      {pixelOf ? (
+        <PixelDialog
+          tenant={tenant}
+          site={site}
+          connection={pixelOf}
+          onClose={() => setPixelOf(null)}
         />
       ) : null}
       <DashboardConfirmDialog
@@ -393,7 +511,7 @@ function OutboundPanel({
   const f = useFormatters();
   const now = useNow(30_000);
   const [status, setStatus] = useState<OutboundStatus | typeof ALL>(ALL);
-  const [platform, setPlatform] = useState<AdPlatform | typeof ALL>(ALL);
+  const [platform, setPlatform] = useState<OutboundTarget | typeof ALL>(ALL);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const log = useOutbound(tenant, site.id, {
     ...(status !== ALL ? { status } : {}),
@@ -463,13 +581,13 @@ function OutboundPanel({
             value={platform}
             options={[
               { value: ALL, label: t('analytics.ads.outbound.allPlatforms') },
-              ...AD_PLATFORMS.map((p) => ({
+              ...OUTBOUND_TARGETS.map((p) => ({
                 value: p,
                 label: t(`analytics.ads.connections.platform.${p}`),
               })),
             ]}
             onValueChange={(v) => {
-              setPlatform(v as AdPlatform | typeof ALL);
+              setPlatform(v as OutboundTarget | typeof ALL);
               setSelected(new Set());
             }}
           />

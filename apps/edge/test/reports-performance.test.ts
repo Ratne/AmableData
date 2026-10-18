@@ -328,14 +328,15 @@ function setModifiers(store: Store, id: string, cost: number | null, revenue: nu
 }
 
 describe('traffic source cost / revenue modifiers', () => {
-  it('scale the touch cost and the revenue credited to the source', () => {
+  it('leave the reported revenue and the stored touch cost alone', () => {
     const { store, db } = createStore();
     store.initSite(siteInit());
     const { meta, google } = createSources(store);
     setModifiers(store, meta, 20, -10);
+    // Touch costs are stored already scaled by the cost modifier (entranceCostMinor): 25 + 20%.
     const touches = [
-      touch('a', D(2), meta, 'm1', { cost_minor: 25 }),
-      touch('b', D(2), meta, 'm1', { cost_minor: 25 }),
+      touch('a', D(2), meta, 'm1', { cost_minor: 30 }),
+      touch('b', D(2), meta, 'm1', { cost_minor: 30 }),
       touch('c', D(3), google, 'g1', { cost_minor: 40 }),
     ];
     store.recordTouches(touches);
@@ -345,17 +346,17 @@ describe('traffic source cost / revenue modifiers', () => {
     const rows = byKey(run(store, { group_by: 'source' }));
     expect(rows.get(meta)).toMatchObject({
       cost_minor: 60,
-      revenue_minor: 810 + 270,
+      revenue_minor: 1200,
       total_revenue_minor: 1200,
-      profit_minor: 1080 - 60,
+      profit_minor: 1200 - 60,
       hard_costs_minor: 0,
-      net_profit_minor: 1020,
-      roas: 18,
+      net_profit_minor: 1140,
+      roas: 20,
     });
     expect(rows.get(google)).toMatchObject({ cost_minor: 40, revenue_minor: 500, hard_costs_minor: 0 });
 
     setModifiers(store, meta, null, null);
-    expect(byKey(run(store, { group_by: 'source' })).get(meta)).toMatchObject({ cost_minor: 50, revenue_minor: 1200 });
+    expect(byKey(run(store, { group_by: 'source' })).get(meta)).toMatchObject({ cost_minor: 60, revenue_minor: 1200 });
   });
 
   it('apply the cost modifier to the synced spend, split or not', () => {

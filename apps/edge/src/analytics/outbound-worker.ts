@@ -2,12 +2,14 @@ import {
   AD_PLATFORMS,
   EDGE_INSTALLATION_TENANT,
   type AdPlatform,
+  type FunnelTouch,
   type GatewayClientInfo,
   type OutboundConversionJob,
   type OutboundPayload,
   type TrafficSource,
 } from '@amable/api-types';
 import {
+  minorToMajor,
   createFakeProvider,
   createProvider,
   isProviderError,
@@ -184,7 +186,11 @@ export async function enqueueForConversion(
   const { conversion, source } = input;
   if (source === null) return { status: 'no_route', reason: 'no_source' };
   const route = outboundRouteFor(source, conversion.event);
-  if (route === null) return { status: 'no_route', reason: 'no_mapping' };
+  if (route === null) {
+    const template = source.conversion.postback_url ?? '';
+    if (template === '') return { status: 'no_route', reason: 'no_mapping' };
+    return enqueuePostback(store, input, source, template);
+  }
   const connection = store.getAdConnection(route.connection_id);
   if (connection === null || connection.platform !== route.platform) {
     return { status: 'no_route', reason: 'unknown_connection' };
@@ -223,6 +229,108 @@ export async function enqueueForConversion(
     payload,
     event_id: eventId,
     ...(delay > 0 ? { next_attempt_at: conversion.ts + delay } : {}),
+  });
+  if (!enqueued.ok) throw new Error(`outbound enqueue: ${enqueued.error.message}`);
+  const { id, created } = enqueued.value;
+  if (!created) return { status: 'duplicate', job_id: id, event_id: eventId };
+  if (skip !== null) {
+    store.finishOutbound(id, { status: 'skipped', error: skip });
+    return { status: 'skipped', job_id: id, event_id: eventId, reason: skip };
+  }
+  return { status: 'enqueued', job_id: id, event_id: eventId };
+}
+
+/** Funnel touch the conversion belongs to: its hit, else the visitor's last touch from the source. */
+function conversionTouch(
+  store: AnalyticsStore,
+  conversion: ConversionRecord | OutboundConversionInput,
+  sourceId: string,
+): FunnelTouch | null {
+  if ('hit' in conversion && conversion.hit !== '') {
+    const touch = store.getTouch(conversion.hit);
+    if (touch !== null) return touch;
+  }
+  if (conversion.visitor_id === null) return null;
+  return (
+    store
+      .listTouchesByVisitor(conversion.visitor_id, 1000)
+      .filter((t) => t.traffic_source_id === sourceId && t.ts <= conversion.ts)
+      .sort((a, b) => b.ts - a.ts)[0] ?? null
+  );
+}
+
+/**
+ * Fills the `{token}` placeholders of a source's postback URL, URL-encoded:
+ * `{external}` click id, `{campaign}`, `{payout}` (major units, revenue
+ * modifier applied), `{txid}`, `{hit}` and `{data-<field name>}`. Unknown
+ * tokens become empty.
+ */
+export function postbackUrl(
+  template: string,
+  source: TrafficSource,
+  conversion: ConversionRecord | OutboundConversionInput,
+  touch: FunnelTouch | null,
+  currency: string | null,
+): string {
+  const payoutMinor = outboundValueMinor(source, conversion.revenue_minor);
+  const tx = conversion.tx ?? '';
+  const value = (token: string): string => {
+    switch (token) {
+      case 'external':
+        return touch?.external_click_id ?? '';
+      case 'campaign':
+        return touch?.campaign ?? '';
+      case 'payout':
+        return String(currency === null ? payoutMinor / 100 : minorToMajor(payoutMinor, currency));
+      case 'txid':
+        return tx === '' ? conversion.id : tx;
+      case 'hit':
+        return touch?.id ?? ('hit' in conversion ? conversion.hit : '');
+    }
+    if (!token.startsWith('data-')) return '';
+    const name = token.slice(5).toLowerCase();
+    const field = source.fields.find((f) => f.name.toLowerCase() === name || f.url_param.toLowerCase() === name);
+    return field === undefined ? '' : (touch?.fields?.[field.slot] ?? '');
+  };
+  return template.replace(/\{([A-Za-z0-9_.-]+)\}/g, (_, token: string) => encodeURIComponent(value(token)));
+}
+
+/** Same queue and gates as the platform route, for the source's own postback URL. */
+async function enqueuePostback(
+  store: AnalyticsStore,
+  input: EnqueueForConversionInput,
+  source: TrafficSource,
+  template: string,
+): Promise<EnqueueForConversionResult> {
+  const { conversion } = input;
+  const eventId = await outboundEventId(`postback:${source.id}`, conversion);
+  const existing = store.listOutbound({ event_id: eventId, limit: 1 })[0];
+  if (existing !== undefined) return { status: 'duplicate', job_id: existing.id, event_id: eventId };
+  const skip = outboundGate(source, {
+    revenue_minor: conversion.revenue_minor,
+    status: conversion.status,
+    consent: input.consent,
+    blacklisted: isBlacklisted(store, input.pii),
+    rng: input.rng,
+  });
+  const currency = conversion.currency ?? store.getSite()?.site.currency ?? null;
+  const touch = conversionTouch(store, conversion, source.id);
+  const tx = conversion.tx ?? '';
+  const enqueued = store.enqueueOutbound({
+    platform: 'postback',
+    connection_id: source.id,
+    kind: outboundKindOf(conversion.event),
+    payload: {
+      event_name: conversion.event,
+      event_time: conversion.ts,
+      value_minor: outboundValueMinor(source, conversion.revenue_minor),
+      currency,
+      order_id: tx === '' ? conversion.id : tx,
+      click_ids: {},
+      external_id: conversion.visitor_id,
+      url: postbackUrl(template, source, conversion, touch, currency).slice(0, 4096),
+    },
+    event_id: eventId,
   });
   if (!enqueued.ok) throw new Error(`outbound enqueue: ${enqueued.error.message}`);
   const { id, created } = enqueued.value;
@@ -349,12 +457,29 @@ function errorText(error: unknown): string {
   return text.slice(0, MAX_ERROR_LENGTH);
 }
 
+export const POSTBACK_TIMEOUT_MS = 10_000;
+
+/** GET of a postback job's URL: `sent` on 2xx, retried on 408/429/5xx and network errors. */
+async function sendPostback(job: OutboundConversionJob, fetcher: typeof fetch): Promise<'sent' | { retry: boolean; error: string }> {
+  const url = job.payload.url ?? '';
+  if (!/^https?:\/\//i.test(url)) return { retry: false, error: 'invalid_postback_url' };
+  try {
+    const res = await fetcher(url, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(POSTBACK_TIMEOUT_MS) });
+    await res.body?.cancel();
+    if (res.ok) return 'sent';
+    return { retry: res.status === 408 || res.status === 429 || res.status >= 500, error: `http_${res.status}` };
+  } catch (error) {
+    return { retry: true, error: errorText(error) };
+  }
+}
+
 /** Claims the due jobs and sends them; every job ends sent, back in the queue with backoff, or failed. */
 export async function processOutboundBatch(
   store: AnalyticsStore,
   resolver: ProviderResolver,
   now: number,
   limit: number = OUTBOUND_BATCH_SIZE,
+  fetcher: typeof fetch = fetch,
 ): Promise<OutboundRunResult> {
   const jobs = store.claimOutboundBatch(now, limit);
   const result: OutboundRunResult = { claimed: jobs.length, sent: 0, retried: 0, failed: 0 };
@@ -381,6 +506,13 @@ export async function processOutboundBatch(
   };
 
   for (const job of jobs) {
+    if (job.platform === 'postback') {
+      const sent = await sendPostback(job, fetcher);
+      if (sent === 'sent') settle(job, { status: 'sent' });
+      else if (sent.retry) retryOrFail(job, sent.error);
+      else settle(job, { status: 'failed', error: sent.error });
+      continue;
+    }
     const connection = store.getAdConnection(job.connection_id);
     if (connection === null) {
       settle(job, { status: 'failed', error: 'connection_not_found' });

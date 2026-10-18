@@ -237,7 +237,7 @@ export function registerBookingRoutes(router: OpenAPIHono<AppEnv>): void {
       const start = await runtime.oauth.startConnect({
         tenantId: tenantId(c),
         provider: 'google',
-        scopes: [OAUTH_SCOPES.calendarRead],
+        scopes: [OAUTH_SCOPES.calendarRead, OAUTH_SCOPES.calendar],
         returnUrl: `${appOrigin(c)}/t/${slug}/bookings/calendars?calendar=${encodeURIComponent(calendarId)}`,
       });
       return c.json({ authorize_url: start.authorizeUrl, state: start.state }, 200);
@@ -278,7 +278,7 @@ export function registerBookingRoutes(router: OpenAPIHono<AppEnv>): void {
       method: 'delete',
       path: '/bookingCalendars/{calendarId}/google',
       tags: calendarsTag,
-      summary: 'Disconnect the Google account (busy time is no longer read)',
+      summary: 'Disconnect the Google account (busy time is no longer read, bookings no longer written)',
       request: { params: bookingCalendarParamSchema },
       responses: { 200: json(bookingCalendarSchema, 'The calendar') },
     }),

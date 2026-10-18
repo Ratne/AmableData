@@ -1,7 +1,8 @@
-import { OAUTH_SCOPES, type OAuthTokenProvider } from '@amable/core';
+import { OAUTH_SCOPES, type OAuthScope, type OAuthTokenProvider } from '@amable/core';
 import { describe, expect, it } from 'vitest';
 import type { BookingOutcome } from '../../src/booking/bookings';
-import { messagesFor } from '../../src/booking/flow';
+import { googleEventId, type CalendarEventChange } from '../../src/booking/calendar-core';
+import { calendarEventFor, messagesFor } from '../../src/booking/flow';
 import { fillBookingVars, textToDoc } from '../../src/booking/messages';
 import { createTestTenant } from '../crm/helpers';
 import { fakeCalendars, nextMonday, seedBooking, SOURCE } from './helpers';
@@ -134,5 +135,90 @@ describe('BookingCalendar core', () => {
     calendars.clock.now += 6 * 60_000;
     await stub.busy(ref, busyStart, busyStart + 1);
     expect(requests).toHaveLength(2);
+  });
+
+  it('writes the booking to Google Calendar, moves it, deletes it, and retries failures', async () => {
+    let scopes: OAuthScope[] = [OAUTH_SCOPES.calendarRead, OAUTH_SCOPES.calendar];
+    const oauth: OAuthTokenProvider = {
+      available: true,
+      startConnect: () => Promise.reject(new Error('unused')),
+      finishConnect: () => Promise.reject(new Error('unused')),
+      getAccessToken: () => Promise.resolve({ accessToken: 'real', expiresAt: Date.now() + 3600_000, scopes, stub: false }),
+      revoke: () => Promise.resolve(),
+    };
+    const google = new Map<string, { status: string; summary: string; start: string; attendees: unknown }>();
+    const calls: string[] = [];
+    let failNext = 0;
+    const calendars = fakeCalendars({
+      oauth,
+      fetch: (url, init) => {
+        const method = init?.method ?? 'GET';
+        calls.push(`${method} ${url.replace('https://www.googleapis.com/calendar/v3/calendars/', '')}`);
+        if (failNext > 0) {
+          failNext -= 1;
+          return Promise.resolve(new Response('busy', { status: 503 }));
+        }
+        const match = /calendars\/([^/]+)\/events(?:\/([^?]+))?/.exec(url);
+        const key = `${decodeURIComponent(match?.[1] ?? '')}/${match?.[2] ?? ''}`;
+        const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { id: string; summary: string; start: { dateTime: string }; attendees: unknown }) : null;
+        if (method === 'PUT') {
+          if (!google.has(key)) return Promise.resolve(new Response('', { status: 404 }));
+          google.set(key, { status: 'confirmed', summary: body?.summary ?? '', start: body?.start.dateTime ?? '', attendees: body?.attendees });
+          return Promise.resolve(Response.json({}));
+        }
+        if (method === 'POST') {
+          google.set(`${key}${body?.id ?? ''}`, { status: 'confirmed', summary: body?.summary ?? '', start: body?.start.dateTime ?? '', attendees: body?.attendees });
+          return Promise.resolve(Response.json({}));
+        }
+        if (method === 'DELETE') {
+          if (!google.has(key)) return Promise.resolve(new Response('', { status: 410 }));
+          google.delete(key);
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
+        return Promise.resolve(new Response('', { status: 400 }));
+      },
+    });
+    const { outcome } = bookedOutcome();
+    const bookingId = outcome.booking.id;
+    const eventId = googleEventId(bookingId);
+    expect(eventId).toMatch(/^[a-v0-9]{5,1024}$/);
+    const event = calendarEventFor(outcome);
+    expect(event).toMatchObject({ attendee: { email: 'ada@example.com' }, description: expect.stringContaining('topic: Sales') });
+    const ref = { ...REF, googleAccountId: 'acc_1', googleCalendarId: 'work' };
+    const a = calendars.namespace.get(calendars.namespace.idFromName('ten_1:cal_1'));
+    const b = calendars.namespace.get(calendars.namespace.idFromName('ten_1:cal_2'));
+    const change = (r: typeof ref | null, e: typeof event | null): CalendarEventChange => ({ tenantId: 'ten_1', ref: r, event: e });
+
+    await a.bookingChanged(bookingId, [], change(ref, event));
+    expect(google.get(`work/${eventId}`)).toMatchObject({ summary: event.summary, attendees: [{ email: 'ada@example.com', displayName: event.attendee?.name }] });
+    expect(calls.slice(-2)).toEqual([`PUT work/events/${eventId}?sendUpdates=none`, 'POST work/events?sendUpdates=none']);
+
+    // Rescheduled: same event, new time.
+    const later = { ...event, start: event.start + 3_600_000, end: event.end + 3_600_000 };
+    await a.bookingChanged(bookingId, [], change(ref, later));
+    expect(google.size).toBe(1);
+    expect(google.get(`work/${eventId}`)?.start).toBe(new Date(later.start).toISOString());
+
+    // Moved to another host: written there, removed here.
+    const refB = { ...ref, calendarId: 'cal_2', googleAccountId: 'acc_2', googleCalendarId: 'other' };
+    await b.bookingChanged(bookingId, [], change(refB, later));
+    await a.bookingChanged(bookingId, [], change(null, null));
+    expect([...google.keys()]).toEqual([`other/${eventId}`]);
+    expect(await a.eventState(bookingId)).toBeNull();
+
+    // Cancelled while Google is down: retried by the alarm.
+    failNext = 1;
+    await b.bookingChanged(bookingId, [], change(refB, null));
+    expect(await b.eventState(bookingId)).toMatchObject({ pending: true, attempts: 1, lastError: 'Google answered 503' });
+    const core = calendars.cores.get('ten_1:cal_2');
+    calendars.clock.now += 61_000;
+    await core?.fireDue();
+    expect(google.size).toBe(0);
+    expect(await b.eventState(bookingId)).toBeNull();
+
+    // Old read-only connections are not retried: the host has to reconnect Google.
+    scopes = [OAUTH_SCOPES.calendarRead];
+    await a.bookingChanged(bookingId, [], change(ref, event));
+    expect(await a.eventState(bookingId)).toMatchObject({ pending: false, lastError: expect.stringContaining('reconnect') });
   });
 });

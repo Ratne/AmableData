@@ -10,6 +10,9 @@ import {
   validateFieldDefinition,
   type FieldDefinition,
 } from '../../src/crm/custom-fields/validate';
+import { createContact } from '../../src/crm/contacts';
+import { findOrCreateCompanyByName } from '../../src/crm/companies';
+import { commerceWorld } from '../commerce/helpers';
 import { createTestTenant, VIEWER_ACTOR } from './helpers';
 
 const OPTIONS = [
@@ -218,6 +221,25 @@ describe('custom fields on records', () => {
     const asViewer = t.op('contacts.get', { id: contact.id }, VIEWER_ACTOR);
     expect(asViewer.custom_fields['tax']).toBe('************205X');
     expect(asViewer.custom_fields['plan']).toBe('pro');
+  });
+
+  it('does not block records the system creates (forms, bookings, inbox, renewals)', () => {
+    const w = commerceWorld();
+    for (const entity of ['contact', 'company', 'order'] as const) {
+      w.t.op('customFields.create', {
+        entity,
+        data: { key: 'ref', label: 'Ref', type: 'TEXT', required: true },
+      });
+    }
+    expect(() => w.t.op('contacts.create', { given_name: 'Bob' })).toThrow(/ref is required/);
+    const ctx = w.t.ctx();
+    expect(createContact(ctx, { given_name: 'Bob' }, { requireAll: false }).id).toBeTruthy();
+    expect(findOrCreateCompanyByName(ctx, 'Initech')).toBeTruthy();
+
+    const sub = w.t.op('subscriptions.create', { contact_id: w.contactId, plan_id: w.monthly });
+    w.t.clock.now = Date.parse(sub.next_bill_at ?? '') + 1000;
+    expect(w.t.op('billing.run', {})).toMatchObject({ renewals: 1 });
+    expect(w.t.op('orders.list', { limit: 10, subscription_id: sub.id }).data).toHaveLength(2);
   });
 
   it('enforces required fields on create and supports groups/tabs layout', () => {

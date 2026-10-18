@@ -39,11 +39,11 @@ export const membersIt: Readonly<Record<MembersMessageKey, string>> = {
   'members.roleDesc.marketer':
     'Contatti, marketing (email, automazioni, moduli, pagine, prenotazioni) e analitica; vendite ed e-commerce in sola lettura, nessuna impostazione.',
   'members.roleDesc.sales':
-    'Contatti, opportunità, attività, prenotazioni e ordini manuali, email singole e report vendite; niente esportazioni massive.',
+    'Contatti, opportunità, attività, prenotazioni, ordini manuali e abbonamenti, email singole e report vendite; niente esportazioni massive.',
   'members.roleDesc.analyst':
     'Legge tutto, crea report e dashboard ed esporta CSV; non modifica mai i dati.',
   'members.roleDesc.viewer':
-    'Sola lettura ovunque: niente esportazioni né report, campi sensibili nascosti.',
+    'Sola lettura ovunque, report compresi: non crea report e non esporta, campi sensibili nascosti.',
   'members.leave': 'Lascia lo spazio di lavoro',
   'members.leaveTitle': 'Lasciare questo spazio di lavoro?',
   'members.leaveConfirm': 'Perderai l’accesso a {tenant} finché qualcuno non ti inviterà di nuovo.',
@@ -54,4 +54,16 @@ export const membersIt: Readonly<Record<MembersMessageKey, string>> = {
   'members.error.stepUp': 'Serve la conferma con il secondo fattore',
   'members.error.rateLimited': 'Troppi inviti: riprova più tardi',
   'members.error.notFound': 'Non esiste più: l’elenco è stato aggiornato',
+  'audit.hint': 'Accessi, modifiche di sicurezza, membri, chiavi API, app e impostazioni, dal più recente. Le voci non contengono mai segreti.',
+  'audit.empty': 'Ancora nessuna voce registrata.',
+  'audit.more': 'Carica voci precedenti',
+  'audit.col.when': 'Quando',
+  'audit.col.actor': 'Chi',
+  'audit.col.action': 'Azione',
+  'audit.col.target': 'Oggetto',
+  'audit.col.details': 'Dettagli',
+  'audit.col.ip': 'IP',
+  'audit.actor.system': 'Sistema',
+  'audit.actor.apiKey': 'Chiave API',
+  'audit.actor.app': 'App {app}',
 };

@@ -93,7 +93,12 @@ The button deploys the dashboard, CRM, automations, email and API with
 `deploy/cloudflare/wrangler.jsonc`, and asks for the secrets listed in
 `deploy/cloudflare/.dev.vars.example`. Then add the edge worker (tracking, hosted
 forms, booking and landing pages, email link redirects) and the first owner with
-`pnpm self-host:setup --deploy`.
+`pnpm self-host:setup --deploy`. The edge cannot read the `EDGE_GATEWAY_SECRET` you gave
+the button, so the script sets a new one on both workers.
+
+Lost or expired the first-owner link? Rerun the script with the same `--owner-email`
+while nobody has signed up yet: it issues a new link for the same workspace and the old
+one stops working.
 
 <details>
 <summary><b>After the first deploy</b></summary>

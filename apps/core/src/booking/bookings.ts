@@ -300,6 +300,8 @@ function outcome(
   bookingId: string,
   changed: boolean,
   previous: BookingOutcome['previous'],
+  /** Calendars the booking just left (reschedule to another host). */
+  leftCalendarIds: readonly string[] = [],
 ): BookingOutcome {
   const row = bookingRow(ctx, { id: bookingId });
   const ids = calendarIdsOf(row);
@@ -310,7 +312,7 @@ function outcome(
     booking: bookingToApi(row),
     eventType: eventTypeToApi(getEventTypeRow(ctx, row.event_type_id)),
     calendars: calendars.map(calendarRef),
-    notifyCalendarIds: notifyIdsFor(ctx, ids),
+    notifyCalendarIds: notifyIdsFor(ctx, [...ids, ...leftCalendarIds]),
     previous,
   };
 }
@@ -603,7 +605,7 @@ export function rescheduleBooking(
     title: event.title,
     startAt: toIso(updated.starts_at),
   });
-  return outcome(ctx, 'rescheduled', row.id, true, previous);
+  return outcome(ctx, 'rescheduled', row.id, true, previous, calendarIdsOf(row));
 }
 
 // ------------------------------------------------------------------- cancel

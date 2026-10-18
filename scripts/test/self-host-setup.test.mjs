@@ -10,6 +10,7 @@ import {
   parseD1Id,
   releaseVersion,
   renderTemplate,
+  secretPlan,
   slugify,
   ulid,
   withoutCoreService,
@@ -92,10 +93,43 @@ describe('self-host setup script', () => {
     expect(invite).toMatchObject({ email: 'owner@example.com', role: 'owner' });
     expect(invite.token_hash).toBe(createHash('sha256').update(token).digest('hex'));
 
-    // A second run (or a run on a used installation) adds nothing.
-    db.exec(sql(ulid(now + 1)));
+    // A second run before anyone signed up replaces the link, in the same workspace.
+    const tenantId = db.prepare('SELECT id FROM tenants').get().id;
+    const rerun = (newToken, at) =>
+      bootstrapOwnerSql({
+        tenantId: ulid(at),
+        slug: 'other',
+        name: 'Other',
+        inviteId: ulid(at),
+        email: 'owner@example.com',
+        tokenHash: createHash('sha256').update(newToken).digest('hex'),
+        now: at,
+        expiresAt: at + 7 * 86_400_000,
+      });
+    db.exec(rerun('second-token', now + 1));
     expect(db.prepare('SELECT COUNT(*) AS n FROM tenants').get().n).toBe(1);
-    expect(db.prepare('SELECT COUNT(*) AS n FROM invites').get().n).toBe(1);
+    expect(db.prepare('SELECT tenant_id, token_hash FROM invites').all()).toEqual([
+      { tenant_id: tenantId, token_hash: createHash('sha256').update('second-token').digest('hex') },
+    ]);
+
+    // Once someone signed up, a rerun changes nothing.
+    db.exec(`INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'owner@example.com', ${now}, ${now})`);
+    db.exec(rerun('third-token', now + 2));
+    expect(db.prepare('SELECT COUNT(*) AS n FROM tenants').get().n).toBe(1);
+    expect(db.prepare('SELECT token_hash FROM invites').get().token_hash).toBe(
+      createHash('sha256').update('second-token').digest('hex'),
+    );
+  });
+
+  it('writes missing secrets and keeps the gateway secret equal on both workers', () => {
+    const all = { core: new Set(['PASSWORD_PEPPER', 'AUTH_ENCRYPTION_KEY', 'EMAIL_TOKEN_SECRET', 'EDGE_GATEWAY_SECRET']), edge: new Set(['EDGE_GATEWAY_SECRET']) };
+    expect(secretPlan(all)).toEqual({ core: [], edge: [] });
+    expect(secretPlan({ core: new Set(), edge: new Set() })).toEqual({
+      core: ['PASSWORD_PEPPER', 'AUTH_ENCRYPTION_KEY', 'EMAIL_TOKEN_SECRET', 'EDGE_GATEWAY_SECRET'],
+      edge: ['EDGE_GATEWAY_SECRET'],
+    });
+    // Core from the Deploy button: the edge cannot copy its value, so both get a new one.
+    expect(secretPlan({ core: all.core, edge: new Set() })).toEqual({ core: ['EDGE_GATEWAY_SECRET'], edge: ['EDGE_GATEWAY_SECRET'] });
   });
 
   it('generates sortable ids and safe slugs', () => {

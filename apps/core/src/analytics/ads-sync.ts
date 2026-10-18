@@ -1,6 +1,7 @@
 import { isProviderError, ProviderError, type AdsProvider as AdPlatformClient } from '@amable/ads-providers';
 import type {
   AdConnection,
+  AdConnectionSettings,
   AdEntity,
   AdEntityLevel,
   AdPlatform,
@@ -234,7 +235,19 @@ interface ConnectionMeta {
 
 const metaOf = (c: AdConnectionRecord): ConnectionMeta => c.metadata as ConnectionMeta;
 
+/** Metadata keys read by the edge outbound worker (`connectionSendOptions`). */
+const PIXEL_KEYS: Partial<Record<AdPlatform, readonly [string, string]>> = {
+  meta: ['pixel_id', 'dataset_id'],
+  tiktok: ['pixel_code', 'event_source_id'],
+};
+
+function metaText(md: Record<string, unknown>, key: string): string | null {
+  const v = md[key];
+  return typeof v === 'string' && v !== '' ? v : null;
+}
+
 export function toAdConnection(c: AdConnectionRecord): AdConnection {
+  const keys = PIXEL_KEYS[c.platform];
   return {
     id: c.id,
     platform: c.platform,
@@ -245,7 +258,44 @@ export function toAdConnection(c: AdConnectionRecord): AdConnection {
     last_sync_at: c.last_sync_at,
     last_error: c.last_error,
     created_at: c.created_at,
+    ...(keys === undefined
+      ? {}
+      : {
+          pixel_id: metaText(c.metadata, keys[0]) ?? metaText(c.metadata, keys[1]),
+          test_event_code: metaText(c.metadata, 'test_event_code'),
+        }),
   };
+}
+
+/** Sets the conversion destination of a Meta/TikTok connection; `null` clears a field. */
+export async function updateAdConnectionSettings(
+  ports: AdsSyncPorts,
+  siteId: string,
+  conn: AdConnectionRecord,
+  settings: AdConnectionSettings,
+): Promise<AdConnectionRecord> {
+  const keys = PIXEL_KEYS[conn.platform];
+  if (keys === undefined) {
+    throw new AdsSyncError('invalid_settings', 'this platform takes no pixel settings');
+  }
+  const metadata: Record<string, unknown> = { ...conn.metadata };
+  if (settings.pixel_id !== undefined) {
+    delete metadata[keys[1]];
+    if (settings.pixel_id === null) delete metadata[keys[0]];
+    else metadata[keys[0]] = settings.pixel_id;
+  }
+  if (settings.test_event_code !== undefined) {
+    if (settings.test_event_code === null) delete metadata.test_event_code;
+    else metadata.test_event_code = settings.test_event_code;
+  }
+  return must(
+    await adsStub(ports.ns, siteId).upsertAdConnection({
+      id: conn.id,
+      platform: conn.platform,
+      account_id: conn.account_id,
+      metadata,
+    }),
+  );
 }
 
 /** Stable per site: reconnecting the same account updates the same connection. */
@@ -523,7 +573,13 @@ export async function syncAllAds(ports: AdsSyncPorts, tenantIds: readonly string
 
 export class AdsSyncError extends Error {
   constructor(
-    readonly code: 'invalid_range' | 'invalid_state' | 'no_accounts' | 'unavailable' | 'not_connected',
+    readonly code:
+      | 'invalid_range'
+      | 'invalid_settings'
+      | 'invalid_state'
+      | 'no_accounts'
+      | 'unavailable'
+      | 'not_connected',
     message: string,
   ) {
     super(message);

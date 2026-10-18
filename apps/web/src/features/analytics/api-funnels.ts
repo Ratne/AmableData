@@ -12,6 +12,7 @@ import type {
   LandingPage,
   OutboundConversionJob,
   OutboundStatus,
+  OutboundTarget,
   TrafficSource,
   TrafficSourceInput,
   TrafficSourceTemplateDef,
@@ -110,7 +111,7 @@ export interface AdConnectionsResponse {
 
 export interface OutboundQuery {
   readonly status?: OutboundStatus;
-  readonly platform?: AdPlatform;
+  readonly platform?: OutboundTarget;
   readonly connection_id?: string;
   readonly from?: string;
   readonly to?: string;
@@ -194,6 +195,12 @@ export function funnelsApi(tenant: string) {
         request<{ id: string; deleted: true }>(sited(siteId, `ads/connections/${enc(id)}`), {
           method: 'DELETE',
         }),
+      settings: (
+        siteId: string,
+        id: string,
+        input: { pixel_id?: string | null; test_event_code?: string | null },
+      ) =>
+        request<AdConnection>(sited(siteId, `ads/connections/${enc(id)}`), send('PATCH', input)),
       backfill: (siteId: string, id: string, range: { from: string; to: string }) =>
         request<{ connection_id: string; from: string; to: string; rows: number }>(
           sited(siteId, `ads/connections/${enc(id)}/backfill`),

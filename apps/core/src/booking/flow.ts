@@ -2,7 +2,7 @@ import { randomToken } from '@amable/auth';
 import type { Interval } from '@amable/booking';
 import type { Env } from '../env';
 import type { BookingOutcome, ExternalBusy } from './bookings';
-import type { CalendarDoRef, ReminderJob } from './calendar-core';
+import type { CalendarDoRef, CalendarEventData, ReminderJob } from './calendar-core';
 import type { CalendarRef } from './calendars';
 import { emailRequest, type BookingMessageVars, type MessageKind } from './messages';
 
@@ -165,10 +165,27 @@ export function messagesFor(input: {
   return { email, reminders };
 }
 
+/** Google Calendar event of a booking, as the host sees it. */
+export function calendarEventFor(outcome: BookingOutcome): CalendarEventData {
+  const { booking, eventType } = outcome;
+  const answers = Object.entries(booking.answers).map(
+    ([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`,
+  );
+  return {
+    summary: `${eventType.title} · ${booking.invitee_name}`,
+    description: [`${booking.invitee_name} <${booking.invitee_email}>`, ...answers].join('\n'),
+    location: eventType.location,
+    start: Date.parse(booking.starts_at),
+    end: Date.parse(booking.ends_at),
+    timeZone: booking.time_zone,
+    attendee: { email: booking.invitee_email, name: booking.invitee_name },
+  };
+}
+
 /**
  * After a booking op: confirmation/change email on `EMAIL_SEND`, reminders
- * on the primary host's calendar DO (stale ones removed from the others) and
- * a live version bump on every affected calendar.
+ * and the Google event on the primary host's calendar DO (removed from the
+ * others) and a live version bump on every affected calendar.
  */
 export async function afterChange(
   env: Env,
@@ -202,12 +219,19 @@ export async function afterChange(
   }
   const primary = outcome.booking.calendar_id;
   const keep = input.notify && (outcome.kind === 'booked' || input.token !== null) ? reminders : [];
+  const primaryRef = outcome.calendars.find((c) => c.calendarId === primary) ?? null;
+  const event = outcome.booking.status === 'cancelled' ? null : calendarEventFor(outcome);
   await Promise.all(
     outcome.notifyCalendarIds.map(async (calendarId) => {
       const stub = calendarStub(env, input.tenantId, calendarId);
       if (stub === null) return;
+      const own = calendarId === primary && primaryRef !== null;
       try {
-        await stub.bookingChanged(outcome.booking.id, calendarId === primary ? keep : []);
+        await stub.bookingChanged(outcome.booking.id, calendarId === primary ? keep : [], {
+          tenantId: input.tenantId,
+          ref: own ? doRef(input.tenantId, primaryRef) : null,
+          event: own ? event : null,
+        });
       } catch (error) {
         console.error('[booking] calendar update failed', calendarId, error);
       }

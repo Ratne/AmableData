@@ -1,9 +1,14 @@
 # Google app (Calendar)
 
-One Google OAuth client powers the **booking calendars**: it reads the host's busy time
-from Google Calendar (free/busy query, `calendar.readonly`) so those slots are not offered
-on the booking page. Nothing is written to Google Calendar: bookings live in AmableData,
-and confirmations, reschedules and reminders are sent by email.
+One Google OAuth client powers the **booking calendars**:
+
+- it reads the host's busy time from Google Calendar (free/busy query,
+  `calendar.readonly`) so those slots are not offered on the booking page;
+- it writes every booking as an event of the connected calendar (`calendar.events`):
+  created on booking, moved on reschedule (or to the new host's calendar), deleted on
+  cancellation. The invitee is listed as attendee, but Google sends no invitation:
+  confirmations and reminders go out by email from AmableData. Failed writes are retried
+  for about 15 hours.
 
 Form exports to Google Sheets need no app here: each workspace uploads the JSON key of
 its own Google service account in the form connection and shares the spreadsheet with
@@ -22,10 +27,11 @@ plane and no app is needed; an own app, when configured, always takes precedence
    [console.cloud.google.com](https://console.cloud.google.com).
 2. *APIs & Services → Library*: enable **Google Calendar API**.
 3. *APIs & Services → OAuth consent screen*: user type **External**; app name, support
-   email, authorized domain, privacy policy and terms URLs. Add the scope:
+   email, authorized domain, privacy policy and terms URLs. Add the scopes:
 
    ```text
    https://www.googleapis.com/auth/calendar.readonly
+   https://www.googleapis.com/auth/calendar.events
    ```
 
 4. *Credentials → Create credentials → OAuth client ID* → **Web application** →
@@ -50,11 +56,12 @@ encrypted with the installation key (`AUTH_ENCRYPTION_KEY`) before being stored 
 
 ## 3. Verification (to let customers connect)
 
-`calendar.readonly` is a **sensitive** scope. While the consent screen is in *Testing*,
+`calendar.readonly` and `calendar.events` are **sensitive** scopes. While the consent screen is in *Testing*,
 only listed test users (max 100) can connect and Google shows an "unverified app" warning. For public
 production use, submit the app for **verification**: domain ownership (Search Console),
 brand review, per-scope justification and usually a short demo video of each flow
-(connecting a calendar and a busy slot disappearing from the booking page). Expect
+(connecting a calendar, a busy slot disappearing from the booking page and a booking
+appearing in Google Calendar). Expect
 several days to a few weeks.
 
 ## One project or two?
@@ -73,5 +80,6 @@ or a separate one:
 
 - Refresh tokens are used; a revoked grant makes the account show as disconnected and the
   user reconnects from the same settings page.
-- Scope grants follow the feature: a booking calendar connection asks only for
-  `calendar.readonly`. Accounts connected earlier with `calendar.events` keep working.
+- A booking calendar connection asks for `calendar.readonly` and `calendar.events`.
+  Accounts connected with `calendar.readonly` only keep their busy time, but bookings
+  are not written: disconnect and reconnect Google to grant the new scope.

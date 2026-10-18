@@ -3,7 +3,14 @@ import type { EmailSendRequest } from '@amable/core';
 import { DurableObject } from 'cloudflare:workers';
 import { createDoSqlDb } from '../crm/db/do-sql';
 import type { Env } from '../env';
-import { CalendarCore, type CalendarDoRef, type ReminderJob, type SyncResult } from './calendar-core';
+import {
+  CalendarCore,
+  type CalendarDoRef,
+  type CalendarEventChange,
+  type CalendarEventState,
+  type ReminderJob,
+  type SyncResult,
+} from './calendar-core';
 import { oauthProviderFor } from './runtime';
 
 /**
@@ -50,8 +57,12 @@ export class BookingCalendar extends DurableObject<Env> {
     return this.core.sync(ref);
   }
 
-  async bookingChanged(bookingId: string, reminders: ReminderJob[]): Promise<number> {
-    return this.core.bookingChanged(bookingId, reminders);
+  async bookingChanged(bookingId: string, reminders: ReminderJob[], change?: CalendarEventChange): Promise<number> {
+    return this.core.bookingChanged(bookingId, reminders, change);
+  }
+
+  eventState(bookingId: string): CalendarEventState | null {
+    return this.core.eventState(bookingId);
   }
 
   /** Availability changed outside a booking (calendar or event type settings). */

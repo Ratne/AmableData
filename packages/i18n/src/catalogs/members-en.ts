@@ -36,11 +36,11 @@ export const membersEn = {
   'members.roleDesc.marketer':
     'Contacts, marketing (emails, automations, forms, pages, bookings) and analytics; read-only sales and e-commerce, no settings.',
   'members.roleDesc.sales':
-    'Contacts, opportunities, tasks, bookings and manual orders, single emails and sales reports; no bulk export.',
+    'Contacts, opportunities, tasks, bookings, manual orders and subscriptions, single emails and sales reports; no bulk export.',
   'members.roleDesc.analyst':
     'Reads everything, creates reports and dashboards and exports CSV; never changes data.',
   'members.roleDesc.viewer':
-    'Read-only everywhere: no export, no reports, sensitive fields hidden.',
+    'Read-only everywhere, reports included: cannot create reports or export, sensitive fields hidden.',
   'members.leave': 'Leave workspace',
   'members.leaveTitle': 'Leave this workspace?',
   'members.leaveConfirm': 'You lose access to {tenant} until someone invites you again.',
@@ -51,6 +51,18 @@ export const membersEn = {
   'members.error.stepUp': 'Confirmation with the second factor is required',
   'members.error.rateLimited': 'Too many invitations: try again later',
   'members.error.notFound': 'It no longer exists: the list has been refreshed',
+  'audit.hint': 'Sign-ins, security changes, members, API keys, apps and settings, newest first. Entries never contain secrets.',
+  'audit.empty': 'Nothing recorded yet.',
+  'audit.more': 'Load older entries',
+  'audit.col.when': 'When',
+  'audit.col.actor': 'Who',
+  'audit.col.action': 'Action',
+  'audit.col.target': 'Target',
+  'audit.col.details': 'Details',
+  'audit.col.ip': 'IP',
+  'audit.actor.system': 'System',
+  'audit.actor.apiKey': 'API key',
+  'audit.actor.app': 'App {app}',
 } as const;
 
 export type MembersMessageKey = keyof typeof membersEn;

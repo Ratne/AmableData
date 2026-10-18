@@ -1,12 +1,13 @@
 import {
-  AD_PLATFORMS,
   OUTBOUND_KINDS,
+  OUTBOUND_TARGETS,
   outboundPayloadSchema,
   type AdPlatform,
   type OutboundConversionJob,
   type OutboundKind,
   type OutboundPayload,
   type OutboundStatus,
+  type OutboundTarget,
   type TrafficSource,
 } from '@amable/api-types';
 import { z } from 'zod';
@@ -23,7 +24,7 @@ import { newObjectId } from './config';
 export const OUTBOUND_CLAIM_LEASE_MS = 10 * 60_000;
 
 export const outboundEnqueueSchema = z.object({
-  platform: z.enum(AD_PLATFORMS),
+  platform: z.enum(OUTBOUND_TARGETS),
   connection_id: z.string().min(1).max(64),
   kind: z.enum(OUTBOUND_KINDS),
   payload: outboundPayloadSchema,
@@ -42,7 +43,7 @@ export type OutboundOutcome =
 interface OutboundRow {
   id: string;
   event_id: string;
-  platform: AdPlatform;
+  platform: OutboundTarget;
   connection_id: string;
   kind: OutboundKind;
   payload: string;
@@ -178,7 +179,7 @@ export function settleOutbound(
 
 export interface OutboundQuery {
   status?: OutboundStatus | undefined;
-  platform?: AdPlatform | undefined;
+  platform?: OutboundTarget | undefined;
   connection_id?: string | undefined;
   event_id?: string | undefined;
   /** `created_at` range, epoch ms (from inclusive, to exclusive). */
@@ -336,7 +337,7 @@ export function resendOutbound(db: SqlDb, ids: readonly string[], now: number): 
 }
 
 export const outboundResendFilterSchema = z.object({
-  platform: z.enum(AD_PLATFORMS).optional(),
+  platform: z.enum(OUTBOUND_TARGETS).optional(),
   connection_id: z.string().min(1).max(64).optional(),
   /** `created_at` range, epoch ms (from inclusive, to exclusive). */
   from: z.number().int().optional(),

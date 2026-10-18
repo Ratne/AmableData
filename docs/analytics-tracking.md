@@ -210,14 +210,18 @@ is the `tx` of a logged conversion is the same sale).
 Connections are created through OAuth (`/ads/connections/{platform}/connect` and `/callback`);
 grants are sealed in the installation database and refreshed before expiry. The core cron:
 
-- every hour pulls the current day's spend at campaign level and the new entities (id → name);
+- every hour pulls the current day's spend at every level (campaign, adset and ad: one call per
+  level) and the new entities (id → name, with their parent);
 - once per local day (from 03:00 in the account's time zone) reconciles the last 7 closed days;
 - stores what the platform reports (conversions, revenue) for the reported-vs-actual columns;
 - marks a connection `auth_expired` when the platform revokes it, alerts the workspace admins and
   keeps syncing the others.
 
-A manual backfill covers up to 90 days. Spend lands in `ad_spend_daily` (unique on platform +
-entity + day, overwritten by each pull). In development, without platform apps configured, a
+A manual backfill covers up to 90 days, at the same three levels. Spend lands in
+`ad_spend_daily` (unique on platform + entity + day, overwritten by each pull). The levels are
+never added up: grouped by campaign, adset or ad, the performance report reads one level per
+platform (the coarsest synced one at or below the grouping, so an ad row gets the ad's own
+spend); grouped by anything else, it reads the coarsest synced level (normally campaign). In development, without platform apps configured, a
 deterministic fake client stands in for every platform.
 
 ## Outbound conversions

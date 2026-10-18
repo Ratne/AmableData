@@ -482,7 +482,7 @@ function inboundContact(ctx: CrmContext, field: AddressField, address: string, i
     ...(email === undefined ? {} : { emails: [{ email }] }),
     ...(field === 'phone' ? { phones: [{ number: address }] } : {}),
     source_type: 'other',
-  }).id;
+  }, { requireAll: false }).id;
 }
 
 /** A message an app received from a contact. The same `external_id` twice is stored once. */

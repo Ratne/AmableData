@@ -142,8 +142,14 @@ export function getCompany(ctx: CrmContext, input: { id: string }): Company {
   return company;
 }
 
-export function createCompany(ctx: CrmContext, input: CreateCompanyInput): Company {
-  const custom = prepareValues(ctx, 'company', input.custom_fields, { requireAll: true });
+export function createCompany(
+  ctx: CrmContext,
+  input: CreateCompanyInput,
+  options: { requireAll?: boolean } = {},
+): Company {
+  const custom = prepareValues(ctx, 'company', input.custom_fields, {
+    requireAll: options.requireAll !== false,
+  });
   const id = ctx.newId();
   const now = ctx.now();
   const columns = ['id', 'created_by', 'created_at', 'updated_at'];
@@ -254,7 +260,7 @@ export function findOrCreateCompanyByName(ctx: CrmContext, name: string): string
     `SELECT id FROM crm_companies WHERE name = ? COLLATE NOCASE AND deleted_at IS NULL ORDER BY id LIMIT 1`,
     trimmed,
   )[0];
-  return existing?.id ?? createCompany(ctx, { name: trimmed }).id;
+  return existing?.id ?? createCompany(ctx, { name: trimmed }, { requireAll: false }).id;
 }
 
 // ------------------------------------------------------------- lead sources

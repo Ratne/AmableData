@@ -353,12 +353,17 @@ describe('connections', () => {
     expect(deliveries(id)).toMatchObject([{ status: 'success' }]);
   });
 
-  it('marks a submission failed when the CRM rejects it and keeps it for reprocessing', async () => {
+  it('creates the contact even when contacts have required custom fields', async () => {
     db.op('customFields.create', { entity: 'contact', data: { key: 'vat', label: 'VAT', type: 'TEXT', required: true } });
     const { submission_id: id } = await submit({ first_name: 'Ada', email: 'ada@example.com' });
-    expect(submissionRow(id)?.status).toBe('failed');
-    expect(db.db.all<{ error: string }>(`SELECT error FROM form_submissions WHERE id = ?`, id)[0]?.error).toContain('vat');
-    db.db.run(`UPDATE crm_custom_fields SET required = 0 WHERE key = 'vat'`);
+    expect(submissionRow(id)?.status).toBe('processed');
+  });
+
+  it('keeps a submission the CRM could not store for reprocessing', async () => {
+    db.db.raw.exec(`CREATE TRIGGER reject_contacts BEFORE INSERT ON crm_contacts BEGIN SELECT RAISE(ABORT, 'contacts are locked'); END`);
+    const { submission_id: id } = await submit({ first_name: 'Ada', email: 'ada@example.com' });
+    expect(submissionRow(id)?.status).toBe('pending');
+    db.db.raw.exec(`DROP TRIGGER reject_contacts`);
     const retried = await processSubmission(h.env, TENANT.id, id, { attempt: 1, final: true });
     expect(retried.status).toBe('processed');
   });

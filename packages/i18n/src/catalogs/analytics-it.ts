@@ -1081,7 +1081,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.sources.conversion.removeMapping': 'Rimuovi evento',
   'analytics.sources.conversion.postbackUrl': 'Postback URL',
   'analytics.sources.conversion.postbackHint':
-    'Chiamato a ogni conversione. Token: {external} {campaign} {payout} {txid} {hit} {data-nome}.',
+    'Chiamato a ogni conversione, salvo quelle escluse da throttle, ricavo zero o consenso; le chiamate fallite vengono ritentate e compaiono in Ads → Conversioni inviate. Token: {external} {campaign} {payout} {txid} {hit} {data-nome} (nome di un campo personalizzato).',
   'analytics.sources.conversion.noneHint':
     'Le conversioni sono registrate e riportate ma non inviate alla sorgente.',
   'analytics.sources.costType': 'Tipo di costo',
@@ -1110,6 +1110,7 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.ads.connections.platform.meta': 'Meta',
   'analytics.ads.connections.platform.google': 'Google Ads',
   'analytics.ads.connections.platform.tiktok': 'TikTok',
+  'analytics.ads.connections.platform.postback': 'URL di postback',
   'analytics.ads.connections.connect': 'Connetti',
   'analytics.ads.connections.reconnect': 'Riconnetti',
   'analytics.ads.connections.connected': 'Account pubblicitario connesso',
@@ -1120,6 +1121,21 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.ads.connections.status.error': 'Errore',
   'analytics.ads.connections.status.disconnected': 'Disconnesso',
   'analytics.ads.connections.lastSync': 'sincronizzato {when}',
+  'analytics.ads.pixel.button': 'Conversioni',
+  'analytics.ads.pixel.title': 'Conversioni lato server',
+  'analytics.ads.pixel.hint.meta':
+    'Le conversioni vengono inviate con la Conversions API a questo dataset. Trovi l’ID in Gestione eventi → Origini dati (va bene anche l’ID del pixel).',
+  'analytics.ads.pixel.hint.tiktok':
+    'Le conversioni vengono inviate con la Events API a questo pixel. Trovi il codice in Gestione eventi → Eventi web.',
+  'analytics.ads.pixel.id.meta': 'ID dataset (pixel)',
+  'analytics.ads.pixel.id.tiktok': 'Codice pixel',
+  'analytics.ads.pixel.testCode': 'Codice evento di test (facoltativo)',
+  'analytics.ads.pixel.testCodeHint':
+    'Finché è impostato, le conversioni finiscono nello strumento di test della piattaforma invece che nei dati reali. Svuotalo quando hai finito i test.',
+  'analytics.ads.pixel.testMode': 'modalità test',
+  'analytics.ads.pixel.missing':
+    'Nessun dataset o pixel impostato: le conversioni lato server verso questo account non possono partire.',
+  'analytics.ads.pixel.saved': 'Impostazioni conversioni salvate',
   'analytics.ads.connections.backfill': 'Reimporta',
   'analytics.ads.connections.backfillTitle': 'Reimporta la spesa',
   'analytics.ads.connections.backfillHint':

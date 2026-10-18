@@ -137,6 +137,20 @@ describe('ad connections API', () => {
     ).toBe(404);
   });
 
+  it('sets the dataset and test code the server-side conversions go to', async () => {
+    const url = `${BASE}/ads/connections/${connectionId}?site_id=${siteId}`;
+    expect((await viewer.patch(url, { pixel_id: '123456789012345' })).status).toBe(403);
+    expect((await owner.patch(url, { pixel_id: 'bad id!' })).status).toBe(422);
+    const res = await owner.patch(url, { pixel_id: '123456789012345', test_event_code: 'TEST123' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ pixel_id: '123456789012345', test_event_code: 'TEST123' });
+    const stored = await ns.store(`site:${siteId}`).getAdConnection(connectionId);
+    expect(stored?.metadata).toMatchObject({ pixel_id: '123456789012345', test_event_code: 'TEST123' });
+    expect(stored?.metadata['grant_id']).toBeDefined();
+    const cleared = await owner.patch(url, { test_event_code: null });
+    expect(cleared.body).toMatchObject({ pixel_id: '123456789012345', test_event_code: null });
+  });
+
   it('isolates tenants', async () => {
     expect((await stranger.get(`${OTHER}/ads/connections?site_id=${siteId}`)).status).toBe(404);
     expect((await stranger.post(`${OTHER}/ads/connections/meta/connect?site_id=${siteId}`)).status).toBe(404);

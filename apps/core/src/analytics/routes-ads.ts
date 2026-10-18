@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { isProviderError } from '@amable/ads-providers';
-import { AD_PLATFORMS, adConnectionSchema } from '@amable/api-types';
+import { AD_PLATFORMS, adConnectionSchema, adConnectionSettingsSchema } from '@amable/api-types';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { crmRoute, json, jsonBody } from '../crm/api/core';
@@ -18,6 +18,7 @@ import {
   startAdsConnect,
   syncAdConnection,
   toAdConnection,
+  updateAdConnectionSettings,
   type AdsSyncPorts,
   type SiteRef,
 } from './ads-sync';
@@ -190,6 +191,30 @@ export function registerAdsRoutes(api: OpenAPIHono<AppEnv>): void {
       await disconnectAdConnection(ports, site.id, conn);
       await audit(c, 'analytics.ads_disconnected', { target: id, details: { site: site.id } });
       return c.json({ id, deleted: true as const }, 200);
+    },
+  );
+
+  api.openapi(
+    crmRoute('analytics:configure', {
+      method: 'patch',
+      path: '/ads/connections/{id}',
+      tags,
+      summary: 'Set where the server-side conversions of a Meta/TikTok account go (dataset or pixel ID, test code)',
+      request: { params: idParam, query: siteQuery, body: jsonBody(adConnectionSettingsSchema) },
+      responses: { 200: json(adConnectionSchema, 'The connection') },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const { site, ports } = await siteOf(c);
+      const conn = await adsStub(ports.ns, site.id).getAdConnection(id);
+      if (conn === null) throw new CrmError('not_found', 'connection not found');
+      try {
+        const updated = await updateAdConnectionSettings(ports, site.id, conn, c.req.valid('json'));
+        await audit(c, 'analytics.ads_settings_updated', { target: id, details: { site: site.id } });
+        return c.json(toAdConnection(updated), 200);
+      } catch (error) {
+        return providerFailure(error);
+      }
     },
   );
 

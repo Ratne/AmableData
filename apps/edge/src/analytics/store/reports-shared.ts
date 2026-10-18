@@ -200,9 +200,8 @@ export interface SourceInfo {
   adsetSlot: string | null;
   /** Tracking field slot holding the ad / creative id. */
   adSlot: string | null;
-  /** Multipliers of the source's cost / revenue modifiers (1 = none). */
+  /** Multiplier of the source's cost modifier for synced ad spend (1 = none). */
   costFactor: number;
-  revenueFactor: number;
 }
 
 const modifierFactor = (pct: number | null | undefined): number =>
@@ -253,7 +252,6 @@ export function loadSources(db: SqlDb): Map<string, SourceInfo> {
       adsetSlot: slots.adset,
       adSlot: slots.ad,
       costFactor: modifierFactor(s.cost_modifier_pct),
-      revenueFactor: modifierFactor(s.revenue_modifier_pct),
     });
   }
   return out;

@@ -7,4 +7,10 @@ export const membersRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/members'), 'MembersPage'),
 });
 
-export const membersRoutes = [membersRoute] as const;
+export const auditLogRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'settings/audit-log',
+  component: lazyRouteComponent(() => import('./pages/audit-log'), 'AuditLogPage'),
+});
+
+export const membersRoutes = [membersRoute, auditLogRoute] as const;

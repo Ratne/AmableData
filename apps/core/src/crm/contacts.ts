@@ -130,7 +130,7 @@ function prepareContact(
   ctx: CrmContext,
   input: UpdateContactInput,
   mode: 'create' | 'update',
-  options: { lenient?: boolean; listDelimiter?: string } = {},
+  options: { lenient?: boolean; listDelimiter?: string; requireAll?: boolean } = {},
 ): PreparedContact {
   assertRef(ctx, 'company', input.company_id, 'company_id');
   assertRef(ctx, 'lead_source', input.lead_source_id, 'lead_source_id');
@@ -140,7 +140,7 @@ function prepareContact(
     addresses: input.addresses,
     customFields: prepareValues(ctx, 'contact', input.custom_fields, {
       ...options,
-      requireAll: mode === 'create',
+      requireAll: mode === 'create' && options.requireAll !== false,
     }),
   };
 }
@@ -379,6 +379,8 @@ export interface WriteOptions {
   listDelimiter?: string;
   /** Skip the event/index side effects already handled by a caller (merge). */
   silent?: boolean;
+  /** False for contacts the system creates (forms, bookings, inbound messages): nobody is there to fill required fields. */
+  requireAll?: boolean;
 }
 
 export function createContact(

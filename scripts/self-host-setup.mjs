@@ -12,11 +12,14 @@
  *    with its service binding to core, and sets the secrets that are not set yet
  *    (PASSWORD_PEPPER, AUTH_ENCRYPTION_KEY, EMAIL_TOKEN_SECRET, EDGE_GATEWAY_SECRET)
  *    to fresh random values — existing secrets are never overwritten (a new
- *    pepper would lock every user out);
+ *    pepper would lock every user out), except EDGE_GATEWAY_SECRET when only one
+ *    of the two workers has it (e.g. core deployed with the button): both get a
+ *    new shared value, since Cloudflare never reveals the existing one;
  * 5. with --owner-email: once the app answered /api/health (migrations applied),
  *    creates the first workspace and an owner invitation in D1 and prints the
  *    invitation link (account creation + mandatory 2FA happen in the browser).
- *    Refused when the installation already has users.
+ *    Rerunning it before anyone signed up replaces the link (the old one stops
+ *    working); refused once the installation has users.
  *
  * Options:
  *   --app-origin <url>    public origin of the app (default: the workers.dev URL you pass later)
@@ -123,12 +126,15 @@ const sqlString = (value) => `'${String(value).replace(/'/g, "''")}'`;
  * installation without users, so rerunning the script can never add an owner later.
  */
 export function bootstrapOwnerSql({ tenantId, slug, name, inviteId, email, tokenHash, now, expiresAt }) {
-  const empty = `NOT EXISTS (SELECT 1 FROM users) AND NOT EXISTS (SELECT 1 FROM tenants)`;
+  const noUsers = `NOT EXISTS (SELECT 1 FROM users)`;
+  const firstTenant = `(SELECT id FROM tenants ORDER BY created_at, id LIMIT 1)`;
   return [
-    `INSERT INTO tenants (id, slug, name, created_at) SELECT ${sqlString(tenantId)}, ${sqlString(slug)}, ${sqlString(name)}, ${now} WHERE ${empty};`,
+    `INSERT INTO tenants (id, slug, name, created_at) SELECT ${sqlString(tenantId)}, ${sqlString(slug)}, ${sqlString(name)}, ${now} WHERE ${noUsers} AND NOT EXISTS (SELECT 1 FROM tenants);`,
+    // A rerun before anyone signed up (link lost or expired) replaces the bootstrap invitation.
+    `DELETE FROM invites WHERE role = 'owner' AND invited_by IS NULL AND ${noUsers};`,
     `INSERT INTO invites (id, tenant_id, email, role, token_hash, invited_by, locale, created_at, expires_at) ` +
-      `SELECT ${sqlString(inviteId)}, ${sqlString(tenantId)}, ${sqlString(email)}, 'owner', ${sqlString(tokenHash)}, NULL, 'en', ${now}, ${expiresAt} ` +
-      `WHERE NOT EXISTS (SELECT 1 FROM users) AND EXISTS (SELECT 1 FROM tenants WHERE id = ${sqlString(tenantId)});`,
+      `SELECT ${sqlString(inviteId)}, ${firstTenant}, ${sqlString(email)}, 'owner', ${sqlString(tokenHash)}, NULL, 'en', ${now}, ${expiresAt} ` +
+      `WHERE ${noUsers} AND EXISTS (SELECT 1 FROM tenants);`,
   ].join('\n');
 }
 
@@ -211,15 +217,40 @@ function provision(wrangler, dryRun) {
   return d1Id;
 }
 
-function setSecrets(wrangler, config, names, shared) {
-  const existing = secretNamesFromList(wrangler(['secret', 'list', '--format', 'json', '--config', config], { allowFailure: true }).stdout);
-  for (const name of names) {
-    if (existing.has(name)) {
-      console.log(`  ${name}: already set, kept`);
-      continue;
+/**
+ * Secrets to write per worker, given the names already set on each. A secret
+ * both workers need must hold the same value on both: when only one has it,
+ * both are rewritten with a new value.
+ */
+export function secretPlan(existing) {
+  const plan = { core: [], edge: [] };
+  for (const worker of ['core', 'edge']) {
+    for (const name of SECRETS[worker]) {
+      const sharedWith = worker === 'core' ? 'edge' : 'core';
+      const shared = SECRETS[sharedWith].includes(name);
+      const missing = !existing[worker].has(name);
+      if (missing || (shared && !existing[sharedWith].has(name))) plan[worker].push(name);
     }
-    shared[name] ??= randomBytes(32).toString('base64');
-    wrangler(['secret', 'put', name, '--config', config], { input: shared[name] });
+  }
+  return plan;
+}
+
+function setSecrets(wrangler) {
+  const list = (config) =>
+    secretNamesFromList(wrangler(['secret', 'list', '--format', 'json', '--config', config], { allowFailure: true }).stdout);
+  const existing = { core: list(CORE_CONFIG), edge: list(EDGE_CONFIG) };
+  const plan = secretPlan(existing);
+  const values = {};
+  for (const [worker, config] of [['core', CORE_CONFIG], ['edge', EDGE_CONFIG]]) {
+    for (const name of SECRETS[worker]) {
+      if (!plan[worker].includes(name)) {
+        console.log(`  ${worker} ${name}: already set, kept`);
+        continue;
+      }
+      if (existing[worker].has(name)) console.log(`  ${worker} ${name}: missing on the other worker, both rotated`);
+      values[name] ??= randomBytes(32).toString('base64');
+      wrangler(['secret', 'put', name, '--config', config], { input: values[name] });
+    }
   }
 }
 
@@ -289,9 +320,7 @@ async function main() {
   wrangler(['deploy', '--config', EDGE_BOOTSTRAP_CONFIG, ...versionVar]);
   wrangler(['deploy', '--config', CORE_CONFIG, ...versionVar]);
   wrangler(['deploy', '--config', EDGE_CONFIG, ...versionVar]);
-  const shared = {};
-  setSecrets(wrangler, CORE_CONFIG, SECRETS.core, shared);
-  setSecrets(wrangler, EDGE_CONFIG, SECRETS.edge, shared);
+  setSecrets(wrangler);
 
   if (options.ownerEmail === null) {
     console.log('\n4/4 No --owner-email: rerun with --owner-email you@example.com to create the first owner.');
@@ -313,7 +342,7 @@ async function main() {
   });
   wrangler(['d1', 'execute', D1_NAME, '--remote', '--config', CORE_CONFIG, '--command', sql]);
   console.log(`\nDone. Open this link within 7 days to create the owner account (shown once):\n  ${appOrigin}/invite#token=${token}`);
-  console.log('If the installation already had users, nothing was created and the link does not work.');
+  console.log('Any earlier first-owner link stops working. If the installation already had users, nothing was created and this link does not work.');
 }
 
 /** The first request applies the installation migrations (tables must exist before the bootstrap). */

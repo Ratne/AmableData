@@ -1081,7 +1081,7 @@ export const analyticsEn = {
   'analytics.sources.conversion.removeMapping': 'Remove event',
   'analytics.sources.conversion.postbackUrl': 'Postback URL',
   'analytics.sources.conversion.postbackHint':
-    'Called on every conversion. Tokens: {external} {campaign} {payout} {txid} {hit} {data-name}.',
+    'Called on every conversion, unless the throttle, zero-revenue or consent rules skip it; failed calls are retried and listed under Ads → Conversions sent. Tokens: {external} {campaign} {payout} {txid} {hit} {data-name} (name of a custom field).',
   'analytics.sources.conversion.noneHint':
     'Conversions are recorded and reported but not sent back to the source.',
   'analytics.sources.costType': 'Cost type',
@@ -1110,6 +1110,7 @@ export const analyticsEn = {
   'analytics.ads.connections.platform.meta': 'Meta',
   'analytics.ads.connections.platform.google': 'Google Ads',
   'analytics.ads.connections.platform.tiktok': 'TikTok',
+  'analytics.ads.connections.platform.postback': 'Postback URL',
   'analytics.ads.connections.connect': 'Connect',
   'analytics.ads.connections.reconnect': 'Reconnect',
   'analytics.ads.connections.connected': 'Ad account connected',
@@ -1120,6 +1121,21 @@ export const analyticsEn = {
   'analytics.ads.connections.status.error': 'Error',
   'analytics.ads.connections.status.disconnected': 'Disconnected',
   'analytics.ads.connections.lastSync': 'synced {when}',
+  'analytics.ads.pixel.button': 'Conversions',
+  'analytics.ads.pixel.title': 'Server-side conversions',
+  'analytics.ads.pixel.hint.meta':
+    'Conversions are sent through the Conversions API to this dataset. Find its ID in Events Manager → Data sources (the pixel ID works too).',
+  'analytics.ads.pixel.hint.tiktok':
+    'Conversions are sent through the Events API to this pixel. Find its code in Events Manager → Web events.',
+  'analytics.ads.pixel.id.meta': 'Dataset (pixel) ID',
+  'analytics.ads.pixel.id.tiktok': 'Pixel code',
+  'analytics.ads.pixel.testCode': 'Test event code (optional)',
+  'analytics.ads.pixel.testCodeHint':
+    'While set, conversions land in the platform test tool instead of the real data. Clear it when you are done testing.',
+  'analytics.ads.pixel.testMode': 'test mode',
+  'analytics.ads.pixel.missing':
+    'No dataset or pixel set: server-side conversions to this account cannot be sent.',
+  'analytics.ads.pixel.saved': 'Conversion settings saved',
   'analytics.ads.connections.backfill': 'Backfill',
   'analytics.ads.connections.backfillTitle': 'Re-import spend',
   'analytics.ads.connections.backfillHint':

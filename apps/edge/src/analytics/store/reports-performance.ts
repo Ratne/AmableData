@@ -144,8 +144,6 @@ class Rows {
 
 const costFactorOf = (ctx: PerformanceContext, source: string | null | undefined): number =>
   source === null || source === undefined ? 1 : (ctx.sources.get(source)?.costFactor ?? 1);
-const revenueFactorOf = (ctx: PerformanceContext, source: string | null | undefined): number =>
-  source === null || source === undefined ? 1 : (ctx.sources.get(source)?.revenueFactor ?? 1);
 
 function parentDim(groupBy: PerformanceGroupBy): PerformanceGroupBy | null {
   if (groupBy === 'ad') return 'adset';
@@ -222,10 +220,11 @@ function clickLog(
   ): void => {
     out.push({ dims, entrances: g.entrances });
     if (!passes(dims, filters)) return;
+    // Touch costs are stored with the source's cost modifier already applied.
     const touchCost =
       dims.platform !== null && dims.platform !== undefined && spendPlatforms.has(dims.platform)
         ? 0
-        : Math.round(g.cost * costFactorOf(ctx, dims.source));
+        : g.cost;
     rows.add(dims[groupBy] ?? null, parent === null ? null : (dims[parent] ?? null), (a) => {
       a.visits += g.entrances + (viewsAreVisits ? g.views : 0);
       a.clicks += g.clicks;
@@ -582,7 +581,7 @@ function attributeInto(
         key,
         parent === null ? null : (dims[parent] ?? null),
         weight,
-        Math.round((amounts[i] ?? 0) * revenueFactorOf(ctx, t.source)),
+        amounts[i] ?? 0,
         costs[i] ?? 0,
       );
     });

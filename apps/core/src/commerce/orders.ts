@@ -281,7 +281,9 @@ export function createOrderRow(
 ): OrderRow {
   assertRef(ctx, 'contact', input.contact_id, 'contact_id');
   assertRef(ctx, 'company', input.company_id, 'company_id');
-  const custom = prepareValues(ctx, 'order', input.custom_fields, { requireAll: true });
+  const custom = prepareValues(ctx, 'order', input.custom_fields, {
+    requireAll: options.source !== 'subscription',
+  });
   const resolved =
     options.lines === undefined
       ? resolveLines(ctx, input.items, input.currency)

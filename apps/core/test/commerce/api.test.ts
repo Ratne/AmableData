@@ -78,7 +78,7 @@ describe('e-commerce REST v2 permissions by role', () => {
     }
   });
 
-  it('lets sales create manual orders and payments, but not refunds or subscriptions', async () => {
+  it('lets sales create manual orders, payments and subscriptions, but not refunds', async () => {
     const sales = clients.sales;
     const order = await sales.post(`${BASE}/orders`, {
       contact_id: contactId,
@@ -98,7 +98,7 @@ describe('e-commerce REST v2 permissions by role', () => {
     expect(
       (await sales.post(`${BASE}/subscriptions`, { contact_id: contactId, plan_id: planId }))
         .status,
-    ).toBe(403);
+    ).toBe(201);
 
     for (const role of ['marketer', 'analyst', 'viewer'] as const) {
       const denied = await clients[role].post(`${BASE}/orders`, {

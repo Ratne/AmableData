@@ -18,6 +18,20 @@ export interface PendingInvite {
   readonly expiresAt: number;
 }
 
+export interface AuditEntry {
+  readonly id: string;
+  readonly actorUserId: string | null;
+  /** `user`, `api_key`, `app` or `system`; null on rows older than the column. */
+  readonly actorType: string | null;
+  readonly actorAppId: string | null;
+  readonly action: string;
+  readonly target: string | null;
+  /** JSON object, or null. */
+  readonly details: string | null;
+  readonly ip: string | null;
+  readonly createdAt: number;
+}
+
 export interface TenantMe {
   readonly tenant: { readonly id: string; readonly slug: string; readonly name: string };
   readonly role: Role;
@@ -41,6 +55,10 @@ export function membersApi(slug: string) {
       send<{ id: string }>('POST', '/invites', input),
     revokeInvite: (id: string) =>
       apiFetch<{ ok: true }>(`${base}/invites/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    audit: (before: number | null, limit = 50) =>
+      apiFetch<{ entries: AuditEntry[] }>(
+        `${base}/audit?limit=${limit}${before === null ? '' : `&before=${before}`}`,
+      ),
   };
 }
 
@@ -48,6 +66,7 @@ export const memberKeys = {
   me: (slug: string) => ['members', slug, 'me'] as const,
   members: (slug: string) => ['members', slug, 'list'] as const,
   invites: (slug: string) => ['members', slug, 'invites'] as const,
+  audit: (slug: string) => ['members', slug, 'audit'] as const,
 };
 
 export function useMembersApi() {

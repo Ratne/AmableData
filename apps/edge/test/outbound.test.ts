@@ -321,6 +321,92 @@ describe('enqueueForConversion', () => {
   });
 });
 
+describe('traffic source postback URL', () => {
+  function postbackSource(s: Setup, overrides: Partial<TrafficSourceInput> = {}): TrafficSource {
+    const r = s.store.createTrafficSource({
+      name: 'Network',
+      template: 'custom',
+      reserved_fields: {
+        campaign: { url_param: 'cid', source_token: '' },
+        external: { url_param: 'clickid', source_token: '', append: false },
+      },
+      fields: [{ slot: 'c1', name: 'Sub', url_param: 'sub', source_token: '' }],
+      conversion: {
+        postback_url: 'https://net.example/pb?click={external}&c={campaign}&p={payout}&tx={txid}&h={hit}&s={data-sub}&x={nope}',
+        mapping: [],
+      },
+      revenue_modifier_pct: -10,
+      ...overrides,
+    });
+    if (!r.ok) throw new Error(r.error.message);
+    return r.value;
+  }
+
+  it('fills the tokens from the conversion touch and sends a GET, retrying server errors', async () => {
+    const s = setup();
+    const src = postbackSource(s);
+    s.store.recordTouch({
+      id: 'hit_pb',
+      ts: T0 - 5000,
+      visitor_id: 'visitor-1',
+      session_id: 'session-1',
+      funnel_id: 'fg_1',
+      node_id: 'n1',
+      traffic_source_id: src.id,
+      kind: 'view',
+      campaign: 'spring sale',
+      external_click_id: 'CLK-1',
+      fields: { c1: 'a&b' },
+    });
+    const cv = s.store.recordConversionFromPostback({ hit: 'hit_pb', tx: 'pb-7', revenue_minor: 5000, currency: 'EUR' });
+    if (!cv.ok) throw new Error('conversion');
+    const r = await s.store.enqueueConversionOutbound({ conversion_id: cv.value.id, consent: true });
+    expect(r).toMatchObject({ ok: true, value: { status: 'enqueued' } });
+    const jobId = r.ok && r.value.status === 'enqueued' ? r.value.job_id : '';
+    const job = s.store.getOutbound(jobId);
+    expect(job).toMatchObject({ platform: 'postback', connection_id: src.id, status: 'pending' });
+    expect(job?.payload.url).toBe('https://net.example/pb?click=CLK-1&c=spring%20sale&p=45&tx=pb-7&h=hit_pb&s=a%26b&x=');
+
+    const calls: string[] = [];
+    const statuses = [503, 200];
+    const fetcher = (async (url: string) => {
+      calls.push(url);
+      return new Response('ok', { status: statuses.shift() ?? 200 });
+    }) as unknown as typeof fetch;
+    const resolver = fakeResolver({});
+    expect(await processOutboundBatch(s.store, resolver, T0, undefined, fetcher)).toMatchObject({ retried: 1 });
+    expect(s.store.getOutbound(jobId)).toMatchObject({ status: 'pending', last_error: 'http_503' });
+    expect(await processOutboundBatch(s.store, resolver, T0 + OUTBOUND_BACKOFF_MS[0], undefined, fetcher)).toMatchObject({
+      sent: 1,
+    });
+    expect(s.store.getOutbound(jobId)?.status).toBe('sent');
+    expect(calls).toHaveLength(2);
+    expect(resolver.calls).toEqual([]);
+  });
+
+  it('applies the source gates, dedups, and fails on client errors', async () => {
+    const s = setup();
+    const src = postbackSource(s, { skip_zero_revenue_postbacks: true });
+    const zero = await enqueueForConversion(s.store, {
+      conversion: conversion(src, { id: 'cv_zero', tx: 'zero', revenue_minor: 0 }),
+      source: src,
+      consent: true,
+      rng: never,
+    });
+    expect(zero).toMatchObject({ status: 'skipped', reason: 'zero_revenue' });
+    const input = { conversion: conversion(src), source: src, consent: true, rng: never };
+    const first = await enqueueForConversion(s.store, input);
+    expect(first.status).toBe('enqueued');
+    expect((await enqueueForConversion(s.store, input)).status).toBe('duplicate');
+    const fetcher = (async () => new Response('no', { status: 404 })) as unknown as typeof fetch;
+    await processOutboundBatch(s.store, fakeResolver({}), T0, undefined, fetcher);
+    expect(first.status === 'enqueued' ? s.store.getOutbound(first.job_id) : null).toMatchObject({
+      status: 'failed',
+      last_error: 'http_404',
+    });
+  });
+});
+
 describe('processOutboundBatch', () => {
   async function enqueued(s: Setup, platform: AdPlatform, tx = 'order-1'): Promise<string> {
     const src = s.store.listTrafficSources().find((t) => t.conversion.platform === platform) ?? s.source(platform);

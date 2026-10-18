@@ -7,6 +7,8 @@ import type { SqlDb } from '../crm/db/sql';
  * kept free of Workers APIs so it runs under vitest:
  * - caches the calendar's external busy time (Google Calendar free/busy
  *   through the central OAuth tokens; dev stub tokens never reach Google);
+ * - writes each booking as an event of the connected Google calendar
+ *   (created, moved, deleted with the booking; retried by the alarm);
  * - stores reminder emails and sends them when due (the DO alarm);
  * - keeps an availability version, bumped on every change and pushed to the
  *   open booking widgets.
@@ -36,6 +38,34 @@ export interface ReminderJob {
   request: EmailSendRequest;
 }
 
+/** Google Calendar event of a booking. */
+export interface CalendarEventData {
+  summary: string;
+  description: string;
+  location: string;
+  start: number;
+  end: number;
+  timeZone: string;
+  attendee: { email: string; name: string } | null;
+}
+
+/** Desired state of a booking's event in this calendar: `event: null` removes it. */
+export interface CalendarEventChange {
+  tenantId: string;
+  /** This calendar, when the event belongs here; null removes it from wherever it was written. */
+  ref: CalendarDoRef | null;
+  event: CalendarEventData | null;
+}
+
+export interface CalendarEventState {
+  bookingId: string;
+  /** Google event id while the event exists in Google. */
+  eventId: string | null;
+  pending: boolean;
+  attempts: number;
+  lastError: string | null;
+}
+
 export interface CalendarDeps {
   db: SqlDb;
   now(): number;
@@ -52,6 +82,16 @@ export const BUSY_TTL_MS = 5 * 60_000;
 /** Window of the external busy time kept in cache. */
 export const BUSY_WINDOW_MS = 120 * 86_400_000;
 const GOOGLE_FREEBUSY_URL = 'https://www.googleapis.com/calendar/v3/freeBusy';
+const GOOGLE_CALENDARS_URL = 'https://www.googleapis.com/calendar/v3/calendars';
+/** Delay before the next event write attempt, indexed by the attempts already made − 1. */
+export const EVENT_RETRY_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 12 * 3_600_000] as const;
+
+/** Google event id of a booking: hex of its id (event ids only allow `a-v` and `0-9`). */
+export function googleEventId(bookingId: string): string {
+  return `bk${[...new TextEncoder().encode(bookingId)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+
+type WriteOutcome = { ok: true } | { ok: false; retry: boolean; error: string };
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
@@ -64,6 +104,15 @@ const SCHEMA = [
     sent_at INTEGER
   )`,
   `CREATE INDEX IF NOT EXISTS reminders_due ON reminders (fire_at) WHERE sent_at IS NULL`,
+  `CREATE TABLE IF NOT EXISTS calendar_events (
+    booking_id TEXT PRIMARY KEY,
+    account_id TEXT,
+    calendar TEXT,
+    desired TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_at INTEGER,
+    last_error TEXT
+  )`,
 ];
 
 export class CalendarCore {
@@ -191,10 +240,19 @@ export class CalendarCore {
     return { intervals, sync };
   }
 
-  /** Replaces the pending reminders of a booking (empty list: cancel them) and bumps the version. */
-  async bookingChanged(bookingId: string, reminders: readonly ReminderJob[]): Promise<number> {
+  /**
+   * Replaces the pending reminders of a booking (empty list: cancel them),
+   * writes its Google event when `change` is given, and bumps the version.
+   */
+  async bookingChanged(
+    bookingId: string,
+    reminders: readonly ReminderJob[],
+    change?: CalendarEventChange,
+  ): Promise<number> {
     const now = this.deps.now();
+    let write = false;
     this.deps.db.transaction(() => {
+      if (change !== undefined) write = this.queueEvent(bookingId, change, now);
       this.deps.db.run(`DELETE FROM reminders WHERE booking_id = ? AND sent_at IS NULL`, bookingId);
       for (const job of reminders) {
         if (job.fireAt <= now) continue;
@@ -208,8 +266,161 @@ export class CalendarCore {
         );
       }
     });
+    if (write) await this.writeEvent(bookingId);
     await this.deps.setAlarm(this.nextAlarm());
     return this.bump();
+  }
+
+  /** False when there is nothing to do (removing an event this calendar never had). */
+  private queueEvent(bookingId: string, change: CalendarEventChange, now: number): boolean {
+    const known = this.deps.db.all<{ account_id: string | null }>(
+      `SELECT account_id FROM calendar_events WHERE booking_id = ?`,
+      bookingId,
+    )[0];
+    const wanted = change.event !== null && change.ref !== null && change.ref.googleAccountId !== null;
+    if (!wanted && (known === undefined || known.account_id === null)) {
+      if (known !== undefined) this.deps.db.run(`DELETE FROM calendar_events WHERE booking_id = ?`, bookingId);
+      return false;
+    }
+    this.deps.db.run(
+      `INSERT INTO calendar_events (booking_id, desired, attempts, next_at) VALUES (?, ?, 0, ?)
+       ON CONFLICT(booking_id) DO UPDATE SET desired = excluded.desired, attempts = 0, next_at = excluded.next_at, last_error = NULL`,
+      bookingId,
+      JSON.stringify(change),
+      now,
+    );
+    return true;
+  }
+
+  eventState(bookingId: string): CalendarEventState | null {
+    const row = this.deps.db.all<{ account_id: string | null; desired: string | null; attempts: number; last_error: string | null }>(
+      `SELECT account_id, desired, attempts, last_error FROM calendar_events WHERE booking_id = ?`,
+      bookingId,
+    )[0];
+    if (row === undefined) return null;
+    return {
+      bookingId,
+      eventId: row.account_id === null ? null : googleEventId(bookingId),
+      pending: row.desired !== null,
+      attempts: row.attempts,
+      lastError: row.last_error,
+    };
+  }
+
+  private async googleToken(ref: { tenantId: string; accountId: string }): Promise<{ token: string | null; outcome?: WriteOutcome }> {
+    if (!this.deps.oauth.available) return { token: null, outcome: { ok: false, retry: false, error: 'OAuth is not available on this installation' } };
+    const token = await this.deps.oauth.getAccessToken({ tenantId: ref.tenantId, provider: 'google', accountId: ref.accountId });
+    if (token === null) return { token: null, outcome: { ok: false, retry: false, error: 'the Google account is no longer connected' } };
+    if (token.stub) return { token: null, outcome: { ok: true } };
+    if (!token.scopes.includes(OAUTH_SCOPES.calendar)) {
+      return { token: null, outcome: { ok: false, retry: false, error: 'missing calendar.events scope: reconnect Google' } };
+    }
+    return { token: token.accessToken };
+  }
+
+  private async googleCall(token: string, method: string, url: string, body?: unknown): Promise<Response> {
+    return this.deps.fetch(url, {
+      method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  }
+
+  private static failure(response: Response): WriteOutcome {
+    const retry = response.status === 401 || response.status === 429 || response.status >= 500;
+    return { ok: false, retry, error: `Google answered ${String(response.status)}` };
+  }
+
+  private async upsertGoogleEvent(tenantId: string, accountId: string, calendar: string, bookingId: string, event: CalendarEventData): Promise<WriteOutcome> {
+    const { token, outcome } = await this.googleToken({ tenantId, accountId });
+    if (token === null) return outcome ?? { ok: true };
+    const id = googleEventId(bookingId);
+    const base = `${GOOGLE_CALENDARS_URL}/${encodeURIComponent(calendar)}/events`;
+    const body = {
+      id,
+      status: 'confirmed',
+      summary: event.summary,
+      description: event.description,
+      location: event.location,
+      start: { dateTime: new Date(event.start).toISOString(), timeZone: event.timeZone },
+      end: { dateTime: new Date(event.end).toISOString(), timeZone: event.timeZone },
+      attendees: event.attendee === null ? [] : [{ email: event.attendee.email, displayName: event.attendee.name }],
+      extendedProperties: { private: { amableBookingId: bookingId } },
+    };
+    // Update first: it also revives an event deleted by an earlier cancellation (same id).
+    const updated = await this.googleCall(token, 'PUT', `${base}/${id}?sendUpdates=none`, body);
+    if (updated.ok) return { ok: true };
+    if (updated.status !== 404) return CalendarCore.failure(updated);
+    const inserted = await this.googleCall(token, 'POST', `${base}?sendUpdates=none`, body);
+    return inserted.ok ? { ok: true } : CalendarCore.failure(inserted);
+  }
+
+  private async deleteGoogleEvent(tenantId: string, accountId: string, calendar: string, bookingId: string): Promise<WriteOutcome> {
+    const { token, outcome } = await this.googleToken({ tenantId, accountId });
+    if (token === null) return outcome?.ok === false && !outcome.retry ? { ok: true } : (outcome ?? { ok: true });
+    const url = `${GOOGLE_CALENDARS_URL}/${encodeURIComponent(calendar)}/events/${googleEventId(bookingId)}?sendUpdates=none`;
+    const response = await this.googleCall(token, 'DELETE', url);
+    return response.ok || response.status === 404 || response.status === 410 ? { ok: true } : CalendarCore.failure(response);
+  }
+
+  /** Brings a booking's Google event to its desired state; failures are retried by the alarm. */
+  private async writeEvent(bookingId: string): Promise<void> {
+    const row = this.deps.db.all<{ account_id: string | null; calendar: string | null; desired: string | null; attempts: number }>(
+      `SELECT account_id, calendar, desired, attempts FROM calendar_events WHERE booking_id = ?`,
+      bookingId,
+    )[0];
+    if (row === undefined || row.desired === null) return;
+    const change = JSON.parse(row.desired) as CalendarEventChange;
+    const ref = change.ref;
+    const target =
+      change.event !== null && ref !== null && ref.googleAccountId !== null
+        ? { tenantId: change.tenantId, accountId: ref.googleAccountId, calendar: ref.googleCalendarId ?? 'primary' }
+        : null;
+    let written: { accountId: string | null; calendar: string | null } = { accountId: row.account_id, calendar: row.calendar };
+    let outcome: WriteOutcome = { ok: true };
+    try {
+      const moved = row.account_id !== null && (target === null || target.accountId !== row.account_id || target.calendar !== row.calendar);
+      if (moved && row.account_id !== null) {
+        outcome = await this.deleteGoogleEvent(change.tenantId, row.account_id, row.calendar ?? 'primary', bookingId);
+        if (outcome.ok) written = { accountId: null, calendar: null };
+      }
+      if (outcome.ok && target !== null && change.event !== null) {
+        outcome = await this.upsertGoogleEvent(target.tenantId, target.accountId, target.calendar, bookingId, change.event);
+        if (outcome.ok) written = { accountId: target.accountId, calendar: target.calendar };
+      }
+    } catch (error) {
+      outcome = { ok: false, retry: true, error: error instanceof Error ? error.message : 'calendar write failed' };
+    }
+    const attempts = row.attempts + 1;
+    if (outcome.ok) {
+      if (written.accountId === null) this.deps.db.run(`DELETE FROM calendar_events WHERE booking_id = ?`, bookingId);
+      else {
+        this.deps.db.run(
+          `UPDATE calendar_events SET account_id = ?, calendar = ?, desired = NULL, attempts = ?, next_at = NULL, last_error = NULL WHERE booking_id = ?`,
+          written.accountId,
+          written.calendar,
+          attempts,
+          bookingId,
+        );
+      }
+      return;
+    }
+    const retry = outcome.retry && attempts < EVENT_RETRY_MS.length + 1;
+    const delay = EVENT_RETRY_MS[Math.min(attempts, EVENT_RETRY_MS.length) - 1] as number;
+    this.deps.db.run(
+      `UPDATE calendar_events SET account_id = ?, calendar = ?, desired = ?, attempts = ?, next_at = ?, last_error = ? WHERE booking_id = ?`,
+      written.accountId,
+      written.calendar,
+      retry ? row.desired : null,
+      attempts,
+      retry ? this.deps.now() + delay : null,
+      outcome.error.slice(0, 500),
+      bookingId,
+    );
+    console.error('[booking] calendar event write failed', bookingId, outcome.error);
   }
 
   pendingReminders(): Array<{ id: string; bookingId: string; fireAt: number; request: EmailSendRequest }> {
@@ -221,7 +432,14 @@ export class CalendarCore {
   }
 
   nextAlarm(): number | null {
-    return this.deps.db.all<{ next: number | null }>(`SELECT MIN(fire_at) AS next FROM reminders WHERE sent_at IS NULL`)[0]?.next ?? null;
+    return (
+      this.deps.db.all<{ next: number | null }>(
+        `SELECT MIN(at) AS next FROM (
+           SELECT MIN(fire_at) AS at FROM reminders WHERE sent_at IS NULL
+           UNION ALL SELECT MIN(next_at) FROM calendar_events WHERE desired IS NOT NULL
+         )`,
+      )[0]?.next ?? null
+    );
   }
 
   /** Alarm handler: sends due reminders (a failed send stays pending for the next alarm). */
@@ -238,6 +456,11 @@ export class CalendarCore {
       }
     }
     this.deps.db.run(`DELETE FROM reminders WHERE sent_at IS NOT NULL AND sent_at < ?`, now - 30 * 86_400_000);
+    const dueEvents = this.deps.db.all<{ booking_id: string }>(
+      `SELECT booking_id FROM calendar_events WHERE desired IS NOT NULL AND next_at <= ? ORDER BY next_at LIMIT 50`,
+      now,
+    );
+    for (const { booking_id: bookingId } of dueEvents) await this.writeEvent(bookingId);
     const next = this.nextAlarm();
     await this.deps.setAlarm(next !== null && next <= now ? now + 60_000 : next);
     return sent;

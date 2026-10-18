@@ -24,8 +24,28 @@ export const adConnectionSchema = z.object({
   last_sync_at: z.number().int().nullable(),
   last_error: z.string().nullable(),
   created_at: z.number().int(),
+  /** Meta dataset (pixel) ID or TikTok pixel code the server-side conversions go to. */
+  pixel_id: z.string().nullable().optional(),
+  /** Meta/TikTok test event code: conversions show up in the platform's test tool. */
+  test_event_code: z.string().nullable().optional(),
 });
 export type AdConnection = z.infer<typeof adConnectionSchema>;
+
+export const adConnectionSettingsSchema = z.strictObject({
+  pixel_id: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{4,64}$/)
+    .nullable()
+    .optional(),
+  test_event_code: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/)
+    .nullable()
+    .optional(),
+});
+export type AdConnectionSettings = z.infer<typeof adConnectionSettingsSchema>;
 
 export const AD_ENTITY_LEVELS = ['campaign', 'adset', 'ad'] as const;
 export type AdEntityLevel = (typeof AD_ENTITY_LEVELS)[number];
@@ -59,6 +79,10 @@ export type AdSpendDay = z.infer<typeof adSpendDaySchema>;
 
 // ---------------------------------------------------------- outbound conversions
 
+/** Where an outbound conversion goes: an ad platform API, or the traffic source's postback URL. */
+export const OUTBOUND_TARGETS = [...AD_PLATFORMS, 'postback'] as const;
+export type OutboundTarget = (typeof OUTBOUND_TARGETS)[number];
+
 export const OUTBOUND_KINDS = ['purchase', 'lead', 'custom'] as const;
 export type OutboundKind = (typeof OUTBOUND_KINDS)[number];
 
@@ -79,12 +103,14 @@ export const outboundPayloadSchema = z.object({
   user_agent: z.string().max(1024).nullable().optional(),
   page_url: z.string().max(2048).nullable().optional(),
   external_id: z.string().max(255).nullable().optional(),
+  /** Postback jobs: the URL with its tokens already filled in. */
+  url: z.string().max(4096).optional(),
 });
 export type OutboundPayload = z.infer<typeof outboundPayloadSchema>;
 
 export const outboundConversionJobSchema = z.object({
   id: z.string(),
-  platform: z.enum(AD_PLATFORMS),
+  platform: z.enum(OUTBOUND_TARGETS),
   connection_id: z.string(),
   kind: z.enum(OUTBOUND_KINDS),
   payload: outboundPayloadSchema,

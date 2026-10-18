@@ -857,8 +857,13 @@ export class AnalyticsStore {
   outboundStats(query: Omit<outbound.OutboundQuery, 'status' | 'limit'> = {}): outbound.OutboundStats {
     return outbound.outboundStats(this.db, query);
   }
-  processOutbound(resolver: ProviderResolver, now: number = this.now(), limit?: number): Promise<OutboundRunResult> {
-    return processOutboundBatch(this, resolver, now, limit);
+  processOutbound(
+    resolver: ProviderResolver,
+    now: number = this.now(),
+    limit?: number,
+    fetcher?: typeof fetch,
+  ): Promise<OutboundRunResult> {
+    return processOutboundBatch(this, resolver, now, limit, fetcher);
   }
 
   // --- identity keys, merges, tags, blacklist

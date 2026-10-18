@@ -131,7 +131,8 @@ const READ_ALL: readonly Permission[] = [
  * - marketer: full CRM + full marketing + analytics incl. configuration,
  *   reports read + contact export, read-only sales/e-commerce. No settings,
  *   users, domains or API keys;
- * - sales: CRM read/write, opportunities/tasks, manual orders and payments,
+ * - sales: CRM read/write, opportunities/tasks, manual orders, payments and
+ *   subscriptions,
  *   single emails, read-only broadcasts/automations, contact journey only,
  *   sales reports, no bulk export;
  * - analyst: read everything, create/save reports and dashboards, CSV export,
@@ -204,6 +205,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'orders:write',
     'products:read',
     'subscriptions:read',
+    'subscriptions:write',
     'emails:send_single',
     'conversations:read',
     'conversations:write',

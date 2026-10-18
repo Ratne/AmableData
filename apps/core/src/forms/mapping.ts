@@ -306,7 +306,7 @@ export function applyToContact(
       ...(mapped.marketingConsent ? { marketable_status: 'single_opt_in' as const } : {}),
       ...(tagIds.length === 0 ? {} : { tag_ids: tagIds }),
       source_type: 'form',
-    });
+    }, { requireAll: false });
     return { contactId: contact.id, created: true, warnings };
   }
 
