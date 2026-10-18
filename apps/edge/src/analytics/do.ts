@@ -1,5 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import type {
+  AdEntity,
+  AdPlatform,
+  AdSpendDay,
   AdsReport,
   Alert,
   AnalyticsBreakdown,
@@ -19,13 +22,24 @@ import type {
   CreateFunnelInput,
   CreateSegmentInput,
   Funnel,
+  FunnelGraph,
+  FunnelGraphInput,
+  FunnelGraphSummary,
+  FunnelGraphUpdate,
   FunnelResult,
+  FunnelStatus,
+  FunnelTouch,
+  IdentityKey,
+  IdentityKeyType,
   InstallCheck,
+  OutboundConversionJob,
   PredictionModelInfo,
   SearchConsoleReport,
   Segment,
   SiteKey,
   SiteKeyScope,
+  TrafficSource,
+  TrafficSourceInput,
   UpdateAlertInput,
   UpdateFunnelInput,
   UpdateSegmentInput,
@@ -43,21 +57,34 @@ import { RealtimeHub } from './store/realtime';
 import { r2ArchiveSink } from './store/retention';
 import {
   AnalyticsStore,
+  type AdConnectionInput,
+  type AdConnectionRecord,
+  type AdEntityQuery,
+  type AdEntityRecord,
+  type AdSpendQuery,
   type AdSpendRow,
   type AnalyticsResult,
   type ContactActivity,
   type ContactVisitor,
+  type ConversionInput,
+  type ConversionQuery,
+  type ConversionRecord,
   type CoreWork,
   type CrmApplyResult,
   type CrmFact,
+  type IdentityKeyRef,
   type IngestResult,
   type IntegrationProviderId,
   type IntegrationRow,
+  type OutboundEnqueueInput,
+  type OutboundOutcome,
+  type OutboundQuery,
   type SearchStatRow,
   type ShareRow,
   type SiteInit,
   type SiteRecord,
   type SyncCursor,
+  type TouchQuery,
   type VisitorListQuery,
 } from './store/index';
 import { withEdgeErrorReporting } from '../errors';
@@ -356,6 +383,135 @@ export class AnalyticsDO extends DurableObject<Env> {
   }
   searchConsole(range: AnalyticsRange): AnalyticsResult<SearchConsoleReport> {
     return this.store.searchConsole(range);
+  }
+
+  listFunnelGraphs(status?: FunnelStatus): FunnelGraphSummary[] {
+    return this.store.listFunnelGraphs(status);
+  }
+  getFunnelGraph(id: string, version?: number): FunnelGraph | null {
+    return this.store.getFunnelGraph(id, version);
+  }
+  createFunnelGraph(input: FunnelGraphInput): AnalyticsResult<FunnelGraph> {
+    return this.store.createFunnelGraph(input);
+  }
+  updateFunnelGraph(id: string, input: FunnelGraphUpdate): AnalyticsResult<FunnelGraph> {
+    return this.store.updateFunnelGraph(id, input);
+  }
+  archiveFunnelGraph(id: string): FunnelGraph | null {
+    return this.store.archiveFunnelGraph(id);
+  }
+  restoreFunnelGraph(id: string): FunnelGraph | null {
+    return this.store.restoreFunnelGraph(id);
+  }
+
+  listTrafficSources(status?: TrafficSource['status']): TrafficSource[] {
+    return this.store.listTrafficSources(status);
+  }
+  getTrafficSource(id: string): TrafficSource | null {
+    return this.store.getTrafficSource(id);
+  }
+  createTrafficSource(input: TrafficSourceInput): AnalyticsResult<TrafficSource> {
+    return this.store.createTrafficSource(input);
+  }
+  updateTrafficSource(id: string, input: TrafficSourceInput): AnalyticsResult<TrafficSource> {
+    return this.store.updateTrafficSource(id, input);
+  }
+  archiveTrafficSource(id: string): TrafficSource | null {
+    return this.store.archiveTrafficSource(id);
+  }
+  restoreTrafficSource(id: string): TrafficSource | null {
+    return this.store.restoreTrafficSource(id);
+  }
+
+  recordTouch(touch: FunnelTouch): AnalyticsResult<{ id: string; created: boolean }> {
+    return this.store.recordTouch(touch);
+  }
+  recordTouches(touches: FunnelTouch[]): AnalyticsResult<{ inserted: number; duplicates: number }> {
+    return this.store.recordTouches(touches);
+  }
+  getTouch(id: string): FunnelTouch | null {
+    return this.store.getTouch(id);
+  }
+  listTouchesByVisitor(visitorIds: string | string[], limit?: number): FunnelTouch[] {
+    return this.store.listTouchesByVisitor(visitorIds, limit);
+  }
+  listTouches(query: TouchQuery): FunnelTouch[] {
+    return this.store.listTouches(query);
+  }
+  recordConversionFromPostback(input: ConversionInput): AnalyticsResult<{ id: string; created: boolean }> {
+    return this.store.recordConversionFromPostback(input);
+  }
+  getConversion(id: string): ConversionRecord | null {
+    return this.store.getConversion(id);
+  }
+  listConversions(query?: ConversionQuery): ConversionRecord[] {
+    return this.store.listConversions(query);
+  }
+
+  upsertAdConnection(input: AdConnectionInput): AnalyticsResult<AdConnectionRecord> {
+    return this.store.upsertAdConnection(input);
+  }
+  getAdConnection(id: string): AdConnectionRecord | null {
+    return this.store.getAdConnection(id);
+  }
+  listAdConnections(platform?: AdPlatform): AdConnectionRecord[] {
+    return this.store.listAdConnections(platform);
+  }
+  upsertAdEntities(entities: AdEntity[], connectionId?: string | null): AnalyticsResult<{ upserted: number }> {
+    return this.store.upsertAdEntities(entities, connectionId ?? null);
+  }
+  listAdEntities(query?: AdEntityQuery): AdEntityRecord[] {
+    return this.store.listAdEntities(query);
+  }
+  upsertAdSpend(rows: AdSpendDay[], connectionId?: string | null): AnalyticsResult<{ upserted: number }> {
+    return this.store.upsertAdSpend(rows, connectionId ?? null);
+  }
+  listAdSpend(query: AdSpendQuery): AdSpendDay[] {
+    return this.store.listAdSpend(query);
+  }
+
+  enqueueOutbound(input: OutboundEnqueueInput): AnalyticsResult<{ id: string; created: boolean }> {
+    return this.store.enqueueOutbound(input);
+  }
+  claimOutboundBatch(now: number, limit?: number): OutboundConversionJob[] {
+    return this.store.claimOutboundBatch(now, limit);
+  }
+  settleOutbound(id: string, outcome: OutboundOutcome): OutboundConversionJob | null {
+    return this.store.settleOutbound(id, outcome);
+  }
+  getOutbound(id: string): OutboundConversionJob | null {
+    return this.store.getOutbound(id);
+  }
+  listOutbound(query?: OutboundQuery): OutboundConversionJob[] {
+    return this.store.listOutbound(query);
+  }
+
+  upsertIdentityKeys(keys: IdentityKey[]): AnalyticsResult<{ added: number }> {
+    return this.store.upsertIdentityKeys(keys);
+  }
+  findVisitorsByKey(keyType: IdentityKeyType, keyValue: string): IdentityKey[] {
+    return this.store.findVisitorsByKey(keyType, keyValue);
+  }
+  listIdentityKeys(visitorIds: string | string[]): IdentityKey[] {
+    return this.store.listIdentityKeys(visitorIds);
+  }
+  applyVisitorTags(visitorId: string, add: string[], remove?: string[]): string[] {
+    return this.store.applyVisitorTags(visitorId, add, remove);
+  }
+  listVisitorTags(visitorId: string): string[] {
+    return this.store.listVisitorTags(visitorId);
+  }
+  addToBlacklist(keys: IdentityKeyRef[]): void {
+    this.store.addToBlacklist(keys);
+  }
+  removeFromBlacklist(keys: IdentityKeyRef[]): void {
+    this.store.removeFromBlacklist(keys);
+  }
+  isBlacklisted(keys: IdentityKeyRef[]): boolean {
+    return this.store.isBlacklisted(keys);
+  }
+  listBlacklist(): Array<IdentityKeyRef & { created_at: number }> {
+    return this.store.listBlacklist();
   }
 
   knownVisitors(ids: string[]): string[] {

@@ -34,7 +34,7 @@ function sessions(db: ReturnType<typeof setup>['db']) {
 
 describe('migrations', () => {
   it('ids are positive and ordered', () => {
-    expect(analyticsMigrations.map((m) => m.id)).toEqual([1, 2]);
+    expect(analyticsMigrations.map((m) => m.id)).toEqual([1, 2, 3]);
   });
 });
 

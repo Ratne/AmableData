@@ -1,4 +1,7 @@
 import type {
+  AdEntity,
+  AdPlatform,
+  AdSpendDay,
   AdsReport,
   Alert,
   AnalyticsBreakdown,
@@ -18,13 +21,24 @@ import type {
   CreateFunnelInput,
   CreateSegmentInput,
   Funnel,
+  FunnelGraph,
+  FunnelGraphInput,
+  FunnelGraphSummary,
+  FunnelGraphUpdate,
   FunnelResult,
+  FunnelStatus,
+  FunnelTouch,
+  IdentityKey,
+  IdentityKeyType,
   InstallCheck,
+  OutboundConversionJob,
   PredictionModelInfo,
   SearchConsoleReport,
   Segment,
   SiteKey,
   SiteKeyScope,
+  TrafficSource,
+  TrafficSourceInput,
   UpdateAlertInput,
   UpdateFunnelInput,
   UpdateSegmentInput,
@@ -32,7 +46,24 @@ import type {
   VisitorProfile,
   VisitorsList,
 } from '@amable/api-types';
-import { analyticsRangeSchema, ATTRIBUTION_MODELS } from '@amable/api-types';
+import {
+  adEntitySchema,
+  adSpendDaySchema,
+  analyticsRangeSchema,
+  ATTRIBUTION_MODELS,
+  funnelGraphInputSchema,
+  funnelGraphUpdateSchema,
+  funnelTouchSchema,
+  identityKeySchema,
+  trafficSourceInputSchema,
+} from '@amable/api-types';
+import type { z } from 'zod';
+import * as adData from './ad-entities';
+import * as funnelGraphs from './funnel-graphs';
+import * as identity from './identity';
+import * as outbound from './outbound';
+import * as touches from './touches';
+import * as trafficSources from './traffic-sources';
 import { attributeRevenue, attributeRevenueByModel, isAttributionDimension } from './attribution';
 import {
   adsReport,
@@ -104,13 +135,42 @@ export type { StoredAlert, ShareRow } from './config';
 export type { IntegrationRow, IntegrationProviderId, AdSpendRow, SearchStatRow } from './bots';
 export type { ContactVisitor, SyncCursor } from './registry';
 export { crmTransactionId } from './crm';
+export type { AdConnectionInput, AdConnectionRecord, AdEntityQuery, AdEntityRecord, AdSpendQuery } from './ad-entities';
+export type { ConversionInput, ConversionQuery, ConversionRecord, ConversionStatus, TouchQuery } from './touches';
+export type { OutboundEnqueueInput, OutboundOutcome, OutboundQuery } from './outbound';
+export type { IdentityKeyRef } from './identity';
 
 export type AnalyticsResult<T> =
   | { ok: true; value: T }
   | {
       ok: false;
-      error: { code: 'not_found' | 'invalid_range' | 'validation_failed'; message: string };
+      error: { code: 'not_found' | 'invalid_range' | 'validation_failed' | 'conflict'; message: string };
     };
+
+/** Parses `input` with a contract schema, as an AnalyticsResult. */
+function parse<S extends z.ZodType>(schema: S, input: unknown): AnalyticsResult<z.output<S>> {
+  const parsed = schema.safeParse(input);
+  if (parsed.success) return { ok: true, value: parsed.data };
+  const issue = parsed.error.issues[0];
+  const path = issue === undefined || issue.path.length === 0 ? '' : `${issue.path.join('.')}: `;
+  return { ok: false, error: { code: 'validation_failed', message: `${path}${issue?.message ?? 'invalid input'}` } };
+}
+
+/** Parses every item; the first invalid one fails the whole batch. */
+function parseAll<S extends z.ZodType>(schema: S, items: readonly unknown[]): AnalyticsResult<z.output<S>[]> {
+  const out: z.output<S>[] = [];
+  for (const [i, item] of items.entries()) {
+    const r = parse(schema, item);
+    if (!r.ok) return { ok: false, error: { ...r.error, message: `[${i}] ${r.error.message}` } };
+    out.push(r.value);
+  }
+  return { ok: true, value: out };
+}
+
+const notFound = (what: string): AnalyticsResult<never> => ({
+  ok: false,
+  error: { code: 'not_found', message: `${what} not found` },
+});
 
 /**
  * Everything one AnalyticsDO instance can do, over the synchronous SQL port.
@@ -565,11 +625,196 @@ export class AnalyticsStore {
     registry.releaseLease(this.db, holder);
   }
 
+  // --- funnel graphs (link-routed funnels; `funnels` above are the step funnels)
+  listFunnelGraphs(status?: FunnelStatus): FunnelGraphSummary[] {
+    return funnelGraphs.listFunnelGraphs(this.db, status);
+  }
+  getFunnelGraph(id: string, version?: number): FunnelGraph | null {
+    return version === undefined
+      ? funnelGraphs.getFunnelGraph(this.db, id)
+      : funnelGraphs.getFunnelGraphVersion(this.db, id, version);
+  }
+  createFunnelGraph(input: FunnelGraphInput): AnalyticsResult<FunnelGraph> {
+    const body = parse(funnelGraphInputSchema, input);
+    if (!body.ok) return body;
+    return { ok: true, value: this.db.transaction(() => funnelGraphs.createFunnelGraph(this.db, body.value, this.now())) };
+  }
+  /** `input.version` must be the stored version, else `conflict`. */
+  updateFunnelGraph(id: string, input: FunnelGraphUpdate): AnalyticsResult<FunnelGraph> {
+    const body = parse(funnelGraphUpdateSchema, input);
+    if (!body.ok) return body;
+    const r = this.db.transaction(() => funnelGraphs.updateFunnelGraph(this.db, id, body.value, this.now()));
+    if (r.ok) return { ok: true, value: r.graph };
+    if (r.reason === 'not_found') return notFound('funnel');
+    return {
+      ok: false,
+      error: { code: 'conflict', message: `funnel changed: current version is ${r.current_version}` },
+    };
+  }
+  archiveFunnelGraph(id: string): FunnelGraph | null {
+    return funnelGraphs.setFunnelGraphStatus(this.db, id, 'archived', this.now());
+  }
+  restoreFunnelGraph(id: string): FunnelGraph | null {
+    return funnelGraphs.setFunnelGraphStatus(this.db, id, 'active', this.now());
+  }
+
+  // --- traffic sources
+  listTrafficSources(status?: TrafficSource['status']): TrafficSource[] {
+    return trafficSources.listTrafficSources(this.db, status);
+  }
+  getTrafficSource(id: string): TrafficSource | null {
+    return trafficSources.getTrafficSource(this.db, id);
+  }
+  createTrafficSource(input: TrafficSourceInput): AnalyticsResult<TrafficSource> {
+    const body = parse(trafficSourceInputSchema, input);
+    if (!body.ok) return body;
+    return { ok: true, value: trafficSources.createTrafficSource(this.db, body.value, this.now()) };
+  }
+  /** Full replace of the source configuration. */
+  updateTrafficSource(id: string, input: TrafficSourceInput): AnalyticsResult<TrafficSource> {
+    const body = parse(trafficSourceInputSchema, input);
+    if (!body.ok) return body;
+    const updated = this.db.transaction(() => trafficSources.updateTrafficSource(this.db, id, body.value, this.now()));
+    return updated === null ? notFound('traffic source') : { ok: true, value: updated };
+  }
+  archiveTrafficSource(id: string): TrafficSource | null {
+    return trafficSources.setTrafficSourceStatus(this.db, id, 'archived', this.now());
+  }
+  restoreTrafficSource(id: string): TrafficSource | null {
+    return trafficSources.setTrafficSourceStatus(this.db, id, 'active', this.now());
+  }
+
+  // --- touches (funnel click-log) and conversions received by postback
+  recordTouch(touch: FunnelTouch): AnalyticsResult<{ id: string; created: boolean }> {
+    const t = parse(funnelTouchSchema, touch);
+    if (!t.ok) return t;
+    return { ok: true, value: { id: t.value.id, created: touches.insertTouch(this.db, t.value) } };
+  }
+  recordTouches(list: readonly FunnelTouch[]): AnalyticsResult<{ inserted: number; duplicates: number }> {
+    const all = parseAll(funnelTouchSchema, list);
+    if (!all.ok) return all;
+    return this.db.transaction(() => {
+      let inserted = 0;
+      for (const t of all.value) if (touches.insertTouch(this.db, t)) inserted += 1;
+      return { ok: true, value: { inserted, duplicates: all.value.length - inserted } };
+    });
+  }
+  getTouch(id: string): FunnelTouch | null {
+    return touches.getTouch(this.db, id);
+  }
+  /** Touches of one or more visitors (e.g. an origin and its merged children), oldest first. */
+  listTouchesByVisitor(visitorIds: string | readonly string[], limit = 1000): FunnelTouch[] {
+    const ids = typeof visitorIds === 'string' ? [visitorIds] : visitorIds;
+    return touches.touchesByVisitor(this.db, ids, Math.min(Math.max(limit, 1), 10_000));
+  }
+  listTouches(query: touches.TouchQuery): FunnelTouch[] {
+    return touches.listTouches(this.db, query);
+  }
+  /** Idempotent on hit + tx (+ event): same key updates, another tx is another conversion. */
+  recordConversionFromPostback(input: touches.ConversionInput): AnalyticsResult<{ id: string; created: boolean }> {
+    const c = parse(touches.conversionInputSchema, input);
+    if (!c.ok) return c;
+    return { ok: true, value: this.db.transaction(() => touches.upsertConversion(this.db, c.value, this.now())) };
+  }
+  getConversion(id: string): touches.ConversionRecord | null {
+    return touches.getConversion(this.db, id);
+  }
+  listConversions(query: touches.ConversionQuery = {}): touches.ConversionRecord[] {
+    return touches.listConversions(this.db, query);
+  }
+
+  // --- ad platforms: connections, entities, daily spend
+  upsertAdConnection(input: adData.AdConnectionInput): AnalyticsResult<adData.AdConnectionRecord> {
+    const c = parse(adData.adConnectionInputSchema, input);
+    if (!c.ok) return c;
+    return { ok: true, value: adData.upsertAdConnection(this.db, c.value, this.now()) };
+  }
+  getAdConnection(id: string): adData.AdConnectionRecord | null {
+    return adData.getAdConnection(this.db, id);
+  }
+  listAdConnections(platform?: AdPlatform): adData.AdConnectionRecord[] {
+    return adData.listAdConnections(this.db, platform);
+  }
+  upsertAdEntities(entities: readonly AdEntity[], connectionId: string | null = null): AnalyticsResult<{ upserted: number }> {
+    const all = parseAll(adEntitySchema, entities);
+    if (!all.ok) return all;
+    const upserted = this.db.transaction(() => adData.upsertAdEntities(this.db, all.value, connectionId, this.now()));
+    return { ok: true, value: { upserted } };
+  }
+  listAdEntities(query: adData.AdEntityQuery = {}): adData.AdEntityRecord[] {
+    return adData.listAdEntities(this.db, query);
+  }
+  /** Overwrites the (platform, entity, day) rows: re-syncing a day replaces it. */
+  upsertAdSpend(rows: readonly AdSpendDay[], connectionId: string | null = null): AnalyticsResult<{ upserted: number }> {
+    const all = parseAll(adSpendDaySchema, rows);
+    if (!all.ok) return all;
+    const upserted = this.db.transaction(() => adData.upsertAdSpend(this.db, all.value, connectionId, this.now()));
+    return { ok: true, value: { upserted } };
+  }
+  listAdSpend(query: adData.AdSpendQuery): AdSpendDay[] {
+    return adData.listAdSpend(this.db, query);
+  }
+
+  // --- outbound conversions (queue consumed by the DO alarm)
+  enqueueOutbound(input: outbound.OutboundEnqueueInput): AnalyticsResult<{ id: string; created: boolean }> {
+    const job = parse(outbound.outboundEnqueueSchema, input);
+    if (!job.ok) return job;
+    return { ok: true, value: outbound.enqueueOutbound(this.db, job.value, this.now()) };
+  }
+  claimOutboundBatch(now: number, limit = 50): OutboundConversionJob[] {
+    return this.db.transaction(() => outbound.claimOutboundBatch(this.db, now, Math.min(Math.max(limit, 1), 500)));
+  }
+  settleOutbound(id: string, outcome: outbound.OutboundOutcome): OutboundConversionJob | null {
+    return outbound.settleOutbound(this.db, id, outcome, this.now());
+  }
+  getOutbound(id: string): OutboundConversionJob | null {
+    return outbound.getOutbound(this.db, id);
+  }
+  listOutbound(query: outbound.OutboundQuery = {}): OutboundConversionJob[] {
+    return outbound.listOutbound(this.db, query);
+  }
+
+  // --- identity keys, merges, tags, blacklist
+  upsertIdentityKeys(keys: readonly IdentityKey[]): AnalyticsResult<{ added: number }> {
+    const all = parseAll(identityKeySchema, keys);
+    if (!all.ok) return all;
+    return { ok: true, value: { added: this.db.transaction(() => identity.upsertIdentityKeys(this.db, all.value)) } };
+  }
+  findVisitorsByKey(keyType: IdentityKeyType, keyValue: string): IdentityKey[] {
+    return identity.findVisitorsByKey(this.db, keyType, keyValue);
+  }
+  listIdentityKeys(visitorIds: string | readonly string[]): IdentityKey[] {
+    return identity.identityKeysOf(this.db, typeof visitorIds === 'string' ? [visitorIds] : visitorIds);
+  }
+  /** Flags the visitors' touches as identified (kept past the anonymous retention). */
+  markTouchesIdentified(visitorIds: readonly string[]): void {
+    touches.markTouchesIdentified(this.db, visitorIds);
+  }
+  applyVisitorTags(visitorId: string, add: readonly string[], remove: readonly string[] = []): string[] {
+    return this.db.transaction(() => identity.applyVisitorTags(this.db, visitorId, add, remove, this.now()));
+  }
+  listVisitorTags(visitorId: string): string[] {
+    return identity.visitorTags(this.db, visitorId);
+  }
+  addToBlacklist(keys: readonly identity.IdentityKeyRef[]): void {
+    this.db.transaction(() => identity.addToBlacklist(this.db, keys, this.now()));
+  }
+  removeFromBlacklist(keys: readonly identity.IdentityKeyRef[]): void {
+    identity.removeFromBlacklist(this.db, keys);
+  }
+  isBlacklisted(keys: readonly identity.IdentityKeyRef[]): boolean {
+    return identity.isBlacklisted(this.db, keys);
+  }
+  listBlacklist(): Array<identity.IdentityKeyRef & { created_at: number }> {
+    return identity.listBlacklist(this.db);
+  }
+
   // --- retention (+ nightly prediction training)
-  async retention(sink: ArchiveSink | null): Promise<RetentionResult | null> {
+  async retention(sink: ArchiveSink | null): Promise<(RetentionResult & { anonymous_touches: number }) | null> {
     const site = getSiteRecord(this.db);
     if (site === null) return null;
-    return runRetention(this.db, sink, site.site.id, site.site.retention_days, this.now());
+    const result = await runRetention(this.db, sink, site.site.id, site.site.retention_days, this.now());
+    return { ...result, anonymous_touches: touches.purgeAnonymousTouches(this.db, this.now()) };
   }
 
   // --- tenant index (tenant:<id> instances)
