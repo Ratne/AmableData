@@ -19,6 +19,7 @@
     "@amable/api-types": "workspace:*",
     "@amable/auth": "workspace:*",
     "@amable/booking": "workspace:*",
+    "@amable/esign": "workspace:*",
     "@amable/builder": "workspace:*",
     "@amable/db": "workspace:*",
     "@amable/forms": "workspace:*",

@@ -18,6 +18,8 @@ export type {
 export { PUBLISHING_EVENT_TYPES } from './publishing-events';
 export { CONVERSATION_EVENT_TYPES } from './conversation-events';
 export type { ConversationEventPayloads, ConversationEventType } from './conversation-events';
+export { ESIGN_OUTBOX_EVENT_TYPES } from './esign-events';
+export type { EsignEventPayloads, EsignOutboxEventType } from './esign-events';
 export { OAUTH_SCOPES, devOAuthProvider, unavailableOAuthProvider } from './oauth';
 export type {
   OAuthProviderId,

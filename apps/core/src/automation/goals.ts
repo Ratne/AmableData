@@ -105,5 +105,8 @@ export function triggerMatches(trigger: GoalTrigger, event: EngineEvent): boolea
       return true;
     case 'app_event':
       return str(p, 'appId') === trigger.app_id && str(p, 'key') === trigger.key;
+    case 'document_completed':
+    case 'document_declined':
+      return anyOf(trigger.template_ids, str(p, 'templateId'));
   }
 }

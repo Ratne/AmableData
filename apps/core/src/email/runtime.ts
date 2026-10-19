@@ -144,6 +144,16 @@ export function crmReader(env: Env, tenantId: string): CrmReader {
     async recordEvents(events) {
       return unwrap<{ recorded: number }>(await stub().crm('mail.recordEvents', SYSTEM_ACTOR, { events }));
     },
+    async transactionalUndelivered(input) {
+      if (input.purpose !== 'esign') return;
+      unwrap(
+        await stub().crm('esign.mailUndelivered', SYSTEM_ACTOR, {
+          requestId: input.referenceId,
+          email: input.email,
+          reason: input.reason,
+        }),
+      );
+    },
   };
 }
 

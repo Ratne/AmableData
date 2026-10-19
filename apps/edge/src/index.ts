@@ -8,6 +8,7 @@ import { formsEdgeRoutes } from './forms/routes';
 import { pagesCatchAll, pagesEdgeRoutes } from './pages/routes';
 import type { AnalyticsMessage } from './analytics/types';
 import { emailEdgeRoutes } from './email/routes';
+import { esignEdgeRoutes } from './esign/routes';
 import type { Env } from './env';
 import { reportEdgeError, withEdgeErrorReporting } from './errors';
 
@@ -58,6 +59,9 @@ app.route('/', linkRoutes);
 app.route('/', formsEdgeRoutes);
 app.route('/', bookingEdgeRoutes);
 app.route('/', pagesEdgeRoutes);
+
+/** Document signing pages `/sign/:slug/:token` and the signing app `/sign.js`. */
+app.route('/', esignEdgeRoutes);
 
 /** Email click redirect `/r/:token`, open pixel `/o/:token`, unsubscribe page `/unsub/:token`. */
 app.route('/', emailEdgeRoutes);

@@ -317,6 +317,19 @@ function TriggerFields({
           />
         </div>
       );
+    case 'document_completed':
+    case 'document_declined':
+      return (
+        <Field label={t('auto.goal.signatureTemplates')}>
+          <ReferenceMultiPicker
+            path="/esignTemplates"
+            values={trigger.template_ids ?? []}
+            placeholder={t('auto.goal.anySignatureTemplate')}
+            disabled={disabled}
+            onChange={(ids) => onChange({ type: trigger.type, ...(ids.length > 0 ? { template_ids: ids } : {}) })}
+          />
+        </Field>
+      );
     case 'opportunity_stage_changed':
       return (
         <div className="grid gap-2">

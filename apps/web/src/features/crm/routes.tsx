@@ -41,6 +41,7 @@ export const CONTACT_TABS = [
   'appointments',
   'deals',
   'orders',
+  'signatures',
   'submissions',
   'emails',
   'automations',

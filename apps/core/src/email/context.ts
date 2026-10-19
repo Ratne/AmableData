@@ -24,6 +24,13 @@ export interface CrmReader {
   setMarketableStatus(contactId: string, status: Contact['marketable_status']): Promise<void>;
   /** Email events into the CRM outbox + timeline (TenantDb `mail.recordEvents`, at most 200). */
   recordEvents(events: BridgedEmailEvent[]): Promise<{ recorded: number }>;
+  /** A transactional email was skipped or failed for good: its module records it (e-signature audit trail). */
+  transactionalUndelivered?(input: {
+    purpose: string;
+    referenceId: string;
+    email: string;
+    reason: string;
+  }): Promise<void>;
 }
 
 export interface TenantUser {

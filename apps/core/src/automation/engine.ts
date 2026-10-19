@@ -73,9 +73,15 @@ import {
   type TokenStatus,
 } from './store';
 import { addDays, formatDate, isLeap, isValidTimeZone, parseTimeOfDay, wallClock } from './time';
-import { validateGraph, type AppActionCatalog } from './validate';
+import { validateGraph, type AppActionCatalog, type EsignTemplateCatalog } from './validate';
 
 /** Who performs an engine API operation (user id from the verified context). */
+/** Catalogs of other modules used by publish validation (fetched by the API worker). */
+export interface CatalogInput {
+  apps?: AppActionCatalog;
+  esignTemplates?: EsignTemplateCatalog;
+}
+
 export interface EngineActor {
   readonly userId: string | null;
 }
@@ -274,15 +280,16 @@ export class AutomationEngine implements StepHost {
     return this.getAutomation({ id: row.id });
   }
 
-  validateDraft(input: { id: string; apps?: AppActionCatalog }): ValidationResult {
+  validateDraft(input: { id: string } & CatalogInput): ValidationResult {
     const row = this.automationOrThrow(input.id);
-    return this.validate(row, parseGraph(row.draft_graph), input.apps);
+    return this.validate(row, parseGraph(row.draft_graph), input);
   }
 
-  private validate(row: AutomationRow, graph: AutomationGraph, apps?: AppActionCatalog): ValidationResult {
+  private validate(row: AutomationRow, graph: AutomationGraph, catalogs: CatalogInput): ValidationResult {
     return validateGraph(graph, parseSettings(row.settings), {
       automationId: row.id,
-      ...(apps === undefined ? {} : { apps }),
+      ...(catalogs.apps === undefined ? {} : { apps: catalogs.apps }),
+      ...(catalogs.esignTemplates === undefined ? {} : { esignTemplates: catalogs.esignTemplates }),
       lookup: (automationId) => {
         if (automationId === row.id) return { graph };
         const target = getAutomationRow(this.db, automationId);
@@ -296,10 +303,10 @@ export class AutomationEngine implements StepHost {
     });
   }
 
-  publish(actor: EngineActor, input: { id: string; apps?: AppActionCatalog }): PublishResult {
+  publish(actor: EngineActor, input: { id: string } & CatalogInput): PublishResult {
     const row = this.automationOrThrow(input.id);
     const graph = parseGraph(row.draft_graph);
-    const result = this.validate(row, graph, input.apps);
+    const result = this.validate(row, graph, input);
     if (!result.valid) {
       throw invalidMany(
         result.issues

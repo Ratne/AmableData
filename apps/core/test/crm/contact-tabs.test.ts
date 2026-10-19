@@ -119,6 +119,7 @@ describe('contact page tabs', () => {
       opportunities: 1,
       orders: 0,
       submissions: 0,
+      signatures: 0,
     });
 
     const viewerCounts = await viewer.get(`${BASE}/contacts/${contactId}/counts`);

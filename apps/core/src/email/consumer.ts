@@ -44,6 +44,7 @@ export function parseEmailSendRequest(body: unknown): EmailSendRequest | null {
     !isStr(body['contactId']) ||
     !isStr(body['requestedAt']) ||
     !isNullableStr(body['notAfter']) ||
+    !(body['toEmail'] === undefined || (typeof body['toEmail'] === 'string' && body['toEmail'].length <= 320)) ||
     !validSource(body['source']) ||
     !isRecord(content) ||
     !isNullableStr(content['templateId']) ||

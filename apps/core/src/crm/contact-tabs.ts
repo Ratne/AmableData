@@ -66,6 +66,7 @@ export interface ContactTabCounts {
   opportunities: number;
   orders: number;
   submissions: number;
+  signatures: number;
 }
 
 /** One indexed `COUNT(*)` per tab of the TenantDb, in a single statement. */
@@ -81,10 +82,20 @@ export function contactTabCounts(ctx: CrmContext, input: { id: string }): Contac
        (SELECT COUNT(*) FROM crm_appointments WHERE contact_id = ? AND deleted_at IS NULL) AS appointments,
        (SELECT COUNT(*) FROM crm_opportunities WHERE contact_id = ? AND deleted_at IS NULL) AS opportunities,
        (SELECT COUNT(*) FROM crm_orders WHERE contact_id = ? AND deleted_at IS NULL) AS orders,
-       (SELECT COUNT(*) FROM form_submissions WHERE contact_id = ? AND deleted_at IS NULL) AS submissions`,
-    ...Array<string>(7).fill(input.id),
+       (SELECT COUNT(*) FROM form_submissions WHERE contact_id = ? AND deleted_at IS NULL) AS submissions,
+       (SELECT COUNT(DISTINCT request_id) FROM esign_signers WHERE contact_id = ?) AS signatures`,
+    ...Array<string>(8).fill(input.id),
   )[0];
   return (
-    row ?? { tags: 0, notes: 0, tasks_open: 0, appointments: 0, opportunities: 0, orders: 0, submissions: 0 }
+    row ?? {
+      tags: 0,
+      notes: 0,
+      tasks_open: 0,
+      appointments: 0,
+      opportunities: 0,
+      orders: 0,
+      submissions: 0,
+      signatures: 0,
+    }
   );
 }

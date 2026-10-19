@@ -9,6 +9,7 @@
  */
 
 import { CONVERSATION_EVENT_TYPES, type ConversationEventPayloads } from './conversation-events';
+import { ESIGN_OUTBOX_EVENT_TYPES, type EsignEventPayloads } from './esign-events';
 import { PUBLISHING_EVENT_TYPES, type PublishingEventPayloads } from './publishing-events';
 
 /** Typed payload of every CRM event. Keys are the event type strings. */
@@ -228,11 +229,12 @@ type MissingCommerceEvent = Exclude<CommerceEventType, (typeof COMMERCE_EVENT_TY
 const commerceEventListIsComplete: MissingCommerceEvent extends never ? true : never = true;
 void commerceEventListIsComplete;
 
-/** Every event the tenant outbox can hold (CRM + e-commerce + forms, bookings, pages + conversations). */
+/** Every event the tenant outbox can hold (CRM + e-commerce + forms, bookings, pages + conversations + signatures). */
 export type OutboxEventPayloads = CrmEventPayloads &
   CommerceEventPayloads &
   PublishingEventPayloads &
-  ConversationEventPayloads;
+  ConversationEventPayloads &
+  EsignEventPayloads;
 export type OutboxEventType = keyof OutboxEventPayloads;
 
 /** Events emitted by later modules (forms, email, booking). */
@@ -253,6 +255,7 @@ export const EVENT_TYPES = [
   ...OTHER_EVENT_TYPES,
   ...PUBLISHING_EVENT_TYPES,
   ...CONVERSATION_EVENT_TYPES,
+  ...ESIGN_OUTBOX_EVENT_TYPES,
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

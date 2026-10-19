@@ -40,6 +40,7 @@ import { pagesOps } from '../pages/ops';
 import { reportTenantOps } from '../reports/tenant-ops';
 import { appTenantOps } from '../apps/tenant-ops';
 import { conversationOps } from '../conversations/ops';
+import { esignOps } from '../esign/ops';
 
 function listContacts(ctx: CrmContext, input: ListContactsQuery): Page<Contact> {
   const result = executeSearch(
@@ -237,6 +238,8 @@ export const crmOps = {
   ...appTenantOps,
   // shared inbox (apps/core/src/conversations)
   ...conversationOps,
+  // electronic signatures (apps/core/src/esign)
+  ...esignOps,
 } satisfies Record<string, (ctx: CrmContext, input: never) => unknown>;
 
 export type CrmOps = typeof crmOps;

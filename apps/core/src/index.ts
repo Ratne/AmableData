@@ -8,6 +8,8 @@ import { backupDeps, runScheduledBackups } from './backup/service';
 import { handleEmailSendBatch } from './email/consumer';
 import { EMAIL_PUBLIC_PREFIXES, emailPublicApp } from './email/public';
 import type { Env } from './env';
+import { consumeEsignSeal } from './esign/queue';
+import { ESIGN_SEAL_QUEUE } from './esign/runner';
 import { consumeFormSubmissions, FORM_SUBMISSIONS_QUEUE } from './forms/queue';
 import { serveSpa } from './middleware/spa';
 import { platformScheduled } from './platform/mount';
@@ -52,6 +54,7 @@ const handler = {
       if (batch.queue === 'email-send') return handleEmailSendBatch(batch, env);
       if (batch.queue === FORM_SUBMISSIONS_QUEUE) return consumeFormSubmissions(batch, env);
       if (batch.queue === WEBHOOKS_QUEUE) return consumeWebhooks(batch, env);
+      if (batch.queue === ESIGN_SEAL_QUEUE) return consumeEsignSeal(batch, env);
       console.log(`[queue:${batch.queue}] received ${batch.messages.length} message(s) — stub`);
       batch.ackAll();
     }, (promise) => ctx.waitUntil(promise));

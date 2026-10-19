@@ -165,6 +165,14 @@ function primaryEmail(data: MailSendContact): string | null {
   return email === undefined ? null : normalizeEmail(email);
 }
 
+function recipientEmail(data: MailSendContact, request: EmailSendRequest): string | null {
+  if (request.source.type === 'transactional' && request.toEmail !== undefined) {
+    const wanted = normalizeEmail(request.toEmail);
+    if (data.contact.emails.some((e) => normalizeEmail(e.email) === wanted)) return wanted;
+  }
+  return primaryEmail(data);
+}
+
 export async function processSends(
   deps: MailDeps,
   batch: readonly { request: EmailSendRequest; queueAttempts: number }[],
@@ -185,9 +193,34 @@ export async function processSends(
 
   const outcomes: SendOutcome[] = [];
   for (const { request } of batch) {
-    outcomes.push(await processOne(deps, request, sending, contacts, owners));
+    const outcome = await processOne(deps, request, sending, contacts, owners);
+    outcomes.push(outcome);
+    await reportUndelivered(deps, request, outcome);
   }
   return outcomes;
+}
+
+const UNDELIVERED = new Set<string>(['skipped', 'failed', 'blocked']);
+
+async function reportUndelivered(
+  deps: MailDeps,
+  request: EmailSendRequest,
+  outcome: SendOutcome,
+): Promise<void> {
+  const report = deps.crm.transactionalUndelivered;
+  if (report === undefined || request.source.type !== 'transactional') return;
+  if (outcome.action !== 'ack' || !UNDELIVERED.has(outcome.status)) return;
+  const row = deps.db.all<MessageRow>(`SELECT * FROM mail_messages WHERE request_id = ?`, request.id)[0];
+  try {
+    await report({
+      purpose: request.source.purpose,
+      referenceId: request.source.referenceId,
+      email: request.toEmail ?? row?.email ?? '',
+      reason: row?.status_reason ?? outcome.status,
+    });
+  } catch (error) {
+    console.error('[email] undelivered report failed', request.id, error);
+  }
 }
 
 async function processOne(
@@ -238,7 +271,7 @@ async function processOne(
 
   const data = contacts.get(request.contactId);
   if (data === undefined) return finish(deps, row, 'skipped', 'contact_not_found');
-  const email = primaryEmail(data);
+  const email = recipientEmail(data, request);
   if (email === null) return finish(deps, row, 'skipped', 'no_email');
   const transactional = request.source.type === 'transactional';
   if ((transactional ? UNDELIVERABLE : UNMARKETABLE).has(data.contact.marketable_status)) {

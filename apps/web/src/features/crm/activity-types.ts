@@ -9,7 +9,10 @@ import {
   CheckSquare,
   ClipboardList,
   CreditCard,
+  FileCheck,
+  FilePen,
   FileText,
+  FileX,
   Globe,
   Handshake,
   Mail,
@@ -21,6 +24,7 @@ import {
   MousePointerClick,
   RefreshCw,
   ShoppingCart,
+  Signature,
   StickyNote,
   Tag,
   Upload,
@@ -98,6 +102,10 @@ const ACTIVITY_LABELS: Readonly<Record<string, MessageKey>> = {
   'message.received': 'crm.activity.messageReceived',
   'message.sent': 'crm.activity.messageSent',
   'message.status_changed': 'crm.activity.messageStatusChanged',
+  'esign.signer_notified': 'crm.activity.esignSent',
+  'esign.signer_signed': 'crm.activity.esignSigned',
+  'esign.request_completed': 'crm.activity.esignCompleted',
+  'esign.request_declined': 'crm.activity.esignDeclined',
 };
 
 const EXACT_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -113,6 +121,10 @@ const EXACT_ICONS: Readonly<Record<string, LucideIcon>> = {
   'email.bounced': MailWarning,
   'email.complained': MailWarning,
   'email.unsubscribed': MailX,
+  'esign.signer_notified': FilePen,
+  'esign.signer_signed': Signature,
+  'esign.request_completed': FileCheck,
+  'esign.request_declined': FileX,
 };
 
 const PREFIX_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -190,6 +202,11 @@ export function activityDetail(activity: Activity, ctx: ActivityDetailContext): 
         .join(', ');
     }
     return '';
+  }
+  if (activity.type.startsWith('esign.')) {
+    return [str(data['name']), str(data['party_name']), str(data['reason'])]
+      .filter((part) => part !== null)
+      .join(' · ');
   }
   if (activity.type.startsWith('message.')) {
     return str(data['preview']) ?? str(data['status']) ?? '';

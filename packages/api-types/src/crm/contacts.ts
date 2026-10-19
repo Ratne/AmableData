@@ -214,6 +214,8 @@ export const contactCountsSchema = z.object({
   orders: z.number().int().optional(),
   /** Form submissions (`forms:read`). */
   submissions: z.number().int().optional(),
+  /** Signature requests the contact signs in (`esign:read`). */
+  signatures: z.number().int().optional(),
   /** Emails sent to the contact (MailDb); omitted when the email store is unreachable. */
   emails: z.number().int().optional(),
   /** Enrollments (`automations:read`); omitted when the automation engine is unreachable. */

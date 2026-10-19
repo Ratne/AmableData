@@ -48,6 +48,10 @@ export const PERMISSIONS = [
   'booking:write',
   /** Cancel / reschedule bookings made by contacts. */
   'booking:manage_bookings',
+  // Electronic signatures
+  'esign:read',
+  /** Templates (PDF, parties, fields) and signature requests: send, remind, void. */
+  'esign:write',
   'emails:send_single',
   /** Shared inbox: read conversations and messages of every channel. */
   'conversations:read',
@@ -113,6 +117,7 @@ const READ_ALL: readonly Permission[] = [
   'forms:submissions_read',
   'pages:read',
   'booking:read',
+  'esign:read',
   'conversations:read',
   'orders:read',
   'products:read',
@@ -172,6 +177,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'booking:read',
     'booking:write',
     'booking:manage_bookings',
+    'esign:read',
+    'esign:write',
     'emails:send_single',
     'conversations:read',
     'conversations:write',
@@ -201,6 +208,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'booking:read',
     'booking:write',
     'booking:manage_bookings',
+    'esign:read',
+    'esign:write',
     'orders:read',
     'orders:write',
     'products:read',

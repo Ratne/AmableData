@@ -35,9 +35,10 @@ import {
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import { appActionCatalog } from '../../apps/actions';
 import { getAuth, getTenant, type AppEnv } from '../../middleware';
-import { CrmHttpError, crmRoute, json, jsonBody } from '../../crm/api/core';
+import { callCrm, CrmHttpError, crmRoute, json, jsonBody } from '../../crm/api/core';
 import type { CrmResult } from '../../crm/ops';
 import type { Engine } from '../../do/engine';
+import type { CatalogInput } from '../engine';
 import { registerFolderRoutes } from '../../folders/routes';
 import type { Env } from '../../env';
 import type { AutomationOpInput, AutomationOpName, AutomationOpOutput } from '../ops';
@@ -77,6 +78,15 @@ export function mountAutomationApi(app: Hono<AppEnv>): void {
     if (tenant === null) return c.json({ error: 'tenant_not_found' }, 404);
     return c.json(await engineStub(c.env, tenant.id).devInspect());
   });
+}
+
+/** Installed app actions and signature templates, checked by publish validation. */
+async function publishCatalogs(c: Context<AppEnv>): Promise<CatalogInput> {
+  const [apps, esignTemplates] = await Promise.all([
+    appActionCatalog(c.env, getTenant(c).tenant.id),
+    callCrm(c, 'esign.templates.catalog', {}),
+  ]);
+  return { apps, esignTemplates };
 }
 
 /** Runs an automation operation in the verified tenant's Engine DO; domain errors become HTTP errors. */
@@ -217,7 +227,7 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       c.json(
         await callEngine(c, 'automations.validate', {
           ...c.req.valid('param'),
-          apps: await appActionCatalog(c.env, getTenant(c).tenant.id),
+          ...(await publishCatalogs(c)),
         }),
         200,
       ),
@@ -237,7 +247,7 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       c.json(
         await callEngine(c, 'automations.publish', {
           ...c.req.valid('param'),
-          apps: await appActionCatalog(c.env, getTenant(c).tenant.id),
+          ...(await publishCatalogs(c)),
         }),
         200,
       ),

@@ -234,6 +234,7 @@ export function registerContactRoutes(app: OpenAPIHono<AppEnv>): void {
           ...(tenant.can('opportunities:read') ? { opportunities: counts.opportunities } : {}),
           ...(tenant.can('orders:read') ? { orders: counts.orders } : {}),
           ...(tenant.can('forms:read') ? { submissions: counts.submissions } : {}),
+          ...(tenant.can('esign:read') ? { signatures: counts.signatures } : {}),
           ...(emails === null ? {} : { emails: emails.count }),
           ...(enrollments === null
             ? {}

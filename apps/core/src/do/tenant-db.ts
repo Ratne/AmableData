@@ -18,6 +18,8 @@ import { runCrmOp, type CrmResult } from '../crm/ops';
 import { ensureSearchIndex } from '../crm/search/index-store';
 import { seedCrm, type CrmSeedSummary } from '../crm/seed';
 import type { Env } from '../env';
+import { nextEsignDue } from '../esign/due';
+import { runEsignDue } from '../esign/runner';
 import { AlarmStepError, reportAlarmFailure, withAlarmReporting } from '../platform/telemetry';
 import { armPointInTime } from './point-in-time';
 
@@ -29,6 +31,13 @@ import { armPointInTime } from './point-in-time';
  * migration inside blockConcurrencyWhile, so no request or RPC can ever observe a
  * stale schema — including the first wake after a fleet-wide deploy.
  */
+/** Ops after which signature timers may have moved (automation steps create requests through `automation.once`). */
+function affectsEsignSchedule(op: string): boolean {
+  return op.startsWith('esign.') || op === 'automation.once';
+}
+
+const ESIGN_RETRY_MS = 60_000;
+
 export class TenantDb extends DurableObject<Env> {
   private schemaVersion = 0;
   private readonly crmDb: SqlDb;
@@ -59,15 +68,15 @@ export class TenantDb extends DurableObject<Env> {
    */
   crm(op: string, actor: CrmActor, input: unknown): CrmResult<unknown> {
     const result = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, actor, op, input);
-    if (result.ok && affectsBillingSchedule(op)) this.armBillingAlarm();
+    if (result.ok && (affectsBillingSchedule(op) || affectsEsignSchedule(op))) this.armAlarm();
     return result;
   }
 
   /**
-   * Billing automation: the DO alarm fires at the earliest subscription due
-   * date, runs the billing job (renewal orders, invoices, events) and re-arms
-   * itself. The alarm is owned by billing; another module needing timers must
-   * share it through a next-wake computation rather than calling setAlarm.
+   * Timers of the tenant: the DO alarm fires at the earliest billing due date
+   * or signature timer (invitation, reminder, expiry, sealing), runs both jobs
+   * and re-arms itself. Modules needing timers share this alarm through the
+   * next-wake computation in `armAlarm` rather than calling setAlarm.
    */
   override async alarm(): Promise<void> {
     await withAlarmReporting(this.env, 'tenant-db', this.ctx, async () => {
@@ -79,16 +88,55 @@ export class TenantDb extends DurableObject<Env> {
       );
       if (!result.ok) {
         console.error('[billing] run failed:', result.error);
-        await reportAlarmFailure(this.env, 'billing', this.ctx, new AlarmStepError(`billing.run ${result.error.code}: ${result.error.message}`));
+        await reportAlarmFailure(
+          this.env,
+          'billing',
+          this.ctx,
+          new AlarmStepError(`billing.run ${result.error.code}: ${result.error.message}`),
+        );
       }
-      this.armBillingAlarm();
+      let esignFailed = false;
+      try {
+        const run = await runEsignDue(this.env, (op, input) => {
+          const out = runCrmOp(
+            { db: this.crmDb, searchMode: this.searchMode },
+            SYSTEM_ACTOR,
+            op,
+            input,
+          );
+          if (!out.ok) throw new AlarmStepError(`${op} ${out.error.code}: ${out.error.message}`);
+          return out.value as never;
+        });
+        esignFailed = run.failed;
+        if (run.changed && run.tenantId !== null) {
+          await this.env.ENGINE.get(this.env.ENGINE.idFromName(run.tenantId))
+            .kick(run.tenantId)
+            .catch(() => undefined);
+        }
+      } catch (error) {
+        esignFailed = true;
+        console.error('[esign] run failed:', error);
+        await reportAlarmFailure(
+          this.env,
+          'esign',
+          this.ctx,
+          error instanceof Error ? error : new AlarmStepError(String(error)),
+        );
+      }
+      this.armAlarm(esignFailed ? ESIGN_RETRY_MS : 0);
     });
   }
 
-  private armBillingAlarm(): void {
-    const due = nextBillingDue(this.crmDb);
-    if (due === null) void this.ctx.storage.deleteAlarm();
-    else void this.ctx.storage.setAlarm(Math.max(due, Date.now()));
+  /** `esignDelay`: after a failed signature run, wait before retrying what is still due. */
+  private armAlarm(esignDelay = 0): void {
+    const now = Date.now();
+    const billing = nextBillingDue(this.crmDb);
+    const esign = nextEsignDue(this.crmDb);
+    const candidates = [billing, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
+      (t): t is number => t !== null,
+    );
+    if (candidates.length === 0) void this.ctx.storage.deleteAlarm();
+    else void this.ctx.storage.setAlarm(Math.max(Math.min(...candidates), now));
   }
 
   private readonly backup = createSqlBackup(backupSqlFromStorage(this.ctx.storage), {
@@ -122,7 +170,7 @@ export class TenantDb extends DurableObject<Env> {
   }
 
   backupRestored(): void {
-    this.armBillingAlarm();
+    this.armAlarm();
   }
 
   /** Dev-only: fills the tenant with fake CRM data (idempotent). */
@@ -139,7 +187,7 @@ export class TenantDb extends DurableObject<Env> {
       throw new Error('commerceDevSeed is only available when ENVIRONMENT=dev');
     }
     const summary = seedCommerce(this.crmDb, this.searchMode);
-    this.armBillingAlarm();
+    this.armAlarm();
     return summary;
   }
 

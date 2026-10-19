@@ -2,6 +2,7 @@ import { automationsEn } from './automations-en';
 import { crmEn } from './crm-en';
 import { emailEn } from './email-en';
 import { bookingEn } from './booking-en';
+import { esignEn } from './esign-en';
 import { formsEn } from './forms-en';
 import { landingEn } from './landing-en';
 import { commerceEn } from './commerce-en';
@@ -24,6 +25,7 @@ export const en = {
   ...emailEn,
   ...formsEn,
   ...bookingEn,
+  ...esignEn,
   ...landingEn,
   ...commerceEn,
   ...analyticsEn,

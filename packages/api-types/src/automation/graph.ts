@@ -92,6 +92,8 @@ export const GOAL_TRIGGER_TYPES = [
   'opportunity_stage_changed',
   'date_anniversary',
   'app_event',
+  'document_completed',
+  'document_declined',
 ] as const;
 
 /** Marketplace app id (same rule as the manifest `id`). */
@@ -160,6 +162,10 @@ export const goalTriggerSchema = z.discriminatedUnion('type', [
   }),
   /** Fired by an installed app with `POST /api/v2/t/{slug}/apps/events` (event `app.<app_id>.<key>`). */
   z.strictObject({ type: z.literal('app_event'), app_id: appIdSchema, key: appExtensionKeySchema }),
+  /** Every party signed a document sent for signature (any template when omitted); fires for each signer. */
+  z.strictObject({ type: z.literal('document_completed'), template_ids: idList.optional() }),
+  /** The contact declined to sign (any template when omitted). */
+  z.strictObject({ type: z.literal('document_declined'), template_ids: idList.optional() }),
 ]);
 export type GoalTrigger = z.infer<typeof goalTriggerSchema>;
 export type GoalTriggerType = GoalTrigger['type'];
@@ -209,6 +215,8 @@ export const settableContactFieldSchema = z.union([
 ]);
 export { SETTABLE_CONTACT_FIELDS };
 
+const esignPartyRefSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
+
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 
 export const STEP_TYPES = [
@@ -231,6 +239,7 @@ export const STEP_TYPES = [
   'app_action',
   'add_to_sequence',
   'remove_from_sequence',
+  'send_signature_request',
   'end',
 ] as const;
 
@@ -410,6 +419,27 @@ export const stepSchema = z.discriminatedUnion('type', [
     type: z.literal('remove_from_sequence'),
     automation_id: idSchema,
     node_id: nodeIdSchema.optional(),
+  }),
+  /**
+   * Sends a signature template: the contact signs as `party_id` (default: the
+   * first party), the other parties are fixed email addresses.
+   */
+  z.strictObject({
+    ...stepBase,
+    type: z.literal('send_signature_request'),
+    template_id: idSchema,
+    party_id: esignPartyRefSchema.optional(),
+    others: z
+      .array(
+        z.strictObject({
+          party_id: esignPartyRefSchema,
+          email: z.email().max(320),
+          name: z.string().trim().max(200).optional(),
+        }),
+      )
+      .max(9)
+      .optional(),
+    message: z.string().trim().max(5000).optional(),
   }),
   /** Ends the automation for the contact (every other position is cancelled). */
   z.strictObject({ ...stepBase, type: z.literal('end') }),

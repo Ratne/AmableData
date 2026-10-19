@@ -3,6 +3,8 @@
   "name": "amable-core",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  // Sealing a long signed PDF can take more CPU than the 30 s default.
+  "limits": { "cpu_ms": 120000 },
 
   // SPA assets built by apps/web (`pnpm build:web`). API routes always hit the worker.
   "assets": {
@@ -50,6 +52,8 @@
       { "binding": "WEBHOOKS_OUT", "queue": "webhooks-out" },
       // Encrypted form submissions → CRM contact, form.submitted, external connections.
       { "binding": "FORM_SUBMISSIONS", "queue": "form-submissions" },
+      // Signed-PDF jobs of completed signature requests (out of the tenant Durable Object).
+      { "binding": "ESIGN_SEAL", "queue": "esign-seal" },
     ],
     "consumers": [
       // Deferrals (warm-up cap, rate limit, paused broadcast) are retries too: the
@@ -58,6 +62,8 @@
       { "queue": "events-rollup", "max_batch_size": 10, "max_batch_timeout": 5 },
       { "queue": "webhooks-out", "max_batch_size": 10, "max_batch_timeout": 5 },
       { "queue": "form-submissions", "max_batch_size": 10, "max_batch_timeout": 2, "max_retries": 10 },
+      // One PDF per invocation; lost jobs come back through the TenantDb alarm lease.
+      { "queue": "esign-seal", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 2 },
     ],
   },
 

@@ -48,7 +48,7 @@ const UTM = ['source', 'medium', 'campaign', 'term', 'content'] as const;
  * - empty scalar fields of the target are filled from the sources (in order);
  * - emails/phones are unioned (up to 5), addresses taken from the first source
  *   when the target has none; tags are unioned; empty custom fields are filled;
- * - notes, tasks, appointments, opportunities and timeline move to the target;
+ * - notes, tasks, appointments, opportunities, timeline and signers move to the target;
  * - sources are soft-deleted with `merged_into_id` and leave the search index.
  * Emits `contact.updated` (via the update), `contact.tag_applied` for new tags
  * and one `contact.merged`.
@@ -142,6 +142,7 @@ export function mergeContacts(
       'crm_appointments',
       'crm_opportunities',
       'crm_activities',
+      'esign_signers',
     ]) {
       ctx.db.run(`UPDATE ${table} SET contact_id = ? WHERE contact_id = ?`, target.id, source.id);
     }

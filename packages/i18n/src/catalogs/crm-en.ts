@@ -287,6 +287,10 @@ export const crmEn = {
   'crm.activity.dealDeleted': 'Deal deleted',
   'crm.activity.imported': 'Imported',
   'crm.activity.formSubmitted': 'Form submitted',
+  'crm.activity.esignSent': 'Document sent for signature',
+  'crm.activity.esignSigned': 'Document signed',
+  'crm.activity.esignCompleted': 'Document signed by every party',
+  'crm.activity.esignDeclined': 'Signature declined',
   'crm.activity.appointmentBooked': 'Appointment booked',
   'crm.activity.appointmentRescheduled': 'Appointment rescheduled',
   'crm.activity.pagePublished': 'Page published',
@@ -429,6 +433,7 @@ export const crmEn = {
   'crm.tags.confirmDeleteCategoryBody': 'Its tags are kept without a category.',
 
   'crm.contact.tab.orders': 'Orders',
+  'crm.contact.tab.signatures': 'Signatures',
   'crm.contact.tab.journey': 'Journey',
   'crm.contact.tab.tags': 'Tags',
   'crm.contact.tab.emails': 'Emails',

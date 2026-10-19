@@ -17,6 +17,7 @@ import { ADS_TOKEN_GATEWAY_OP, handleAdsTokenOp } from '../analytics/ads-sync';
 import { findTrackingHost, TRACKING_HOST_GATEWAY_OP } from '../analytics/routes-tracking-domains';
 import { findTenantBySlug } from '../auth/store';
 import { bookingGatewayHandlers, bookingGatewayRawHandlers } from '../booking/gateway';
+import { esignGatewayHandlers, esignGatewayRawHandlers } from '../esign/gateway';
 import type { Env } from '../env';
 import { formsGatewayHandlers, formsGatewayRawHandlers } from '../forms/gateway';
 import { ensureInstallationMigrated } from '../migrate';
@@ -48,11 +49,13 @@ const handlers: GatewayHandlers = {
   ...formsGatewayHandlers,
   ...bookingGatewayHandlers,
   ...pagesGatewayHandlers,
+  ...esignGatewayHandlers,
 };
 const rawHandlers: GatewayRawHandlers = {
   ...formsGatewayRawHandlers,
   ...bookingGatewayRawHandlers,
   ...pagesGatewayRawHandlers,
+  ...esignGatewayRawHandlers,
 };
 
 const MAX_BODY_BYTES = 1_000_000;

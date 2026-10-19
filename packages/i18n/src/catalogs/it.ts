@@ -2,6 +2,7 @@ import { automationsIt } from './automations-it';
 import { crmIt } from './crm-it';
 import { emailIt } from './email-it';
 import { bookingIt } from './booking-it';
+import { esignIt } from './esign-it';
 import { formsIt } from './forms-it';
 import { landingIt } from './landing-it';
 import { commerceIt } from './commerce-it';
@@ -25,6 +26,7 @@ export const it: Readonly<Record<MessageKey, string>> = {
   ...emailIt,
   ...formsIt,
   ...bookingIt,
+  ...esignIt,
   ...landingIt,
   ...commerceIt,
   ...analyticsIt,

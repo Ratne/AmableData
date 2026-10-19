@@ -43,7 +43,7 @@ export type EmailSendSource =
  * per-minute rate limit and tenant suspension, and are never sent to addresses
  * that hard-bounced or complained (or were suppressed manually).
  */
-export const TRANSACTIONAL_EMAIL_PURPOSES = ['booking'] as const;
+export const TRANSACTIONAL_EMAIL_PURPOSES = ['booking', 'esign'] as const;
 export type TransactionalEmailPurpose = (typeof TRANSACTIONAL_EMAIL_PURPOSES)[number];
 
 /** Content of a send: a stored template or an inline Tiptap document (rendered by the pipeline). */
@@ -71,6 +71,12 @@ export interface EmailSendRequest {
   readonly id: string;
   readonly tenantId: string;
   readonly contactId: string;
+  /**
+   * Transactional only: send to this address of the contact instead of its
+   * primary one (e.g. the address a document was sent to for signature).
+   * Ignored when the contact no longer has it.
+   */
+  readonly toEmail?: string;
   readonly content: EmailSendContent;
   readonly source: EmailSendSource;
   /** ISO 8601. */

@@ -28,6 +28,7 @@ import type { Permission } from '@amable/core';
 import { GitMerge, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ContactOrdersPanel } from '../../commerce';
+import { ContactSignaturesPanel } from '../../esign';
 import { CountrySelect } from '../../../components/locale/country-select';
 import { LanguageSelect } from '../../../components/locale/language-select';
 import { languageName, nativeLanguageName } from '../../../components/locale/languages';
@@ -704,6 +705,7 @@ const TAB_PERMISSION: Partial<Record<FixedContactTab, Permission>> = {
   appointments: 'tasks:read',
   deals: 'opportunities:read',
   orders: 'orders:read',
+  signatures: 'esign:read',
   submissions: 'forms:read',
   automations: 'automations:read',
   journey: 'analytics:journey_read',
@@ -769,6 +771,7 @@ function ContactTabs({
     orders: counts?.orders,
     submissions: counts?.submissions,
     emails: counts?.emails,
+    signatures: counts?.signatures,
   };
   /** Text and tooltip of the badge next to a tab label (none when there is nothing to count). */
   const badgeOf = (tab: FixedContactTab): { text: string; title?: string } | null => {
@@ -1086,6 +1089,15 @@ function ContactView({ contact }: { contact: Contact }) {
           appointments: <AppointmentsPanel contactId={contact.id} />,
           deals: <DealsPanel contactId={contact.id} />,
           orders: <ContactOrdersPanel contactId={contact.id} limit={20} />,
+          signatures: (
+            <ContactSignaturesPanel
+              contact={{
+                id: contact.id,
+                name,
+                email: contact.emails.find((e) => e.is_primary)?.email ?? contact.emails[0]?.email ?? '',
+              }}
+            />
+          ),
           submissions: <ContactSubmissionsPanel contactId={contact.id} />,
           emails: <ContactEmailsPanel contactId={contact.id} />,
           automations: <ContactAutomationsPanel contactId={contact.id} />,

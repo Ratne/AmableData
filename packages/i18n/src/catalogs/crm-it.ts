@@ -290,6 +290,10 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.activity.dealDeleted': 'Opportunità eliminata',
   'crm.activity.imported': 'Importato',
   'crm.activity.formSubmitted': 'Modulo inviato',
+  'crm.activity.esignSent': 'Documento inviato per la firma',
+  'crm.activity.esignSigned': 'Documento firmato',
+  'crm.activity.esignCompleted': 'Documento firmato da tutte le parti',
+  'crm.activity.esignDeclined': 'Firma rifiutata',
   'crm.activity.appointmentBooked': 'Appuntamento prenotato',
   'crm.activity.appointmentRescheduled': 'Appuntamento spostato',
   'crm.activity.pagePublished': 'Pagina pubblicata',
@@ -432,6 +436,7 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.tags.confirmDeleteCategoryBody': 'I suoi tag restano, senza categoria.',
 
   'crm.contact.tab.orders': 'Ordini',
+  'crm.contact.tab.signatures': 'Firme',
   'crm.contact.tab.journey': 'Percorso',
   'crm.contact.tab.tags': 'Tag',
   'crm.contact.tab.emails': 'Email',

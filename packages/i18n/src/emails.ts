@@ -23,6 +23,7 @@ export interface SystemEmailVars {
   email_change_verify: { url: string };
   email_changed: { newEmail: string };
   support_access_started: { tenant: string; staff: string; until: string };
+  esign_declined: { document: string; signer: string; reason: string; url: string };
 }
 
 export type SystemEmailKind = keyof SystemEmailVars;
@@ -124,6 +125,14 @@ const templates: Record<Locale, Templates> = {
       ],
       footer: 'If nobody in your team asked for support, revoke the access now.',
     },
+    esign_declined: {
+      subject: '{signer} declined to sign "{document}"',
+      body: [
+        '{signer} declined to sign "{document}". The request is closed: the other parties can no longer sign it.',
+        'Reason given: {reason}',
+      ],
+      action: { label: 'Open the request', urlVar: 'url' },
+    },
   },
   it: {
     magic_link: {
@@ -198,6 +207,14 @@ const templates: Record<Locale, Templates> = {
         "L'accesso termina al più tardi alle {until}. Puoi revocarlo in qualsiasi momento dalla pagina Supporto.",
       ],
       footer: "Se nessuno del tuo team ha chiesto supporto, revoca subito l'accesso.",
+    },
+    esign_declined: {
+      subject: '{signer} ha rifiutato di firmare "{document}"',
+      body: [
+        '{signer} ha rifiutato di firmare "{document}". La richiesta è chiusa: le altre parti non possono più firmarla.',
+        'Motivo indicato: {reason}',
+      ],
+      action: { label: 'Apri la richiesta', urlVar: 'url' },
     },
   },
 };

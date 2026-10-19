@@ -21,16 +21,27 @@ const BOOKING_DOC = {
       type: 'paragraph',
       content: [
         { type: 'text', text: 'Hi ' },
-        { type: 'liquidVariable', attrs: { path: 'contact.first_name', label: null, fallback: null, filter: null } },
+        {
+          type: 'liquidVariable',
+          attrs: { path: 'contact.first_name', label: null, fallback: null, filter: null },
+        },
         { type: 'text', text: ', your booking is confirmed.' },
       ],
     },
   ],
 };
 
-async function send(world: World, id: string, contactId: string, source: EmailSendRequest['source'] = TRANSACTIONAL) {
+async function send(
+  world: World,
+  id: string,
+  contactId: string,
+  source: EmailSendRequest['source'] = TRANSACTIONAL,
+) {
   const base = sendRequest(contactId, { id, source });
-  const request = { ...base, content: { ...base.content, subject: 'Confirmed', body: BOOKING_DOC } };
+  const request = {
+    ...base,
+    content: { ...base.content, subject: 'Confirmed', body: BOOKING_DOC },
+  };
   const [outcome] = await world.op('send.process', { batch: [{ request, queueAttempts: 1 }] });
   return outcome;
 }
@@ -50,7 +61,9 @@ describe('transactional sends', () => {
     world.crm.op('contacts.update', { id: contactId, data: { marketable_status: 'unsubscribed' } });
     await world.op('suppressions.add', { email: 'ada@example.com', reason: 'unsubscribe' });
 
-    expect(await send(world, 'marketing', contactId, { type: 'single', userId: 'user_owner' })).toMatchObject({ status: 'skipped' });
+    expect(
+      await send(world, 'marketing', contactId, { type: 'single', userId: 'user_owner' }),
+    ).toMatchObject({ status: 'skipped' });
     expect(await send(world, 'tx', contactId)).toEqual({ id: 'tx', action: 'ack', status: 'sent' });
     expect(row(world, 'tx')).toMatchObject({ status: 'sent', source_type: 'transactional' });
     const [email] = world.provider.sent;
@@ -59,7 +72,9 @@ describe('transactional sends', () => {
     expect(email?.html).toContain('Hi Ada, your booking is confirmed.');
     expect(email?.html).not.toMatch(/\/unsub\//);
     const events = await world.op('events.pending', {});
-    expect(events.find((e) => e.type === 'email.sent')?.payload).toMatchObject({ source: TRANSACTIONAL });
+    expect(events.find((e) => e.type === 'email.sent')?.payload).toMatchObject({
+      source: TRANSACTIONAL,
+    });
   });
 
   it('still skip hard-bounced, complaining and manually suppressed addresses', async () => {
@@ -99,12 +114,18 @@ describe('transactional sends', () => {
       },
     };
     const contactId = world.contact({});
-    expect(await send(world, 'single', contactId, { type: 'single', userId: 'user_owner' })).toMatchObject({ status: 'skipped' });
+    expect(
+      await send(world, 'single', contactId, { type: 'single', userId: 'user_owner' }),
+    ).toMatchObject({ status: 'skipped' });
     expect(checks).toHaveLength(1);
 
     setSetting(world.deps, 'warmup_started_at', String(world.clock.now));
     const day = new Date(world.clock.now).toISOString().slice(0, 10);
-    world.deps.db.run(`UPDATE mail_counters SET count = ? WHERE bucket = ?`, WARMUP_CAPS[0] ?? 0, `day:${day}`);
+    world.deps.db.run(
+      `UPDATE mail_counters SET count = ? WHERE bucket = ?`,
+      WARMUP_CAPS[0] ?? 0,
+      `day:${day}`,
+    );
     world.deps.db.run(
       `INSERT OR IGNORE INTO mail_counters (bucket, count) VALUES (?, ?)`,
       `day:${day}`,
@@ -115,7 +136,10 @@ describe('transactional sends', () => {
 
     await world.op('settings.update', { rate_per_minute: 1 });
     const other = world.contact({ email: 'z@example.com' });
-    expect(await send(world, 'tx2', other)).toMatchObject({ action: 'retry', reason: 'rate_limit' });
+    expect(await send(world, 'tx2', other)).toMatchObject({
+      action: 'retry',
+      reason: 'rate_limit',
+    });
   });
 
   it('booking emails render contact Liquid and reach unsubscribed invitees', async () => {
@@ -130,7 +154,12 @@ describe('transactional sends', () => {
       bookingId: 'bkg_1',
       hostUserId: 'user_owner',
       kind: 'confirmation',
-      messages: { confirmation_subject: '', confirmation_body: '', reminder_subject: '', reminder_body: '' },
+      messages: {
+        confirmation_subject: '',
+        confirmation_body: '',
+        reminder_subject: '',
+        reminder_body: '',
+      },
       vars: {
         eventTitle: 'Intro call',
         startsAt: Date.UTC(2026, 9, 20, 8),
@@ -145,7 +174,12 @@ describe('transactional sends', () => {
       now: world.clock.now,
       notAfter: null,
     });
-    expect(request.source).toEqual({ type: 'transactional', purpose: 'booking', referenceId: 'bkg_1', userId: 'user_owner' });
+    expect(request.source).toEqual({
+      type: 'transactional',
+      purpose: 'booking',
+      referenceId: 'bkg_1',
+      userId: 'user_owner',
+    });
     const [outcome] = await world.op('send.process', { batch: [{ request, queueAttempts: 1 }] });
     expect(outcome).toMatchObject({ status: 'sent' });
     const [email] = world.provider.sent;
@@ -157,8 +191,45 @@ describe('transactional sends', () => {
   it('are validated by the queue consumer', () => {
     const contactId = 'con_1';
     expect(parseEmailSendRequest(sendRequest(contactId, { source: TRANSACTIONAL }))).not.toBeNull();
-    expect(parseEmailSendRequest(sendRequest(contactId, { source: { ...TRANSACTIONAL, userId: null } }))).not.toBeNull();
-    const bad = { ...sendRequest(contactId), source: { type: 'transactional', purpose: 'newsletter', referenceId: 'x', userId: null } };
+    expect(
+      parseEmailSendRequest(sendRequest(contactId, { source: { ...TRANSACTIONAL, userId: null } })),
+    ).not.toBeNull();
+    const bad = {
+      ...sendRequest(contactId),
+      source: { type: 'transactional', purpose: 'newsletter', referenceId: 'x', userId: null },
+    };
     expect(parseEmailSendRequest(bad)).toBeNull();
+  });
+});
+
+describe('undelivered transactional emails', () => {
+  it('are reported back to the module that sent them, sent ones are not', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    const reports: unknown[] = [];
+    world.deps.crm.transactionalUndelivered = (input) => {
+      reports.push(input);
+      return Promise.resolve();
+    };
+    const esign: EmailSendRequest['source'] = {
+      type: 'transactional',
+      purpose: 'esign',
+      referenceId: 'req_1',
+      userId: null,
+    };
+    const ok = world.contact({ email: 'ok@example.com' });
+    const bounced = world.contact({ email: 'bounced@example.com' });
+    world.crm.op('contacts.update', { id: bounced, data: { marketable_status: 'bounced' } });
+
+    await send(world, 'ok', ok, esign);
+    await send(world, 'bounced', bounced, esign);
+    expect(reports).toEqual([
+      {
+        purpose: 'esign',
+        referenceId: 'req_1',
+        email: 'bounced@example.com',
+        reason: 'unmarketable: bounced',
+      },
+    ]);
   });
 });

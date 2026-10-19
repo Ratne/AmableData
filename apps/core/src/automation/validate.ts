@@ -18,11 +18,18 @@ export type AutomationLookup = (automationId: string) => { graph: AutomationGrap
 /** Input schema of every action of the installed apps (active or paused), by app id then action key. */
 export type AppActionCatalog = Readonly<Record<string, Readonly<Record<string, AppInputSchema>>>>;
 
+/** Party ids of every signature template, and whether it can be sent now (active and ready). */
+export type EsignTemplateCatalog = Readonly<
+  Record<string, { readonly parties: readonly string[]; readonly sendable: boolean }>
+>;
+
 interface ValidationContext {
   automationId: string;
   lookup: AutomationLookup;
   /** Without it (internal callers) `app_action` steps are not checked against the apps. */
   apps?: AppActionCatalog;
+  /** Without it `send_signature_request` steps are not checked against the templates. */
+  esignTemplates?: EsignTemplateCatalog;
 }
 
 /**
@@ -341,7 +348,44 @@ function validateStep(
       }
       return;
     }
+    case 'send_signature_request':
+      validateSignatureStep(step, path, add, nodeId, context.esignTemplates);
+      return;
     default:
       return;
+  }
+}
+
+function validateSignatureStep(
+  step: Extract<Step, { type: 'send_signature_request' }>,
+  path: string,
+  add: Add,
+  nodeId: string,
+  catalog: EsignTemplateCatalog | undefined,
+): void {
+  if (catalog === undefined) return;
+  const template = catalog[step.template_id];
+  if (template === undefined) {
+    add('error', 'unknown_signature_template', `signature template ${step.template_id} does not exist`, `${path}.template_id`, nodeId);
+    return;
+  }
+  const contactParty = step.party_id ?? template.parties[0];
+  if (contactParty === undefined || !template.parties.includes(contactParty)) {
+    add('error', 'unknown_signature_party', `the template has no party ${step.party_id ?? ''}`, `${path}.party_id`, nodeId);
+    return;
+  }
+  const covered = new Set([contactParty]);
+  (step.others ?? []).forEach((other, k) => {
+    if (!template.parties.includes(other.party_id) || covered.has(other.party_id)) {
+      add('error', 'invalid_signature_party', `party ${other.party_id} is unknown or already assigned`, `${path}.others[${k}].party_id`, nodeId);
+    }
+    covered.add(other.party_id);
+  });
+  const missing = template.parties.filter((party) => !covered.has(party));
+  if (missing.length > 0) {
+    add('error', 'signature_parties_missing', `no signer for ${missing.join(', ')}`, `${path}.others`, nodeId);
+  }
+  if (!template.sendable) {
+    add('warning', 'signature_template_inactive', 'the template is not active: the step fails until it is activated', `${path}.template_id`, nodeId);
   }
 }

@@ -89,6 +89,8 @@ export interface Env {
   // --- Forms, bookings, landing pages (apps/core/src/{forms,booking,pages,public}) ----
   /** Stored submissions to process: CRM mapping, `form.submitted`, external connections. */
   FORM_SUBMISSIONS?: Queue<unknown>;
+  /** Signed-PDF jobs (apps/core/src/esign/queue.ts); without it the TenantDb alarm seals inline. */
+  ESIGN_SEAL?: Queue<unknown>;
   /** Editing lock of a landing page, one instance per page (`<tenantId>:<pageId>`). */
   EDIT_SESSION?: DurableObjectNamespace<EditSession>;
   /** One instance per booking calendar (`<tenantId>:<calendarId>`). */

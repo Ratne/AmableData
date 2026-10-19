@@ -155,7 +155,8 @@ self-hosted installation never needs the cloud.
 │   Durable Objects per tenant: TenantDb (CRM, SQLite),        │
 │     Engine (automations), MailDb (email), BookingCalendar,   │
 │     EditSession                                              │
-│   Queues: email-send, webhooks-out, form-submissions         │
+│   Queues: email-send, webhooks-out, form-submissions,        │
+│     esign-seal                                               │
 │   R2: files and backups                                      │
 │                                                              │
 │ amable-edge (Worker, on your domains)                        │

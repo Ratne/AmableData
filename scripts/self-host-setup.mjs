@@ -43,7 +43,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const D1_NAME = 'amable-installation';
 export const R2_BUCKET = 'amable-files';
-export const QUEUES = ['email-send', 'events-rollup', 'webhooks-out', 'form-submissions', 'analytics'];
+export const QUEUES = ['email-send', 'events-rollup', 'webhooks-out', 'form-submissions', 'esign-seal', 'analytics'];
 export const SECRETS = {
   core: ['PASSWORD_PEPPER', 'AUTH_ENCRYPTION_KEY', 'EMAIL_TOKEN_SECRET', 'EDGE_GATEWAY_SECRET'],
   edge: ['EDGE_GATEWAY_SECRET'],

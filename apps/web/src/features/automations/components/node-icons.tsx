@@ -10,7 +10,10 @@ import {
   Clock,
   Code,
   Eye,
+  FileCheck,
   FileInput,
+  FilePen,
+  FileX,
   Flag,
   Gauge,
   Globe,
@@ -50,6 +53,8 @@ const GOAL_ICONS: Record<GoalTriggerType, LucideIcon> = {
   opportunity_stage_changed: KanbanSquare,
   date_anniversary: CalendarClock,
   app_event: Blocks,
+  document_completed: FileCheck,
+  document_declined: FileX,
 };
 
 const STEP_ICONS: Record<StepType, LucideIcon> = {
@@ -72,6 +77,7 @@ const STEP_ICONS: Record<StepType, LucideIcon> = {
   app_action: Blocks,
   add_to_sequence: ListPlus,
   remove_from_sequence: ListMinus,
+  send_signature_request: FilePen,
   end: CircleStop,
 };
 

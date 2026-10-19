@@ -26,6 +26,8 @@ export const TRIGGER_EVENTS: Record<GoalTrigger['type'], readonly string[]> = {
   opportunity_stage_changed: ['opportunity.stage_changed'],
   date_anniversary: ['automation.date_anniversary'],
   app_event: ['app.event'],
+  document_completed: ['esign.request_completed'],
+  document_declined: ['esign.request_declined'],
 };
 
 export interface GoalRef {

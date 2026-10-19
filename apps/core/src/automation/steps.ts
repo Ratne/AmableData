@@ -359,6 +359,26 @@ async function runCreateOrder(
   };
 }
 
+/** Signature request through the e-signature module; the contact signs as `party_id`. */
+async function runSendSignatureRequest(
+  ctx: StepContext,
+  step: StepOf<'send_signature_request'>,
+): Promise<StepOutcome> {
+  const request = await once(ctx, 'esign.requests.createFromAutomation', {
+    template_id: step.template_id,
+    contact_id: ctx.contactId,
+    party_id: step.party_id,
+    others: step.others,
+    message: step.message,
+    origin_ref: `eng:${ctx.key}`,
+  });
+  return {
+    kind: 'done',
+    message: `signature request ${request.id} sent`,
+    result: { esign_request_id: request.id },
+  };
+}
+
 const CANCELLABLE_SUBSCRIPTION = new Set(['trialing', 'active', 'past_due', 'paused']);
 
 /** Cancels the contact's live subscriptions (optionally only for some products). */
@@ -636,6 +656,8 @@ export async function executeStep(ctx: StepContext): Promise<StepOutcome> {
           ctx.tokenId,
         ),
       };
+    case 'send_signature_request':
+      return runSendSignatureRequest(ctx, step);
     case 'end':
       return { kind: 'end', message: 'automation ended for the contact' };
   }

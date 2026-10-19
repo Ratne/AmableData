@@ -19,6 +19,7 @@ import { crmRoutes } from './features/crm/routes';
 import { developerPublicRoutes, developerRoutes } from './features/developers/routes';
 import { emailRoutes } from './features/email/routes';
 import { bookingRoutes } from './features/booking/routes';
+import { esignRoutes } from './features/esign/routes';
 import { formsRoutes } from './features/forms/routes';
 import { integrationsRoutes } from './features/integrations/routes';
 import { landingRoutes } from './features/landing/routes';
@@ -103,6 +104,7 @@ const featureRoutes = [
   ...analyticsRoutes,
   ...formsRoutes,
   ...bookingRoutes,
+  ...esignRoutes,
   ...landingRoutes,
   ...commerceRoutes,
   ...emailRoutes,

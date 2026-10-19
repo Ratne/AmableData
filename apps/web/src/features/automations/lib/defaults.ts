@@ -22,6 +22,8 @@ export const GOAL_TYPES: readonly GoalTriggerType[] = [
   'opportunity_stage_changed',
   'date_anniversary',
   'app_event',
+  'document_completed',
+  'document_declined',
 ];
 
 export function defaultTrigger(type: GoalTriggerType): GoalTrigger {
@@ -55,6 +57,9 @@ export function defaultTrigger(type: GoalTriggerType): GoalTrigger {
       return { type, field: 'birthday', offset_days: 0, time: '09:00' };
     case 'app_event':
       return { type, app_id: '', key: '' };
+    case 'document_completed':
+    case 'document_declined':
+      return { type };
   }
 }
 
@@ -64,7 +69,7 @@ export const STEP_GROUPS: ReadonlyArray<{
   types: readonly StepType[];
 }> = [
   { id: 'timers', types: ['delay', 'wait_until', 'field_timer'] },
-  { id: 'messages', types: ['send_email', 'http_request', 'app_action'] },
+  { id: 'messages', types: ['send_email', 'send_signature_request', 'http_request', 'app_action'] },
   {
     id: 'crm',
     types: [
@@ -141,6 +146,8 @@ export function defaultStep(type: StepType, id: string): Step {
       return { id, type, automation_id: '', node_id: '' };
     case 'remove_from_sequence':
       return { id, type, automation_id: '' };
+    case 'send_signature_request':
+      return { id, type, template_id: '' };
     case 'end':
       return { id, type };
   }

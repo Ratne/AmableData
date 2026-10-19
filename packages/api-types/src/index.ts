@@ -73,3 +73,6 @@ export * from './workspace/index';
 
 /** Conversations: shared inbox with channels provided by apps. */
 export * from './conversations/index';
+
+/** Electronic signatures: templates, signature requests, audit trail. */
+export * from './esign/index';
