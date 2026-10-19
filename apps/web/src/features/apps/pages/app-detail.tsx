@@ -147,7 +147,7 @@ export function AppDetailPage() {
                 <Badge variant="secondary">{labels.pricing(manifest.pricing.model)}</Badge>
               </div>
               {manifest.pricing.note !== undefined ? (
-                <p className="text-xs text-(--obsidian-dashboard-shell-text-subtle)">{manifest.pricing.note}</p>
+                <p className="text-xs text-(--obsidian-dashboard-shell-text-subtle)">{text(manifest.pricing.note, locale)}</p>
               ) : null}
               {[
                 [t('apps.link.homepage'), manifest.homepage],

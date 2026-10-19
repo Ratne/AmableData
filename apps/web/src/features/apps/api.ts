@@ -44,7 +44,7 @@ export interface AppManifestView {
   readonly webhooks: { readonly events: string[] };
   readonly privacy: { readonly handles_personal_data: boolean };
   readonly custom_fields: Array<{ key: string; label: LocalizedText; type: string; entity: string }>;
-  readonly pricing: { readonly model: 'free' | 'freemium' | 'paid' | 'external'; readonly note?: string; readonly billing_url?: string };
+  readonly pricing: { readonly model: 'free' | 'freemium' | 'paid' | 'external'; readonly note?: LocalizedText; readonly billing_url?: string };
   readonly extensions: {
     readonly contact_validate?: { fields: string[] };
     readonly automation_actions?: AppAutomationAction[];
