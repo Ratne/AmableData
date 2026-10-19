@@ -200,7 +200,7 @@ export function contactJourneyFacts(
   const activities = ctx.db
     .all<{ id: string; type: string; occurred_at: number; data: string }>(
       `SELECT id, type, occurred_at, data FROM crm_activities
-       WHERE contact_id = ? AND (type LIKE 'email.%' OR type IN ('form.submitted', 'appointment.booked', 'booking.created'))
+       WHERE contact_id = ? AND (type LIKE 'email.%' OR type IN ('form.submitted', 'appointment.booked'))
        ORDER BY id DESC LIMIT ?`,
       input.contactId,
       limit,

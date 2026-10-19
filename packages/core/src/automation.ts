@@ -130,12 +130,6 @@ export interface AutomationEventPayloads {
     url: string;
     source: EmailSendSource | null;
   };
-  'booking.created': {
-    contactId: string;
-    bookingId: string;
-    eventTypeId: string | null;
-    appointmentId: string | null;
-  };
   /** A web analytics goal completed by an identified visitor. */
   'analytics.goal': { contactId: string; siteId: string; goalName: string };
   /** Trigger fired by an installed app (`POST /api/v2/t/{slug}/apps/events`); `name` is `app.<appId>.<key>`. */
@@ -154,7 +148,6 @@ export const AUTOMATION_EVENT_TYPES = [
   'form.submitted',
   'email.opened',
   'email.link_clicked',
-  'booking.created',
   'analytics.goal',
   'app.event',
 ] as const satisfies readonly AutomationEventType[];

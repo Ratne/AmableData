@@ -322,15 +322,15 @@ export function registerBookingRoutes(router: OpenAPIHono<AppEnv>): void {
       method: 'get',
       path: '/bookingCalendars/{calendarId}/sync',
       tags: calendarsTag,
-      summary: 'Last busy time sync and booking write status (Google is not contacted)',
+      summary: 'Last busy time sync and booking write status (re-reads the granted scopes, no busy-time fetch)',
       request: { params: bookingCalendarParamSchema },
       responses: { 200: json(bookingSyncResultSchema, 'Sync status') },
     }),
     async (c) => {
       const { calendarId } = c.req.valid('param');
-      await callCrm(c, 'booking.getCalendar', { id: calendarId });
+      const ref = await callCrm(c, 'booking.calendarForWorker', { id: calendarId });
       const stub = calendarStub(c.env, tenantId(c), calendarId);
-      return c.json(stub === null ? UNAVAILABLE_SYNC : syncToApi((await stub.status()) as SyncResult), 200);
+      return c.json(stub === null ? UNAVAILABLE_SYNC : syncToApi((await stub.status(doRef(tenantId(c), ref))) as SyncResult), 200);
     },
   );
 

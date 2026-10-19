@@ -245,7 +245,6 @@ const OTHER_EVENT_TYPES = [
   'email.bounced',
   'email.complained',
   'email.unsubscribed',
-  'booking.created',
 ] as const;
 
 export const EVENT_TYPES = [

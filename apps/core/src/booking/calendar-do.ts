@@ -57,9 +57,9 @@ export class BookingCalendar extends DurableObject<Env> {
     return this.core.sync(ref);
   }
 
-  /** Last busy sync and booking write health, without contacting Google. */
-  status(): SyncResult {
-    return this.core.lastSync();
+  /** Last busy sync and booking write health (no busy-time fetch). */
+  async status(ref: CalendarDoRef): Promise<SyncResult> {
+    return this.core.status(ref);
   }
 
   async bookingChanged(bookingId: string, reminders: ReminderJob[], change?: CalendarEventChange): Promise<number> {

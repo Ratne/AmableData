@@ -186,12 +186,16 @@ function DealView({ deal }: { deal: Opportunity }) {
           onClick: () => {
             api.opportunities
               .restore(deal.id)
-              .then(() =>
-                navigate({
+              .then((restored) => {
+                if (restored.pipeline_id !== deal.pipeline_id) {
+                  const name = pipelines.data?.find((p) => p.id === restored.pipeline_id)?.name ?? '';
+                  toast.info(t('crm.deals.restoredInto', { pipeline: name }));
+                }
+                return navigate({
                   to: '/t/$tenant/deals/$dealId',
                   params: { tenant: slug, dealId: deal.id },
-                }),
-              )
+                });
+              })
               .catch((error: unknown) =>
                 toast.error(error instanceof Error ? error.message : t('common.error')),
               );

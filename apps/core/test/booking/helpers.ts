@@ -1,6 +1,6 @@
 import { zonedToUtc } from '@amable/booking';
 import { devOAuthProvider, type EmailSendRequest, type OAuthTokenProvider } from '@amable/core';
-import { CalendarCore } from '../../src/booking/calendar-core';
+import { CalendarCore, type CalendarDoRef } from '../../src/booking/calendar-core';
 import type { Env } from '../../src/env';
 import { createNodeSqlDb, type TestTenant } from '../crm/helpers';
 
@@ -62,7 +62,7 @@ export function fakeCalendars(options: { oauth?: OAuthTokenProvider; fetch?: (in
           change?: Parameters<CalendarCore['bookingChanged']>[2],
         ) => c.bookingChanged(id, structuredClone(jobs), change === undefined ? undefined : structuredClone(change)),
         eventState: (id: string) => Promise.resolve(c.eventState(id)),
-        status: () => Promise.resolve(c.lastSync()),
+        status: (ref: CalendarDoRef) => c.status(ref),
         touch: () => Promise.resolve(c.bump()),
         version: () => Promise.resolve(c.version()),
         fetch: () => Promise.resolve(new Response('ws', { status: 200 })),

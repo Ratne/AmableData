@@ -81,6 +81,7 @@ function AlertDialog({
     },
   );
 
+  const [confirmRotate, setConfirmRotate] = useState(false);
   const rotate = useAnalyticsMutation(
     tenant,
     async () => (alert ? (await api.alerts.rotateSecret(site.id, alert.id)).webhook_secret : null),
@@ -115,6 +116,19 @@ function AlertDialog({
           </div>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-4">
+            <DashboardConfirmDialog
+              open={confirmRotate}
+              onOpenChange={setConfirmRotate}
+              title={t('analytics.alerts.rotateConfirmTitle')}
+              description={t('analytics.alerts.rotateConfirmBody')}
+              confirmLabel={t('analytics.alerts.rotate')}
+              cancelLabel={t('common.cancel')}
+              tone="danger"
+              onConfirm={() => {
+                setConfirmRotate(false);
+                rotate.mutate(undefined);
+              }}
+            />
             <DialogHeader>
               <DialogTitle>
                 {alert ? t('analytics.alerts.editTitle') : t('analytics.alerts.newTitle')}
@@ -170,7 +184,7 @@ function AlertDialog({
                     variant="secondary"
                     size="sm"
                     disabled={rotate.isPending}
-                    onClick={() => rotate.mutate(undefined)}
+                    onClick={() => setConfirmRotate(true)}
                   >
                     {t('analytics.alerts.rotate')}
                   </DashboardButton>

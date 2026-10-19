@@ -527,7 +527,18 @@ export function DealsPage() {
                 can('opportunities:write')
                   ? {
                       onDelete: (rows) => remove.mutateAsync(rows).then(() => undefined),
-                      onUndo: (rows) => restore.mutateAsync(rows).then(() => undefined),
+                      onUndo: (rows) =>
+                        restore.mutateAsync(rows).then((restored) => {
+                          const moved = restored.find((d) => d.pipeline_id !== pipelineId);
+                          if (moved === undefined) return;
+                          const name = pipelines.data?.find((p) => p.id === moved.pipeline_id)?.name ?? '';
+                          toast.info(t('crm.deals.restoredElsewhere', { pipeline: name }), {
+                            action: {
+                              label: t('crm.deals.showPipeline'),
+                              onClick: () => setPipelineId(moved.pipeline_id),
+                            },
+                          });
+                        }),
                     }
                   : undefined
               }

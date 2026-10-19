@@ -483,6 +483,9 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.alerts.secretTitle': 'Segreto di firma del webhook',
   'analytics.alerts.secretHint': 'Usalo per verificare l’header Amable-Signature di ogni invio.',
   'analytics.alerts.rotate': 'Nuovo segreto',
+  'analytics.alerts.rotateConfirmTitle': 'Generare un nuovo segreto del webhook?',
+  'analytics.alerts.rotateConfirmBody':
+    'Il segreto attuale smette subito di funzionare: aggiorna il ricevitore con quello nuovo. Le modifiche non salvate in questo modulo vanno perse.',
   'analytics.alerts.rotateHint': 'Il segreto si vede una sola volta. Perso? Generane uno nuovo: il vecchio smette subito di funzionare.',
 
   'analytics.share.title': 'Condividi {site}',

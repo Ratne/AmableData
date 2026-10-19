@@ -104,6 +104,8 @@ export function googleEventId(bookingId: string): string {
 type WriteOutcome = { ok: true } | { ok: false; retry: boolean; error: string; reconnect?: boolean };
 
 const MISSING_WRITE_SCOPE = 'missing calendar.events scope: reconnect Google';
+/** How often reading the status re-reads the granted scopes of the stored token. */
+const SCOPE_CHECK_MS = 5 * 60_000;
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
@@ -172,6 +174,32 @@ export class CalendarCore {
     this.setMeta('write_error', error === null ? '' : JSON.stringify(error));
   }
 
+  /** Flags a token without `calendar.events` (bookings cannot be written), and clears the flag once granted. */
+  private checkWriteScope(scopes: readonly string[], now: number): void {
+    this.setMeta('scope_checked_at', String(now));
+    if (!scopes.includes(OAUTH_SCOPES.calendar)) {
+      this.setWriteError({ message: MISSING_WRITE_SCOPE, at: now, reconnect: true });
+    } else if (this.lastSync().needsReconnect === true) {
+      this.setWriteError(null);
+    }
+  }
+
+  /** Last sync and write health; re-reads the token scopes now and then, so a read-only grant shows at once. */
+  async status(ref: CalendarDoRef): Promise<SyncResult> {
+    const now = this.deps.now();
+    const checkedAt = Number(this.meta('scope_checked_at') ?? 0);
+    const sameAccount = this.meta('scope_checked_account') === ref.googleAccountId;
+    if (ref.googleAccountId !== null && this.deps.oauth.available && (!sameAccount || now - checkedAt >= SCOPE_CHECK_MS)) {
+      this.setMeta('scope_checked_at', String(now));
+      this.setMeta('scope_checked_account', ref.googleAccountId);
+      const token = await this.deps.oauth
+        .getAccessToken({ tenantId: ref.tenantId, provider: 'google', accountId: ref.googleAccountId })
+        .catch(() => null);
+      if (token !== null && !token.stub) this.checkWriteScope(token.scopes, now);
+    }
+    return this.lastSync();
+  }
+
   private replaceBusy(intervals: readonly Interval[]): void {
     this.deps.db.transaction(() => {
       this.deps.db.run(`DELETE FROM external_busy`);
@@ -208,11 +236,7 @@ export class CalendarCore {
       if (before > 0) this.bump();
       return this.record({ status: 'stub', busyCount: 0, syncedAt: now, message: 'skipped (dev stub)' }, ref.googleAccountId);
     }
-    if (!token.scopes.includes(OAUTH_SCOPES.calendar)) {
-      this.setWriteError({ message: MISSING_WRITE_SCOPE, at: now, reconnect: true });
-    } else if (this.withWrites({ status: 'ok', busyCount: 0, syncedAt: null, message: null }).needsReconnect === true) {
-      this.setWriteError(null);
-    }
+    this.checkWriteScope(token.scopes, now);
     if (!token.scopes.includes(OAUTH_SCOPES.calendarRead) && !token.scopes.includes(OAUTH_SCOPES.calendar)) {
       return this.record({ status: 'error', busyCount: before, syncedAt: now, message: 'missing calendar scope' }, ref.googleAccountId);
     }

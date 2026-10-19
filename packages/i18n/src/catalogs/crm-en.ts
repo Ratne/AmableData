@@ -289,7 +289,6 @@ export const crmEn = {
   'crm.activity.formSubmitted': 'Form submitted',
   'crm.activity.appointmentBooked': 'Appointment booked',
   'crm.activity.appointmentRescheduled': 'Appointment rescheduled',
-  'crm.activity.bookingCreated': 'Booking created',
   'crm.activity.pagePublished': 'Page published',
   'crm.activity.pageUnpublished': 'Page unpublished',
   'crm.activity.emailSent': 'Email sent',
@@ -378,6 +377,10 @@ export const crmEn = {
   'crm.deals.title': 'Title',
   'crm.deals.value': 'Value',
   'crm.deals.stage': 'Stage',
+  'crm.deals.restoredElsewhere':
+    'Restored into the “{pipeline}” pipeline, because its stage or pipeline was deleted: it is not in the list you are viewing.',
+  'crm.deals.showPipeline': 'Show pipeline',
+  'crm.deals.restoredInto': 'Its stage or pipeline was deleted: the deal was restored into the “{pipeline}” pipeline.',
   'crm.deals.expectedClose': 'Expected close',
   'crm.deals.created': 'Deal created',
   'crm.deals.moved': 'Moved to {stage}',

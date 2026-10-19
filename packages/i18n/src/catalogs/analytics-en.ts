@@ -486,6 +486,9 @@ export const analyticsEn = {
   'analytics.alerts.secretTitle': 'Webhook signing secret',
   'analytics.alerts.secretHint': 'Use it to verify the Amable-Signature header of every delivery.',
   'analytics.alerts.rotate': 'New secret',
+  'analytics.alerts.rotateConfirmTitle': 'Issue a new webhook secret?',
+  'analytics.alerts.rotateConfirmBody':
+    'The current secret stops working at once: update the receiver with the new one. Unsaved changes in this form are discarded.',
   'analytics.alerts.rotateHint': 'The secret is shown only once. Lost it? Issue a new one: the old one stops working at once.',
 
   'analytics.share.title': 'Share {site}',

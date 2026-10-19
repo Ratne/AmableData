@@ -292,7 +292,6 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.activity.formSubmitted': 'Modulo inviato',
   'crm.activity.appointmentBooked': 'Appuntamento prenotato',
   'crm.activity.appointmentRescheduled': 'Appuntamento spostato',
-  'crm.activity.bookingCreated': 'Prenotazione creata',
   'crm.activity.pagePublished': 'Pagina pubblicata',
   'crm.activity.pageUnpublished': 'Pagina ritirata',
   'crm.activity.emailSent': 'Email inviata',
@@ -381,6 +380,10 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.deals.title': 'Titolo',
   'crm.deals.value': 'Valore',
   'crm.deals.stage': 'Fase',
+  'crm.deals.restoredElsewhere':
+    'Ripristinato nella pipeline «{pipeline}», perché la sua fase o pipeline è stata eliminata: non compare nella lista che stai guardando.',
+  'crm.deals.showPipeline': 'Mostra pipeline',
+  'crm.deals.restoredInto': 'La sua fase o pipeline è stata eliminata: il deal è stato ripristinato nella pipeline «{pipeline}».',
   'crm.deals.expectedClose': 'Chiusura prevista',
   'crm.deals.created': 'Opportunità creata',
   'crm.deals.moved': 'Spostata in {stage}',

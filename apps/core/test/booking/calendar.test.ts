@@ -250,4 +250,34 @@ describe('BookingCalendar core', () => {
     scopes = [OAUTH_SCOPES.calendarRead, OAUTH_SCOPES.calendar];
     expect(await stub.sync(ref)).toMatchObject({ status: 'ok', needsReconnect: false, writeError: null });
   });
+
+  it('shows a read-only grant on the first status read, before any sync or write', async () => {
+    let scopes: OAuthScope[] = [OAUTH_SCOPES.calendarRead];
+    let tokenReads = 0;
+    const oauth: OAuthTokenProvider = {
+      available: true,
+      startConnect: () => Promise.reject(new Error('unused')),
+      finishConnect: () => Promise.reject(new Error('unused')),
+      getAccessToken: () => {
+        tokenReads += 1;
+        return Promise.resolve({ accessToken: 'real', expiresAt: Date.now() + 3600_000, scopes, stub: false });
+      },
+      revoke: () => Promise.resolve(),
+    };
+    const calendars = fakeCalendars({ oauth, fetch: () => Promise.reject(new Error('Google must not be called')) });
+    const stub = calendars.namespace.get(calendars.namespace.idFromName('ten_1:cal_1'));
+    const ref = { ...REF, googleAccountId: 'acc_1', googleCalendarId: 'primary' };
+    expect(await stub.status(ref)).toMatchObject({ status: 'not_connected', needsReconnect: true });
+    // Cached between reads; re-read after the interval.
+    scopes = [OAUTH_SCOPES.calendarRead, OAUTH_SCOPES.calendar];
+    expect(await stub.status(ref)).toMatchObject({ needsReconnect: true });
+    expect(tokenReads).toBe(1);
+    // Reconnecting changes the account: checked at once.
+    expect(await stub.status({ ...ref, googleAccountId: 'acc_2' })).toMatchObject({ needsReconnect: false });
+    expect(tokenReads).toBe(2);
+    scopes = [OAUTH_SCOPES.calendarRead];
+    calendars.clock.now += 5 * 60_000;
+    expect(await stub.status({ ...ref, googleAccountId: 'acc_2' })).toMatchObject({ needsReconnect: true });
+    expect(tokenReads).toBe(3);
+  });
 });
