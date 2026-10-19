@@ -50,11 +50,14 @@ const handler = {
   // (apps/core/src/webhooks); events-rollup is still a stub.
   // Failures are reported to the fleet monitor (no personal data), then rethrown for retry.
   async queue(batch: MessageBatch<unknown>, env: Env, ctx: ExecutionContext): Promise<void> {
-    return withErrorReporting(env, 'queue', batch.queue, async () => {
-      if (batch.queue === 'email-send') return handleEmailSendBatch(batch, env);
-      if (batch.queue === FORM_SUBMISSIONS_QUEUE) return consumeFormSubmissions(batch, env);
-      if (batch.queue === WEBHOOKS_QUEUE) return consumeWebhooks(batch, env);
-      if (batch.queue === ESIGN_SEAL_QUEUE) return consumeEsignSeal(batch, env);
+    // The managed installer prefixes queue names (`amable-email-send`) so they cannot clash
+    // with other projects on a shared Cloudflare account.
+    const queue = batch.queue.replace(/^amable-/, '');
+    return withErrorReporting(env, 'queue', queue, async () => {
+      if (queue === 'email-send') return handleEmailSendBatch(batch, env);
+      if (queue === FORM_SUBMISSIONS_QUEUE) return consumeFormSubmissions(batch, env);
+      if (queue === WEBHOOKS_QUEUE) return consumeWebhooks(batch, env);
+      if (queue === ESIGN_SEAL_QUEUE) return consumeEsignSeal(batch, env);
       console.log(`[queue:${batch.queue}] received ${batch.messages.length} message(s) — stub`);
       batch.ackAll();
     }, (promise) => ctx.waitUntil(promise));

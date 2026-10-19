@@ -93,8 +93,10 @@ const handler = {
   fetch: app.fetch,
 
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
-    if (batch.queue === 'analytics') {
-      await withEdgeErrorReporting(env, { source: 'queue', module: batch.queue }, () =>
+    // `amable-analytics` on installations made by the managed installer (shared accounts).
+    const queue = batch.queue.replace(/^amable-/, '');
+    if (queue === 'analytics') {
+      await withEdgeErrorReporting(env, { source: 'queue', module: queue }, () =>
         consumeAnalyticsBatch(batch as MessageBatch<AnalyticsMessage>, env),
       );
       return;
