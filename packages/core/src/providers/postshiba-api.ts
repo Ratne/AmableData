@@ -415,12 +415,14 @@ export function postshibaDnsRecords(domain: PostShibaSendingDomain): DnsRecord[]
   return records;
 }
 
+/**
+ * PostShiba reports `failed` as soon as a record is missing and keeps
+ * rechecking, so an unverified domain stays `pending`; only a suspended one fails.
+ */
 export function postshibaVerification(domain: PostShibaSendingDomain): DomainVerification {
-  const statuses = [domain.dkimStatus, domain.returnPathStatus];
-  const failed = statuses.some((s) => s === 'failed' || s === 'invalid');
   return {
     domain: domain.name,
-    status: domain.sendingAllowed && !domain.suspended ? 'verified' : failed ? 'failed' : 'pending',
+    status: domain.suspended ? 'failed' : domain.sendingAllowed ? 'verified' : 'pending',
     records: postshibaDnsRecords(domain),
   };
 }

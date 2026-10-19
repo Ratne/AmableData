@@ -4,6 +4,8 @@ import {
   PostShibaAccount,
   PostShibaEmailMarketingProvider,
   postshibaDnsRecords,
+  postshibaVerification,
+  type PostShibaSendingDomain,
   type PostShibaSenderStore,
   type PostShibaWorkspace,
   type PostShibaWorkspaceAdmin,
@@ -38,6 +40,30 @@ const DOMAIN = {
   queue_flushed_at: null,
 };
 const VERIFIED = { ...DOMAIN, dkim_status: 'verified', return_path_status: 'verified', dmarc_status: 'verified', sending_allowed: true };
+
+type RawDomain = typeof DOMAIN;
+/** Recorded API shape → client shape (what `PostShibaAccount` returns). */
+function toDomainFixture(d: RawDomain): PostShibaSendingDomain {
+  return {
+    id: d.id,
+    name: d.name,
+    tenantId: d.tenant_id,
+    dkimStatus: d.dkim_status,
+    returnPathStatus: d.return_path_status,
+    dmarcStatus: d.dmarc_status,
+    sendingAllowed: d.sending_allowed,
+    dkimManual: d.dkim_manual,
+    dkimTxt: d.dkim_txt,
+    dkimCnameHost: d.dkim_cname_host,
+    dkimCnameTarget: d.dkim_cname_target,
+    dmarcHost: d.dmarc_host,
+    dmarcRecord: d.dmarc_record,
+    returnPathHost: d.return_path_host,
+    returnPathTarget: d.return_path_target,
+    lastVerificationError: d.last_verification_error,
+    suspended: d.suspended,
+  };
+}
 const TENANT = { id: 'Ten001', name: 'acme', slug: 'ws-acme', suspended: false };
 const CREDENTIAL = { id: 'Cred01', username: 'smtp_42', password: 'pw-redacted', tenant_id: 'Ten001', tenant: 'ws-acme', cluster_id: 'Clu001' };
 const ENDPOINT = {
@@ -233,32 +259,15 @@ describe('PostShiba workspace on an own account', () => {
       sending_domain: { name: 'mail.acme.test', tenant_id: 'Ten001' },
     });
     expect((await admin.verifyDomain('Ten001', 'mail.acme.test')).status).toBe('verified');
+    expect(postshibaVerification(toDomainFixture({ ...DOMAIN, dkim_status: 'failed' })).status).toBe('pending');
+    expect(postshibaVerification(toDomainFixture({ ...VERIFIED, suspended: true })).status).toBe('failed');
     await expect(admin.addDomain('Ten001', 'mail.acme.test')).rejects.toMatchObject({ code: 'hostname_taken', status: 409 });
     await admin.removeDomain('Ten001', 'MAIL.acme.test');
     expect(ps.keys()).toContain(`DELETE ${API}/sending_domains/Dom001`);
   });
 
   it('publishes the DKIM key as TXT when it is imported', () => {
-    const manual = { ...DOMAIN, dkim_manual: true };
-    const records = postshibaDnsRecords({
-      id: manual.id,
-      name: manual.name,
-      tenantId: manual.tenant_id,
-      dkimStatus: 'pending',
-      returnPathStatus: 'pending',
-      dmarcStatus: 'pending',
-      sendingAllowed: false,
-      dkimManual: true,
-      dkimTxt: manual.dkim_txt,
-      dkimCnameHost: manual.dkim_cname_host,
-      dkimCnameTarget: manual.dkim_cname_target,
-      dmarcHost: manual.dmarc_host,
-      dmarcRecord: manual.dmarc_record,
-      returnPathHost: manual.return_path_host,
-      returnPathTarget: manual.return_path_target,
-      lastVerificationError: null,
-      suspended: false,
-    });
+    const records = postshibaDnsRecords(toDomainFixture({ ...DOMAIN, dkim_manual: true }));
     expect(records[0]).toEqual({ type: 'TXT', name: 'ps1._domainkey.mail.acme.test', value: 'v=DKIM1; k=rsa; p=REDACTED' });
   });
 
