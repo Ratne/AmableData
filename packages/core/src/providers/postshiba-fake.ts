@@ -1,11 +1,27 @@
 import { EmailProviderError } from './email-marketing';
 import type {
   PostShibaAccountApi,
+  PostShibaCluster,
   PostShibaSendingDomain,
   PostShibaSmtpCredential,
+  PostShibaTeamStatus,
   PostShibaTenant,
   PostShibaWebhookEndpoint,
 } from './postshiba-api';
+
+const fakeCluster = (id: string, name: string): PostShibaCluster => ({
+  id,
+  name,
+  plan: 'small',
+  classification: 'bulk',
+  status: 'active',
+  sendingReady: true,
+  emailsPerHour: 40_000,
+  emailsPerDay: 240_000,
+  baseEmailsPerHour: 40_000,
+  baseEmailsPerDay: 240_000,
+  httpEndpoint: 'inject.postshiba.test:443',
+});
 
 /**
  * In-memory PostShiba team (dev, staging, tests): same answers as the real
@@ -17,6 +33,12 @@ export class FakePostShibaAccount implements PostShibaAccountApi {
   readonly credentials = new Map<string, PostShibaSmtpCredential & { tenantId: string; clusterId: string; disabled: boolean }>();
   readonly domains = new Map<string, PostShibaSendingDomain>();
   readonly endpoints = new Map<string, PostShibaWebhookEndpoint & { secret: string }>();
+  readonly clusters = new Map<string, PostShibaCluster>([
+    ['FakeCluster', fakeCluster('FakeCluster', 'fake-small')],
+    ['FakeCluster2', fakeCluster('FakeCluster2', 'fake-small-2')],
+  ]);
+  /** Ids reported in `clusters_at_cap`. */
+  readonly atCap = new Set<string>();
   readonly calls: string[] = [];
   failNext: string | null = null;
   verifyAll = false;
@@ -171,5 +193,19 @@ export class FakePostShibaAccount implements PostShibaAccountApi {
     this.enter('deleteWebhookEndpoint');
     this.endpoints.delete(id);
     return Promise.resolve();
+  }
+
+  listClusters(): Promise<PostShibaCluster[]> {
+    this.enter('listClusters');
+    return Promise.resolve([...this.clusters.values()]);
+  }
+
+  teamStatus(): Promise<PostShibaTeamStatus> {
+    this.enter('teamStatus');
+    return Promise.resolve({
+      suspended: false,
+      clustersAtCap: [...this.atCap].map((id) => ({ id, hourlyRemaining: 0, dailyRemaining: 0, queued: 0 })),
+      heldTenants: [],
+    });
   }
 }

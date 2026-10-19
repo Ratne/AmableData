@@ -181,6 +181,14 @@ export interface EmailWorkspaceResponse {
   readonly injectUrl: string;
 }
 
+/**
+ * `POST /v1/installation/email/workspaces/credential` (body `EmailTenantRequest`):
+ * the current credential of a tenant, after the control plane moved it to another cluster.
+ */
+export interface EmailCredentialResponse extends EmailWorkspaceResponse {
+  readonly workspaceId: string;
+}
+
 /** `POST /v1/installation/email/domains` (add), `…/domains/verify`, `…/domains/remove`. */
 export interface EmailDomainRequest {
   readonly providerTenantId: string;

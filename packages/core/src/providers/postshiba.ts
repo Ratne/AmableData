@@ -40,6 +40,8 @@ export interface PostShibaWorkspaceAdmin {
   removeDomain(providerTenantId: string, hostname: string): Promise<void>;
   suspend(providerTenantId: string): Promise<void>;
   resume(providerTenantId: string): Promise<void>;
+  /** Current credential of a tenant the control plane moved to another cluster. */
+  refreshWorkspace?(providerTenantId: string): Promise<{ workspaceId: string; workspace: PostShibaWorkspace }>;
 }
 
 /** Per-workspace sending credentials, kept encrypted by the installation. */
@@ -79,16 +81,29 @@ export class PostShibaEmailMarketingProvider implements EmailMarketingProvider {
   async sendEmail(email: MarketingEmail): Promise<SendEmailResult> {
     const tenantId = email.providerTenantId ?? null;
     const sender = tenantId === null ? null : await this.config.senders.get(tenantId);
-    if (sender === null) {
+    if (tenantId === null || sender === null) {
       throw new EmailProviderError('the workspace has no PostShiba sender yet', false, null, null, 'credential_missing');
     }
-    await postshibaInject(sender.smtp, email, {
+    try {
+      await this.inject(sender, email);
+    } catch (error) {
+      // A rejected login sent nothing: the credential was replaced (cluster move), fetch it and retry once.
+      const refresh = this.config.admin.refreshWorkspace?.bind(this.config.admin);
+      if (!(error instanceof EmailProviderError) || error.status !== 401 || refresh === undefined) throw error;
+      const { workspaceId, workspace } = await refresh(tenantId);
+      await this.config.senders.put(workspaceId, workspace);
+      await this.inject(workspace, email);
+    }
+    // Inject returns no message id: delivery events match on the unique args.
+    return { messageId: email.idempotencyKey ?? '', accepted: true };
+  }
+
+  private inject(sender: PostShibaWorkspace, email: MarketingEmail): Promise<void> {
+    return postshibaInject(sender.smtp, email, {
       ...(sender.injectUrl === null ? {} : { injectUrl: sender.injectUrl }),
       ...(this.config.fetch === undefined ? {} : { fetch: this.config.fetch }),
       ...(this.config.timeoutMs === undefined ? {} : { timeoutMs: this.config.timeoutMs }),
     });
-    // Inject returns no message id: delivery events match on the unique args.
-    return { messageId: email.idempotencyKey ?? '', accepted: true };
   }
 
   async createTenant(name: string, workspaceId: string): Promise<ProviderTenant> {

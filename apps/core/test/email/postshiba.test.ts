@@ -4,6 +4,7 @@ import {
   PostShibaAccount,
   PostShibaEmailMarketingProvider,
   postshibaDnsRecords,
+  postshibaInjectUrl,
   postshibaVerification,
   type PostShibaSendingDomain,
   type PostShibaSenderStore,
@@ -170,6 +171,28 @@ describe('PostShiba sending (HTTP inject)', () => {
     expect(ps.calls).toEqual([]);
   });
 
+  it('fetches the moved credential once when the cluster rejects the login', async () => {
+    const MOVED: PostShibaWorkspace = { ...SENDER, smtp: { username: 'smtp_77', password: 'pw-moved' }, injectUrl: 'https://inject2.postshiba.test/api/inject/v1' };
+    const ps = postshiba({
+      [`POST ${INJECT}`]: () => ({ status: 401, json: { error: 'unauthorized' } }),
+      [`POST ${MOVED.injectUrl ?? ''}`]: () => ({ json: { success_count: 1, fail_count: 0, errors: [] } }),
+    });
+    const senders = memoryStore();
+    senders.saved.set('Ten001', SENDER);
+    const refreshed: string[] = [];
+    const admin = {
+      refreshWorkspace: (id: string) => {
+        refreshed.push(id);
+        return Promise.resolve({ workspaceId: 'acme', workspace: MOVED });
+      },
+    } as unknown as PostShibaWorkspaceAdmin;
+    const provider = new PostShibaEmailMarketingProvider({ admin, senders, webhookUrl: () => '', fetch: ps.fetch });
+    expect(await provider.sendEmail(email)).toEqual({ messageId: 'msg_1', accepted: true });
+    expect(refreshed).toEqual(['Ten001']);
+    expect(senders.saved.get('Ten001')).toEqual(MOVED);
+    expect(ps.calls[1]?.headers['authorization']).toBe(`Basic ${btoa('smtp_77:pw-moved')}`);
+  });
+
   it('maps refused recipients, error codes and timeouts', async () => {
     const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
     const ps = postshiba({
@@ -275,5 +298,49 @@ describe('PostShiba workspace on an own account', () => {
     const ps = postshiba({});
     await expect(new PostShibaAccount({ apiKey: '', teamId: 'Team01', fetch: ps.fetch }).listTenants()).rejects.toMatchObject({ retryable: false });
     expect(ps.calls).toEqual([]);
+  });
+
+  it('reads clusters, their inject URL and the team status', async () => {
+    const CLUSTER = {
+      id: 'Clu001',
+      name: 'acme-bulk',
+      region: 'local',
+      size: 'small',
+      plan: 'small',
+      emails_per_hour: 40000,
+      emails_per_day: 240000,
+      base_emails_per_hour: 40000,
+      base_emails_per_day: 240000,
+      boost: null,
+      status: 'active',
+      smtp_endpoint: 'smtp.postshiba.com:587',
+      http_endpoint: 'inject.postshiba.com:443',
+      classification: 'bulk',
+      sending_ready: true,
+    };
+    const ps = postshiba({
+      [`GET ${TEAM}/clusters`]: () => ({ json: [CLUSTER] }),
+      [`GET ${TEAM}/status`]: () => ({
+        json: { suspended: false, kyc_status: 'approved', clusters_at_cap: [{ id: 'Clu001', name: 'acme-bulk', hourly_remaining: 0, daily_remaining: 9, queued: 3 }], held_tenants: [] },
+      }),
+    });
+    const [cluster] = await account(ps.fetch).listClusters();
+    expect(cluster).toEqual({
+      id: 'Clu001',
+      name: 'acme-bulk',
+      plan: 'small',
+      classification: 'bulk',
+      status: 'active',
+      sendingReady: true,
+      emailsPerHour: 40000,
+      emailsPerDay: 240000,
+      baseEmailsPerHour: 40000,
+      baseEmailsPerDay: 240000,
+      httpEndpoint: 'inject.postshiba.com:443',
+    });
+    expect(postshibaInjectUrl(cluster ?? { httpEndpoint: null })).toBe(INJECT);
+    expect(postshibaInjectUrl({ httpEndpoint: 'inject-eu.postshiba.com:8443' })).toBe('https://inject-eu.postshiba.com:8443/api/inject/v1');
+    expect(postshibaInjectUrl({ httpEndpoint: null })).toBe(INJECT);
+    expect((await account(ps.fetch).teamStatus()).clustersAtCap).toEqual([{ id: 'Clu001', hourlyRemaining: 0, dailyRemaining: 9, queued: 3 }]);
   });
 });

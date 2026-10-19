@@ -81,6 +81,7 @@ export {
   findPostShibaDomain,
   postshibaDnsRecords,
   postshibaInject,
+  postshibaInjectUrl,
   postshibaVerification,
   PostShibaAccount,
   POSTSHIBA_DEFAULT_BASE_URL,
@@ -91,9 +92,11 @@ export { FakePostShibaAccount } from './providers/postshiba-fake';
 export type {
   PostShibaAccountApi,
   PostShibaAccountConfig,
+  PostShibaCluster,
   PostShibaSendingDomain,
   PostShibaSmtpCredential,
   PostShibaSmtpLogin,
+  PostShibaTeamStatus,
   PostShibaTenant,
   PostShibaWebhookEndpoint,
 } from './providers/postshiba-api';

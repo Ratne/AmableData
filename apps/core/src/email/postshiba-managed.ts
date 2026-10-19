@@ -1,5 +1,6 @@
 import { EmailProviderError, type DomainVerification, type PostShibaWorkspace, type PostShibaWorkspaceAdmin } from '@amable/core';
 import type {
+  EmailCredentialResponse,
   EmailDomainRequest,
   EmailDomainResponse,
   EmailTenantRequest,
@@ -58,5 +59,14 @@ export class ControlPlanePostShibaAdmin implements PostShibaWorkspaceAdmin {
   async resume(providerTenantId: string): Promise<void> {
     const body: EmailTenantRequest = { providerTenantId };
     await this.post('/email/tenants/resume', body);
+  }
+
+  async refreshWorkspace(providerTenantId: string): Promise<{ workspaceId: string; workspace: PostShibaWorkspace }> {
+    const body: EmailTenantRequest = { providerTenantId };
+    const res = await this.post<EmailCredentialResponse>('/email/workspaces/credential', body);
+    return {
+      workspaceId: res.workspaceId,
+      workspace: { providerTenantId: res.providerTenantId, smtp: res.smtp, webhookSecret: res.webhookSecret, injectUrl: res.injectUrl },
+    };
   }
 }

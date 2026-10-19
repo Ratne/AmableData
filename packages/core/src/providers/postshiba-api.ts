@@ -172,6 +172,29 @@ export interface PostShibaWebhookEndpoint {
   readonly secret: string | null;
 }
 
+export interface PostShibaCluster {
+  readonly id: string;
+  readonly name: string;
+  readonly plan: string;
+  readonly classification: 'bulk' | 'transactional';
+  readonly status: string;
+  readonly sendingReady: boolean;
+  /** Current throttles, including an active boost. */
+  readonly emailsPerHour: number;
+  readonly emailsPerDay: number;
+  /** Throttles of the monthly plan. */
+  readonly baseEmailsPerHour: number;
+  readonly baseEmailsPerDay: number;
+  /** `host:port` of HTTP inject, null while provisioning. */
+  readonly httpEndpoint: string | null;
+}
+
+export interface PostShibaTeamStatus {
+  readonly suspended: boolean;
+  readonly clustersAtCap: readonly { readonly id: string; readonly hourlyRemaining: number; readonly dailyRemaining: number; readonly queued: number }[];
+  readonly heldTenants: readonly { readonly id: string; readonly slug: string }[];
+}
+
 export interface PostShibaAccountConfig {
   /** Team key with Full access. */
   readonly apiKey: string;
@@ -231,7 +254,51 @@ function toEndpoint(value: unknown): PostShibaWebhookEndpoint {
   };
 }
 
-const list = <T>(value: unknown, map: (item: unknown) => T): T[] => (Array.isArray(value) ? value.map(map) : []);
+const int = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 0);
+
+function toCluster(value: unknown): PostShibaCluster {
+  if (!isRecord(value) || typeof value['id'] !== 'string') throw new EmailProviderError('unexpected cluster response', true);
+  return {
+    id: value['id'],
+    name: str(value['name']),
+    plan: str(value['plan']),
+    classification: value['classification'] === 'transactional' ? 'transactional' : 'bulk',
+    status: str(value['status']),
+    sendingReady: value['sending_ready'] === true,
+    emailsPerHour: int(value['emails_per_hour']),
+    emailsPerDay: int(value['emails_per_day']),
+    baseEmailsPerHour: int(value['base_emails_per_hour']),
+    baseEmailsPerDay: int(value['base_emails_per_day']),
+    httpEndpoint: str(value['http_endpoint']) || null,
+  };
+}
+
+function toTeamStatus(value: unknown): PostShibaTeamStatus {
+  const record = isRecord(value) ? value : {};
+  return {
+    suspended: record['suspended'] === true,
+    clustersAtCap: list(record['clusters_at_cap'], (c) => {
+      const r = isRecord(c) ? c : {};
+      return { id: str(r['id']), hourlyRemaining: int(r['hourly_remaining']), dailyRemaining: int(r['daily_remaining']), queued: int(r['queued']) };
+    }),
+    heldTenants: list(record['held_tenants'], (t) => {
+      const r = isRecord(t) ? t : {};
+      return { id: str(r['id']), slug: str(r['slug']) };
+    }),
+  };
+}
+
+/** HTTP inject URL of a cluster (`http_endpoint` is `host:port`). */
+export function postshibaInjectUrl(cluster: Pick<PostShibaCluster, 'httpEndpoint'>): string {
+  if (cluster.httpEndpoint === null) return POSTSHIBA_DEFAULT_INJECT_URL;
+  const [host = '', port = '443'] = cluster.httpEndpoint.replace(/^https?:\/\//, '').split(':');
+  if (!/^[a-z0-9.-]+$/i.test(host)) return POSTSHIBA_DEFAULT_INJECT_URL;
+  return `https://${host}${port === '443' ? '' : `:${port}`}/api/inject/v1`;
+}
+
+function list<T>(value: unknown, map: (item: unknown) => T): T[] {
+  return Array.isArray(value) ? value.map(map) : [];
+}
 
 /** Operations on a PostShiba team (implemented by `PostShibaAccount`, faked in tests). */
 export interface PostShibaAccountApi {
@@ -251,6 +318,8 @@ export interface PostShibaAccountApi {
   getWebhookEndpoint(id: string): Promise<PostShibaWebhookEndpoint>;
   updateWebhookEndpointUrl(id: string, url: string): Promise<PostShibaWebhookEndpoint>;
   deleteWebhookEndpoint(id: string): Promise<void>;
+  listClusters(): Promise<PostShibaCluster[]>;
+  teamStatus(): Promise<PostShibaTeamStatus>;
 }
 
 /** Team-scoped PostShiba account: tenants, SMTP credentials, sending domains, webhook endpoints. */
@@ -352,6 +421,16 @@ export class PostShibaAccount implements PostShibaAccountApi {
 
   async deleteWebhookEndpoint(id: string): Promise<void> {
     await this.call('DELETE', `/webhook_endpoints/${encodeURIComponent(id)}`);
+  }
+
+  /** Live clusters of the team (deprovisioned ones excluded). */
+  async listClusters(): Promise<PostShibaCluster[]> {
+    return list(await this.call('GET', `${this.team}/clusters`), toCluster);
+  }
+
+  /** Clusters at their cap, held tenants, team suspension. */
+  async teamStatus(): Promise<PostShibaTeamStatus> {
+    return toTeamStatus(await this.call('GET', `${this.team}/status`));
   }
 }
 
