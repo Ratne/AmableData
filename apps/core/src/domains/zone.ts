@@ -32,6 +32,8 @@ interface CfEnvelope<T> {
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
 
+const unquote = (content: string): string => content.replace(/^"|"$/g, '');
+
 /** `https://<hostname>/health` answered by the edge worker (SSRF-safe, no redirects). */
 export async function probeEdgeHost(hostname: string, fetchFn: FetchFn): Promise<boolean> {
   try {
@@ -107,6 +109,7 @@ export class CloudflareZoneAutomation implements ZoneAutomation {
       const body = { type: record.type, name: record.name, content: record.value, ttl: 1, proxied: false };
       const same = existing.find((r) => r.content === record.value);
       if (same !== undefined) continue;
+      if (record.unlessPrefix !== undefined && existing.some((r) => unquote(r.content).startsWith(record.unlessPrefix ?? ''))) continue;
       const replace = record.type === 'CNAME' ? existing[0] : undefined;
       if (replace !== undefined) await this.call('PUT', `/zones/${zoneId}/dns_records/${replace.id}`, body);
       else await this.call('POST', `/zones/${zoneId}/dns_records`, body);
@@ -189,10 +192,14 @@ export class FakeZoneAutomation implements ZoneAutomation {
     let changed = 0;
     for (const record of records) {
       if (state.records.some((r) => r.type === record.type && r.name === record.name && r.value === record.value)) continue;
+      if (
+        record.unlessPrefix !== undefined &&
+        state.records.some((r) => r.type === record.type && r.name === record.name && r.value.startsWith(record.unlessPrefix ?? ''))
+      ) continue;
       state.records = state.records.filter(
         (r) => !(record.type === 'CNAME' && r.type === 'CNAME' && r.name === record.name),
       );
-      state.records.push({ ...record });
+      state.records.push({ type: record.type, name: record.name, value: record.value });
       changed += 1;
     }
     await this.save(zoneId, state);

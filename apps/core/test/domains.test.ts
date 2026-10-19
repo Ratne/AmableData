@@ -1,4 +1,4 @@
-import { FakeEmailMarketingProvider } from '@amable/core';
+import { EmailProviderError, FakeEmailMarketingProvider } from '@amable/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { overrideAuthServices } from '../src/auth/services';
 import { overrideDomainDeps } from '../src/domains/runtime';
@@ -90,6 +90,28 @@ describe('domain wizard', () => {
     await expect(service.add('t_acme', { kind: 'app', hostname: 'x.example.com', paths: ['/m'] })).rejects.toMatchObject({ code: 'invalid_path' });
   });
 
+  it('sending domain removal deletes it at the provider; provider failures become API errors', async () => {
+    const service = new DomainService(deps());
+    const domain = await service.add('t_acme', { kind: 'sending', hostname: 'mail.example.com' });
+    await service.remove('t_acme', domain.id);
+    expect(provider.domains.has('mail.example.com')).toBe(false);
+
+    provider.addDomain = () => Promise.reject(new EmailProviderError('busy', true, 503));
+    await expect(service.add('t_acme', { kind: 'sending', hostname: 'news.example.com' })).rejects.toMatchObject({ status: 503, code: 'email_provider_unavailable' });
+    provider.addDomain = () => Promise.reject(new EmailProviderError('taken', false, 409, null, 'hostname_taken'));
+    await expect(service.add('t_acme', { kind: 'sending', hostname: 'news.example.com' })).rejects.toMatchObject({ status: 409, code: 'hostname_taken' });
+    const rows = await h.env.DB.prepare(`SELECT hostname FROM domains WHERE tenant_id = 't_acme'`).all();
+    expect(rows.results).toEqual([]);
+  });
+
+  it('never writes a second DMARC policy on the zone', async () => {
+    const zone = new FakeZoneAutomation(h.env.DB);
+    const dmarc = { type: 'TXT' as const, name: '_dmarc.example.com', value: 'v=DMARC1; p=none;', unlessPrefix: 'v=DMARC1' };
+    await zone.upsertRecords('example.com', [{ type: 'TXT', name: '_dmarc.example.com', value: 'v=DMARC1; p=reject;' }]);
+    expect(await zone.upsertRecords('example.com', [dmarc])).toBe(0);
+    expect(await zone.upsertRecords('example.com', [{ ...dmarc, name: '_dmarc.mail.example.com' }])).toBe(1);
+  });
+
   it('manual mode refuses DNS automation and probes the hostname', async () => {
     const probed: string[] = [];
     const service = new DomainService(deps({ zone: null, probeEdge: (host) => { probed.push(host); return Promise.resolve(true); } }));
@@ -110,6 +132,7 @@ describe('Cloudflare zone automation (fake HTTP)', () => {
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer token');
       if (input.includes('/zones?name=www.example.com')) return Promise.resolve(reply([]));
       if (input.includes('/zones?name=example.com')) return Promise.resolve(reply([{ id: 'z1', name: 'example.com', account: { id: 'acc' } }]));
+      if (input.includes('/dns_records?type=TXT&name=_dmarc')) return Promise.resolve(reply([{ id: 'r2', content: '"v=DMARC1; p=reject"' }]));
       if (input.includes('/dns_records?type=TXT')) return Promise.resolve(reply([{ id: 'r1', content: 'v=spf1 old' }]));
       if (input.includes('/dns_records?type=CNAME')) return Promise.resolve(reply([]));
       if (input.endsWith('/workers/routes') && method === 'GET') return Promise.resolve(reply([{ pattern: 'www.example.com/health' }]));
@@ -120,6 +143,7 @@ describe('Cloudflare zone automation (fake HTTP)', () => {
       await zone.upsertRecords('z1', [
         { type: 'TXT', name: 'mail.example.com', value: 'v=spf1 include:x ~all' },
         { type: 'CNAME', name: 'k._domainkey.mail.example.com', value: 'k.dkim.example.net' },
+        { type: 'TXT', name: '_dmarc.example.com', value: 'v=DMARC1; p=none;', unlessPrefix: 'v=DMARC1' },
       ]),
     ).toBe(2);
     expect(await zone.addWorkerRoutes('z1', ['www.example.com/offers*', 'www.example.com/health'], 'amable-edge')).toBe(1);

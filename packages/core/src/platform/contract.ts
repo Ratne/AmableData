@@ -157,6 +157,47 @@ export interface NotifyResponse {
   readonly id: string;
 }
 
+// ----------------------------------------------------- marketing email
+
+/**
+ * Marketing email through the managed PostShiba account: the control plane
+ * holds the team key and gives every CRM workspace its own PostShiba tenant.
+ * `POST /v1/installation/email/workspaces` is idempotent (a repeat returns the
+ * same credential); domain routes act only on tenants of the calling installation.
+ */
+export interface EmailWorkspaceRequest {
+  /** CRM workspace (tenant) id. */
+  readonly workspaceId: string;
+  readonly name: string;
+  /** `<APP_ORIGIN>/hooks/email/postshiba/<workspaceId>`. */
+  readonly webhookUrl: string;
+}
+
+export interface EmailWorkspaceResponse {
+  readonly providerTenantId: string;
+  readonly smtp: { readonly username: string; readonly password: string };
+  readonly webhookSecret: string;
+  /** HTTP inject endpoint of the cluster. */
+  readonly injectUrl: string;
+}
+
+/** `POST /v1/installation/email/domains` (add), `…/domains/verify`, `…/domains/remove`. */
+export interface EmailDomainRequest {
+  readonly providerTenantId: string;
+  readonly hostname: string;
+}
+
+export interface EmailDomainResponse {
+  readonly domain: string;
+  readonly status: 'pending' | 'verified' | 'failed';
+  readonly records: readonly { readonly type: 'TXT' | 'CNAME' | 'MX'; readonly name: string; readonly value: string; readonly unlessPrefix?: string }[];
+}
+
+/** `POST /v1/installation/email/tenants/suspend` / `…/resume` (sender health). */
+export interface EmailTenantRequest {
+  readonly providerTenantId: string;
+}
+
 // ------------------------------------------------------------- errors
 
 export type ErrorSource = 'api' | 'edge' | 'durable_object' | 'queue' | 'cron';

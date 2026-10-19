@@ -64,11 +64,39 @@ export type {
 } from './providers/email-marketing';
 export type { SystemEmail, SystemEmailProvider } from './providers/system-email';
 export {
+  DirectPostShibaAdmin,
   PostShibaEmailMarketingProvider,
   ProviderNotImplementedError,
-  POSTSHIBA_DEFAULT_BASE_URL,
 } from './providers/postshiba';
-export type { PostShibaConfig } from './providers/postshiba';
+export type {
+  PostShibaConfig,
+  PostShibaSenderStore,
+  PostShibaWorkspace,
+  PostShibaWorkspaceAdmin,
+} from './providers/postshiba';
+export {
+  ensurePostShibaDomain,
+  ensurePostShibaTenant,
+  ensurePostShibaWebhook,
+  findPostShibaDomain,
+  postshibaDnsRecords,
+  postshibaInject,
+  postshibaVerification,
+  PostShibaAccount,
+  POSTSHIBA_DEFAULT_BASE_URL,
+  POSTSHIBA_DEFAULT_INJECT_URL,
+  POSTSHIBA_WEBHOOK_EVENTS,
+} from './providers/postshiba-api';
+export { FakePostShibaAccount } from './providers/postshiba-fake';
+export type {
+  PostShibaAccountApi,
+  PostShibaAccountConfig,
+  PostShibaSendingDomain,
+  PostShibaSmtpCredential,
+  PostShibaSmtpLogin,
+  PostShibaTenant,
+  PostShibaWebhookEndpoint,
+} from './providers/postshiba-api';
 export { NotifySystemEmailProvider } from './providers/notify';
 export type { NotifyServiceConfig } from './providers/notify';
 export { ConsoleEmailMarketingProvider, ConsoleSystemEmailProvider } from './providers/console';

@@ -64,8 +64,8 @@
   // "send_email": [{ "name": "SYSTEM_EMAIL" }],
 
   // Secrets (set by the setup script, never here): PASSWORD_PEPPER, AUTH_ENCRYPTION_KEY,
-  // EMAIL_TOKEN_SECRET, EDGE_GATEWAY_SECRET. Optional: POSTSHIBA_API_KEY,
-  // POSTSHIBA_WEBHOOK_SECRET, TURNSTILE_SECRET_KEY, CLOUDFLARE_DNS_API_TOKEN,
+  // EMAIL_TOKEN_SECRET, EDGE_GATEWAY_SECRET. Optional: POSTSHIBA_API_KEY (with the
+  // POSTSHIBA_TEAM_ID / POSTSHIBA_CLUSTER_ID vars), TURNSTILE_SECRET_KEY, CLOUDFLARE_DNS_API_TOKEN,
   // GOOGLE_OAUTH_CLIENT_SECRET, LICENSE_KEY (only to link a platform account).
   "vars": {
     "ENVIRONMENT": "production",
@@ -76,5 +76,7 @@
     // "TURNSTILE_SITE_KEY": "",
     // "GOOGLE_OAUTH_CLIENT_ID": "",
     // "ADDRESS_LOOKUP_URL": "off", // or your own Photon, e.g. https://photon.example.com/api
+    // "POSTSHIBA_TEAM_ID": "",    // own PostShiba account: GET /users/me → team_id
+    // "POSTSHIBA_CLUSTER_ID": "", // cluster the workspace SMTP credentials are issued on
   },
 }

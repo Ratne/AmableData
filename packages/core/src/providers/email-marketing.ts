@@ -45,6 +45,8 @@ export interface DnsRecord {
   readonly type: 'TXT' | 'CNAME' | 'MX';
   readonly name: string;
   readonly value: string;
+  /** TXT written only when the name has no TXT starting with this prefix (one DMARC policy per name). */
+  readonly unlessPrefix?: string;
 }
 
 export interface DomainVerification {
@@ -81,8 +83,8 @@ export class EmailProviderError extends Error {
 export interface EmailMarketingProvider {
   /** Hands one marketing email to the provider for delivery. */
   sendEmail(email: MarketingEmail): Promise<SendEmailResult>;
-  /** Create the provider-side tenant that backs a CRM tenant. */
-  createTenant(name: string): Promise<ProviderTenant>;
+  /** Create (idempotently) the provider-side tenant that backs CRM tenant `workspaceId`. */
+  createTenant(name: string, workspaceId: string): Promise<ProviderTenant>;
   /** Suspend / resume all sending of a provider-side tenant (anti-abuse). */
   suspendTenant(providerTenantId: string, reason: string): Promise<void>;
   resumeTenant(providerTenantId: string): Promise<void>;
@@ -90,4 +92,6 @@ export interface EmailMarketingProvider {
   addDomain(providerTenantId: string, domain: string): Promise<DomainVerification>;
   /** Start / check verification of a sending domain (SPF, DKIM, DMARC). */
   verifyDomain(domain: string, providerTenantId?: string): Promise<DomainVerification>;
+  /** Deletes a sending domain at the provider (the CRM row is removed anyway). */
+  removeDomain?(domain: string, providerTenantId: string): Promise<void>;
 }

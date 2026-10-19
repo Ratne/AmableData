@@ -5,7 +5,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Env } from '../env';
 import { ensureInstallationMigrated } from '../migrate';
 import type { MailOpName, MailResult } from './ops';
-import { tokenSecrets, webhookSecrets } from './runtime';
+import { tokenSecrets, workspaceWebhookSecrets } from './runtime';
 
 /**
  * Unauthenticated email endpoints of the core worker, outside `/api` (no
@@ -56,7 +56,7 @@ emailPublicApp.post('/hooks/email/postshiba/:tenantId', async (c) => {
   const result = await callMailDb(c, tenantId, 'webhooks.provider', {
     rawBody: raw,
     signature,
-    secrets: webhookSecrets(c.env),
+    secrets: await workspaceWebhookSecrets(c.env, tenantId),
   });
   if (!result.ok) {
     return c.json({ error: result.error.code }, result.error.status as ContentfulStatusCode);

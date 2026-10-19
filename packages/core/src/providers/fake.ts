@@ -58,4 +58,9 @@ export class FakeEmailMarketingProvider implements EmailMarketingProvider {
   verifyDomain(domain: string): Promise<DomainVerification> {
     return Promise.resolve(this.domains.get(domain) ?? { domain, status: 'pending', records: [] });
   }
+
+  removeDomain(domain: string): Promise<void> {
+    this.domains.delete(domain);
+    return Promise.resolve();
+  }
 }

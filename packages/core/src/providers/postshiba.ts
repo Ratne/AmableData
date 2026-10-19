@@ -1,26 +1,60 @@
 import {
   EmailProviderError,
-  type DnsRecord,
   type DomainVerification,
-  type DomainVerificationStatus,
   type EmailMarketingProvider,
   type MarketingEmail,
   type ProviderTenant,
   type SendEmailResult,
 } from './email-marketing';
+import {
+  ensurePostShibaDomain,
+  ensurePostShibaTenant,
+  ensurePostShibaWebhook,
+  findPostShibaDomain,
+  postshibaInject,
+  postshibaVerification,
+  type FetchLike,
+  type PostShibaAccountApi,
+  type PostShibaSmtpLogin,
+} from './postshiba-api';
 
-export const POSTSHIBA_DEFAULT_BASE_URL = 'https://app.postshiba.com/api/v1';
+/** What a CRM workspace needs to send through its own PostShiba tenant. */
+export interface PostShibaWorkspace {
+  readonly providerTenantId: string;
+  readonly smtp: PostShibaSmtpLogin;
+  /** Signing secret of the tenant's delivery webhook. */
+  readonly webhookSecret: string;
+  /** HTTP inject endpoint of the cluster (null = default). */
+  readonly injectUrl: string | null;
+}
 
-type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
+/**
+ * Tenant and domain management behind the provider: the control plane in the
+ * managed offering (it alone holds the team key), or `DirectPostShibaAdmin`
+ * on an installation that brings its own PostShiba account.
+ */
+export interface PostShibaWorkspaceAdmin {
+  ensureWorkspace(input: { workspaceId: string; name: string; webhookUrl: string }): Promise<PostShibaWorkspace>;
+  addDomain(providerTenantId: string, hostname: string): Promise<DomainVerification>;
+  verifyDomain(providerTenantId: string, hostname: string): Promise<DomainVerification>;
+  removeDomain(providerTenantId: string, hostname: string): Promise<void>;
+  suspend(providerTenantId: string): Promise<void>;
+  resume(providerTenantId: string): Promise<void>;
+}
+
+/** Per-workspace sending credentials, kept encrypted by the installation. */
+export interface PostShibaSenderStore {
+  get(providerTenantId: string): Promise<PostShibaWorkspace | null>;
+  put(workspaceId: string, workspace: PostShibaWorkspace): Promise<void>;
+}
 
 export interface PostShibaConfig {
-  /** API root; defaults to https://app.postshiba.com/api/v1. */
-  readonly baseUrl?: string;
-  /** Bearer API key (Wrangler secret `POSTSHIBA_API_KEY`). */
-  readonly apiKey: string;
+  readonly admin: PostShibaWorkspaceAdmin;
+  readonly senders: PostShibaSenderStore;
+  /** Delivery webhook of a CRM workspace (`<APP_ORIGIN>/hooks/email/postshiba/<id>`). */
+  readonly webhookUrl: (workspaceId: string) => string;
   /** Injected transport — tests pass a fake; nothing in dev or tests reaches the network. */
   readonly fetch?: FetchLike;
-  /** Per-request timeout. Default 15 s. */
   readonly timeoutMs?: number;
 }
 
@@ -32,234 +66,102 @@ export class ProviderNotImplementedError extends Error {
   }
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+/**
+ * PostShiba-backed EmailMarketingProvider: one PostShiba tenant per CRM
+ * workspace, each with its own SMTP credential (it can only send from that
+ * tenant's verified domains), delivery webhook and suppression list.
+ * Messages go out through HTTP inject; `metadata` travels as
+ * `X-Capsule-Unique-Args` and comes back on every delivery webhook.
+ */
+export class PostShibaEmailMarketingProvider implements EmailMarketingProvider {
+  constructor(private readonly config: PostShibaConfig) {}
 
-/** Send errors where the message may already be queued: resending could deliver it twice. */
-const NORMALIZED_CODES: Readonly<Record<string, string>> = {
-  idempotency_outcome_unknown: 'outcome_unknown',
-  inject_timeout_unknown: 'outcome_unknown',
-};
-/** Nothing was sent and the same request can go again later. */
-const RETRYABLE_CODES = new Set([
-  'rate_limited',
-  'throttled',
-  'idempotency_in_progress',
-  'idempotency_unavailable',
-  'inject_unavailable',
-  'cluster_not_ready',
-]);
-/** Retrying the same request can never succeed. */
-const PERMANENT_CODES = new Set([
-  'suppressed',
-  'domain_unverified',
-  'domain_suspended',
-  'credential_missing',
-  'firewall',
-  'sender_blocked',
-  'kyc_required',
-  'invalid',
-  'too_many_recipients',
-  'payload_too_large',
-  'idempotency_conflict',
-]);
-
-const DNS_TYPES = new Set(['TXT', 'CNAME', 'MX']);
-const DOMAIN_STATUSES = new Set(['pending', 'verified', 'failed']);
-
-/** Provider limits: at most 32 scalar keys, keys ≤ 64 bytes, values ≤ 256 bytes. */
-function uniqueArgs(metadata: Readonly<Record<string, string>>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(metadata).slice(0, 32)) {
-    if (key.length > 64) continue;
-    out[key] = value.slice(0, 256);
-  }
-  return out;
-}
-
-function parseDomain(body: unknown, fallbackDomain: string): DomainVerification {
-  const data = isRecord(body) && isRecord(body['data']) ? body['data'] : body;
-  if (!isRecord(data)) throw new EmailProviderError('unexpected domain response', true);
-  const rawStatus = typeof data['status'] === 'string' ? data['status'].toLowerCase() : 'pending';
-  const status: DomainVerificationStatus = DOMAIN_STATUSES.has(rawStatus)
-    ? (rawStatus as DomainVerificationStatus)
-    : 'pending';
-  const records: DnsRecord[] = [];
-  if (Array.isArray(data['records'])) {
-    for (const record of data['records']) {
-      if (!isRecord(record)) continue;
-      const type = typeof record['type'] === 'string' ? record['type'].toUpperCase() : '';
-      if (
-        DNS_TYPES.has(type) &&
-        typeof record['name'] === 'string' &&
-        typeof record['value'] === 'string'
-      ) {
-        records.push({ type: type as DnsRecord['type'], name: record['name'], value: record['value'] });
-      }
+  async sendEmail(email: MarketingEmail): Promise<SendEmailResult> {
+    const tenantId = email.providerTenantId ?? null;
+    const sender = tenantId === null ? null : await this.config.senders.get(tenantId);
+    if (sender === null) {
+      throw new EmailProviderError('the workspace has no PostShiba sender yet', false, null, null, 'credential_missing');
     }
+    await postshibaInject(sender.smtp, email, {
+      ...(sender.injectUrl === null ? {} : { injectUrl: sender.injectUrl }),
+      ...(this.config.fetch === undefined ? {} : { fetch: this.config.fetch }),
+      ...(this.config.timeoutMs === undefined ? {} : { timeoutMs: this.config.timeoutMs }),
+    });
+    // Inject returns no message id: delivery events match on the unique args.
+    return { messageId: email.idempotencyKey ?? '', accepted: true };
   }
-  return {
-    domain: typeof data['domain'] === 'string' ? data['domain'] : fallbackDomain,
-    status,
-    records,
-  };
+
+  async createTenant(name: string, workspaceId: string): Promise<ProviderTenant> {
+    const workspace = await this.config.admin.ensureWorkspace({ workspaceId, name, webhookUrl: this.config.webhookUrl(workspaceId) });
+    await this.config.senders.put(workspaceId, workspace);
+    return { providerTenantId: workspace.providerTenantId, name };
+  }
+
+  suspendTenant(providerTenantId: string): Promise<void> {
+    return this.config.admin.suspend(providerTenantId);
+  }
+
+  resumeTenant(providerTenantId: string): Promise<void> {
+    return this.config.admin.resume(providerTenantId);
+  }
+
+  addDomain(providerTenantId: string, domain: string): Promise<DomainVerification> {
+    return this.config.admin.addDomain(providerTenantId, domain);
+  }
+
+  verifyDomain(domain: string, providerTenantId?: string): Promise<DomainVerification> {
+    if (providerTenantId === undefined) {
+      return Promise.reject(new EmailProviderError('verifyDomain needs the provider tenant id', false));
+    }
+    return this.config.admin.verifyDomain(providerTenantId, domain);
+  }
+
+  removeDomain(domain: string, providerTenantId: string): Promise<void> {
+    return this.config.admin.removeDomain(providerTenantId, domain);
+  }
 }
 
 /**
- * PostShiba-backed EmailMarketingProvider (managed offering).
- *
- * - `POST /emails` with `Authorization: Bearer <key>` sends one message;
- *   `Idempotency-Key` = our mail message id so retries never double-send.
- *   `metadata` travels as `unique_args`, echoed on every delivery webhook.
- * - Tenants and domains are managed per CRM tenant (`/tenants`, `/tenants/{id}/domains`).
- *
- * Sending, error codes and webhooks follow the public API reference; the
- * tenant/domain management paths still need confirming.
+ * Workspace admin on the installation's own PostShiba account (team key +
+ * cluster): self-hosted installations that do not use the managed service.
  */
-export class PostShibaEmailMarketingProvider implements EmailMarketingProvider {
-  private readonly baseUrl: string;
-  private readonly doFetch: FetchLike;
-  private readonly timeoutMs: number;
+export class DirectPostShibaAdmin implements PostShibaWorkspaceAdmin {
+  constructor(
+    private readonly account: PostShibaAccountApi,
+    private readonly options: { readonly clusterId: string; readonly injectUrl?: string | null },
+  ) {}
 
-  constructor(private readonly config: PostShibaConfig) {
-    this.baseUrl = (config.baseUrl ?? POSTSHIBA_DEFAULT_BASE_URL).replace(/\/+$/, '');
-    this.doFetch = config.fetch ?? ((input, init) => fetch(input, init));
-    this.timeoutMs = config.timeoutMs ?? 15_000;
-  }
-
-  private async request(
-    method: 'GET' | 'POST',
-    path: string,
-    body?: unknown,
-    extraHeaders: Record<string, string> = {},
-  ): Promise<unknown> {
-    if (this.config.apiKey === '') {
-      throw new EmailProviderError('POSTSHIBA_API_KEY is not configured', false);
-    }
-    const headers: Record<string, string> = {
-      authorization: `Bearer ${this.config.apiKey}`,
-      accept: 'application/json',
-      ...extraHeaders,
+  async ensureWorkspace(input: { workspaceId: string; name: string; webhookUrl: string }): Promise<PostShibaWorkspace> {
+    const tenant = await ensurePostShibaTenant(this.account, `ws-${input.workspaceId.toLowerCase()}`, input.name);
+    const credential = await this.account.createSmtpCredential(this.options.clusterId, tenant.id);
+    const webhook = await ensurePostShibaWebhook(this.account, tenant.id, input.webhookUrl);
+    return {
+      providerTenantId: tenant.id,
+      smtp: { username: credential.username, password: credential.password ?? '' },
+      webhookSecret: webhook.secret,
+      injectUrl: this.options.injectUrl ?? null,
     };
-    if (body !== undefined) headers['content-type'] = 'application/json';
-    let response: Response;
-    try {
-      response = await this.doFetch(`${this.baseUrl}${path}`, {
-        method,
-        headers,
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-    } catch (error) {
-      throw new EmailProviderError(
-        `network error: ${error instanceof Error ? error.message : String(error)}`,
-        true,
-      );
-    }
-    const text = await response.text();
-    let parsed: unknown = null;
-    if (text !== '') {
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        parsed = null;
-      }
-    }
-    if (!response.ok) {
-      const retryAfter = Number(response.headers.get('retry-after'));
-      const rawCode = isRecord(parsed) && typeof parsed['error'] === 'string' ? parsed['error'] : null;
-      const message =
-        isRecord(parsed) && typeof parsed['message'] === 'string'
-          ? parsed['message']
-          : (rawCode ?? `HTTP ${String(response.status)}`);
-      const code = rawCode === null ? null : (NORMALIZED_CODES[rawCode] ?? rawCode);
-      const hinted = isRecord(parsed) && typeof parsed['retryable'] === 'boolean' ? parsed['retryable'] : null;
-      const retryable =
-        code === 'outcome_unknown'
-          ? false
-          : (hinted ??
-            (code !== null && RETRYABLE_CODES.has(code)
-              ? true
-              : code !== null && PERMANENT_CODES.has(code)
-                ? false
-                : response.status === 429 || response.status >= 500));
-      throw new EmailProviderError(
-        message.slice(0, 300),
-        retryable,
-        response.status,
-        Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
-        code,
-      );
-    }
-    return parsed;
   }
 
-  async sendEmail(email: MarketingEmail): Promise<SendEmailResult> {
-    const body = await this.request(
-      'POST',
-      '/emails',
-      {
-        from: email.from,
-        to: email.to,
-        subject: email.subject,
-        html: email.html,
-        text: email.text,
-        ...(email.replyTo ? { reply_to: email.replyTo } : {}),
-        headers: email.headers ?? {},
-        ...(email.providerTenantId ? { tenant: email.providerTenantId } : {}),
-        unique_args: uniqueArgs(email.metadata ?? {}),
-      },
-      email.idempotencyKey === undefined ? {} : { 'idempotency-key': email.idempotencyKey },
-    );
-    const data = isRecord(body) && isRecord(body['data']) ? body['data'] : body;
-    const skipped = isRecord(data) && Array.isArray(data['suppressed']) ? data['suppressed'] : [];
-    if (skipped.some((address) => typeof address === 'string' && address.toLowerCase() === email.to.toLowerCase())) {
-      throw new EmailProviderError('recipient is on the provider suppression list', false, 403, null, 'suppressed');
-    }
-    const id = isRecord(data) ? (data['message_id'] ?? data['id']) : undefined;
-    if (typeof id !== 'string' || id === '') {
-      // Accepted without an id: resending could double-deliver; webhooks still match on unique args.
-      throw new EmailProviderError('send response without a message id', false, null, null, 'outcome_unknown');
-    }
-    return { messageId: id, accepted: true };
+  async addDomain(providerTenantId: string, hostname: string): Promise<DomainVerification> {
+    return postshibaVerification(await ensurePostShibaDomain(this.account, providerTenantId, hostname));
   }
 
-  async createTenant(name: string): Promise<ProviderTenant> {
-    const body = await this.request('POST', '/tenants', { name });
-    const data = isRecord(body) && isRecord(body['data']) ? body['data'] : body;
-    const id = isRecord(data) ? data['id'] : undefined;
-    if (typeof id !== 'string') throw new EmailProviderError('tenant response without id', true);
-    return { providerTenantId: id, name };
+  async verifyDomain(providerTenantId: string, hostname: string): Promise<DomainVerification> {
+    const domain = await ensurePostShibaDomain(this.account, providerTenantId, hostname);
+    return postshibaVerification(await this.account.verifySendingDomain(domain.id));
   }
 
-  async suspendTenant(providerTenantId: string, reason: string): Promise<void> {
-    await this.request('POST', `/tenants/${encodeURIComponent(providerTenantId)}/suspend`, {
-      reason,
-    });
+  async removeDomain(providerTenantId: string, hostname: string): Promise<void> {
+    const domain = await findPostShibaDomain(this.account, hostname);
+    if (domain !== null && domain.tenantId === providerTenantId) await this.account.deleteSendingDomain(domain.id);
   }
 
-  async resumeTenant(providerTenantId: string): Promise<void> {
-    await this.request('POST', `/tenants/${encodeURIComponent(providerTenantId)}/resume`, {});
+  suspend(providerTenantId: string): Promise<void> {
+    return this.account.suspendTenant(providerTenantId);
   }
 
-  async addDomain(providerTenantId: string, domain: string): Promise<DomainVerification> {
-    const body = await this.request(
-      'POST',
-      `/tenants/${encodeURIComponent(providerTenantId)}/domains`,
-      { domain },
-    );
-    return parseDomain(body, domain);
-  }
-
-  async verifyDomain(domain: string, providerTenantId?: string): Promise<DomainVerification> {
-    if (providerTenantId === undefined) {
-      throw new EmailProviderError('verifyDomain needs the provider tenant id', false);
-    }
-    const body = await this.request(
-      'POST',
-      `/tenants/${encodeURIComponent(providerTenantId)}/domains/${encodeURIComponent(domain)}/verify`,
-      {},
-    );
-    return parseDomain(body, domain);
+  resume(providerTenantId: string): Promise<void> {
+    return this.account.resumeTenant(providerTenantId);
   }
 }

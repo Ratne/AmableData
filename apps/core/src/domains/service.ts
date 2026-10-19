@@ -1,4 +1,4 @@
-import type { DnsRecord, EmailMarketingProvider } from '@amable/core';
+import { EmailProviderError, type DnsRecord, type EmailMarketingProvider } from '@amable/core';
 import { ZoneAutomationError, type ZoneAutomation } from './zone';
 
 export type DomainKind = 'sending' | 'tracking' | 'app';
@@ -56,11 +56,24 @@ export interface TenantDomain {
 
 export class DomainError extends Error {
   constructor(
-    readonly status: 404 | 409 | 422 | 502,
+    readonly status: 404 | 409 | 422 | 502 | 503,
     readonly code: string,
     message: string,
   ) {
     super(message);
+  }
+}
+
+/** Email provider failures as API errors (409 taken elsewhere, 503 retry later, 502 rejected). */
+async function providerCall<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (!(error instanceof EmailProviderError)) throw error;
+    if (error.code === 'hostname_taken') throw new DomainError(409, 'hostname_taken', 'hostname already used by another sender');
+    if (error.code === 'not_configured') throw new DomainError(409, 'email_not_configured', error.message);
+    if (error.retryable) throw new DomainError(503, 'email_provider_unavailable', error.message);
+    throw new DomainError(502, 'email_provider_error', error.message);
   }
 }
 
@@ -147,7 +160,7 @@ export class DomainService {
       .prepare(`SELECT slug FROM tenants WHERE id = ?`)
       .bind(tenantId)
       .first<{ slug: string }>();
-    const created = await this.deps.provider.createTenant(tenant?.slug ?? tenantId);
+    const created = await providerCall(() => this.deps.provider.createTenant(tenant?.slug ?? tenantId, tenantId));
     await this.deps.db
       .prepare(`INSERT OR IGNORE INTO installation_meta (key, value) VALUES (?, ?)`)
       .bind(key, created.providerTenantId)
@@ -187,7 +200,8 @@ export class DomainService {
     let records: DnsRecord[];
     let status: DomainStatus = 'pending';
     if (input.kind === 'sending') {
-      const verification = await this.deps.provider.addDomain(await this.providerTenantId(tenantId), hostname);
+      const providerTenantId = await this.providerTenantId(tenantId);
+      const verification = await providerCall(() => this.deps.provider.addDomain(providerTenantId, hostname));
       records = [...verification.records];
       if (verification.status === 'verified') status = 'verified';
     } else {
@@ -248,7 +262,8 @@ export class DomainService {
     let error: string | null = null;
     let records: DnsRecord[] | null = null;
     if (row.kind === 'sending') {
-      const result = await this.deps.provider.verifyDomain(row.hostname, await this.providerTenantId(tenantId));
+      const providerTenantId = await this.providerTenantId(tenantId);
+      const result = await providerCall(() => this.deps.provider.verifyDomain(row.hostname, providerTenantId));
       ok = result.status === 'verified';
       if (result.records.length > 0) records = [...result.records];
       if (!ok) error = result.status === 'failed' ? 'records_invalid' : 'records_not_found_yet';
@@ -269,7 +284,15 @@ export class DomainService {
   }
 
   async remove(tenantId: string, id: string): Promise<void> {
-    await this.row(tenantId, id);
+    const row = await this.row(tenantId, id);
+    const removeDomain = this.deps.provider.removeDomain?.bind(this.deps.provider);
+    if (row.kind === 'sending' && removeDomain !== undefined) {
+      const providerTenant = await this.deps.db
+        .prepare(`SELECT value FROM installation_meta WHERE key = ?`)
+        .bind(`postshiba_tenant:${tenantId}`)
+        .first<{ value: string }>();
+      if (providerTenant !== null) await providerCall(() => removeDomain(row.hostname, providerTenant.value));
+    }
     await this.deps.db.prepare(`DELETE FROM domains WHERE id = ? AND tenant_id = ?`).bind(id, tenantId).run();
   }
 }

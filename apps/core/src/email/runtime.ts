@@ -1,8 +1,12 @@
 import type { Contact } from '@amable/api-types';
 import {
   ConsoleEmailMarketingProvider,
+  DirectPostShibaAdmin,
+  EmailProviderError,
+  PostShibaAccount,
   PostShibaEmailMarketingProvider,
   type EmailMarketingProvider,
+  type PostShibaWorkspaceAdmin,
   type QuotaGuard,
 } from '@amable/core';
 import { SYSTEM_ACTOR } from '../crm/context';
@@ -10,7 +14,10 @@ import type { CrmResult } from '../crm/ops';
 import type { MailRecipientFacts, MailSendContact } from '../crm/mail-reads';
 import type { TenantDb } from '../do/tenant-db';
 import type { Env } from '../env';
+import { controlPlaneClient } from '../platform/client';
 import { createPlatformQuotaGuard } from '../platform/quota';
+import { ControlPlanePostShibaAdmin } from './postshiba-managed';
+import { postshibaSenderStore, workspaceTenantKey, workspaceWebhookSecret } from './postshiba-senders';
 import type {
   AutomationSink,
   CrmReader,
@@ -58,12 +65,53 @@ export function webhookSecrets(env: Env): string[] {
     .filter((s) => s !== '');
 }
 
+/** Env secrets plus the secret of the workspace's own delivery webhook. */
+export async function workspaceWebhookSecrets(env: Env, tenantId: string): Promise<string[]> {
+  const own = await workspaceWebhookSecret(env, tenantId);
+  return own === null ? webhookSecrets(env) : [own, ...webhookSecrets(env)];
+}
+
+class UnconfiguredPostShibaAdmin implements PostShibaWorkspaceAdmin {
+  private fail(): Promise<never> {
+    return Promise.reject(
+      new EmailProviderError(
+        'marketing email is not configured: link a license or set POSTSHIBA_API_KEY, POSTSHIBA_TEAM_ID and POSTSHIBA_CLUSTER_ID',
+        false,
+        null,
+        null,
+        'not_configured',
+      ),
+    );
+  }
+  ensureWorkspace = () => this.fail();
+  addDomain = () => this.fail();
+  verifyDomain = () => this.fail();
+  removeDomain = () => this.fail();
+  suspend = () => this.fail();
+  resume = () => this.fail();
+}
+
+/** Own PostShiba account (team key + team + cluster), else the control plane of the license. */
+function postshibaAdmin(env: Env): PostShibaWorkspaceAdmin {
+  const apiKey = env.POSTSHIBA_API_KEY ?? '';
+  const teamId = env.POSTSHIBA_TEAM_ID ?? '';
+  const clusterId = env.POSTSHIBA_CLUSTER_ID ?? '';
+  if (apiKey !== '' && teamId !== '' && clusterId !== '') {
+    const account = new PostShibaAccount({ apiKey, teamId, ...(env.POSTSHIBA_BASE_URL ? { baseUrl: env.POSTSHIBA_BASE_URL } : {}) });
+    return new DirectPostShibaAdmin(account, { clusterId, injectUrl: env.POSTSHIBA_INJECT_URL ?? null });
+  }
+  const client = controlPlaneClient(env);
+  return client === null ? new UnconfiguredPostShibaAdmin() : new ControlPlanePostShibaAdmin(client);
+}
+
 /** Console provider in dev (never any network); PostShiba everywhere else. */
 export function marketingProvider(env: Env): EmailMarketingProvider {
   if (env.ENVIRONMENT === 'dev') return new ConsoleEmailMarketingProvider();
+  const origin = (env.APP_ORIGIN ?? '').replace(/\/+$/, '');
   return new PostShibaEmailMarketingProvider({
-    apiKey: env.POSTSHIBA_API_KEY ?? '',
-    ...(env.POSTSHIBA_BASE_URL ? { baseUrl: env.POSTSHIBA_BASE_URL } : {}),
+    admin: postshibaAdmin(env),
+    senders: postshibaSenderStore(env),
+    webhookUrl: (workspaceId) => `${origin}/hooks/email/postshiba/${encodeURIComponent(workspaceId)}`,
   });
 }
 
@@ -135,7 +183,7 @@ export function sendingState(env: Env, tenantId: string): () => Promise<SendingS
     const providerTenant = await env.DB.prepare(
       `SELECT value FROM installation_meta WHERE key = ?`,
     )
-      .bind(`postshiba_tenant:${tenantId}`)
+      .bind(workspaceTenantKey(tenantId))
       .first<{ value: string }>();
     return {
       state: verifiedSending ? 'verified' : override ? 'dev_override' : 'unverified',

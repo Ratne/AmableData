@@ -99,11 +99,21 @@ export interface Env {
   // --- Email marketing (apps/core/src/email, apps/core/src/broadcast) --------
   /** Email DO per tenant: templates, messages, suppressions, broadcasts, email outbox. */
   MAIL_DB: DurableObjectNamespace<MailDb>;
-  /** PostShiba Bearer key (Wrangler secret). Never used with ENVIRONMENT=dev (console provider). */
+  /**
+   * Own PostShiba account (self-hosted, Wrangler secret): team key with Full
+   * access. With POSTSHIBA_TEAM_ID + POSTSHIBA_CLUSTER_ID it replaces the
+   * managed service of the license. Never used with ENVIRONMENT=dev (console provider).
+   */
   POSTSHIBA_API_KEY?: string;
+  /** Obfuscated team id of the own account (`GET /users/me` → `team_id`). */
+  POSTSHIBA_TEAM_ID?: string;
+  /** Cluster the workspace SMTP credentials are issued on. */
+  POSTSHIBA_CLUSTER_ID?: string;
   /** Optional API root override (default https://app.postshiba.com/api/v1). */
   POSTSHIBA_BASE_URL?: string;
-  /** Comma-separated HMAC secrets of the delivery webhooks (rotation). */
+  /** Optional HTTP inject endpoint of the own cluster (default https://inject.postshiba.com/api/inject/v1). */
+  POSTSHIBA_INJECT_URL?: string;
+  /** Extra comma-separated HMAC secrets accepted on delivery webhooks (each workspace also has its own). */
   POSTSHIBA_WEBHOOK_SECRET?: string;
   /** Signs click / open / unsubscribe / `_amb_c` tokens (Wrangler secret, shared with the edge). */
   EMAIL_TOKEN_SECRET?: string;
