@@ -17,6 +17,7 @@ import type {
   AttributionModel,
   AttributionReport,
   BotsReport,
+  ConditionSuggestAttr,
   CreateAlertInput,
   CreateFunnelInput,
   CreateSegmentInput,
@@ -51,7 +52,9 @@ import {
   adSpendDaySchema,
   analyticsRangeSchema,
   ATTRIBUTION_MODELS,
+  CONDITION_SUGGEST_ATTRS,
   funnelGraphInputSchema,
+  MAX_CONDITION_VALUES,
   funnelGraphUpdateSchema,
   funnelTouchSchema,
   identityKeySchema,
@@ -684,6 +687,11 @@ export class AnalyticsStore {
     return version === undefined
       ? funnelGraphs.getFunnelGraph(this.db, id)
       : funnelGraphs.getFunnelGraphVersion(this.db, id, version);
+  }
+  /** Builder suggestions for a condition / tag value (tags, cities, regions, campaigns seen on the site). */
+  conditionValues(attr: ConditionSuggestAttr, limit = MAX_CONDITION_VALUES): string[] {
+    if (!(CONDITION_SUGGEST_ATTRS as readonly string[]).includes(attr)) return [];
+    return funnelGraphs.conditionValues(this.db, attr, Math.min(Math.max(1, limit), MAX_CONDITION_VALUES));
   }
   createFunnelGraph(input: FunnelGraphInput): AnalyticsResult<FunnelGraph> {
     const body = parse(funnelGraphInputSchema, input);

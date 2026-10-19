@@ -80,6 +80,34 @@ export const CONDITION_OPERATORS = [
 ] as const;
 export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 
+/** Values the edge user-agent parser produces for `device`, `os` and `browser`. */
+export const DEVICE_TYPES = ['desktop', 'mobile', 'tablet'] as const;
+export const KNOWN_OS_NAMES = ['Windows', 'macOS', 'iOS', 'iPadOS', 'Android', 'ChromeOS', 'Linux', 'Unknown'] as const;
+export const KNOWN_BROWSER_NAMES = [
+  'Chrome',
+  'Safari',
+  'Firefox',
+  'Edge',
+  'Opera',
+  'Samsung Internet',
+  'Yandex',
+  'UC Browser',
+  'Vivaldi',
+  'DuckDuckGo',
+  'Facebook',
+  'Instagram',
+  'Internet Explorer',
+  'Unknown',
+] as const;
+
+/** Attributes whose values come from the site's data (`GET /funnels-v2/condition-values`). */
+export const CONDITION_SUGGEST_ATTRS = ['tag', 'city', 'region', 'campaign'] as const;
+export type ConditionSuggestAttr = (typeof CONDITION_SUGGEST_ATTRS)[number];
+export const MAX_CONDITION_VALUES = 300;
+
+export const conditionValuesSchema = z.object({ values: z.array(z.string()) });
+export type ConditionValues = z.infer<typeof conditionValuesSchema>;
+
 export const conditionRuleSchema = z.object({
   attr: conditionAttributeSchema,
   op: z.enum(CONDITION_OPERATORS),

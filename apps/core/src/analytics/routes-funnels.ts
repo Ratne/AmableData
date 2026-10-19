@@ -1,5 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import {
+  CONDITION_SUGGEST_ATTRS,
+  conditionValuesSchema,
   createTrackingDomainSchema,
   errorResponseSchema,
   FUNNEL_STATUSES,
@@ -11,6 +13,7 @@ import {
   funnelHeatmapSchema,
   funnelLinksSchema,
   HEATMAP_METRICS,
+  MAX_CONDITION_VALUES,
   validateGraph,
   type FunnelGraph,
   type FunnelGraphError,
@@ -166,6 +169,25 @@ export function registerFunnelRoutes(api: OpenAPIHono<AppEnv>): void {
       const { site_id, status } = c.req.valid('query');
       const stub = await siteForQuery(c, site_id);
       return c.json({ data: await stub.listFunnelGraphs(status) }, 200);
+    },
+  );
+
+  api.openapi(
+    crmRoute('analytics:read', {
+      method: 'get',
+      path: '/funnels-v2/condition-values',
+      tags,
+      summary: 'Known values of a condition attribute (builder suggestions)',
+      description:
+        'Visitor tags (also those set by tag nodes), cities, regions and campaigns seen on the site, ' +
+        `most frequent first, at most ${MAX_CONDITION_VALUES}.`,
+      request: { query: siteQuery.extend({ attr: z.enum(CONDITION_SUGGEST_ATTRS) }) },
+      responses: { 200: json(conditionValuesSchema, 'Values') },
+    }),
+    async (c) => {
+      const { site_id, attr } = c.req.valid('query');
+      const stub = await siteForQuery(c, site_id);
+      return c.json({ values: await stub.conditionValues(attr) }, 200);
     },
   );
 

@@ -1,4 +1,10 @@
-import type { FunnelGraph, FunnelGraphUpdate, HeatmapMetric, Site } from '@amable/api-types';
+import type {
+  FunnelGraph,
+  FunnelGraphUpdate,
+  HeatmapMetric,
+  Site,
+  TrafficSource,
+} from '@amable/api-types';
 import {
   cn,
   DashboardButton,
@@ -74,6 +80,7 @@ import { useAnalyticsQueryState, type AnalyticsState } from '../lib/query-state'
 import { analyticsFunnelBuilderRoute, type FunnelBuilderSearch } from '../routes';
 
 const ALL_SOURCES = 'all';
+const NO_SOURCES: readonly TrafficSource[] = [];
 
 function Builder({
   tenant,
@@ -526,6 +533,7 @@ export function AnalyticsFunnelBuilderPage() {
   const graph = useFunnelGraph(tenant, site?.id ?? null, funnelId);
   const pages = useAmablePages(tenant);
   const resources = useMemo(() => pageResources(pages.data ?? []), [pages.data]);
+  const sources = useTrafficSources(tenant, site?.id ?? null);
 
   const error = controls.sites.error ?? graph.error;
   if (error)
@@ -545,7 +553,12 @@ export function AnalyticsFunnelBuilderPage() {
     return <EmptyNote>{t('analytics.funnelsV2.noSite')}</EmptyNote>;
   return (
     <ReactFlowProvider>
-      <BuilderResourcesProvider pages={resources}>
+      <BuilderResourcesProvider
+        tenant={tenant}
+        siteId={site.id}
+        pages={resources}
+        sources={sources.data ?? NO_SOURCES}
+      >
         <Builder
           key={`${site.id}:${funnelId}`}
           tenant={tenant}

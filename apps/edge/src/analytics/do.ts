@@ -18,6 +18,7 @@ import type {
   AttributionModel,
   AttributionReport,
   BotsReport,
+  ConditionSuggestAttr,
   CreateAlertInput,
   CreateFunnelInput,
   CreateSegmentInput,
@@ -425,6 +426,9 @@ export class AnalyticsDO extends DurableObject<Env> {
   }
   getFunnelGraph(id: string, version?: number): FunnelGraph | null {
     return this.store.getFunnelGraph(id, version);
+  }
+  conditionValues(attr: ConditionSuggestAttr, limit?: number): string[] {
+    return this.store.conditionValues(attr, limit);
   }
   createFunnelGraph(input: FunnelGraphInput): AnalyticsResult<FunnelGraph> {
     return this.store.createFunnelGraph(input);

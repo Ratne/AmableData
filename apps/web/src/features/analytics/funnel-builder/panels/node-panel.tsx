@@ -2,7 +2,9 @@ import type { FunnelGraph, FunnelNode } from '@amable/api-types';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
 import { Link2, Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
 import { useI18n } from '../../../../i18n';
+import { graphTags } from '../condition-ui';
 import type { BuilderAction } from '../state';
 import { ConditionPanel } from './condition-panel';
 import { ExternalUrlPanel } from './external-url-panel';
@@ -29,6 +31,7 @@ export function NodePanel({
 }) {
   const { t } = useI18n();
   const onChange = (next: FunnelNode) => dispatch({ type: 'update_node', node: next });
+  const draftTags = useMemo(() => graphTags(graph), [graph]);
 
   const body = () => {
     switch (node.kind) {
@@ -43,7 +46,7 @@ export function NodePanel({
       case 'page_group':
         return <PageGroupPanel node={node} onChange={onChange} />;
       case 'condition':
-        return <ConditionPanel node={node} onChange={onChange} />;
+        return <ConditionPanel node={node} draftTags={draftTags} onChange={onChange} />;
       case 'external_url':
         return <ExternalUrlPanel node={node} onChange={onChange} />;
       case 'action_proxy':
@@ -53,7 +56,7 @@ export function NodePanel({
           </p>
         );
       case 'tag':
-        return <TagPanel node={node} onChange={onChange} />;
+        return <TagPanel node={node} draftTags={draftTags} onChange={onChange} />;
       case 'webhook':
         return <WebhookPanel node={node} onChange={onChange} />;
     }

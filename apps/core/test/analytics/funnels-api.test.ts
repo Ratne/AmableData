@@ -327,6 +327,16 @@ describe('funnel graphs v2 API', () => {
     expect((res.body['nodes'] as Array<{ node_id: string; visits: number }>).find((n) => n.node_id === 't')?.visits).toBe(10_000);
   });
 
+  it('suggests condition values of the site to readers', async () => {
+    ns.store(`site:${siteId}`).applyVisitorTags('v1', ['vip']);
+    const res = await viewer.get(`${BASE}/funnels-v2/condition-values?${sq()}&attr=tag`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ values: ['vip'] });
+    expect((await viewer.get(`${BASE}/funnels-v2/condition-values?${sq()}&attr=city`)).body).toEqual({ values: [] });
+    expect((await viewer.get(`${BASE}/funnels-v2/condition-values?${sq()}&attr=os`)).status).toBe(422);
+    expect((await stranger.get(`${OTHER}/funnels-v2/condition-values?${sq()}&attr=tag`)).status).toBe(404);
+  });
+
   it("isolates tenants: another tenant's site is a 404 on every endpoint", async () => {
     const q = `site_id=${siteId}`;
     const f = `${OTHER}/funnels-v2`;
@@ -353,6 +363,7 @@ describe('funnel graphs v2 API', () => {
     const paths = res.body['paths'] as Record<string, Record<string, { responses: Record<string, unknown> }>>;
     for (const p of [
       '/funnels-v2',
+      '/funnels-v2/condition-values',
       '/funnels-v2/{id}',
       '/funnels-v2/{id}/archive',
       '/funnels-v2/{id}/restore',

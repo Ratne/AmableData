@@ -78,6 +78,7 @@ describe('migration 3', () => {
       'createFunnelGraph',
       'updateFunnelGraph',
       'archiveFunnelGraph',
+      'conditionValues',
       'createTrafficSource',
       'recordTouch',
       'recordTouches',
@@ -175,6 +176,36 @@ describe('funnel graphs', () => {
     });
     expect(dup.ok).toBe(false);
     expect(store.listFunnelGraphs()).toEqual([]);
+  });
+
+  it('suggests condition values: tags of tag nodes and visitors, cities, campaigns', () => {
+    const { store, db } = createStore();
+    const base = graphInput();
+    store.createFunnelGraph({
+      ...base,
+      nodes: [
+        ...base.nodes,
+        { id: 'n_tag', kind: 'tag', config: { add: ['lead'], remove: ['cold'] } },
+        { id: 'n_old', kind: 'tag', deleted_at: T0, config: { add: ['gone'], remove: [] } },
+      ],
+    });
+    store.applyVisitorTags('v1', ['vip', 'lead']);
+    store.recordTouches([touch({ id: 'a', campaign: 'spring' }), touch({ id: 'b', campaign: 'spring' })]);
+    for (const [id, city] of [['s1', 'Rome'], ['s2', 'Rome'], ['s3', 'Milan'], ['s4', null]] as const) {
+      db.run(
+        `INSERT INTO sessions (id, visitor_id, session_number, started_at, last_seen, channel, city) VALUES (?, 'v1', 1, ?, ?, 'direct', ?)`,
+        id,
+        T0,
+        T0,
+        city,
+      );
+    }
+    expect(store.conditionValues('tag')).toEqual(['lead', 'cold', 'vip']);
+    expect(store.conditionValues('city')).toEqual(['Rome', 'Milan']);
+    expect(store.conditionValues('city', 1)).toEqual(['Rome']);
+    expect(store.conditionValues('region')).toEqual([]);
+    expect(store.conditionValues('campaign')).toEqual(['spring']);
+    expect(store.conditionValues('os' as never)).toEqual([]);
   });
 });
 

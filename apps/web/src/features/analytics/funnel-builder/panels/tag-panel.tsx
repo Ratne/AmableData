@@ -1,26 +1,56 @@
 import type { FunnelNodeOf } from '@amable/api-types';
+import { useMemo } from 'react';
 import { useI18n } from '../../../../i18n';
-import { Field, ListInput } from './form-bits';
+import { useConditionValues } from '../../api-funnels';
+import { useBuilderResources } from '../resources';
+import { Field } from './form-bits';
+import { ValueSelect } from './value-select';
 
 type Node = FunnelNodeOf<'tag'>;
 
-export function TagPanel({ node, onChange }: { node: Node; onChange: (node: Node) => void }) {
+/** At most 20 tags per list (`tag` node schema). */
+const MAX_TAGS = 20;
+
+export function TagPanel({
+  node,
+  draftTags,
+  onChange,
+}: {
+  node: Node;
+  /** Tags of the draft's tag nodes, offered before they reach the backend. */
+  draftTags: readonly string[];
+  onChange: (node: Node) => void;
+}) {
   const { t } = useI18n();
-  const hint = t('analytics.funnelBuilder.panel.commaHint');
+  const { tenant, siteId } = useBuilderResources();
+  const known = useConditionValues(tenant, siteId, 'tag');
+  const options = useMemo(
+    () =>
+      [...new Set([...draftTags, ...(known.data ?? [])])]
+        .sort((a, b) => a.localeCompare(b))
+        .map((tag) => ({ value: tag, label: tag })),
+    [draftTags, known.data],
+  );
+  const hint = t('analytics.funnelBuilder.panel.tagsHint');
+  const picker = (key: 'add' | 'remove', label: string) => (
+    <Field label={label} hint={hint}>
+      <ValueSelect
+        ariaLabel={label}
+        value={node.config[key]}
+        onChange={(tags) => onChange({ ...node, config: { ...node.config, [key]: tags } })}
+        options={options}
+        loading={known.isPending && options.length === 0}
+        placeholder={t('analytics.funnelBuilder.panel.tagsPick')}
+        max={MAX_TAGS}
+        maxLength={64}
+        custom
+      />
+    </Field>
+  );
   return (
     <>
-      <Field label={t('analytics.funnelBuilder.panel.tagsAdd')} hint={hint}>
-        <ListInput
-          value={node.config.add}
-          onChange={(add) => onChange({ ...node, config: { ...node.config, add } })}
-        />
-      </Field>
-      <Field label={t('analytics.funnelBuilder.panel.tagsRemove')} hint={hint}>
-        <ListInput
-          value={node.config.remove}
-          onChange={(remove) => onChange({ ...node, config: { ...node.config, remove } })}
-        />
-      </Field>
+      {picker('add', t('analytics.funnelBuilder.panel.tagsAdd'))}
+      {picker('remove', t('analytics.funnelBuilder.panel.tagsRemove'))}
     </>
   );
 }

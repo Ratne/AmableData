@@ -1,17 +1,21 @@
 /** Lightweight user-agent parsing: browser, OS and device class (no dependency). */
 
-export type DeviceType = 'desktop' | 'mobile' | 'tablet';
+import type { DEVICE_TYPES, KNOWN_BROWSER_NAMES, KNOWN_OS_NAMES } from '@amable/api-types';
+
+export type DeviceType = (typeof DEVICE_TYPES)[number];
+type OsName = (typeof KNOWN_OS_NAMES)[number];
+type BrowserName = (typeof KNOWN_BROWSER_NAMES)[number];
 
 export interface ParsedUserAgent {
-  browser: string;
+  browser: BrowserName;
   browserVersion: string | null;
-  os: string;
+  os: OsName;
   osVersion: string | null;
   device: DeviceType;
 }
 
 /** Order matters: Chromium forks advertise "Chrome" and "Safari" too. */
-const BROWSERS: ReadonlyArray<[name: string, re: RegExp]> = [
+const BROWSERS: ReadonlyArray<[name: BrowserName, re: RegExp]> = [
   ['Edge', /\b(?:Edg|EdgA|EdgiOS|Edge)\/(\d+)/],
   ['Opera', /\b(?:OPR|Opera|OPiOS)\/(\d+)/],
   ['Samsung Internet', /\bSamsungBrowser\/(\d+)/],
@@ -28,7 +32,7 @@ const BROWSERS: ReadonlyArray<[name: string, re: RegExp]> = [
 ];
 
 export function parseUserAgent(ua: string): ParsedUserAgent {
-  let browser = 'Unknown';
+  let browser: BrowserName = 'Unknown';
   let browserVersion: string | null = null;
   for (const [name, re] of BROWSERS) {
     const m = re.exec(ua);
@@ -40,7 +44,7 @@ export function parseUserAgent(ua: string): ParsedUserAgent {
   }
   if (browser === 'Unknown' && /AppleWebKit/.test(ua) && /Mobile\//.test(ua)) browser = 'Safari';
 
-  let os = 'Unknown';
+  let os: OsName = 'Unknown';
   let osVersion: string | null = null;
   let m: RegExpExecArray | null;
   if ((m = /\bWindows NT (\d+\.\d+)/.exec(ua)) !== null) {

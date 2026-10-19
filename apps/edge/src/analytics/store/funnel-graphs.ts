@@ -1,4 +1,5 @@
 import type {
+  ConditionSuggestAttr,
   FunnelGraph,
   FunnelGraphSummary,
   FunnelStatus,
@@ -177,6 +178,41 @@ export function updateFunnelGraph(
   }
   saveVersion(db, id, next, body, now);
   return { ok: true, graph: getFunnelGraph(db, id) as FunnelGraph };
+}
+
+const distinctColumn = (db: SqlDb, table: string, column: string, limit: number): string[] =>
+  db
+    .all<{ v: string }>(
+      `SELECT ${column} AS v FROM ${table} WHERE ${column} IS NOT NULL AND ${column} != ''
+       GROUP BY ${column} ORDER BY COUNT(*) DESC, ${column} LIMIT ?`,
+      limit,
+    )
+    .map((r) => r.v);
+
+/** Known values of a condition attribute on this site, most frequent first (builder suggestions). */
+export function conditionValues(db: SqlDb, attr: ConditionSuggestAttr, limit: number): string[] {
+  const out = new Set<string>();
+  switch (attr) {
+    case 'tag': {
+      for (const row of db.all<{ graph: string }>(`SELECT graph FROM funnel_graphs WHERE status = 'active'`)) {
+        for (const node of (JSON.parse(row.graph) as StoredGraph).nodes) {
+          if (node.kind !== 'tag' || node.deleted_at != null) continue;
+          for (const tag of [...node.config.add, ...node.config.remove]) out.add(tag);
+        }
+      }
+      for (const tag of distinctColumn(db, 'visitor_tags', 'tag', limit)) out.add(tag);
+      break;
+    }
+    case 'city':
+    case 'region':
+      for (const v of distinctColumn(db, 'sessions', attr, limit)) out.add(v);
+      break;
+    case 'campaign':
+      for (const v of distinctColumn(db, 'funnel_sessions', 'campaign', limit)) out.add(v);
+      for (const v of distinctColumn(db, 'touches', 'campaign', limit)) out.add(v);
+      break;
+  }
+  return [...out].slice(0, limit);
 }
 
 export function setFunnelGraphStatus(

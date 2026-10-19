@@ -1,38 +1,160 @@
 import {
   CONDITION_ATTRIBUTES,
-  CONDITION_OPERATORS,
   type ConditionGroup,
   type ConditionOperator,
   type ConditionRoute,
   type ConditionRule,
+  type DEVICE_TYPES,
   type FunnelNodeOf,
 } from '@amable/api-types';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react';
 import { useI18n } from '../../../../i18n';
+import { useConditionValues } from '../../api-funnels';
 import { Segmented } from '../../components/ui';
+import {
+  changeAttr,
+  changeOp,
+  DEFAULT_FIELD_NAME,
+  FIELD_PREFIX,
+  fieldNames,
+  isFieldAttr,
+  operatorsFor,
+  staticOptions,
+  valueEditorFor,
+  type ValueEditor,
+  type ValueOption,
+} from '../condition-ui';
+import { useBuilderResources } from '../resources';
 import { nextId } from '../state';
-import { Field, ListInput, NumberInput, selectClass } from './form-bits';
+import { Field, NumberInput, selectClass } from './form-bits';
+import { ValueSelect } from './value-select';
 
 type Node = FunnelNodeOf<'condition'>;
 
-const FIELD_PREFIX = 'field:';
 const newRule = (): ConditionRule => ({ attr: 'country', op: 'is', values: [] });
 const newGroup = (): ConditionGroup => ({ match: 'all', rules: [newRule()] });
 
+const asOptions = (values: readonly string[]): ValueOption[] =>
+  values.map((value) => ({ value, label: value }));
+
+function ValuesEditor({
+  rule,
+  editor,
+  draftTags,
+  onChange,
+}: {
+  rule: ConditionRule;
+  editor: ValueEditor;
+  draftTags: readonly string[];
+  onChange: (values: string[]) => void;
+}) {
+  const { t, locale } = useI18n();
+  const { tenant, siteId, sources } = useBuilderResources();
+  const suggest = useConditionValues(tenant, siteId, editor.kind === 'suggest' ? editor.attr : null);
+  const ctx = {
+    locale,
+    sources,
+    deviceLabel: (d: (typeof DEVICE_TYPES)[number]) => t(`analytics.funnelBuilder.value.device.${d}`),
+    archivedLabel: t('analytics.funnelBuilder.value.archived'),
+  };
+  const label = t('analytics.funnelBuilder.panel.values');
+  switch (editor.kind) {
+    case 'none':
+      return null;
+    case 'options':
+      return (
+        <ValueSelect
+          ariaLabel={label}
+          value={rule.values}
+          onChange={onChange}
+          options={staticOptions(editor.set, ctx)}
+          custom={editor.custom}
+          single={editor.single}
+        />
+      );
+    case 'suggest': {
+      const known = editor.attr === 'tag' ? [...new Set([...draftTags, ...(suggest.data ?? [])])] : suggest.data;
+      return (
+        <ValueSelect
+          ariaLabel={label}
+          value={rule.values}
+          onChange={onChange}
+          options={asOptions(known ?? [])}
+          loading={suggest.isPending && known === undefined}
+          maxLength={editor.attr === 'tag' ? 64 : 255}
+          custom
+        />
+      );
+    }
+    case 'free':
+      return (
+        <ValueSelect
+          ariaLabel={label}
+          value={rule.values}
+          onChange={onChange}
+          options={[]}
+          placeholder={t('analytics.funnelBuilder.value.type')}
+          custom
+        />
+      );
+    case 'number':
+      return (
+        <ValueSelect
+          ariaLabel={label}
+          value={rule.values.slice(0, 1)}
+          onChange={onChange}
+          options={[]}
+          placeholder={t('analytics.funnelBuilder.value.number')}
+          custom
+          numeric
+          single
+        />
+      );
+    case 'range': {
+      const options = editor.set ? staticOptions(editor.set, ctx) : [];
+      const bound = (i: 0 | 1, aria: string) => (
+        <ValueSelect
+          ariaLabel={aria}
+          value={rule.values[i] ? [rule.values[i]] : []}
+          onChange={([v = '']) => {
+            const next = [rule.values[0] ?? '', rule.values[1] ?? ''];
+            next[i] = v;
+            onChange(next);
+          }}
+          options={options}
+          placeholder={aria}
+          custom={editor.set === null}
+          numeric={editor.set === null}
+          single
+        />
+      );
+      return (
+        <div className="grid grid-cols-2 gap-1.5">
+          {bound(0, t('analytics.funnelBuilder.value.from'))}
+          {bound(1, t('analytics.funnelBuilder.value.to'))}
+        </div>
+      );
+    }
+  }
+}
+
 function RuleRow({
   rule,
+  draftTags,
   onChange,
   onRemove,
 }: {
   rule: ConditionRule;
+  draftTags: readonly string[];
   onChange: (rule: ConditionRule) => void;
   onRemove?: () => void;
 }) {
   const { t } = useI18n();
-  const isField = rule.attr.startsWith(FIELD_PREFIX);
-  const needsValues = rule.op !== 'exists' && rule.op !== 'not_exists';
+  const { sources } = useBuilderResources();
+  const isField = isFieldAttr(rule.attr);
+  const fields = fieldNames(sources);
   return (
     <li className="grid gap-1.5 rounded-md bg-foreground/[0.03] p-2">
       <div className="flex items-center gap-1.5">
@@ -41,10 +163,14 @@ function RuleRow({
           aria-label={t('analytics.funnelBuilder.panel.attr')}
           value={isField ? 'field' : rule.attr}
           onChange={(e) =>
-            onChange({
-              ...rule,
-              attr: e.target.value === 'field' ? `${FIELD_PREFIX}c1` : e.target.value,
-            })
+            onChange(
+              changeAttr(
+                rule,
+                e.target.value === 'field'
+                  ? `${FIELD_PREFIX}${fields[0] ?? DEFAULT_FIELD_NAME}`
+                  : e.target.value,
+              ),
+            )
           }
         >
           {CONDITION_ATTRIBUTES.map((a) => (
@@ -58,9 +184,9 @@ function RuleRow({
           className={selectClass}
           aria-label={t('analytics.funnelBuilder.panel.op')}
           value={rule.op}
-          onChange={(e) => onChange({ ...rule, op: e.target.value as ConditionOperator })}
+          onChange={(e) => onChange(changeOp(rule, e.target.value as ConditionOperator))}
         >
-          {CONDITION_OPERATORS.map((o) => (
+          {operatorsFor(rule.attr, rule.op).map((o) => (
             <option key={o} value={o}>
               {t(`analytics.funnelBuilder.panel.op.${o}`)}
             </option>
@@ -79,31 +205,39 @@ function RuleRow({
         ) : null}
       </div>
       {isField ? (
-        <Input
-          className="h-8"
-          aria-label={t('analytics.funnelBuilder.panel.fieldName')}
+        <ValueSelect
+          ariaLabel={t('analytics.funnelBuilder.panel.fieldName')}
           placeholder={t('analytics.funnelBuilder.panel.fieldName')}
-          value={rule.attr.slice(FIELD_PREFIX.length)}
-          onChange={(e) => onChange({ ...rule, attr: `${FIELD_PREFIX}${e.target.value}` })}
+          value={[rule.attr.slice(FIELD_PREFIX.length)].filter(Boolean)}
+          onChange={([name = DEFAULT_FIELD_NAME]) => onChange({ ...rule, attr: `${FIELD_PREFIX}${name}` })}
+          options={fields.map((name) => ({
+            value: name,
+            label: name,
+            hint: t('analytics.funnelBuilder.value.trackingField'),
+          }))}
+          maxLength={64}
+          custom
+          single
         />
       ) : null}
-      {needsValues ? (
-        <ListInput
-          value={rule.values}
-          placeholder={t('analytics.funnelBuilder.panel.values')}
-          onChange={(values) => onChange({ ...rule, values })}
-        />
-      ) : null}
+      <ValuesEditor
+        rule={rule}
+        editor={valueEditorFor(rule.attr, rule.op)}
+        draftTags={draftTags}
+        onChange={(values) => onChange({ ...rule, values })}
+      />
     </li>
   );
 }
 
 function GroupCard({
   group,
+  draftTags,
   onChange,
   onRemove,
 }: {
   group: ConditionGroup;
+  draftTags: readonly string[];
   onChange: (group: ConditionGroup) => void;
   onRemove?: () => void;
 }) {
@@ -138,6 +272,7 @@ function GroupCard({
           <RuleRow
             key={i}
             rule={rule}
+            draftTags={draftTags}
             onChange={(next) =>
               onChange({ ...group, rules: group.rules.map((r, j) => (j === i ? next : r)) })
             }
@@ -164,7 +299,16 @@ function GroupCard({
   );
 }
 
-export function ConditionPanel({ node, onChange }: { node: Node; onChange: (node: Node) => void }) {
+export function ConditionPanel({
+  node,
+  draftTags,
+  onChange,
+}: {
+  node: Node;
+  /** Tags set by the tag nodes of the draft (not saved yet, so unknown to the backend). */
+  draftTags: readonly string[];
+  onChange: (node: Node) => void;
+}) {
   const { t } = useI18n();
   const routes = [...node.config.routes].sort((a, b) => a.priority - b.priority);
   const setRoutes = (next: ConditionRoute[]) =>
@@ -242,6 +386,7 @@ export function ConditionPanel({ node, onChange }: { node: Node; onChange: (node
                 <GroupCard
                   key={i}
                   group={group}
+                  draftTags={draftTags}
                   onChange={(next) =>
                     updateRoute(route.id, {
                       groups: route.groups.map((g, j) => (j === i ? next : g)),

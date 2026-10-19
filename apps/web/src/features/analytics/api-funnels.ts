@@ -1,6 +1,8 @@
 import type {
   AdConnection,
   AdPlatform,
+  ConditionSuggestAttr,
+  ConditionValues,
   FunnelGraph,
   FunnelGraphInput,
   FunnelGraphSummary,
@@ -162,6 +164,8 @@ export function funnelsApi(tenant: string) {
         ),
       heatmap: (siteId: string, id: string, params: FunnelHeatmapParams) =>
         request<FunnelHeatmap>(sited(siteId, `${graph(id)}/heatmap`, { ...params })),
+      conditionValues: (siteId: string, attr: ConditionSuggestAttr) =>
+        request<ConditionValues>(sited(siteId, 'funnels-v2/condition-values', { attr })),
     },
     sources: {
       templates: () =>
@@ -342,6 +346,18 @@ export function useTrafficSources(
     queryFn: () => funnelsApi(tenant).sources.list(siteId ?? '', status),
     enabled: siteId !== null,
     select: (result) => result.data,
+    retry: false,
+  });
+}
+
+/** Builder suggestions for a condition / tag value; `null` attr disables the query. */
+export function useConditionValues(tenant: string, siteId: string, attr: ConditionSuggestAttr | null) {
+  return useQuery({
+    queryKey: [...funnelKeys.graphs(tenant, siteId), 'condition-values', attr],
+    queryFn: () => funnelsApi(tenant).funnels.conditionValues(siteId, attr!),
+    enabled: attr !== null && siteId !== '',
+    select: (result) => result.values,
+    staleTime: 60_000,
     retry: false,
   });
 }
