@@ -422,6 +422,7 @@ export function registerTrackingDomainRoutes(api: OpenAPIHono<AppEnv>): void {
           options: {
             cname_available: hostnames !== null,
             target: hostnames?.cnameTarget ?? trackingCnameTarget(c.env),
+            default_host: c.env.EDGE_HOSTNAME?.toLowerCase() || hostOf(c.env.EDGE_ORIGIN),
           },
         },
         200,

@@ -202,5 +202,7 @@ export const trackingDomainOptionsSchema = z.object({
   cname_available: z.boolean(),
   /** Host the CNAME (or the proxied record of a `zone` domain) points at. */
   target: z.string(),
+  /** Hostname of the installation's own tracking worker (chosen at setup), always active for every site. */
+  default_host: z.string().nullable(),
 });
 export type TrackingDomainOptions = z.infer<typeof trackingDomainOptionsSchema>;

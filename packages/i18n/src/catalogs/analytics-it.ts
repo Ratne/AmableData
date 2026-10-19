@@ -706,6 +706,9 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.domains.hint':
     'Servi i link di tracciamento e il tracker dal tuo hostname (es. track.example.com): cookie di prima parte, link coerenti con il tuo brand.',
   'analytics.domains.empty': 'Nessun dominio di tracciamento.',
+  'analytics.domains.default': 'Predefinito',
+  'analytics.domains.defaultHint':
+    "Dominio dell'installazione, scelto nel setup: tracker e link di tracciamento funzionano già qui per tutti i siti. Aggiungi altri domini solo se vuoi servirli anche da un hostname di un sito specifico.",
   'analytics.domains.new': 'Aggiungi dominio',
   'analytics.domains.newTitle': 'Aggiungi un dominio di tracciamento',
   'analytics.domains.newHint':

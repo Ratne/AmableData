@@ -197,6 +197,24 @@ function DnsRecordRow({ type, name, value }: { type: string; name: string; value
   );
 }
 
+/** The installation's own tracking hostname: set up at install time, nothing to verify or remove. */
+function DefaultDomainItem({ hostname }: { hostname: string }) {
+  const { t } = useI18n();
+  return (
+    <li className="flex flex-wrap items-center gap-3 py-3">
+      <Globe className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="truncate font-medium">{hostname}</span>
+          <StatusPill tone="success">{t('analytics.domains.status.active')}</StatusPill>
+          <StatusPill tone="neutral">{t('analytics.domains.default')}</StatusPill>
+        </span>
+        <span className="text-xs text-muted-foreground">{t('analytics.domains.defaultHint')}</span>
+      </div>
+    </li>
+  );
+}
+
 function DomainItem({
   tenant,
   domain,
@@ -350,10 +368,11 @@ export function DomainsTab({
         <ErrorState error={domains.error} />
       ) : !domains.data ? (
         <ListSkeleton rows={2} />
-      ) : domains.data.data.length === 0 ? (
+      ) : domains.data.data.length === 0 && !domains.data.options.default_host ? (
         <EmptyNote>{t('analytics.domains.empty')}</EmptyNote>
       ) : (
         <ul className="flex flex-col divide-y divide-foreground/[0.06]">
+          {domains.data.options.default_host ? <DefaultDomainItem hostname={domains.data.options.default_host} /> : null}
           {domains.data.data.map((domain) => (
             <DomainItem
               key={domain.id}

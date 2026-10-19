@@ -173,7 +173,7 @@ describe('zone domains (no custom hostname provider)', () => {
     expect(res.body['status']).toBe('pending_dns');
     const id = String(res.body['id']);
     const list = await owner.get(`${BASE}/tracking-domains?site_id=${siteId}`);
-    expect(list.body['options']).toEqual({ cname_available: false, target: 'edge.amable.test' });
+    expect(list.body['options']).toEqual({ cname_available: false, target: 'edge.amable.test', default_host: 'edge.amable.test' });
     expect(await findTrackingHost(h.env.DB, 'go.zone.test')).toBeNull();
     // The route and record are in place: the probe sees the worker.
     overrideZoneProbe(() => Promise.resolve({ status: 'active', error: null }));

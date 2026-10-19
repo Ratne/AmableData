@@ -707,6 +707,9 @@ export const analyticsEn = {
   'analytics.domains.hint':
     'Serve tracking links and the tracker from your own hostname (e.g. track.example.com): first-party cookies, links that match your brand.',
   'analytics.domains.empty': 'No tracking domains yet.',
+  'analytics.domains.default': 'Default',
+  'analytics.domains.defaultHint':
+    "The installation's domain, chosen at setup: the tracker and tracking links already work here for every site. Add more domains only to serve them from a specific site's hostname too.",
   'analytics.domains.new': 'Add domain',
   'analytics.domains.newTitle': 'Add a tracking domain',
   'analytics.domains.newHint':
