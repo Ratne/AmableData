@@ -1,3 +1,4 @@
+import { renderEmailLayout } from '@amable/i18n';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
 import { appOriginOf } from '../providers/select';
@@ -47,9 +48,6 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? '');
 }
 
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
-
 export async function notifyAppAdmins(
   env: Env,
   tenantId: string,
@@ -80,13 +78,16 @@ export async function notifyAppAdmins(
       };
       const subject = fill(copy.subject, values);
       const body = fill(copy.body, values);
-      await services.email.send({
-        to: admin.email,
-        subject,
-        text: `${body}\n\n${link}`,
-        html: `<p>${escapeHtml(body)}</p><p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>`,
-        locale,
+      const rendered = renderEmailLayout({
+        lang: locale,
+        title: subject,
+        blocks: [
+          { type: 'paragraph', text: body },
+          { type: 'action', label: locale === 'it' ? 'Apri le app installate' : 'Open installed apps', url: link },
+        ],
+        logoUrl: `${appOriginOf(env)}/brand/logo.png`,
       });
+      await services.email.send({ to: admin.email, subject, text: rendered.text, html: rendered.html, locale });
     }
   } catch (error) {
     console.error('[apps] admin notice failed:', error instanceof Error ? error.message : error);

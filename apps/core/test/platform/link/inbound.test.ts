@@ -234,4 +234,34 @@ describe('signed control plane routes', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, licensed: true, version: 'dev', schemaVersion: latestSchemaVersion(installationMigrations) });
   });
+
+  it('bootstraps the first workspace and owner invitation once, never after a sign-up', async () => {
+    const { h, keys } = await setup();
+    license(h.env);
+    const path = '/api/platform/v1/bootstrap-owner';
+    const call = async () => {
+      const body = JSON.stringify({ email: 'Owner@Example.com', workspaceName: 'ZZZ Srl', locale: 'it' });
+      return post(h, path, body, await signed(keys.privateKey, body, h.clock.now, path));
+    };
+    const unsigned = await post(h, path, '{}', { 'content-type': 'application/json' });
+    expect(unsigned.status).toBe(401);
+
+    const first = await call();
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ ok: true, status: 'invited', workspace: 'ZZZ Srl' });
+    expect(String((first.body as { url: string }).url)).toMatch(new RegExp(`^${ORIGIN}/invite#token=`));
+    const second = await call();
+    expect((second.body as { url: string }).url).not.toBe((first.body as { url: string }).url);
+    const tenants = h.shim.sqlite.prepare(`SELECT slug, name FROM tenants`).all();
+    expect(tenants).toEqual([{ slug: 'zzz-srl', name: 'ZZZ Srl' }]);
+    const pending = h.shim.sqlite
+      .prepare(`SELECT email, role, locale FROM invites WHERE accepted_at IS NULL AND revoked_at IS NULL`)
+      .all();
+    expect(pending).toEqual([{ email: 'owner@example.com', role: 'owner', locale: 'it' }]);
+
+    h.shim.sqlite
+      .prepare(`INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'someone@example.com', 0, 0)`)
+      .run();
+    expect((await call()).body).toEqual({ ok: true, status: 'has_users' });
+  });
 });

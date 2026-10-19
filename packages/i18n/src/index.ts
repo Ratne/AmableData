@@ -86,4 +86,6 @@ export function formatNumber(
 }
 
 export { renderSystemEmail, escapeHtml } from './emails';
+export { renderEmailLayout } from './email-layout';
+export type { EmailBlock, EmailLayoutInput, EmailLayoutOutput } from './email-layout';
 export type { SystemEmailKind, SystemEmailVars, RenderedEmail } from './emails';

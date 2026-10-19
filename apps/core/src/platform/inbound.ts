@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { revokeApp } from '../apps/lifecycle';
 import type { Env } from '../env';
 import type { AppEnv } from '../middleware';
+import { appOrigin } from '../middleware/security';
+import { bootstrapOwner } from './bootstrap-owner';
 import { sendHeartbeat } from './heartbeat';
 import { platformLink } from './license';
 import { dropQuotaMemoryCache, quotaSnapshotSchema, storeQuotaSnapshot } from './quota';
@@ -16,6 +18,12 @@ const restoreSchema = z.strictObject({ at: z.number().int().positive() });
 const revokeAppSchema = z.strictObject({
   app_id: z.string().regex(/^[a-z][a-z0-9-]{2,39}$/),
   reason: z.string().min(1).max(500),
+});
+
+const bootstrapOwnerSchema = z.strictObject({
+  email: z.string().trim().max(320).pipe(z.email()),
+  workspaceName: z.string().trim().min(1).max(120),
+  locale: z.enum(['en', 'it']),
 });
 
 const resumeEmailSchema = z.strictObject({
@@ -93,6 +101,20 @@ export function mountPlatformInbound(app: Hono<AppEnv>): void {
       .run();
     const installs = await revokeApp(c.env, parsed.data.app_id, parsed.data.reason, now);
     return c.json({ ok: true, installs });
+  });
+
+  app.post('/platform/v1/bootstrap-owner', async (c) => {
+    const body = await verifiedControlPlaneBody(c);
+    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
+    let json: unknown;
+    try {
+      json = JSON.parse(body);
+    } catch {
+      return c.json({ error: 'invalid_json' }, 400);
+    }
+    const parsed = bootstrapOwnerSchema.safeParse(json);
+    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    return c.json(await bootstrapOwner(c.env, parsed.data, appOrigin(c), c.get('services').now()));
   });
 
   // Signed reachability probe of the link (no data beyond what the control plane already knows).

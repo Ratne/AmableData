@@ -402,6 +402,28 @@ export interface PointInTimeRestoreResponse {
   readonly failed: readonly { readonly tenantId: string; readonly object: string; readonly error: string }[];
 }
 
+/**
+ * `POST /api/platform/v1/bootstrap-owner` (signed) — after the install, the control plane
+ * asks for the owner invitation of the account's registered email. `has_users` once
+ * anyone signed up (nothing changes); otherwise any previous bootstrap invitation is
+ * replaced and the new link is returned, for the control plane to email.
+ */
+export interface BootstrapOwnerRequest {
+  readonly email: string;
+  readonly workspaceName: string;
+  readonly locale: 'en' | 'it';
+}
+
+export type BootstrapOwnerResponse =
+  | { readonly ok: true; readonly status: 'has_users' }
+  | {
+      readonly ok: true;
+      readonly status: 'invited';
+      readonly url: string;
+      readonly expiresAt: number;
+      readonly workspace: string;
+    };
+
 /** `POST /api/platform/v1/assist/revoke` (signed) — the control plane revoked a grant. */
 export interface AssistRevokeRequest {
   readonly grantId: string;

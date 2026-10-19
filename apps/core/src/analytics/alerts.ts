@@ -1,5 +1,6 @@
 import { signWebhook, WEBHOOK_SIGNATURE_HEADER } from '@amable/auth';
 import type { SystemEmailProvider } from '@amable/core';
+import { renderEmailLayout } from '@amable/i18n';
 import type { AlertDelivery } from './sync';
 
 /**
@@ -20,9 +21,6 @@ export interface AlertTransport {
   appOrigin: string;
 }
 
-const escapeHtml = (s: string): string =>
-  s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch);
-
 export function alertEmail(d: AlertDelivery, to: string, appOrigin: string): {
   to: string;
   subject: string;
@@ -34,12 +32,22 @@ export function alertEmail(d: AlertDelivery, to: string, appOrigin: string): {
   const what = payload.test
     ? `Test alert "${alert.name}" for goal "${payload.goal}" on ${site.name}.`
     : `Goal "${payload.goal}" was completed ${payload.count} time${payload.count === 1 ? '' : 's'} on ${site.name} (alert "${alert.name}").`;
-  const link = `${appOrigin.replace(/\/+$/, '')}/`;
+  const origin = appOrigin.replace(/\/+$/, '');
+  const { html, text } = renderEmailLayout({
+    lang: 'en',
+    title: payload.test ? `Test alert: ${alert.name}` : `${payload.goal} on ${site.name}`,
+    blocks: [
+      { type: 'paragraph', text: what },
+      { type: 'details', rows: [['First', payload.first_at], ['Last', payload.last_at]] },
+      { type: 'action', label: 'Open amabledata', url: `${origin}/` },
+    ],
+    logoUrl: `${origin}/brand/logo.png`,
+  });
   return {
     to,
     subject: payload.test ? `[amabledata] Test: ${alert.name}` : `[amabledata] ${payload.goal} on ${site.name}`,
-    text: `${what}\n\nFirst: ${payload.first_at}\nLast: ${payload.last_at}\n\n${link}`,
-    html: `<p>${escapeHtml(what)}</p><p>First: ${escapeHtml(payload.first_at)}<br>Last: ${escapeHtml(payload.last_at)}</p><p><a href="${escapeHtml(link)}">amabledata</a></p>`,
+    text,
+    html,
     locale: 'en',
   };
 }

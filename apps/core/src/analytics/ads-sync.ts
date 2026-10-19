@@ -21,6 +21,7 @@ import {
   type AnalyticsResult,
 } from '@amable/app-edge/analytics';
 import type { OAuthKeyValueStore, OAuthSealer, SystemEmail } from '@amable/core';
+import { renderEmailLayout } from '@amable/i18n';
 import { z } from 'zod';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
@@ -799,14 +800,21 @@ const ALERT_ROLES = ['owner', 'admin'];
 export function adConnectionAlertEmail(alert: AdConnectionAlert, to: string, appOrigin: string): SystemEmail {
   const account = alert.connection.account_name ?? alert.connection.account_id;
   const what = `The ${alert.connection.platform} ad account "${account}" of ${alert.site.name} needs to be reconnected: its authorization expired or was revoked. Spend sync is paused until then.`;
-  const link = `${appOrigin.replace(/\/+$/, '')}/`;
-  const esc = (s: string) =>
-    s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch);
+  const origin = appOrigin.replace(/\/+$/, '');
+  const { html, text } = renderEmailLayout({
+    lang: 'en',
+    title: `Reconnect ${alert.connection.platform} ads`,
+    blocks: [
+      { type: 'paragraph', text: what },
+      { type: 'action', label: 'Open amabledata', url: `${origin}/` },
+    ],
+    logoUrl: `${origin}/brand/logo.png`,
+  });
   return {
     to,
     subject: `[amabledata] Reconnect ${alert.connection.platform} ads on ${alert.site.name}`,
-    text: `${what}\n\n${link}`,
-    html: `<p>${esc(what)}</p><p><a href="${esc(link)}">amabledata</a></p>`,
+    text,
+    html,
     locale: 'en',
   };
 }

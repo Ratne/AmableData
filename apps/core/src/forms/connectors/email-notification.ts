@@ -1,6 +1,6 @@
 import { emailNotificationConfigSchema, type EmailNotificationConfig } from '@amable/api-types';
-import { escapeHtmlAttr, escapeHtmlText } from '@amable/auth/security';
 import { displayValue } from '@amable/forms';
+import { renderEmailLayout } from '@amable/i18n';
 import { mergeContext, renderTags, zodConfig } from './merge';
 import { failure, type Connector, type ConnectorContext } from './types';
 
@@ -19,22 +19,16 @@ export function notificationEmail(ctx: ConnectorContext<EmailNotificationConfig>
       return { label: f.label || f.key, value: value === undefined ? '' : displayValue(f, value) };
     });
   const link = ctx.submissionUrl;
-  const text = [
-    `New submission of "${ctx.form.name}" (${ctx.submission.submittedAt})`,
-    '',
-    ...rows.map((r) => `${r.label}: ${r.value}`),
-    ...(link === null ? [] : ['', `Open in amabledata: ${link}`]),
-  ].join('\n');
-  const html = [
-    `<p>New submission of <strong>${escapeHtmlText(ctx.form.name)}</strong> (${escapeHtmlText(ctx.submission.submittedAt)})</p>`,
-    '<table cellpadding="6" style="border-collapse:collapse">',
-    ...rows.map(
-      (r) =>
-        `<tr><td style="font-weight:600;vertical-align:top">${escapeHtmlText(r.label)}</td><td>${escapeHtmlText(r.value).replace(/\n/g, '<br>')}</td></tr>`,
-    ),
-    '</table>',
-    ...(link === null ? [] : [`<p><a href="${escapeHtmlAttr(link)}">Open in amabledata</a></p>`]),
-  ].join('\n');
+  const { text, html } = renderEmailLayout({
+    lang: 'en',
+    title: `New submission of "${ctx.form.name}"`,
+    blocks: [
+      { type: 'paragraph', text: `Submitted at ${ctx.submission.submittedAt}` },
+      ...(rows.length === 0 ? [] : [{ type: 'details' as const, rows: rows.map((r) => [r.label, r.value] as const) }]),
+      ...(link === null ? [] : [{ type: 'action' as const, label: 'Open in amabledata', url: link }]),
+    ],
+    ...(link === null ? {} : { logoUrl: `${new URL(link).origin}/brand/logo.png` }),
+  });
   return { subject, text, html };
 }
 

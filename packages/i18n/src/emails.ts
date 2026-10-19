@@ -1,12 +1,13 @@
+import { renderEmailLayout, type EmailBlock } from './email-layout';
 import type { Locale } from './index';
+
+export { escapeHtml } from './email-layout';
 
 /**
  * System (transactional) email templates in English and Italian.
  *
  * Every template yields subject + HTML + plain text. Variables are HTML-escaped
- * in the HTML part. The layout is intentionally minimal; when
- * packages/email-render ships, `renderSystemEmail` keeps its signature and
- * swaps the layout.
+ * in the HTML part; the layout is the shared one of `email-layout.ts`.
  */
 
 export interface SystemEmailVars {
@@ -219,20 +220,10 @@ const templates: Record<Locale, Templates> = {
   },
 };
 
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function fill(template: string, vars: Record<string, string | number>, html: boolean): string {
+function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (match, name: string) => {
     const value = vars[name];
-    if (value === undefined) return match;
-    return html ? escapeHtml(String(value)) : String(value);
+    return value === undefined ? match : String(value);
   });
 }
 
@@ -240,37 +231,23 @@ export function renderSystemEmail<K extends SystemEmailKind>(
   kind: K,
   locale: Locale,
   vars: SystemEmailVars[K],
+  options: { logoUrl?: string } = {},
 ): RenderedEmail {
   const copy = templates[locale][kind];
   const values = vars as Record<string, string | number>;
-  const subject = fill(copy.subject, values, false);
-
-  const textParts = copy.body.map((p) => fill(p, values, false));
-  const htmlParts = copy.body.map(
-    (p) => `<p style="margin:0 0 16px;font-size:15px;line-height:22px">${fill(p, values, true)}</p>`,
-  );
-  if (copy.highlightVar !== undefined) {
-    const value = String(values[copy.highlightVar] ?? '');
-    textParts.push(value);
-    htmlParts.push(
-      `<p style="margin:0 0 16px;font-size:28px;letter-spacing:6px;font-weight:700;font-family:monospace">${escapeHtml(value)}</p>`,
-    );
-  }
+  const subject = fill(copy.subject, values);
+  const blocks: EmailBlock[] = copy.body.map((p) => ({ type: 'paragraph', text: fill(p, values) }));
+  if (copy.highlightVar !== undefined) blocks.push({ type: 'code', value: String(values[copy.highlightVar] ?? '') });
   if (copy.action !== undefined) {
-    const url = String(values[copy.action.urlVar] ?? '');
-    textParts.push(`${copy.action.label}: ${url}`);
-    htmlParts.push(
-      `<p style="margin:0 0 16px"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background:#111827;color:#ffffff;border-radius:6px;text-decoration:none;font-weight:600">${escapeHtml(copy.action.label)}</a></p>`,
-    );
+    blocks.push({ type: 'action', label: copy.action.label, url: String(values[copy.action.urlVar] ?? '') });
   }
-  if (copy.footer !== undefined) {
-    textParts.push(copy.footer);
-    htmlParts.push(
-      `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">${escapeHtml(copy.footer)}</p>`,
-    );
-  }
-
-  const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:24px;background:#f3f4f6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;padding:32px"><tr><td><p style="margin:0 0 24px;font-weight:700">amabledata</p>${htmlParts.join('')}</td></tr></table></td></tr></table></body></html>`;
-
-  return { subject, html, text: `${textParts.join('\n\n')}\n` };
+  const { html, text } = renderEmailLayout({
+    lang: locale,
+    title: subject,
+    preheader: fill(copy.body[0] ?? '', values),
+    blocks,
+    ...(copy.footer === undefined ? {} : { footer: copy.footer }),
+    ...(options.logoUrl === undefined ? {} : { logoUrl: options.logoUrl }),
+  });
+  return { subject, html, text };
 }

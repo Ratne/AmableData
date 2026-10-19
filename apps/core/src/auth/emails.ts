@@ -14,7 +14,12 @@ export async function sendSystemEmail<K extends SystemEmailKind>(
   vars: SystemEmailVars[K],
 ): Promise<void> {
   const resolved = resolveLocale(locale);
-  const rendered = renderSystemEmail(kind, resolved, vars);
+  const rendered = renderSystemEmail(
+    kind,
+    resolved,
+    vars,
+    services.brandLogoUrl === undefined ? {} : { logoUrl: services.brandLogoUrl },
+  );
   await services.email.send({
     to,
     subject: rendered.subject,

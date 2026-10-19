@@ -41,6 +41,8 @@ export interface AuthServices {
   apiLimiter: RateLimiter;
   email: SystemEmailProvider;
   turnstileSiteKey: string | null;
+  /** Absolute URL of the logo shown in system emails. */
+  brandLogoUrl?: string;
 }
 
 export class AuthConfigError extends Error {
@@ -118,6 +120,9 @@ const defaultFactory: Factory = async (env) => {
       env.TURNSTILE_SITE_KEY !== undefined && env.TURNSTILE_SITE_KEY !== ''
         ? env.TURNSTILE_SITE_KEY
         : null,
+    ...(env.APP_ORIGIN !== undefined && env.APP_ORIGIN !== ''
+      ? { brandLogoUrl: `${env.APP_ORIGIN.replace(/\/+$/, '')}/brand/logo.png` }
+      : {}),
   };
 };
 
