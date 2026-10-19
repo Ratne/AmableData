@@ -100,7 +100,8 @@ export function EmailSettingsPage() {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="set-reply">{t('email.common.replyTo')}</Label>
-              <Input id="set-reply" type="email" {...field('reply_to')} />
+              <Input id="set-reply" type="email" aria-describedby="set-reply-hint" {...field('reply_to')} />
+              <p id="set-reply-hint" className="text-xs text-muted-foreground">{t('email.settings.replyToHint')}</p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="set-address">{t('email.settings.physicalAddress')}</Label>

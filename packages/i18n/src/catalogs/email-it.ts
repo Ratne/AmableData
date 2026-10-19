@@ -15,6 +15,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.common.subject': 'Oggetto',
   'email.common.fromName': 'Nome mittente',
   'email.common.replyTo': 'Rispondi a',
+  'email.settings.replyToHint':
+    "Dove arrivano le risposte a tutte le email del CRM (broadcast, automazioni, email singole). Utile quando invii da un sottodominio che non riceve posta: invii da hi@s.tuodominio.com e le risposte arrivano a hi@tuodominio.com. Broadcast, template e automazioni possono indicarne uno diverso.",
   'email.common.updated': 'Aggiornato',
   'email.common.created': 'Creato',
   'email.common.status': 'Stato',

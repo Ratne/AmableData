@@ -13,6 +13,8 @@ export const emailEn = {
   'email.common.subject': 'Subject',
   'email.common.fromName': 'Sender name',
   'email.common.replyTo': 'Reply-to',
+  'email.settings.replyToHint':
+    'Where replies to every CRM email go (broadcasts, automations, single emails). Useful when you send from a subdomain that does not receive mail: send from hi@s.yourdomain.com and replies reach hi@yourdomain.com. Broadcasts, templates and automations can set a different one.',
   'email.common.updated': 'Updated',
   'email.common.created': 'Created',
   'email.common.status': 'Status',
