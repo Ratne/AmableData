@@ -1,6 +1,5 @@
 /** English strings of calendars, event types, availability and bookings (spread into the main catalog). */
 export const bookingEn = {
-  'booking.title': 'Bookings',
   'booking.tab.bookings': 'Bookings',
   'booking.tab.calendars': 'Calendars',
   'booking.tab.eventTypes': 'Event types',

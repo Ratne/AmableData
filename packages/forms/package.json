@@ -6,7 +6,8 @@
   "license": "AGPL-3.0-only",
   "exports": {
     ".": "./src/index.ts",
-    "./bundle": "./generated/bundle.ts"
+    "./bundle": "./generated/bundle.ts",
+    "./widget/turnstile": "./src/widget/turnstile.ts"
   },
   "scripts": {
     "build": "node scripts/build.mjs",

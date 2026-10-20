@@ -7,6 +7,7 @@ import {
   getAuth,
   getTenant,
   handleError,
+  requireAnyPermission,
   requirePermission,
   requireStepUpForSession,
   requireStepUpForSessionWhen,
@@ -92,18 +93,24 @@ export const jsonBody = <T extends z.ZodType>(schema: T) => ({
 export function crmRoute<const R extends Omit<RouteConfig, 'middleware' | 'security'>>(
   permission: Permission,
   config: R,
-  /** `stepUp`: always, or only when the predicate says the request touches secrets. */
-  options: { stepUp?: boolean | ((c: Context<AppEnv>) => boolean | Promise<boolean>) } = {},
+  options: {
+    /** Always, or only when the predicate says the request touches secrets. */
+    stepUp?: boolean | ((c: Context<AppEnv>) => boolean | Promise<boolean>);
+    /** Also requires at least one of these (declared as `x-amable-permission-any`). */
+    anyOf?: readonly Permission[];
+  } = {},
 ) {
-  const guard: MiddlewareHandler<AppEnv> = requirePermission(permission);
-  const stepUp = options.stepUp;
+  const { stepUp, anyOf } = options;
+  const middleware: MiddlewareHandler<AppEnv>[] = [requirePermission(permission)];
+  if (anyOf !== undefined) middleware.push(requireAnyPermission(anyOf));
+  if (stepUp !== undefined && stepUp !== false) {
+    middleware.push(stepUp === true ? requireStepUpForSession() : requireStepUpForSessionWhen(stepUp));
+  }
   const extra = {
-    middleware:
-      stepUp === undefined || stepUp === false
-        ? guard
-        : [guard, stepUp === true ? requireStepUpForSession() : requireStepUpForSessionWhen(stepUp)],
+    middleware: middleware.length === 1 ? middleware[0]! : middleware,
     security: [{ apiKey: [] }, { session: [] }] as Array<Record<string, string[]>>,
     'x-amable-permission': permission,
+    ...(anyOf === undefined ? {} : { 'x-amable-permission-any': [...anyOf] }),
   };
   const route: R & typeof extra = Object.assign({}, config, extra, {
     responses: { ...ERROR_RESPONSES, ...config.responses },

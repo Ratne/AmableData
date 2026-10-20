@@ -7,9 +7,7 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
 
   'email.common.save': 'Salva',
   'email.common.saved': 'Salvato',
-  'email.common.create': 'Crea',
   'email.common.cancel': 'Annulla',
-  'email.common.delete': 'Elimina',
   'email.common.edit': 'Modifica',
   'email.common.name': 'Nome',
   'email.common.subject': 'Oggetto',
@@ -22,7 +20,6 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.common.status': 'Stato',
   'email.common.loadMore': 'Carica altri',
   'email.common.error': 'Qualcosa è andato storto: {message}',
-  'email.common.none': '—',
   'email.common.back': 'Indietro',
 
   'email.templates.title': 'Template',
@@ -44,7 +41,6 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.snippets.empty': 'Nessuno snippet. Gli snippet sono blocchi di testo riutilizzabili con logica Liquid.',
   'email.snippets.group': 'Contenuti dinamici',
 
-  'email.preview.title': 'Anteprima',
   'email.preview.as': 'Anteprima come',
   'email.preview.sample': 'Dati di esempio',
   'email.preview.searchContact': 'Cerca un contatto…',
@@ -66,7 +62,6 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.suppressions.source': 'Origine',
   'email.suppressions.search': 'Cerca indirizzo…',
   'email.suppressions.empty': 'Nessun indirizzo soppresso.',
-  'email.suppressions.remove': 'Rimuovi dalla lista',
   'email.suppressions.reason.unsubscribe': 'Disiscritto',
   'email.suppressions.reason.bounce': 'Rimbalzo',
   'email.suppressions.reason.complaint': 'Segnalato come spam',

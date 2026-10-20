@@ -1,12 +1,19 @@
 import type { EsignSignerInput, EsignTemplate } from '@amable/api-types';
 import { Button } from '@amable/ui/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@amable/ui/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@amable/ui/ui/dialog';
 import { Input } from '@amable/ui/ui/input';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
-import { ChoiceSelect, FormField } from '../../commerce/components/common';
+import { ChoiceSelect, FormField } from '../../../components/feature-kit';
 import { useEsign, useEsignMutation, useTemplates } from '../api/hooks';
 import { ContactPicker, type PickedContact } from './common';
 
@@ -22,7 +29,8 @@ interface SignerDraft {
 const EMPTY_SIGNER: SignerDraft = { mode: 'contact', contact: null, email: '', name: '' };
 
 function signerInput(partyId: string, draft: SignerDraft): EsignSignerInput | null {
-  if (draft.mode === 'contact') return draft.contact === null ? null : { party_id: partyId, contact_id: draft.contact.id };
+  if (draft.mode === 'contact')
+    return draft.contact === null ? null : { party_id: partyId, contact_id: draft.contact.id };
   const email = draft.email.trim();
   if (!EMAIL_RE.test(email)) return null;
   const name = draft.name.trim();
@@ -43,26 +51,37 @@ export function SendDialog({
   const { slug, api } = useEsign();
   const navigate = useNavigate();
   const templates = useTemplates();
-  const sendable = useMemo(() => (templates.data ?? []).filter((tpl) => tpl.status === 'active' && tpl.ready), [templates.data]);
+  const sendable = useMemo(
+    () => (templates.data ?? []).filter((tpl) => tpl.status === 'active' && tpl.ready),
+    [templates.data],
+  );
   const [templateId, setTemplateId] = useState(template?.id ?? '');
-  const selected = template?.id === templateId ? template : sendable.find((tpl) => tpl.id === templateId);
+  const selected =
+    template?.id === templateId ? template : sendable.find((tpl) => tpl.id === templateId);
   const [signers, setSigners] = useState<Record<string, SignerDraft>>({});
   const [message, setMessage] = useState('');
   const [expireDays, setExpireDays] = useState<string | null>(null);
 
   const parties = selected?.parties ?? [];
   const initialOf = (partyId: string): SignerDraft =>
-    contact !== undefined && partyId === parties[0]?.id ? { ...EMPTY_SIGNER, contact } : EMPTY_SIGNER;
+    contact !== undefined && partyId === parties[0]?.id
+      ? { ...EMPTY_SIGNER, contact }
+      : EMPTY_SIGNER;
   const draftOf = (partyId: string): SignerDraft => signers[partyId] ?? initialOf(partyId);
   const setDraft = (partyId: string, patch: Partial<SignerDraft>) =>
-    setSigners((current) => ({ ...current, [partyId]: { ...(current[partyId] ?? initialOf(partyId)), ...patch } }));
+    setSigners((current) => ({
+      ...current,
+      [partyId]: { ...(current[partyId] ?? initialOf(partyId)), ...patch },
+    }));
 
   const inputs = parties.map((party) => signerInput(party.id, draftOf(party.id)));
   const complete = inputs.every((input) => input !== null);
   const defaultExpire = selected?.settings.expire_days ?? null;
   const expireText = expireDays ?? (defaultExpire === null ? '' : String(defaultExpire));
   const expireValue = expireText.trim() === '' ? null : Number(expireText);
-  const expireValid = expireValue === null || (Number.isInteger(expireValue) && expireValue >= 1 && expireValue <= 365);
+  const expireValid =
+    expireValue === null ||
+    (Number.isInteger(expireValue) && expireValue >= 1 && expireValue <= 365);
 
   const send = useEsignMutation({
     mutationFn: () =>
@@ -75,7 +94,10 @@ export function SendDialog({
     success: t('esign.send.sent'),
     onSuccess: (request) => {
       onClose();
-      void navigate({ to: '/t/$tenant/signatures/$requestId', params: { tenant: slug, requestId: request.id } });
+      void navigate({
+        to: '/t/$tenant/signatures/$requestId',
+        params: { tenant: slug, requestId: request.id },
+      });
     },
   });
 
@@ -93,7 +115,14 @@ export function SendDialog({
             <DialogDescription>{t('esign.send.description')}</DialogDescription>
           </DialogHeader>
           {template === undefined ? (
-            <FormField label={t('esign.field.template')} hint={sendable.length === 0 && !templates.isPending ? t('esign.send.noTemplates') : undefined}>
+            <FormField
+              label={t('esign.field.template')}
+              hint={
+                sendable.length === 0 && !templates.isPending
+                  ? t('esign.send.noTemplates')
+                  : undefined
+              }
+            >
               {(id) => (
                 <ChoiceSelect
                   id={id}
@@ -115,7 +144,11 @@ export function SendDialog({
             return (
               <fieldset key={party.id} className="grid gap-2 rounded-lg border p-3">
                 <legend className="flex items-center gap-2 px-1 text-sm font-medium">
-                  <span className="size-2.5 rounded-full" style={{ backgroundColor: party.color ?? '#64748b' }} aria-hidden />
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ backgroundColor: party.color ?? '#64748b' }}
+                    aria-hidden
+                  />
                   {party.name}
                 </legend>
                 <div className="flex gap-1 text-xs">
@@ -132,7 +165,11 @@ export function SendDialog({
                   ))}
                 </div>
                 {draft.mode === 'contact' ? (
-                  <ContactPicker value={draft.contact} label={t('esign.send.contactFor', { party: party.name })} onChange={(next) => setDraft(party.id, { contact: next })} />
+                  <ContactPicker
+                    value={draft.contact}
+                    label={t('esign.send.contactFor', { party: party.name })}
+                    onChange={(next) => setDraft(party.id, { contact: next })}
+                  />
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Input
@@ -159,11 +196,32 @@ export function SendDialog({
             <>
               <FormField label={t('esign.field.message')} hint={t('esign.send.messageHint')}>
                 {(id) => (
-                  <Textarea id={id} rows={3} maxLength={5000} value={message} placeholder={selected.settings.email_message} onChange={(e) => setMessage(e.target.value)} />
+                  <Textarea
+                    id={id}
+                    rows={3}
+                    maxLength={5000}
+                    value={message}
+                    placeholder={selected.settings.email_message}
+                    onChange={(e) => setMessage(e.target.value)}
+                  />
                 )}
               </FormField>
-              <FormField label={t('esign.field.expireDays')} hint={t('esign.send.expireHint')} error={expireValid ? null : t('esign.error.expireDays')}>
-                {(id) => <Input id={id} type="number" min={1} max={365} className="w-32" value={expireText} onChange={(e) => setExpireDays(e.target.value)} />}
+              <FormField
+                label={t('esign.field.expireDays')}
+                hint={t('esign.send.expireHint')}
+                error={expireValid ? null : t('esign.error.expireDays')}
+              >
+                {(id) => (
+                  <Input
+                    id={id}
+                    type="number"
+                    min={1}
+                    max={365}
+                    className="w-32"
+                    value={expireText}
+                    onChange={(e) => setExpireDays(e.target.value)}
+                  />
+                )}
               </FormField>
             </>
           ) : null}
@@ -171,7 +229,10 @@ export function SendDialog({
             <Button type="button" variant="ghost" onClick={onClose}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" disabled={selected === undefined || !complete || !expireValid || send.isPending}>
+            <Button
+              type="submit"
+              disabled={selected === undefined || !complete || !expireValid || send.isPending}
+            >
               {t('esign.send.submit')}
             </Button>
           </DialogFooter>

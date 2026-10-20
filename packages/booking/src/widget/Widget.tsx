@@ -23,7 +23,7 @@ import {
   timeZones,
   todayIn,
 } from './format';
-import { mountTurnstile, type TurnstileHandle } from './turnstile';
+import { mountTurnstile, type TurnstileHandle } from '@amable/forms/widget/turnstile';
 
 interface Slot {
   start: number;

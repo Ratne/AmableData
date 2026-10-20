@@ -34,8 +34,9 @@ import type {
   UpdateProductInput,
   UpdatePromoCodeInput,
 } from '@amable/api-types';
-import type { Permission, Role } from '@amable/core';
-import { stepUpFetch } from '../../../lib/step-up';
+import { tenantRest } from '../../../lib/tenant-api';
+
+export { TenantApiError as CommerceApiError } from '../../../lib/tenant-api';
 
 /**
  * Typed client of the e-commerce REST v2 surface (`/api/v2/t/{slug}`) plus the
@@ -43,107 +44,17 @@ import { stepUpFetch } from '../../../lib/step-up';
  * order search). Types come from the shared Zod schemas in `@amable/api-types`.
  */
 
-const CSRF_HEADER = 'x-amable-csrf';
-
-export interface ApiErrorDetail {
-  readonly path: string;
-  readonly message: string;
-}
-
-export class CommerceApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    readonly detail: string | null,
-    readonly details: readonly ApiErrorDetail[],
-  ) {
-    super(detail ?? `API ${String(status)} ${code}`);
-  }
-}
-
-type QueryValue = string | number | boolean | null | undefined;
-
-interface RequestOptions {
-  readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-  readonly query?: Readonly<Record<string, QueryValue>>;
-  readonly json?: unknown;
-}
-
-function buildQuery(query: Readonly<Record<string, QueryValue>> | undefined): string {
-  if (query === undefined) return '';
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === null || value === '') continue;
-    params.set(key, String(value));
-  }
-  const text = params.toString();
-  return text === '' ? '' : `?${text}`;
-}
-
-let redirecting = false;
-
-async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
-  const method = options.method ?? 'GET';
-  const headers = new Headers();
-  let body: string | undefined;
-  if (options.json !== undefined) {
-    headers.set('content-type', 'application/json');
-    body = JSON.stringify(options.json);
-  }
-  if (method !== 'GET') headers.set(CSRF_HEADER, '1');
-  if (method === 'POST') headers.set('idempotency-key', crypto.randomUUID());
-  const response = await stepUpFetch(`${url}${buildQuery(options.query)}`, {
-    method,
-    headers,
-    body,
-    credentials: 'same-origin',
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-      message?: string;
-      details?: ApiErrorDetail[];
-    } | null;
-    if (response.status === 401 && !redirecting && window.location.pathname !== '/login') {
-      redirecting = true;
-      window.location.assign('/login');
-    }
-    throw new CommerceApiError(
-      response.status,
-      payload?.error ?? 'http_error',
-      payload?.message ?? null,
-      payload?.details ?? [],
-    );
-  }
-  return (await response.json()) as T;
-}
-
-export interface TenantMe {
-  readonly tenant: { readonly id: string; readonly slug: string; readonly name: string };
-  readonly role: Role;
-  readonly permissions: readonly Permission[];
-}
-
 export type ListParams = {
   readonly limit?: number;
   readonly cursor?: string;
 };
 
-type Deleted = { id: string; deleted: true };
-
 export function commerceClient(slug: string) {
-  const base = `/api/v2/t/${encodeURIComponent(slug)}`;
-  const get = <T>(path: string, query?: RequestOptions['query']) =>
-    request<T>(`${base}${path}`, { query });
-  const post = <T>(path: string, json: unknown = {}) =>
-    request<T>(`${base}${path}`, { method: 'POST', json });
-  const patch = <T>(path: string, json: unknown) =>
-    request<T>(`${base}${path}`, { method: 'PATCH', json });
-  const del = <T = Deleted>(path: string) => request<T>(`${base}${path}`, { method: 'DELETE' });
+  const { get, post, patch, del, me } = tenantRest(slug);
   const id = (value: string) => encodeURIComponent(value);
 
   return {
-    me: () => request<TenantMe>(`/api/t/${encodeURIComponent(slug)}/me`),
+    me,
 
     settings: {
       get: () => get<CommerceSettings>('/commerce/settings'),
@@ -256,19 +167,3 @@ export function commerceClient(slug: string) {
 }
 
 export type CommerceClient = ReturnType<typeof commerceClient>;
-
-/** Drains a cursor-paginated endpoint (bounded: reference lists only). */
-export async function fetchAllPages<T>(
-  load: (cursor: string | undefined) => Promise<Page<T>>,
-  maxPages = 20,
-): Promise<T[]> {
-  const rows: T[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < maxPages; page += 1) {
-    const result = await load(cursor);
-    rows.push(...result.data);
-    if (result.next_cursor === null) break;
-    cursor = result.next_cursor;
-  }
-  return rows;
-}

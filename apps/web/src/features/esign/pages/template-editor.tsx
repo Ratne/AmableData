@@ -17,16 +17,51 @@ import { Switch } from '@amable/ui/ui/switch';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker, useParams } from '@tanstack/react-router';
-import { Archive, ArchiveRestore, Copy, FileUp, ImagePlus, Plus, Save, Send, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  Archive,
+  ArchiveRestore,
+  Copy,
+  FileUp,
+  ImagePlus,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import { useI18n } from '../../../i18n';
-import { ChoiceSelect, FormField } from '../../commerce/components/common';
+import { ChoiceSelect, FormField } from '../../../components/feature-kit';
 import { EsignApiError } from '../api/client';
-import { errorMessage, esignKeys, useEsign, useEsignMutation, useEsignPermissions, useTemplate } from '../api/hooks';
+import {
+  errorMessage,
+  esignKeys,
+  useEsign,
+  useEsignMutation,
+  useEsignPermissions,
+  useTemplate,
+} from '../api/hooks';
 import { PageState, TemplateStatusPill, useEsignChrome } from '../components/common';
 import { FIELD_DRAG_TYPE, FIELD_ICONS, PageCanvas } from '../components/page-canvas';
 import { SendDialog } from '../components/send-dialog';
-import { clamp, newField, newFieldId, newParty, PARTY_COLORS, round, templateReady } from '../lib/fields';
+import {
+  clamp,
+  newField,
+  newFieldId,
+  newParty,
+  PARTY_COLORS,
+  round,
+  templateReady,
+} from '../lib/fields';
 import { renderPdfPages } from '../lib/render-pdf';
 
 interface Draft {
@@ -47,14 +82,20 @@ function draftOf(template: EsignTemplate): Draft {
   };
 }
 
-type Work = { readonly phase: 'upload' } | { readonly phase: 'render' | 'images'; readonly done: number; readonly total: number };
+type Work =
+  | { readonly phase: 'upload' }
+  | { readonly phase: 'render' | 'images'; readonly done: number; readonly total: number };
 
 export function EsignTemplateEditorPage() {
   const { templateId } = useParams({ from: '/t/$tenant/signatures/templates/$templateId' });
   const template = useTemplate(templateId);
   return (
     <PageState isPending={template.isPending} error={template.error}>
-      {() => (template.data === undefined ? null : <TemplateEditor key={template.data.id} template={template.data} />)}
+      {() =>
+        template.data === undefined ? null : (
+          <TemplateEditor key={template.data.id} template={template.data} />
+        )
+      }
     </PageState>
   );
 }
@@ -78,11 +119,15 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
 
   useEsignChrome('templates', draft.name || server.name, {
     label: t(`esign.templateStatus.${server.status}`),
-    tone: server.status === 'active' ? 'success' : server.status === 'archived' ? 'warning' : 'neutral',
+    tone:
+      server.status === 'active' ? 'success' : server.status === 'archived' ? 'warning' : 'neutral',
   });
 
   const update = useCallback((patch: Partial<Draft> | ((current: Draft) => Partial<Draft>)) => {
-    setDraftState((current) => ({ ...current, ...(typeof patch === 'function' ? patch(current) : patch) }));
+    setDraftState((current) => ({
+      ...current,
+      ...(typeof patch === 'function' ? patch(current) : patch),
+    }));
     setDirty(true);
   }, []);
 
@@ -119,7 +164,10 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
         ...(status === undefined ? {} : { status }),
       }),
     invalidate: [esignKeys.templates(slug)],
-    success: (result) => (result.status !== server.status ? t(`esign.editor.status.${result.status}`) : t('esign.editor.saved')),
+    success: (result) =>
+      result.status !== server.status
+        ? t(`esign.editor.status.${result.status}`)
+        : t('esign.editor.saved'),
     onSuccess: adopt,
   });
 
@@ -129,7 +177,8 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
   const missingImages = server.source !== null && server.pages.some((p) => !p.has_image);
 
   const changeField = useCallback(
-    (field: EsignField) => update((current) => ({ fields: current.fields.map((f) => (f.id === field.id ? field : f)) })),
+    (field: EsignField) =>
+      update((current) => ({ fields: current.fields.map((f) => (f.id === field.id ? field : f)) })),
     [update],
   );
   const removeField = useCallback(
@@ -151,7 +200,11 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target !== null && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+      if (
+        target !== null &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      )
+        return;
       if (event.key === 'Escape') {
         setSelectedId(null);
         setArmed(null);
@@ -164,7 +217,12 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
         return;
       }
       const step = event.shiftKey ? 0.01 : 0.002;
-      const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+      const moves: Record<string, [number, number]> = {
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+      };
       const move = moves[event.key];
       if (move === undefined) return;
       event.preventDefault();
@@ -181,7 +239,9 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
   const renderImages = async (target: EsignTemplate, data: ArrayBuffer) => {
     const sha = target.source?.sha256;
     if (sha === undefined) return target;
-    const rendered = await renderPdfPages(data, (done, total) => setProgress({ phase: 'render', done, total }));
+    const rendered = await renderPdfPages(data, (done, total) =>
+      setProgress({ phase: 'render', done, total }),
+    );
     let current = target;
     const pages = rendered.filter((p) => p.index < target.pages.length);
     for (const [i, page] of pages.entries()) {
@@ -195,7 +255,9 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
     try {
       adopt(await task());
     } catch (error) {
-      toast.error(error instanceof EsignApiError ? errorMessage(t, error) : t('esign.editor.renderFailed'));
+      toast.error(
+        error instanceof EsignApiError ? errorMessage(t, error) : t('esign.editor.renderFailed'),
+      );
       const fresh = await api.templates.get(server.id).catch(() => null);
       if (fresh !== null) adopt(fresh);
     } finally {
@@ -222,7 +284,9 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
   const regenerateImages = () =>
     run(async () => {
       setProgress({ phase: 'upload' });
-      const response = await fetch(api.templates.documentUrl(server.id), { credentials: 'same-origin' });
+      const response = await fetch(api.templates.documentUrl(server.id), {
+        credentials: 'same-origin',
+      });
       if (!response.ok) throw new Error('document_unavailable');
       return renderImages(server, await response.arrayBuffer());
     });
@@ -239,7 +303,9 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
     event.preventDefault();
     setDragging(false);
     if (!writable || progress !== null) return;
-    const file = Array.from(event.dataTransfer.files).find((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    const file = Array.from(event.dataTransfer.files).find(
+      (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
+    );
     if (file === undefined) toast.error(t('esign.editor.dropNotPdf'));
     else void uploadDocument(file);
   };
@@ -249,11 +315,19 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
       <PageToolbar
         filters={
           <div className="flex items-center gap-3">
-            <Link to="/t/$tenant/signatures/templates" params={{ tenant: slug }} className="text-sm text-muted-foreground hover:text-foreground">
+            <Link
+              to="/t/$tenant/signatures/templates"
+              params={{ tenant: slug }}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
               ← {t('esign.editor.back')}
             </Link>
             <TemplateStatusPill status={server.status} />
-            {dirty ? <span className="text-xs text-amber-600 dark:text-amber-400">{t('esign.editor.unsaved')}</span> : null}
+            {dirty ? (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                {t('esign.editor.unsaved')}
+              </span>
+            ) : null}
           </div>
         }
         actions={
@@ -270,8 +344,12 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
                   if (file !== undefined) void uploadDocument(file);
                 }}
               />
-              <DashboardButton onClick={() => fileInput.current?.click()} disabled={progress !== null}>
-                <FileUp aria-hidden /> {server.source === null ? t('esign.editor.upload') : t('esign.editor.replace')}
+              <DashboardButton
+                onClick={() => fileInput.current?.click()}
+                disabled={progress !== null}
+              >
+                <FileUp aria-hidden />{' '}
+                {server.source === null ? t('esign.editor.upload') : t('esign.editor.replace')}
               </DashboardButton>
               <DashboardButton
                 onClick={() => save.mutate(server.status === 'archived' ? 'draft' : 'archived')}
@@ -290,8 +368,16 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
               {statusAction !== null ? (
                 <DashboardButton
                   onClick={() => save.mutate(statusAction.status)}
-                  disabled={save.isPending || progress !== null || (statusAction.status === 'active' && !ready)}
-                  title={statusAction.status === 'active' && !ready ? t('esign.editor.notReady') : undefined}
+                  disabled={
+                    save.isPending ||
+                    progress !== null ||
+                    (statusAction.status === 'active' && !ready)
+                  }
+                  title={
+                    statusAction.status === 'active' && !ready
+                      ? t('esign.editor.notReady')
+                      : undefined
+                  }
                 >
                   {statusAction.label}
                 </DashboardButton>
@@ -301,7 +387,11 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
                   <Send aria-hidden /> {t('esign.action.send')}
                 </DashboardButton>
               ) : null}
-              <DashboardButton variant="primary" onClick={() => save.mutate(undefined)} disabled={!dirty || save.isPending || progress !== null}>
+              <DashboardButton
+                variant="primary"
+                onClick={() => save.mutate(undefined)}
+                disabled={!dirty || save.isPending || progress !== null}
+              >
                 <Save aria-hidden /> {t('esign.editor.save')}
               </DashboardButton>
             </>
@@ -318,7 +408,10 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
             onActive={setActiveParty}
             onChange={(parties) => {
               const kept = new Set(parties.map((p) => p.id));
-              update((current) => ({ parties, fields: current.fields.filter((f) => kept.has(f.party_id)) }));
+              update((current) => ({
+                parties,
+                fields: current.fields.filter((f) => kept.has(f.party_id)),
+              }));
               if (!kept.has(activeParty)) setActiveParty(parties[0]?.id ?? '');
             }}
           />
@@ -356,7 +449,12 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
               <span>{t('esign.editor.missingImages')}</span>
               {writable ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => void regenerateImages()}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void regenerateImages()}
+                >
                   <ImagePlus aria-hidden /> {t('esign.editor.generateImages')}
                 </Button>
               ) : null}
@@ -388,7 +486,15 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
                 <figure key={page.index} className="grid gap-1">
                   <PageCanvas
                     page={page}
-                    imageUrl={page.has_image ? api.templates.pageImageUrl(server.id, page.index, server.source?.sha256 ?? '') : null}
+                    imageUrl={
+                      page.has_image
+                        ? api.templates.pageImageUrl(
+                            server.id,
+                            page.index,
+                            server.source?.sha256 ?? '',
+                          )
+                        : null
+                    }
                     fields={draft.fields.filter((f) => f.page === page.index)}
                     parties={draft.parties}
                     selectedId={selectedId}
@@ -416,7 +522,11 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
               onChange={changeField}
               onRemove={() => removeField(selected.id)}
               onDuplicate={() => {
-                const shifted = { ...selected, id: newFieldId(), y: round(clamp(selected.y + selected.h + 0.01, 0, 1 - selected.h)) };
+                const shifted = {
+                  ...selected,
+                  id: newFieldId(),
+                  y: round(clamp(selected.y + selected.h + 0.01, 0, 1 - selected.h)),
+                };
                 update((current) => ({ fields: [...current.fields, shifted] }));
                 setSelectedId(shifted.id);
               }}
@@ -432,7 +542,15 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
   );
 }
 
-function Panel({ title, actions, children }: { title: ReactNode; actions?: ReactNode; children: ReactNode }) {
+function Panel({
+  title,
+  actions,
+  children,
+}: {
+  title: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="rounded-xl border bg-card p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -446,7 +564,12 @@ function Panel({ title, actions, children }: { title: ReactNode; actions?: React
 
 function ProgressBanner({ progress }: { progress: Work }) {
   const { t } = useI18n();
-  const value = progress.phase === 'upload' ? 5 : progress.phase === 'render' ? (progress.done / progress.total) * 50 : 50 + (progress.done / progress.total) * 50;
+  const value =
+    progress.phase === 'upload'
+      ? 5
+      : progress.phase === 'render'
+        ? (progress.done / progress.total) * 50
+        : 50 + (progress.done / progress.total) * 50;
   const label =
     progress.phase === 'upload'
       ? t('esign.editor.progress.upload')
@@ -493,7 +616,10 @@ function PartiesPanel({
             variant="ghost"
             aria-label={t('esign.editor.addParty')}
             onClick={() => {
-              const next = newParty(parties, t('esign.editor.partyName', { n: parties.length + 1 }));
+              const next = newParty(
+                parties,
+                t('esign.editor.partyName', { n: parties.length + 1 }),
+              );
               onChange([...parties, next]);
               onActive(next.id);
             }}
@@ -506,7 +632,10 @@ function PartiesPanel({
       <p className="mb-2 text-xs text-muted-foreground">{t('esign.editor.partiesHint')}</p>
       <ul className="grid gap-1.5">
         {parties.map((party, index) => (
-          <li key={party.id} className={`flex items-center gap-1.5 rounded-md border p-1.5 ${party.id === active ? 'border-primary bg-primary/5' : ''}`}>
+          <li
+            key={party.id}
+            className={`flex items-center gap-1.5 rounded-md border p-1.5 ${party.id === active ? 'border-primary bg-primary/5' : ''}`}
+          >
             <button
               type="button"
               className="size-4 shrink-0 rounded-full ring-offset-1 focus-visible:ring-2"
@@ -522,12 +651,26 @@ function PartiesPanel({
               className="h-7 min-w-0 flex-1 px-1.5 text-xs"
               aria-label={t('esign.editor.partyNameLabel')}
               onFocus={() => onActive(party.id)}
-              onChange={(event) => onChange(parties.map((p) => (p.id === party.id ? { ...p, name: event.target.value } : p)))}
+              onChange={(event) =>
+                onChange(
+                  parties.map((p) => (p.id === party.id ? { ...p, name: event.target.value } : p)),
+                )
+              }
               onBlur={(event) => {
-                if (event.target.value.trim() === '') onChange(parties.map((p) => (p.id === party.id ? { ...p, name: t('esign.editor.partyName', { n: index + 1 }) } : p)));
+                if (event.target.value.trim() === '')
+                  onChange(
+                    parties.map((p) =>
+                      p.id === party.id
+                        ? { ...p, name: t('esign.editor.partyName', { n: index + 1 }) }
+                        : p,
+                    ),
+                  );
               }}
             />
-            <span className="w-5 text-right text-xs text-muted-foreground tabular-nums" title={t('esign.field.fields')}>
+            <span
+              className="w-5 text-right text-xs text-muted-foreground tabular-nums"
+              title={t('esign.field.fields')}
+            >
               {counts.get(party.id) ?? 0}
             </span>
             {!readOnly && parties.length > 1 ? (
@@ -572,7 +715,13 @@ function FieldPanel({
     <Panel
       title={t('esign.editor.fieldTitle')}
       actions={
-        <Button type="button" size="icon-sm" variant="ghost" aria-label={t('esign.editor.closeField')} onClick={onClose}>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t('esign.editor.closeField')}
+          onClick={onClose}
+        >
           <X aria-hidden />
         </Button>
       }
@@ -588,9 +737,20 @@ function FieldPanel({
               onChange={(type) => {
                 const next = type as EsignFieldType;
                 const needsOptions = next === 'select' || next === 'radio';
-                onChange({ ...field, type: next, options: needsOptions ? (field.options.length > 0 ? field.options : ['1', '2']) : [] });
+                onChange({
+                  ...field,
+                  type: next,
+                  options: needsOptions
+                    ? field.options.length > 0
+                      ? field.options
+                      : ['1', '2']
+                    : [],
+                });
               }}
-              choices={ESIGN_FIELD_TYPES.map((type) => ({ value: type, label: t(`esign.fieldType.${type}`) }))}
+              choices={ESIGN_FIELD_TYPES.map((type) => ({
+                value: type,
+                label: t(`esign.fieldType.${type}`),
+              }))}
             />
           )}
         </FormField>
@@ -607,28 +767,55 @@ function FieldPanel({
           )}
         </FormField>
         <FormField label={t('esign.field.label')} hint={t('esign.editor.labelHint')}>
-          {(id) => <Input id={id} value={field.label} disabled={readOnly} maxLength={200} onChange={(e) => onChange({ ...field, label: e.target.value })} />}
+          {(id) => (
+            <Input
+              id={id}
+              value={field.label}
+              disabled={readOnly}
+              maxLength={200}
+              onChange={(e) => onChange({ ...field, label: e.target.value })}
+            />
+          )}
         </FormField>
         {field.type !== 'signed_date' ? (
           <div className="flex items-center justify-between gap-2">
             <Label htmlFor={requiredId}>{t('esign.field.required')}</Label>
-            <Switch id={requiredId} checked={field.required} disabled={readOnly} onCheckedChange={(required) => onChange({ ...field, required })} />
+            <Switch
+              id={requiredId}
+              checked={field.required}
+              disabled={readOnly}
+              onCheckedChange={(required) => onChange({ ...field, required })}
+            />
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">{t('esign.editor.signedDateHint')}</p>
         )}
         {choices ? (
-          <OptionsEditor options={field.options} readOnly={readOnly} onChange={(options) => onChange({ ...field, options })} />
+          <OptionsEditor
+            options={field.options}
+            readOnly={readOnly}
+            onChange={(options) => onChange({ ...field, options })}
+          />
         ) : null}
         <p className="text-xs text-muted-foreground tabular-nums">
-          {t('esign.editor.position', { page: field.page + 1, x: Math.round(field.x * 100), y: Math.round(field.y * 100) })}
+          {t('esign.editor.position', {
+            page: field.page + 1,
+            x: Math.round(field.x * 100),
+            y: Math.round(field.y * 100),
+          })}
         </p>
         {!readOnly ? (
           <div className="flex gap-1.5">
             <Button type="button" size="sm" variant="outline" onClick={onDuplicate}>
               <Copy aria-hidden /> {t('esign.editor.duplicate')}
             </Button>
-            <Button type="button" size="sm" variant="outline" className="text-destructive" onClick={onRemove}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              onClick={onRemove}
+            >
               <Trash2 aria-hidden /> {t('esign.editor.removeField')}
             </Button>
           </div>
@@ -638,11 +825,27 @@ function FieldPanel({
   );
 }
 
-function OptionsEditor({ options, readOnly, onChange }: { options: readonly string[]; readOnly: boolean; onChange: (options: string[]) => void }) {
+function OptionsEditor({
+  options,
+  readOnly,
+  onChange,
+}: {
+  options: readonly string[];
+  readOnly: boolean;
+  onChange: (options: string[]) => void;
+}) {
   const { t } = useI18n();
   const [text, setText] = useState(options.join('\n'));
   useEffect(() => {
-    setText((current) => (current.split('\n').map((o) => o.trim()).filter(Boolean).join('\n') === options.join('\n') ? current : options.join('\n')));
+    setText((current) =>
+      current
+        .split('\n')
+        .map((o) => o.trim())
+        .filter(Boolean)
+        .join('\n') === options.join('\n')
+        ? current
+        : options.join('\n'),
+    );
   }, [options]);
   return (
     <FormField label={t('esign.field.options')} hint={t('esign.editor.optionsHint')}>
@@ -654,7 +857,14 @@ function OptionsEditor({ options, readOnly, onChange }: { options: readonly stri
           disabled={readOnly}
           onChange={(event) => {
             setText(event.target.value);
-            const list = Array.from(new Set(event.target.value.split('\n').map((o) => o.trim()).filter(Boolean))).slice(0, 50);
+            const list = Array.from(
+              new Set(
+                event.target.value
+                  .split('\n')
+                  .map((o) => o.trim())
+                  .filter(Boolean),
+              ),
+            ).slice(0, 50);
             if (list.length > 0) onChange(list.map((o) => o.slice(0, 200)));
           }}
         />
@@ -678,8 +888,10 @@ function SettingsPanel({
   const otpId = useId();
   const remindersId = useId();
   const settings = draft.settings;
-  const setSettings = (patch: Partial<EsignSettings>) => onChange({ settings: { ...settings, ...patch } });
-  const setReminders = (patch: Partial<EsignSettings['reminders']>) => setSettings({ reminders: { ...settings.reminders, ...patch } });
+  const setSettings = (patch: Partial<EsignSettings>) =>
+    onChange({ settings: { ...settings, ...patch } });
+  const setReminders = (patch: Partial<EsignSettings['reminders']>) =>
+    setSettings({ reminders: { ...settings.reminders, ...patch } });
   const intIn = (value: string, min: number, max: number, fallback: number) => {
     const n = Number(value);
     return Number.isInteger(n) ? clamp(n, min, max) : fallback;
@@ -689,14 +901,28 @@ function SettingsPanel({
       <Panel title={t('esign.editor.general')}>
         <div className="grid gap-3">
           <FormField label={t('esign.field.name')}>
-            {(id) => <Input id={id} value={draft.name} disabled={readOnly} maxLength={200} onChange={(e) => onChange({ name: e.target.value })} />}
+            {(id) => (
+              <Input
+                id={id}
+                value={draft.name}
+                disabled={readOnly}
+                maxLength={200}
+                onChange={(e) => onChange({ name: e.target.value })}
+              />
+            )}
           </FormField>
           {template.source !== null ? (
             <p className="text-xs break-all text-muted-foreground">
-              {t('esign.templates.pages', { name: template.source.filename, count: template.pages.length })}
+              {t('esign.templates.pages', {
+                name: template.source.filename,
+                count: template.pages.length,
+              })}
             </p>
           ) : null}
-          <FormField label={t('esign.field.signingOrder')} hint={t(`esign.signingOrder.${draft.signing_order}Hint`)}>
+          <FormField
+            label={t('esign.field.signingOrder')}
+            hint={t(`esign.signingOrder.${draft.signing_order}Hint`)}
+          >
             {(id) => (
               <ChoiceSelect
                 id={id}
@@ -704,7 +930,10 @@ function SettingsPanel({
                 value={draft.signing_order}
                 disabled={readOnly}
                 onChange={(value) => onChange({ signing_order: value as Draft['signing_order'] })}
-                choices={(['parallel', 'sequential'] as const).map((value) => ({ value, label: t(`esign.signingOrder.${value}`) }))}
+                choices={(['parallel', 'sequential'] as const).map((value) => ({
+                  value,
+                  label: t(`esign.signingOrder.${value}`),
+                }))}
               />
             )}
           </FormField>
@@ -717,7 +946,12 @@ function SettingsPanel({
               <Label htmlFor={otpId}>{t('esign.field.requireOtp')}</Label>
               <p className="text-xs text-muted-foreground">{t('esign.editor.otpHint')}</p>
             </div>
-            <Switch id={otpId} checked={settings.require_otp} disabled={readOnly} onCheckedChange={(require_otp) => setSettings({ require_otp })} />
+            <Switch
+              id={otpId}
+              checked={settings.require_otp}
+              disabled={readOnly}
+              onCheckedChange={(require_otp) => setSettings({ require_otp })}
+            />
           </div>
           <FormField label={t('esign.field.expireDays')} hint={t('esign.editor.expireHint')}>
             {(id) => (
@@ -729,7 +963,12 @@ function SettingsPanel({
                 className="w-28"
                 disabled={readOnly}
                 value={settings.expire_days === null ? '' : String(settings.expire_days)}
-                onChange={(e) => setSettings({ expire_days: e.target.value.trim() === '' ? null : intIn(e.target.value, 1, 365, 30) })}
+                onChange={(e) =>
+                  setSettings({
+                    expire_days:
+                      e.target.value.trim() === '' ? null : intIn(e.target.value, 1, 365, 30),
+                  })
+                }
               />
             )}
           </FormField>
@@ -739,23 +978,54 @@ function SettingsPanel({
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-2">
             <Label htmlFor={remindersId}>{t('esign.field.remindersEnabled')}</Label>
-            <Switch id={remindersId} checked={settings.reminders.enabled} disabled={readOnly} onCheckedChange={(enabled) => setReminders({ enabled })} />
+            <Switch
+              id={remindersId}
+              checked={settings.reminders.enabled}
+              disabled={readOnly}
+              onCheckedChange={(enabled) => setReminders({ enabled })}
+            />
           </div>
           {settings.reminders.enabled ? (
             <div className="grid grid-cols-3 gap-2">
               <FormField label={t('esign.field.firstAfterDays')}>
                 {(id) => (
-                  <Input id={id} type="number" min={1} max={60} disabled={readOnly} value={settings.reminders.first_after_days} onChange={(e) => setReminders({ first_after_days: intIn(e.target.value, 1, 60, 3) })} />
+                  <Input
+                    id={id}
+                    type="number"
+                    min={1}
+                    max={60}
+                    disabled={readOnly}
+                    value={settings.reminders.first_after_days}
+                    onChange={(e) =>
+                      setReminders({ first_after_days: intIn(e.target.value, 1, 60, 3) })
+                    }
+                  />
                 )}
               </FormField>
               <FormField label={t('esign.field.everyDays')}>
                 {(id) => (
-                  <Input id={id} type="number" min={1} max={60} disabled={readOnly} value={settings.reminders.every_days} onChange={(e) => setReminders({ every_days: intIn(e.target.value, 1, 60, 3) })} />
+                  <Input
+                    id={id}
+                    type="number"
+                    min={1}
+                    max={60}
+                    disabled={readOnly}
+                    value={settings.reminders.every_days}
+                    onChange={(e) => setReminders({ every_days: intIn(e.target.value, 1, 60, 3) })}
+                  />
                 )}
               </FormField>
               <FormField label={t('esign.field.maxReminders')}>
                 {(id) => (
-                  <Input id={id} type="number" min={0} max={10} disabled={readOnly} value={settings.reminders.max} onChange={(e) => setReminders({ max: intIn(e.target.value, 0, 10, 3) })} />
+                  <Input
+                    id={id}
+                    type="number"
+                    min={0}
+                    max={10}
+                    disabled={readOnly}
+                    value={settings.reminders.max}
+                    onChange={(e) => setReminders({ max: intIn(e.target.value, 0, 10, 3) })}
+                  />
                 )}
               </FormField>
             </div>
@@ -765,10 +1035,27 @@ function SettingsPanel({
       <Panel title={t('esign.editor.email')}>
         <div className="grid gap-3">
           <FormField label={t('esign.field.subject')} hint={t('esign.editor.subjectHint')}>
-            {(id) => <Input id={id} value={settings.email_subject} disabled={readOnly} maxLength={300} onChange={(e) => setSettings({ email_subject: e.target.value })} />}
+            {(id) => (
+              <Input
+                id={id}
+                value={settings.email_subject}
+                disabled={readOnly}
+                maxLength={300}
+                onChange={(e) => setSettings({ email_subject: e.target.value })}
+              />
+            )}
           </FormField>
           <FormField label={t('esign.field.message')} hint={t('esign.editor.messageHint')}>
-            {(id) => <Textarea id={id} rows={4} value={settings.email_message} disabled={readOnly} maxLength={5000} onChange={(e) => setSettings({ email_message: e.target.value })} />}
+            {(id) => (
+              <Textarea
+                id={id}
+                rows={4}
+                value={settings.email_message}
+                disabled={readOnly}
+                maxLength={5000}
+                onChange={(e) => setSettings({ email_message: e.target.value })}
+              />
+            )}
           </FormField>
           <FormField label={t('esign.field.locale')}>
             {(id) => (
@@ -778,7 +1065,10 @@ function SettingsPanel({
                 value={settings.locale}
                 disabled={readOnly}
                 onChange={(value) => setSettings({ locale: value as EsignSettings['locale'] })}
-                choices={(['auto', 'en', 'it'] as const).map((value) => ({ value, label: t(`esign.locale.${value}`) }))}
+                choices={(['auto', 'en', 'it'] as const).map((value) => ({
+                  value,
+                  label: t(`esign.locale.${value}`),
+                }))}
               />
             )}
           </FormField>

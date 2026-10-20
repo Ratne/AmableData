@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { siteIdPath } from './params';
 import {
   ANALYTICS_BREAKDOWN_DIMENSIONS,
   analyticsBreakdownParamsSchema,
@@ -44,7 +45,6 @@ import {
   updateSite,
 } from './service';
 
-const siteIdParam = z.object({ siteId: z.string().min(1).max(64) });
 const tags = ['Analytics'];
 
 /** Web analytics REST v2, relative to `/api/v2/t/{slug}/analytics`. */
@@ -89,7 +89,7 @@ analyticsApi.openapi(
     path: '/sites/{siteId}',
     tags,
     summary: 'Get a site',
-    request: { params: siteIdParam },
+    request: { params: siteIdPath },
     responses: { 200: json(siteSchema, 'The site') },
   }),
   async (c) => c.json(await getSite(c, c.req.valid('param').siteId), 200),
@@ -101,7 +101,7 @@ analyticsApi.openapi(
     path: '/sites/{siteId}',
     tags,
     summary: 'Update a site',
-    request: { params: siteIdParam, body: jsonBody(updateSiteSchema) },
+    request: { params: siteIdPath, body: jsonBody(updateSiteSchema) },
     responses: { 200: json(siteSchema, 'The site') },
   }),
   async (c) => {
@@ -118,7 +118,7 @@ analyticsApi.openapi(
     path: '/sites/{siteId}',
     tags,
     summary: 'Delete a site (ingest stops; raw data follows the retention)',
-    request: { params: siteIdParam },
+    request: { params: siteIdPath },
     responses: { 200: json(z.object({ id: z.string(), deleted: z.literal(true) }), 'Deleted') },
   }),
   async (c) => {
@@ -136,7 +136,7 @@ analyticsApi.openapi(
     path: '/sites/{siteId}/secret',
     tags,
     summary: 'Roll the server secret of a site',
-    request: { params: siteIdParam },
+    request: { params: siteIdPath },
     responses: { 200: json(z.object({ secret: z.string() }), 'The new secret (shown once)') },
   }, { stepUp: true }),
   async (c) => {
@@ -153,7 +153,7 @@ analyticsApi.openapi(
     path: '/sites/{siteId}/snippet',
     tags,
     summary: 'Tracking snippet of a site',
-    request: { params: siteIdParam },
+    request: { params: siteIdPath },
     responses: { 200: json(siteSnippetSchema, 'Snippet and script URLs') },
   }),
   async (c) => c.json(await siteSnippet(c, c.req.valid('param').siteId), 200),

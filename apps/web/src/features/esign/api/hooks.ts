@@ -1,11 +1,17 @@
 import type { Permission } from '@amable/core';
-import { toast } from '@amable/ui';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
+import {
+  apiErrorMessage,
+  type ApiErrorMessages,
+  type ApiMutationOptions,
+  useApiMutation,
+  useGrantedPermissions,
+} from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
-import { EsignApiError, esignClient, type EsignClient, type ListRequestsParams } from './client';
+import { esignClient, type EsignClient, type ListRequestsParams } from './client';
 
 /** Every e-signature query of a tenant lives under ['esign', slug, …]. */
 export const esignKeys = {
@@ -25,17 +31,26 @@ export function useEsign(): { slug: string; api: EsignClient } {
 }
 
 /** Permissions of the active membership; actions stay hidden until known (the server enforces them). */
-export function useEsignPermissions(): { can: (permission: Permission) => boolean; ready: boolean } {
+export function useEsignPermissions(): {
+  can: (permission: Permission) => boolean;
+  ready: boolean;
+} {
   const { slug, api } = useEsign();
-  const me = useQuery({ queryKey: esignKeys.me(slug), queryFn: () => api.me(), staleTime: 60_000, retry: false });
-  const granted = useMemo(() => new Set(me.data?.permissions ?? []), [me.data]);
-  const can = useCallback((permission: Permission) => granted.has(permission), [granted]);
-  return { can, ready: me.data !== undefined };
+  const me = useQuery({
+    queryKey: esignKeys.me(slug),
+    queryFn: () => api.me(),
+    staleTime: 60_000,
+    retry: false,
+  });
+  return useGrantedPermissions(me.data);
 }
 
 export function useTemplates() {
   const { slug, api } = useEsign();
-  return useQuery({ queryKey: esignKeys.templates(slug), queryFn: async () => (await api.templates.list()).data });
+  return useQuery({
+    queryKey: esignKeys.templates(slug),
+    queryFn: async () => (await api.templates.list()).data,
+  });
 }
 
 export function useTemplate(id: string) {
@@ -63,7 +78,10 @@ export function useRequestDetail(id: string) {
       const data = query.state.data;
       if (data === undefined) return false;
       const open = data.status === 'sent' || data.status === 'partially_signed';
-      const sealing = data.status === 'completed' && !data.document_ready && (data.finalize_error === null || data.finalize_next_attempt_at !== null);
+      const sealing =
+        data.status === 'completed' &&
+        !data.document_ready &&
+        (data.finalize_error === null || data.finalize_next_attempt_at !== null);
       return open ? 30_000 : sealing ? 5_000 : false;
     },
   });
@@ -71,49 +89,31 @@ export function useRequestDetail(id: string) {
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
+const ESIGN_ERRORS: ApiErrorMessages = {
+  forbidden: 'esign.error.forbidden',
+  notFound: 'esign.error.notFound',
+  conflict: 'esign.error.conflict',
+  tooLarge: 'esign.error.tooLarge',
+  validation: 'esign.error.validation',
+};
+
 export function errorMessage(t: Translate, error: unknown): string {
-  if (error instanceof EsignApiError) {
-    if (error.status === 403) return t('esign.error.forbidden');
-    if (error.status === 404) return t('esign.error.notFound');
-    if (error.status === 409) return error.detail ?? t('esign.error.conflict');
-    if (error.status === 413) return t('esign.error.tooLarge');
-    if (error.status === 415) return error.detail ?? t('esign.error.validation');
-    if (error.status === 422 || error.status === 400) {
-      const first = error.details[0];
-      if (first !== undefined && error.code === 'validation_failed' && first.path !== 'body') return first.path ? `${first.path}: ${first.message}` : first.message;
-      return error.detail ?? t('esign.error.validation');
-    }
-  }
-  return t('common.error');
+  return apiErrorMessage(t, error, ESIGN_ERRORS, (e) => {
+    if (e.status === 415) return e.detail ?? t('esign.error.validation');
+    // Only schema failures carry field paths worth showing; other 400/422 answer with a message.
+    const fieldError = e.code === 'validation_failed' && e.details[0]?.path !== 'body';
+    if ((e.status === 422 || e.status === 400) && !fieldError)
+      return e.detail ?? t('esign.error.validation');
+    return null;
+  });
 }
 
-export interface EsignMutationOptions<TInput, TResult> {
-  readonly mutationFn: (input: TInput) => Promise<TResult>;
-  /** Default: the whole tenant e-signature cache. */
-  readonly invalidate?: readonly QueryKey[];
-  readonly success?: string | ((result: TResult) => string);
-  readonly onSuccess?: (result: TResult, input: TInput) => void;
-}
+export type EsignMutationOptions<TInput, TResult> = ApiMutationOptions<TInput, TResult>;
 
 /** `useMutation` with cache invalidation and toasts. */
 export function useEsignMutation<TInput, TResult>(options: EsignMutationOptions<TInput, TResult>) {
   const { slug } = useEsign();
-  const { t } = useI18n();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: options.mutationFn,
-    onSuccess: async (result, input) => {
-      const keys = options.invalidate ?? [esignKeys.root(slug)];
-      await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
-      if (options.success !== undefined) {
-        toast.success(typeof options.success === 'function' ? options.success(result) : options.success);
-      }
-      options.onSuccess?.(result, input);
-    },
-    onError: (error) => {
-      toast.error(errorMessage(t, error));
-    },
-  });
+  return useApiMutation(options, esignKeys.root(slug), errorMessage);
 }
 
 /** Dates of the audit trail in the browser's locale and time zone. */

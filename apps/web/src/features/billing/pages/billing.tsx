@@ -13,8 +13,9 @@ import { useQuery } from '@tanstack/react-query';
 import { CircleAlert, ExternalLink, Info, ShieldAlert, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useI18n } from '../../../i18n';
-import { Facts, PageState, Pill, SectionCard } from '../../commerce/components/common';
-import { request } from '../../crm/api/client';
+import { Facts, Pill, SectionCard } from '../../../components/feature-kit';
+import { PageState } from '../../commerce/components/common';
+import { request } from '../../../lib/tenant-api';
 import { usePermissions, useTenantSlug } from '../../crm/api/hooks';
 
 /** Low-balance threshold: the wallet should cover at least this many emails beyond the quota. */

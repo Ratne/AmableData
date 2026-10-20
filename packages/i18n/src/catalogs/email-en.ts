@@ -5,9 +5,7 @@ export const emailEn = {
 
   'email.common.save': 'Save',
   'email.common.saved': 'Saved',
-  'email.common.create': 'Create',
   'email.common.cancel': 'Cancel',
-  'email.common.delete': 'Delete',
   'email.common.edit': 'Edit',
   'email.common.name': 'Name',
   'email.common.subject': 'Subject',
@@ -20,7 +18,6 @@ export const emailEn = {
   'email.common.status': 'Status',
   'email.common.loadMore': 'Load more',
   'email.common.error': 'Something went wrong: {message}',
-  'email.common.none': '—',
   'email.common.back': 'Back',
 
   'email.templates.title': 'Templates',
@@ -42,7 +39,6 @@ export const emailEn = {
   'email.snippets.empty': 'No snippets yet. Snippets are reusable blocks of text with Liquid logic.',
   'email.snippets.group': 'Dynamic Content',
 
-  'email.preview.title': 'Preview',
   'email.preview.as': 'Preview as',
   'email.preview.sample': 'Sample data',
   'email.preview.searchContact': 'Search a contact…',
@@ -64,7 +60,6 @@ export const emailEn = {
   'email.suppressions.source': 'Source',
   'email.suppressions.search': 'Search address…',
   'email.suppressions.empty': 'No suppressed addresses.',
-  'email.suppressions.remove': 'Remove from list',
   'email.suppressions.reason.unsubscribe': 'Unsubscribed',
   'email.suppressions.reason.bounce': 'Bounced',
   'email.suppressions.reason.complaint': 'Spam complaint',

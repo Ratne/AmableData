@@ -2,7 +2,6 @@ import type { BookingMessageKey } from './booking-en';
 
 /** Italian strings of calendars, event types, availability and bookings — must cover every key of booking-en. */
 export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
-  'booking.title': 'Prenotazioni',
   'booking.tab.bookings': 'Prenotazioni',
   'booking.tab.calendars': 'Calendari',
   'booking.tab.eventTypes': 'Tipi di evento',

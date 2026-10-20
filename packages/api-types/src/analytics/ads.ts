@@ -153,3 +153,32 @@ export const visitorMergeSchema = z.object({
   created_at: z.number().int(),
 });
 export type VisitorMerge = z.infer<typeof visitorMergeSchema>;
+
+// ------------------------------------------------- tokens for the edge worker
+
+/** Gateway op answered by the core: decrypted (refreshed if needed) access token of a connection. */
+export const ADS_TOKEN_GATEWAY_OP = 'analytics.adsToken';
+
+export const adsTokenInputSchema = z.strictObject({
+  tenant_id: z.string().min(1).max(64),
+  site_id: z.string().min(1).max(64),
+  connection_id: z.string().min(1).max(64),
+});
+export type AdsTokenInput = z.infer<typeof adsTokenInputSchema>;
+
+/** Null when the connection is unknown to the core or disconnected. */
+export type AdsTokenOutput = {
+  platform: AdPlatform;
+  access_token: string;
+  /** Google Ads only. */
+  developer_token?: string | null;
+  login_customer_id?: string | null;
+  api_version?: string | null;
+} | null;
+
+/** Error code the core answers when the connection's refresh token is revoked. */
+export const ADS_TOKEN_AUTH_EXPIRED = 'auth_expired';
+
+export type AnalyticsGatewayOps = {
+  [ADS_TOKEN_GATEWAY_OP]: { input: AdsTokenInput; output: AdsTokenOutput };
+};

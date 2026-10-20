@@ -1,12 +1,19 @@
 import type { CustomFieldEntityPath, SearchEntity } from '@amable/api-types/crm';
 import type { Permission } from '@amable/core';
-import { toast } from '@amable/ui';
-import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 import { useI18n } from '../../../i18n';
+import {
+  apiErrorMessage,
+  type ApiMutationOptions,
+  REFERENCE_STALE_MS,
+  useApiMutation,
+  useGrantedPermissions,
+} from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
-import { crmClient, CrmApiError, fetchAllPages, type CrmClient } from './client';
+import { fetchAllPages } from '../../../lib/api';
+import { crmClient, type CrmClient } from './client';
 
 /** Query keys: everything of a tenant lives under ['crm', slug, …] so one invalidation refreshes it. */
 export const crmKeys = {
@@ -49,8 +56,6 @@ export function useCrm(): { slug: string; api: CrmClient } {
   return { slug, api };
 }
 
-const REFERENCE_STALE_MS = 60_000;
-
 export function useTenantMe() {
   const { slug, api } = useCrm();
   return useQuery({
@@ -67,9 +72,7 @@ export function useTenantMe() {
  */
 export function usePermissions(): { can: (permission: Permission) => boolean; ready: boolean } {
   const me = useTenantMe();
-  const granted = useMemo(() => new Set(me.data?.permissions ?? []), [me.data]);
-  const can = useCallback((permission: Permission) => granted.has(permission), [granted]);
-  return { can, ready: me.data !== undefined };
+  return useGrantedPermissions(me.data);
 }
 
 export function useDirectory() {
@@ -169,47 +172,19 @@ type Translate = ReturnType<typeof useI18n>['t'];
 
 /** User-facing text for an API failure: permission, validation details, not found, generic. */
 export function errorMessage(t: Translate, error: unknown): string {
-  if (error instanceof CrmApiError) {
-    if (error.status === 403) return t('crm.error.forbidden');
-    if (error.status === 404) return t('crm.error.notFound');
-    if (error.status === 409) return error.detail ?? t('crm.error.conflict');
-    if (error.status === 413) return t('crm.error.tooLarge');
-    if (error.status === 422 || error.status === 400) {
-      const first = error.details[0];
-      if (first !== undefined) return `${first.path}: ${first.message}`;
-      return error.detail ?? t('crm.error.validation');
-    }
-  }
-  return t('common.error');
+  return apiErrorMessage(t, error, {
+    forbidden: 'crm.error.forbidden',
+    notFound: 'crm.error.notFound',
+    conflict: 'crm.error.conflict',
+    tooLarge: 'crm.error.tooLarge',
+    validation: 'crm.error.validation',
+  });
 }
 
-export interface CrmMutationOptions<TInput, TResult> {
-  readonly mutationFn: (input: TInput) => Promise<TResult>;
-  /** Query keys refreshed after success. Default: the whole tenant CRM cache. */
-  readonly invalidate?: readonly QueryKey[];
-  readonly success?: string | ((result: TResult) => string);
-  readonly onSuccess?: (result: TResult, input: TInput) => void;
-}
+export type CrmMutationOptions<TInput, TResult> = ApiMutationOptions<TInput, TResult>;
 
 /** `useMutation` with tenant cache invalidation and toasts for success and failure. */
 export function useCrmMutation<TInput, TResult>(options: CrmMutationOptions<TInput, TResult>) {
   const { slug } = useCrm();
-  const { t } = useI18n();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: options.mutationFn,
-    onSuccess: async (result, input) => {
-      const keys = options.invalidate ?? [crmKeys.root(slug)];
-      await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
-      if (options.success !== undefined) {
-        toast.success(
-          typeof options.success === 'function' ? options.success(result) : options.success,
-        );
-      }
-      options.onSuccess?.(result, input);
-    },
-    onError: (error) => {
-      toast.error(errorMessage(t, error));
-    },
-  });
+  return useApiMutation(options, crmKeys.root(slug), errorMessage);
 }

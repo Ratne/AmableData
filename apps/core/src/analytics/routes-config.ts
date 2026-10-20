@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { idParam, siteQuery } from './params';
 import {
   INTEGRATION_PROVIDERS,
   alertSchema,
@@ -36,7 +37,6 @@ import {
   createSiteKey,
   namespace,
   rangeOf,
-  requireAny,
   siteIdParam,
   siteRecord,
   unwrap,
@@ -44,8 +44,6 @@ import {
 import { signShareToken } from './share';
 
 const tags = ['Analytics'];
-const siteQuery = z.object({ site_id: z.string().min(1).max(64) });
-const idParam = z.object({ id: z.string().min(1).max(64) });
 const ok = z.object({ id: z.string(), deleted: z.literal(true) });
 const SAVED_VIEW_WRITERS = ['analytics:configure', 'reports:create'] as const;
 
@@ -90,83 +88,127 @@ async function assertMembers(c: Ctx, emails: readonly string[]): Promise<void> {
   }
 }
 
-/** Funnels, segments, goal alerts, share links, site keys, integrations and prediction. */
-export function registerConfigRoutes(api: OpenAPIHono<AppEnv>): void {
-  // ------------------------------------------------------------------ funnels
+type SiteStub = ReturnType<typeof siteStub>;
+
+/**
+ * List / create / (get) / update / delete of a site's saved view (funnels, segments):
+ * readable with analytics:read, writable with any of SAVED_VIEW_WRITERS.
+ */
+function savedViewRoutes<C extends z.ZodType, U extends z.ZodType>(
+  api: OpenAPIHono<AppEnv>,
+  view: {
+    path: `/${string}`;
+    noun: string;
+    schema: z.ZodType;
+    createSchema: C;
+    updateSchema: U;
+    summaries: { list: string; create: string; get?: string; update: string; remove: string };
+    list: (stub: SiteStub) => Promise<unknown[]>;
+    create: (stub: SiteStub, input: z.output<C>) => Promise<unknown>;
+    get?: (stub: SiteStub, id: string) => Promise<unknown>;
+    update: (stub: SiteStub, id: string, patch: z.output<U>) => Promise<unknown>;
+    remove: (stub: SiteStub, id: string) => Promise<boolean>;
+  },
+): void {
+  const createBody: z.ZodType = view.createSchema;
+  const updateBody: z.ZodType = view.updateSchema;
+  const label = view.noun[0]!.toUpperCase() + view.noun.slice(1);
+  const notFound = () => new CrmError('not_found', `${view.noun} not found`);
+  const writers = { anyOf: SAVED_VIEW_WRITERS };
   api.openapi(
     crmRoute('analytics:read', {
       method: 'get',
-      path: '/funnels',
+      path: view.path,
       tags,
-      summary: 'Funnels of a site',
+      summary: view.summaries.list,
       request: { query: siteQuery },
-      responses: { 200: json(z.object({ data: z.array(funnelSchema) }), 'Funnels') },
+      responses: { 200: json(z.object({ data: z.array(view.schema) }), `${label}s`) },
     }),
-    async (c) => c.json({ data: await (await siteOf(c)).stub.listFunnels() }, 200),
+    async (c) => c.json({ data: await view.list((await siteOf(c)).stub) }, 200),
   );
   api.openapi(
     crmRoute('analytics:read', {
       method: 'post',
-      path: '/funnels',
+      path: view.path,
       tags,
-      summary: 'Create a funnel (2-8 ordered pageview / goal steps)',
-      description: 'Requires analytics:configure or reports:create.',
-      request: { query: siteQuery, body: jsonBody(createFunnelSchema) },
-      responses: { 201: json(funnelSchema, 'Funnel') },
-    }),
-    async (c) => {
-      requireAny(c, SAVED_VIEW_WRITERS);
-      const { stub } = await siteOf(c);
-      return c.json(await stub.createFunnel(c.req.valid('json')), 201);
-    },
+      summary: view.summaries.create,
+      request: { query: siteQuery, body: jsonBody(createBody) },
+      responses: { 201: json(view.schema, label) },
+    }, writers),
+    async (c) => c.json(await view.create((await siteOf(c)).stub, c.req.valid('json') as z.output<C>), 201),
   );
-  api.openapi(
-    crmRoute('analytics:read', {
-      method: 'get',
-      path: '/funnels/{id}',
-      tags,
-      summary: 'Get a funnel',
-      request: { params: idParam, query: siteQuery },
-      responses: { 200: json(funnelSchema, 'Funnel') },
-    }),
-    async (c) => {
-      const funnel = await (await siteOf(c)).stub.getFunnel(c.req.valid('param').id);
-      if (funnel === null) throw new CrmError('not_found', 'funnel not found');
-      return c.json(funnel, 200);
-    },
-  );
+  const get = view.get;
+  if (get !== undefined) {
+    api.openapi(
+      crmRoute('analytics:read', {
+        method: 'get',
+        path: `${view.path}/{id}`,
+        tags,
+        summary: view.summaries.get ?? `Get a ${view.noun}`,
+        request: { params: idParam, query: siteQuery },
+        responses: { 200: json(view.schema, label) },
+      }),
+      async (c) => {
+        const row = await get((await siteOf(c)).stub, c.req.valid('param').id);
+        if (row === null) throw notFound();
+        return c.json(row, 200);
+      },
+    );
+  }
   api.openapi(
     crmRoute('analytics:read', {
       method: 'patch',
-      path: '/funnels/{id}',
+      path: `${view.path}/{id}`,
       tags,
-      summary: 'Update a funnel',
-      request: { params: idParam, query: siteQuery, body: jsonBody(updateFunnelSchema) },
-      responses: { 200: json(funnelSchema, 'Funnel') },
-    }),
+      summary: view.summaries.update,
+      request: { params: idParam, query: siteQuery, body: jsonBody(updateBody) },
+      responses: { 200: json(view.schema, label) },
+    }, writers),
     async (c) => {
-      requireAny(c, SAVED_VIEW_WRITERS);
-      const funnel = await (await siteOf(c)).stub.updateFunnel(c.req.valid('param').id, c.req.valid('json'));
-      if (funnel === null) throw new CrmError('not_found', 'funnel not found');
-      return c.json(funnel, 200);
+      const row = await view.update((await siteOf(c)).stub, c.req.valid('param').id, c.req.valid('json') as z.output<U>);
+      if (row === null) throw notFound();
+      return c.json(row, 200);
     },
   );
   api.openapi(
     crmRoute('analytics:read', {
       method: 'delete',
-      path: '/funnels/{id}',
+      path: `${view.path}/{id}`,
       tags,
-      summary: 'Delete a funnel',
+      summary: view.summaries.remove,
       request: { params: idParam, query: siteQuery },
       responses: { 200: json(ok, 'Deleted') },
-    }),
+    }, writers),
     async (c) => {
-      requireAny(c, SAVED_VIEW_WRITERS);
       const { id } = c.req.valid('param');
-      if (!(await (await siteOf(c)).stub.deleteFunnel(id))) throw new CrmError('not_found', 'funnel not found');
+      if (!(await view.remove((await siteOf(c)).stub, id))) throw notFound();
       return c.json({ id, deleted: true as const }, 200);
     },
   );
+}
+
+/** Funnels, segments, goal alerts, share links, site keys, integrations and prediction. */
+export function registerConfigRoutes(api: OpenAPIHono<AppEnv>): void {
+  // ------------------------------------------------------- funnels, segments
+  savedViewRoutes(api, {
+    path: '/funnels',
+    noun: 'funnel',
+    schema: funnelSchema,
+    createSchema: createFunnelSchema,
+    updateSchema: updateFunnelSchema,
+    summaries: {
+      list: 'Funnels of a site',
+      create: 'Create a funnel (2-8 ordered pageview / goal steps)',
+      get: 'Get a funnel',
+      update: 'Update a funnel',
+      remove: 'Delete a funnel',
+    },
+    list: (stub) => stub.listFunnels(),
+    create: (stub, input) => stub.createFunnel(input),
+    get: (stub, id) => stub.getFunnel(id),
+    update: (stub, id, patch) => stub.updateFunnel(id, patch),
+    remove: (stub, id) => stub.deleteFunnel(id),
+  });
   api.openapi(
     crmRoute('analytics:read', {
       method: 'get',
@@ -183,64 +225,23 @@ export function registerConfigRoutes(api: OpenAPIHono<AppEnv>): void {
     },
   );
 
-  // ----------------------------------------------------------------- segments
-  api.openapi(
-    crmRoute('analytics:read', {
-      method: 'get',
-      path: '/segments',
-      tags,
-      summary: 'Saved segments (filter sets) of a site',
-      request: { query: siteQuery },
-      responses: { 200: json(z.object({ data: z.array(segmentSchema) }), 'Segments') },
-    }),
-    async (c) => c.json({ data: await (await siteOf(c)).stub.listSegments() }, 200),
-  );
-  api.openapi(
-    crmRoute('analytics:read', {
-      method: 'post',
-      path: '/segments',
-      tags,
-      summary: 'Save a segment',
-      request: { query: siteQuery, body: jsonBody(createSegmentSchema) },
-      responses: { 201: json(segmentSchema, 'Segment') },
-    }),
-    async (c) => {
-      requireAny(c, SAVED_VIEW_WRITERS);
-      return c.json(await (await siteOf(c)).stub.createSegment(c.req.valid('json')), 201);
+  savedViewRoutes(api, {
+    path: '/segments',
+    noun: 'segment',
+    schema: segmentSchema,
+    createSchema: createSegmentSchema,
+    updateSchema: updateSegmentSchema,
+    summaries: {
+      list: 'Saved segments (filter sets) of a site',
+      create: 'Save a segment',
+      update: 'Update a segment',
+      remove: 'Delete a segment',
     },
-  );
-  api.openapi(
-    crmRoute('analytics:read', {
-      method: 'patch',
-      path: '/segments/{id}',
-      tags,
-      summary: 'Update a segment',
-      request: { params: idParam, query: siteQuery, body: jsonBody(updateSegmentSchema) },
-      responses: { 200: json(segmentSchema, 'Segment') },
-    }),
-    async (c) => {
-      requireAny(c, SAVED_VIEW_WRITERS);
-      const segment = await (await siteOf(c)).stub.updateSegment(c.req.valid('param').id, c.req.valid('json'));
-      if (segment === null) throw new CrmError('not_found', 'segment not found');
-      return c.json(segment, 200);
-    },
-  );
-  api.openapi(
-    crmRoute('analytics:read', {
-      method: 'delete',
-      path: '/segments/{id}',
-      tags,
-      summary: 'Delete a segment',
-      request: { params: idParam, query: siteQuery },
-      responses: { 200: json(ok, 'Deleted') },
-    }),
-    async (c) => {
-      requireAny(c, SAVED_VIEW_WRITERS);
-      const { id } = c.req.valid('param');
-      if (!(await (await siteOf(c)).stub.deleteSegment(id))) throw new CrmError('not_found', 'segment not found');
-      return c.json({ id, deleted: true as const }, 200);
-    },
-  );
+    list: (stub) => stub.listSegments(),
+    create: (stub, input) => stub.createSegment(input),
+    update: (stub, id, patch) => stub.updateSegment(id, patch),
+    remove: (stub, id) => stub.deleteSegment(id),
+  });
 
   // ------------------------------------------------------------------- alerts
   api.openapi(
@@ -348,9 +349,8 @@ export function registerConfigRoutes(api: OpenAPIHono<AppEnv>): void {
       summary: 'Public share links of a site dashboard',
       request: { query: siteQuery },
       responses: { 200: json(z.object({ data: z.array(shareSchema) }), 'Share links') },
-    }),
+    }, { anyOf: ['analytics:configure'] }),
     async (c) => {
-      requireAny(c, ['analytics:configure']);
       const { siteId, stub } = await siteOf(c);
       const rows = await stub.listShares();
       return c.json({ data: await Promise.all(rows.map((r) => shareOut(c, siteId, r))) }, 200);

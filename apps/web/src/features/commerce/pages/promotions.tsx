@@ -24,7 +24,7 @@ import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { CurrencySelect } from '../components/currency-select';
 import { listTableLabels } from '../../../lib/labels';
-import { fetchAllPages } from '../api/client';
+import { fetchAllPages } from '../../../lib/api';
 import {
   commerceKeys,
   useCatalog,

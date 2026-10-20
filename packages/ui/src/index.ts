@@ -12,11 +12,8 @@ export { Toaster } from './components/ui/sonner';
 export { toast } from 'sonner';
 
 export {
-  applyTheme,
   isThemePreference,
-  PREFS_COOKIE,
   readBootPrefs,
-  resolveTheme,
   THEME_PREFERENCES,
   writePrefsCookie,
   type BootPrefs,
@@ -26,9 +23,7 @@ export {
 } from './theme/prefs';
 export { ThemeProvider, useTheme, type ThemeProviderProps } from './theme/theme-provider';
 export {
-  isSafeColor,
   PRODUCT_LOGO_URL,
-  readableForeground,
   useTenantBranding,
   type TenantBranding,
 } from './theme/branding';
@@ -43,7 +38,6 @@ export {
 } from './shell/app-shell';
 
 export {
-  DEFAULT_LIST_TABLE_LABELS,
   ListTable,
   type ListTableBulkAction,
   type ListTableColumn,
@@ -57,7 +51,6 @@ export {
 
 export {
   DashboardButton,
-  dashboardButtonVariants,
   DashboardConfirmDialog,
   DashboardFilterMenu,
   DashboardMenu,
@@ -71,7 +64,6 @@ export {
   DashboardPopover,
   DashboardPopoverContent,
   DashboardPopoverTrigger,
-  DashboardShell,
   type DashboardButtonProps,
   type DashboardConfirmDialogProps,
   type DashboardFilterMenuProps,

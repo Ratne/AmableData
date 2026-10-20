@@ -1,34 +1,21 @@
-import { cn, PageBody } from '@amable/ui';
+import { PageBody } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { ExternalLink, LifeBuoy } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useI18n } from '../../i18n';
 import { COMMUNITY_URL } from './api';
 
-export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+export { Pill, type Tone } from '../../components/feature-kit';
 
-const TONE_CLASS: Record<Tone, string> = {
-  neutral: 'bg-muted text-muted-foreground',
-  success: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  warning: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-  danger: 'bg-red-500/15 text-red-700 dark:text-red-300',
-  info: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
-};
-
-export function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap',
-        TONE_CLASS[tone],
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-export function Section({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
+export function Section({
+  title,
+  actions,
+  children,
+}: {
+  title: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="rounded-lg border border-border bg-card">
       <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">

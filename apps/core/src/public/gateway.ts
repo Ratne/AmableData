@@ -1,4 +1,5 @@
 import {
+  ADS_TOKEN_GATEWAY_OP,
   EDGE_ERROR_REPORT_OP,
   EDGE_GATEWAY_DEV_SECRET,
   EDGE_GATEWAY_ENVELOPE_HEADER,
@@ -13,7 +14,7 @@ import {
 } from '@amable/api-types';
 import { verifyWebhook } from '@amable/auth/security';
 import { z } from 'zod';
-import { ADS_TOKEN_GATEWAY_OP, handleAdsTokenOp } from '../analytics/ads-sync';
+import { handleAdsTokenOp } from '../analytics/ads-sync';
 import { findTrackingHost, TRACKING_HOST_GATEWAY_OP } from '../analytics/routes-tracking-domains';
 import { findTenantBySlug } from '../auth/store';
 import { bookingGatewayHandlers, bookingGatewayRawHandlers } from '../booking/gateway';

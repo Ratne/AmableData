@@ -35,7 +35,7 @@ import {
 } from '../../middleware';
 import { ControlPlaneError, controlPlaneClient } from '../client';
 import { platformLink } from '../license';
-import { controlPlaneVerifyKey, verifiedControlPlaneBody } from '../signature';
+import { controlPlaneVerifyKey, verifiedControlPlaneJson } from '../signature';
 import { actingUser, isSupportUserEmail, SUPPORT_EMAIL_DOMAIN } from './shared';
 
 const DAY_MS = 86_400_000;
@@ -475,16 +475,8 @@ export function mountAssistEntry(app: Hono<AppEnv>): void {
   });
 
   app.post('/platform/v1/assist/revoke', async (c) => {
-    const body = await verifiedControlPlaneBody(c);
-    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
-    let json: unknown;
-    try {
-      json = JSON.parse(body);
-    } catch {
-      return c.json({ error: 'invalid_json' }, 400);
-    }
-    const parsed = revokeInput.safeParse(json);
-    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    const parsed = await verifiedControlPlaneJson(c, revokeInput);
+    if (!parsed.ok) return parsed.response;
     const grant = await findGrant(c.env.DB, parsed.data.grantId);
     if (grant === null) return c.json({ ok: true, revoked: false });
     const now = c.get('services').now();

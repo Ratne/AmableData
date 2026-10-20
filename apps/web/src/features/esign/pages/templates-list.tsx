@@ -1,7 +1,20 @@
 import type { EsignTemplate } from '@amable/api-types';
-import { DashboardButton, ListTable, PageBody, PageToolbar, type ListTableColumn, type ListTableRowAction } from '@amable/ui';
+import {
+  DashboardButton,
+  ListTable,
+  PageBody,
+  PageToolbar,
+  type ListTableColumn,
+  type ListTableRowAction,
+} from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@amable/ui/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@amable/ui/ui/dialog';
 import { Input } from '@amable/ui/ui/input';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -9,8 +22,15 @@ import { Archive, ArchiveRestore, Pencil, Plus, Send } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
-import { ChoiceSelect, FormField } from '../../commerce/components/common';
-import { esignKeys, useEsign, useEsignDates, useEsignMutation, useEsignPermissions, useTemplates } from '../api/hooks';
+import { ChoiceSelect, FormField } from '../../../components/feature-kit';
+import {
+  esignKeys,
+  useEsign,
+  useEsignDates,
+  useEsignMutation,
+  useEsignPermissions,
+  useTemplates,
+} from '../api/hooks';
 import { ErrorNotice, TemplateStatusPill, useEsignChrome } from '../components/common';
 import { SendDialog } from '../components/send-dialog';
 
@@ -28,19 +48,30 @@ export function EsignTemplatesPage() {
   const [view, setView] = useState<'current' | 'archived'>('current');
   const writable = can('esign:write');
   const rows = useMemo(
-    () => (templates.data ?? []).filter((tpl) => (tpl.status === 'archived') === (view === 'archived')),
+    () =>
+      (templates.data ?? []).filter((tpl) => (tpl.status === 'archived') === (view === 'archived')),
     [templates.data, view],
   );
   const setStatus = useEsignMutation({
-    mutationFn: ({ id, status }: { id: string; status: EsignTemplate['status'] }) => api.templates.update(id, { status }),
+    mutationFn: ({ id, status }: { id: string; status: EsignTemplate['status'] }) =>
+      api.templates.update(id, { status }),
     invalidate: [esignKeys.templates(slug)],
     success: (result) => t(`esign.editor.status.${result.status}`),
   });
   const open = (template: EsignTemplate) =>
-    void navigate({ to: '/t/$tenant/signatures/templates/$templateId', params: { tenant: slug, templateId: template.id } });
+    void navigate({
+      to: '/t/$tenant/signatures/templates/$templateId',
+      params: { tenant: slug, templateId: template.id },
+    });
 
   const columns: ListTableColumn<EsignTemplate>[] = [
-    { id: 'name', header: t('esign.field.name'), cell: (tpl) => <span className="truncate font-medium">{tpl.name}</span>, sortable: true, sortValue: (tpl) => tpl.name.toLowerCase() },
+    {
+      id: 'name',
+      header: t('esign.field.name'),
+      cell: (tpl) => <span className="truncate font-medium">{tpl.name}</span>,
+      sortable: true,
+      sortValue: (tpl) => tpl.name.toLowerCase(),
+    },
     {
       id: 'document',
       header: t('esign.field.document'),
@@ -48,20 +79,51 @@ export function EsignTemplatesPage() {
         tpl.source === null ? (
           <span className="text-muted-foreground">{t('esign.templates.noDocument')}</span>
         ) : (
-          <span className="truncate">{t('esign.templates.pages', { name: tpl.source.filename, count: tpl.pages.length })}</span>
+          <span className="truncate">
+            {t('esign.templates.pages', { name: tpl.source.filename, count: tpl.pages.length })}
+          </span>
         ),
       hideBelow: 'md',
     },
-    { id: 'parties', header: t('esign.field.parties'), cell: (tpl) => tpl.parties.map((p) => p.name).join(', '), hideBelow: 'lg' },
-    { id: 'fields', header: t('esign.field.fields'), cell: (tpl) => tpl.fields.length, align: 'right', hideBelow: 'lg' },
-    { id: 'status', header: t('esign.field.status'), cell: (tpl) => <TemplateStatusPill status={tpl.status} /> },
-    { id: 'updated', header: t('esign.field.updated'), cell: (tpl) => dates.dateTime(tpl.updated_at), sortable: true, sortValue: (tpl) => tpl.updated_at, hideBelow: 'md' },
+    {
+      id: 'parties',
+      header: t('esign.field.parties'),
+      cell: (tpl) => tpl.parties.map((p) => p.name).join(', '),
+      hideBelow: 'lg',
+    },
+    {
+      id: 'fields',
+      header: t('esign.field.fields'),
+      cell: (tpl) => tpl.fields.length,
+      align: 'right',
+      hideBelow: 'lg',
+    },
+    {
+      id: 'status',
+      header: t('esign.field.status'),
+      cell: (tpl) => <TemplateStatusPill status={tpl.status} />,
+    },
+    {
+      id: 'updated',
+      header: t('esign.field.updated'),
+      cell: (tpl) => dates.dateTime(tpl.updated_at),
+      sortable: true,
+      sortValue: (tpl) => tpl.updated_at,
+      hideBelow: 'md',
+    },
   ];
 
   const rowActions = (template: EsignTemplate): ListTableRowAction<EsignTemplate>[] => [
     { id: 'edit', label: t('esign.action.edit'), icon: Pencil, onSelect: () => open(template) },
     ...(writable && template.status === 'active' && template.ready
-      ? [{ id: 'send', label: t('esign.action.send'), icon: Send, onSelect: () => setSending(template) }]
+      ? [
+          {
+            id: 'send',
+            label: t('esign.action.send'),
+            icon: Send,
+            onSelect: () => setSending(template),
+          },
+        ]
       : []),
     ...(writable
       ? [
@@ -139,13 +201,21 @@ export function EsignTemplatesPage() {
           }
         />
       )}
-      {creating ? <CreateTemplateDialog onClose={() => setCreating(false)} onCreated={open} /> : null}
+      {creating ? (
+        <CreateTemplateDialog onClose={() => setCreating(false)} onCreated={open} />
+      ) : null}
       {sending !== null ? <SendDialog template={sending} onClose={() => setSending(null)} /> : null}
     </>
   );
 }
 
-function CreateTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (template: EsignTemplate) => void }) {
+function CreateTemplateDialog({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (template: EsignTemplate) => void;
+}) {
   const { t } = useI18n();
   const { api } = useEsign();
   const [name, setName] = useState('');
@@ -165,7 +235,15 @@ function CreateTemplateDialog({ onClose, onCreated }: { onClose: () => void; onC
             <DialogTitle>{t('esign.templates.new')}</DialogTitle>
           </DialogHeader>
           <FormField label={t('esign.field.name')} hint={t('esign.templates.nameHint')}>
-            {(id) => <Input id={id} autoFocus value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />}
+            {(id) => (
+              <Input
+                id={id}
+                autoFocus
+                value={name}
+                maxLength={200}
+                onChange={(e) => setName(e.target.value)}
+              />
+            )}
           </FormField>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>

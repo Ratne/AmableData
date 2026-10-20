@@ -12,6 +12,7 @@ import {
   type IntegrationRow,
   type SearchStatRow,
 } from '@amable/app-edge/analytics';
+import { mapLimited } from '../concurrency';
 
 /**
  * Ad spend (Meta Ads) and organic search (Google Search Console) integrations.
@@ -336,6 +337,9 @@ export function adPlatformClientsFor(
   };
 }
 
+/** Sites synced at once; a site's own integrations run one after the other. */
+const SYNC_SITE_CONCURRENCY = 4;
+
 /** Daily sync of every connected integration of the given sites (cron). */
 export async function syncDueIntegrations(
   ns: AnalyticsNamespace,
@@ -344,14 +348,15 @@ export async function syncDueIntegrations(
   now: number,
 ): Promise<number> {
   if (!integrations.oauth.available) return 0;
-  let synced = 0;
-  for (const siteId of siteIds) {
+  const perSite = await mapLimited(siteIds, SYNC_SITE_CONCURRENCY, async (siteId) => {
+    let synced = 0;
     for (const row of await siteStub(ns, siteId).listIntegrations()) {
       if (row.status === 'disconnected') continue;
       if (row.last_sync_at !== null && now - row.last_sync_at < INTEGRATION_SYNC_INTERVAL_MS) continue;
       await syncIntegration(ns, siteId, row.provider, integrations, now);
       synced += 1;
     }
-  }
-  return synced;
+    return synced;
+  });
+  return perSite.reduce((sum, n) => sum + n, 0);
 }

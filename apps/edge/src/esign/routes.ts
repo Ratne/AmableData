@@ -13,6 +13,7 @@ import { acceptLanguageList } from '@amable/booking';
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env';
 import { callCore, callCoreRaw, clientInfo, GatewayCallError, tenantRef } from '../gateway';
+import { escapeHtml, inlineJson, jsonResponders, readBoundedText, serveBundle } from '../public/http';
 
 /**
  * Signing pages on the edge (edge origin or a customer zone):
@@ -41,34 +42,9 @@ const PAGE_CSP = [
   "frame-ancestors 'none'",
 ].join('; ');
 
-function errorJson(status: number, error: string, message: string, details?: unknown): Response {
-  return new Response(JSON.stringify({ error, message, ...(details === undefined ? {} : { details }) }), {
-    status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
-  });
-}
-
-function okJson(value: unknown): Response {
-  return new Response(JSON.stringify(value), {
-    status: 200,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
-  });
-}
-
-function fromGatewayError(error: unknown): Response {
-  if (error instanceof GatewayCallError) return errorJson(error.body.status, error.body.code, error.body.message, error.body.details);
-  console.error('[esign] gateway call failed', error);
-  return errorJson(502, 'gateway_error', 'signing service unavailable');
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-/** JSON inside `<script type="application/json">`: no way to close the tag. */
-function inlineJson(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-}
+const { errorJson, okJson, fromGatewayError } = jsonResponders('esign', 'signing service unavailable', {
+  'referrer-policy': 'no-referrer',
+});
 
 function htmlHeaders(): Record<string, string> {
   return {
@@ -120,10 +96,8 @@ async function readJson(c: Ctx, max: number): Promise<{ ok: true; value: Record<
   if (!(c.req.header('content-type') ?? '').toLowerCase().includes('application/json')) {
     return { ok: false, response: errorJson(415, 'unsupported_media_type', 'send JSON') };
   }
-  const declared = Number(c.req.header('content-length') ?? '0');
-  if (declared > max) return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
-  const raw = await c.req.text();
-  if (new TextEncoder().encode(raw).length > max) return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
+  const raw = await readBoundedText(c, max);
+  if (raw === null) return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
   try {
     const value: unknown = raw === '' ? {} : JSON.parse(raw);
     if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('not an object');
@@ -137,20 +111,7 @@ const scriptTag = `<script defer src="/sign.js?v=${ESIGN_APP_BUNDLE_HASH}"></scr
 
 // --------------------------------------------------------------- app script
 
-esignEdgeRoutes.get('/sign.js', (c) => {
-  const etag = `"${ESIGN_APP_BUNDLE_HASH}"`;
-  const headers: Record<string, string> = {
-    'content-type': 'application/javascript; charset=utf-8',
-    'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
-    etag,
-    'x-content-type-options': 'nosniff',
-  };
-  const inm = c.req.header('if-none-match');
-  if (inm !== undefined && inm.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)) {
-    return new Response(null, { status: 304, headers });
-  }
-  return new Response(ESIGN_APP_BUNDLE, { status: 200, headers });
-});
+esignEdgeRoutes.get('/sign.js', (c) => serveBundle(c, ESIGN_APP_BUNDLE, ESIGN_APP_BUNDLE_HASH));
 
 // ---------------------------------------------------------------- the page
 

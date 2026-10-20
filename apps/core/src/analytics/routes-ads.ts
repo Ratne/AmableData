@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { idParam, siteQuery } from './params';
 import { isProviderError } from '@amable/ads-providers';
 import { AD_PLATFORMS, adConnectionSchema, adConnectionSettingsSchema } from '@amable/api-types';
 import type { OpenAPIHono } from '@hono/zod-openapi';
@@ -23,11 +24,12 @@ import {
   type SiteRef,
 } from './ads-sync';
 import { namespace, siteIdParam, siteRecord } from './service';
+import { mapLimited } from '../concurrency';
 
 const tags = ['Analytics'];
-const siteQuery = z.object({ site_id: z.string().min(1).max(64) });
+/** Accounts of one authorization synced at once right after connecting. */
+const FIRST_SYNC_CONCURRENCY = 3;
 const platformParam = z.object({ platform: z.enum(AD_PLATFORMS) });
-const idParam = z.object({ id: z.string().min(1).max(64) });
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const connectionsSchema = z.object({
@@ -60,6 +62,14 @@ async function siteOf(c: Ctx): Promise<{ site: SiteRef; ports: AdsSyncPorts }> {
     site: { tenantId: getTenant(c).tenant.id, id: siteId, name: record.site.name },
     ports: adsSyncPorts(c.env, namespace(c), () => services.now()),
   };
+}
+
+/** Connection `id` of the request's site, or 404. */
+async function connectionOf(c: Ctx, id: string) {
+  const { site, ports } = await siteOf(c);
+  const conn = await adsStub(ports.ns, site.id).getAdConnection(id);
+  if (conn === null) throw new CrmError('not_found', 'connection not found');
+  return { site, ports, conn };
 }
 
 function providerFailure(error: unknown): never {
@@ -165,11 +175,10 @@ export function registerAdsRoutes(api: OpenAPIHono<AppEnv>): void {
         details: { site: site.id, accounts: created.length },
       });
       const stub = adsStub(ports.ns, site.id);
-      const out = [];
-      for (const conn of created) {
+      const out = await mapLimited(created, FIRST_SYNC_CONCURRENCY, async (conn) => {
         await syncAdConnection(ports, site, conn, { force: true });
-        out.push(toAdConnection((await stub.getAdConnection(conn.id)) ?? conn));
-      }
+        return toAdConnection((await stub.getAdConnection(conn.id)) ?? conn);
+      });
       return c.json({ data: out }, 200);
     },
   );
@@ -185,9 +194,7 @@ export function registerAdsRoutes(api: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       const { id } = c.req.valid('param');
-      const { site, ports } = await siteOf(c);
-      const conn = await adsStub(ports.ns, site.id).getAdConnection(id);
-      if (conn === null) throw new CrmError('not_found', 'connection not found');
+      const { site, ports, conn } = await connectionOf(c, id);
       await disconnectAdConnection(ports, site.id, conn);
       await audit(c, 'analytics.ads_disconnected', { target: id, details: { site: site.id } });
       return c.json({ id, deleted: true as const }, 200);
@@ -205,9 +212,7 @@ export function registerAdsRoutes(api: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       const { id } = c.req.valid('param');
-      const { site, ports } = await siteOf(c);
-      const conn = await adsStub(ports.ns, site.id).getAdConnection(id);
-      if (conn === null) throw new CrmError('not_found', 'connection not found');
+      const { site, ports, conn } = await connectionOf(c, id);
       try {
         const updated = await updateAdConnectionSettings(ports, site.id, conn, c.req.valid('json'));
         await audit(c, 'analytics.ads_settings_updated', { target: id, details: { site: site.id } });
@@ -229,9 +234,7 @@ export function registerAdsRoutes(api: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       const { id } = c.req.valid('param');
-      const { site, ports } = await siteOf(c);
-      const conn = await adsStub(ports.ns, site.id).getAdConnection(id);
-      if (conn === null) throw new CrmError('not_found', 'connection not found');
+      const { site, ports, conn } = await connectionOf(c, id);
       try {
         const result = await backfillAdConnection(ports, site, conn, c.req.valid('json'));
         await audit(c, 'analytics.ads_backfilled', {

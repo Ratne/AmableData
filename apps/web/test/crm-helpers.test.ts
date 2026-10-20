@@ -1,6 +1,6 @@
 import type { Opportunity } from '@amable/api-types/crm';
 import { describe, expect, it } from 'vitest';
-import { buildQuery } from '../src/features/crm/api/client';
+import { buildQuery } from '../src/lib/tenant-api';
 import { bucketByDay, dayKey, shiftAnchor, visibleRange } from '../src/features/crm/calendar-utils';
 import {
   duplicateTargets,

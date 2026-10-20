@@ -18,7 +18,6 @@ export const foldersEn = {
   'folders.actions': 'Actions for {name}',
   'folders.toggle': 'Show folders',
   'folders.includeSub': 'Include subfolders',
-  'folders.count': '{n} items',
   'folders.created': 'Folder created',
   'folders.renamed': 'Folder renamed',
   'folders.deleted': 'Folder deleted',

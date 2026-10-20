@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { FilePen, Send } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
-import { ListFooter } from '../../commerce/components/common';
+import { ListFooter } from '../../../components/feature-kit';
 import { useEsign, useEsignDates, useEsignPermissions, useRequests } from '../api/hooks';
 import { ErrorNotice, RequestStatusPill, type PickedContact } from './common';
 import { SendDialog } from './send-dialog';

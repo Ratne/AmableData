@@ -12,7 +12,6 @@ import {
   type SiteWithSecret,
   type UpdateSiteInput,
 } from '@amable/api-types';
-import type { Permission } from '@amable/core';
 import {
   newSiteId,
   newSiteKey,
@@ -213,12 +212,6 @@ export function unwrap<T>(result: AnalyticsResult<T>): T {
 export async function siteForQuery(c: Ctx, siteId: string) {
   await siteRecord(c, siteId);
   return siteStub(namespace(c), siteId);
-}
-
-/** 403 unless the caller holds at least one of the permissions. */
-export function requireAny(c: Ctx, permissions: readonly Permission[]): void {
-  const { can } = getTenant(c);
-  if (!permissions.some((p) => can(p))) throw new HttpError(403, 'forbidden', { missing: [...permissions] });
 }
 
 /** Required `site_id` query parameter of the saved-object routes. */

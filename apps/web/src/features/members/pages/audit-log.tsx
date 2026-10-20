@@ -3,7 +3,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
-import { PageState, SectionCard } from '../../commerce/components/common';
+import { SectionCard } from '../../../components/feature-kit';
+import { PageState } from '../../commerce/components/common';
 import { memberKeys, useMembersApi, type AuditEntry } from '../api';
 
 const PAGE_SIZE = 50;
@@ -100,7 +101,9 @@ export function AuditLogPage() {
                         <TableCell className="whitespace-nowrap text-xs">
                           {formatDateTime(locale, entry.createdAt)}
                         </TableCell>
-                        <TableCell className="max-w-48 truncate text-xs">{actorOf(entry)}</TableCell>
+                        <TableCell className="max-w-48 truncate text-xs">
+                          {actorOf(entry)}
+                        </TableCell>
                         <TableCell className="font-mono text-xs">{entry.action}</TableCell>
                         <TableCell className="max-w-48 truncate font-mono text-xs">
                           {entry.target ?? ''}

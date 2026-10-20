@@ -1,14 +1,34 @@
-import { ESIGN_EVENT_TYPES, type EsignEvent, type EsignEventType, type EsignRequestDetail, type EsignSigner } from '@amable/api-types';
+import {
+  ESIGN_EVENT_TYPES,
+  type EsignEvent,
+  type EsignEventType,
+  type EsignRequestDetail,
+  type EsignSigner,
+} from '@amable/api-types';
 import { DashboardButton, PageBody, PageToolbar, toast } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@amable/ui/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@amable/ui/ui/dialog';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { Link, useParams } from '@tanstack/react-router';
 import { Ban, BellRing, Download, FileText, Link2, RotateCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
-import { Facts, FormField, SectionCard } from '../../commerce/components/common';
-import { errorMessage, useEsign, useEsignDates, useEsignMutation, useEsignPermissions, useRequestDetail } from '../api/hooks';
+import { Facts, FormField, SectionCard } from '../../../components/feature-kit';
+import {
+  errorMessage,
+  useEsign,
+  useEsignDates,
+  useEsignMutation,
+  useEsignPermissions,
+  useRequestDetail,
+} from '../api/hooks';
 import { openFile, PageState, SignerStatusPill, useEsignChrome } from '../components/common';
 
 const OPEN_STATUSES = new Set(['sent', 'partially_signed']);
@@ -33,7 +53,10 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
   const writable = can('esign:write');
   const open = OPEN_STATUSES.has(request.status);
   const tone = request.status === 'completed' ? 'success' : open ? 'warning' : 'neutral';
-  useEsignChrome('requests', request.name, { label: t(`esign.requestStatus.${request.status}`), tone });
+  useEsignChrome('requests', request.name, {
+    label: t(`esign.requestStatus.${request.status}`),
+    tone,
+  });
 
   const remind = useEsignMutation({
     mutationFn: (signerId: string | undefined) => api.requests.remind(request.id, signerId),
@@ -56,33 +79,53 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
 
   const sealing = request.status === 'completed' && !request.document_ready;
   // Whose turn it is, as the server reminds: in sequential order only the first party still to sign.
-  const pending = request.signers.filter((s) => s.status !== 'completed' && s.status !== 'declined');
-  const inTurn = new Set((request.signing_order === 'sequential' ? pending.slice(0, 1) : pending).map((s) => s.id));
+  const pending = request.signers.filter(
+    (s) => s.status !== 'completed' && s.status !== 'declined',
+  );
+  const inTurn = new Set(
+    (request.signing_order === 'sequential' ? pending.slice(0, 1) : pending).map((s) => s.id),
+  );
   // The automatic attempts gave up: only then staff retries by hand.
-  const gaveUp = sealing && request.finalize_error !== null && request.finalize_next_attempt_at === null;
-  const signerName = useMemo(() => new Map(request.signers.map((s) => [s.id, s.name || s.email])), [request.signers]);
+  const gaveUp =
+    sealing && request.finalize_error !== null && request.finalize_next_attempt_at === null;
+  const signerName = useMemo(
+    () => new Map(request.signers.map((s) => [s.id, s.name || s.email])),
+    [request.signers],
+  );
 
   return (
     <>
       <PageToolbar
         filters={
-          <Link to="/t/$tenant/signatures" params={{ tenant: slug }} className="text-sm text-muted-foreground hover:text-foreground">
+          <Link
+            to="/t/$tenant/signatures"
+            params={{ tenant: slug }}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
             ← {t('esign.detail.back')}
           </Link>
         }
         actions={
           <>
             {request.document_ready ? (
-              <DashboardButton variant="primary" onClick={() => openFile(api.requests.documentUrl(request.id, 'completed', true))}>
+              <DashboardButton
+                variant="primary"
+                onClick={() => openFile(api.requests.documentUrl(request.id, 'completed', true))}
+              >
                 <Download aria-hidden /> {t('esign.detail.downloadSigned')}
               </DashboardButton>
             ) : null}
-            <DashboardButton onClick={() => openFile(api.requests.documentUrl(request.id, 'original'))}>
+            <DashboardButton
+              onClick={() => openFile(api.requests.documentUrl(request.id, 'original'))}
+            >
               <FileText aria-hidden /> {t('esign.detail.viewOriginal')}
             </DashboardButton>
             {writable && open ? (
               <>
-                <DashboardButton onClick={() => remind.mutate(undefined)} disabled={remind.isPending}>
+                <DashboardButton
+                  onClick={() => remind.mutate(undefined)}
+                  disabled={remind.isPending}
+                >
                   <BellRing aria-hidden /> {t('esign.detail.remindAll')}
                 </DashboardButton>
                 <DashboardButton onClick={() => setVoiding(true)}>
@@ -91,7 +134,10 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
               </>
             ) : null}
             {writable && sealing && gaveUp ? (
-              <DashboardButton onClick={() => finalize.mutate(undefined)} disabled={finalize.isPending}>
+              <DashboardButton
+                onClick={() => finalize.mutate(undefined)}
+                disabled={finalize.isPending}
+              >
                 <RotateCw aria-hidden /> {t('esign.detail.retryFinalize')}
               </DashboardButton>
             ) : null}
@@ -107,20 +153,48 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
                 [t('esign.field.origin'), t(`esign.origin.${request.origin}`)],
                 [t('esign.field.signingOrder'), t(`esign.signingOrder.${request.signing_order}`)],
                 [t('esign.field.sentAt'), dates.dateTime(request.created_at)],
-                [t('esign.field.expiresAt'), request.expires_at === null ? t('esign.detail.never') : dates.dateTime(request.expires_at)],
-                ...(request.completed_at !== null ? [[t('esign.field.completedAt'), dates.dateTime(request.completed_at)] as const] : []),
-                ...(request.declined_at !== null ? [[t('esign.field.declinedAt'), dates.dateTime(request.declined_at)] as const] : []),
-                ...(request.voided_at !== null
-                  ? [[t('esign.field.voidedAt'), `${dates.dateTime(request.voided_at)}${request.void_reason ? ` — ${request.void_reason}` : ''}`] as const]
+                [
+                  t('esign.field.expiresAt'),
+                  request.expires_at === null
+                    ? t('esign.detail.never')
+                    : dates.dateTime(request.expires_at),
+                ],
+                ...(request.completed_at !== null
+                  ? [[t('esign.field.completedAt'), dates.dateTime(request.completed_at)] as const]
                   : []),
-                [t('esign.field.originalHash'), <code key="o" className="text-xs break-all">{request.source_sha256}</code>],
+                ...(request.declined_at !== null
+                  ? [[t('esign.field.declinedAt'), dates.dateTime(request.declined_at)] as const]
+                  : []),
+                ...(request.voided_at !== null
+                  ? [
+                      [
+                        t('esign.field.voidedAt'),
+                        `${dates.dateTime(request.voided_at)}${request.void_reason ? ` — ${request.void_reason}` : ''}`,
+                      ] as const,
+                    ]
+                  : []),
+                [
+                  t('esign.field.originalHash'),
+                  <code key="o" className="text-xs break-all">
+                    {request.source_sha256}
+                  </code>,
+                ],
                 ...(request.completed_sha256 !== null
-                  ? [[t('esign.field.signedHash'), <code key="c" className="text-xs break-all">{request.completed_sha256}</code>] as const]
+                  ? [
+                      [
+                        t('esign.field.signedHash'),
+                        <code key="c" className="text-xs break-all">
+                          {request.completed_sha256}
+                        </code>,
+                      ] as const,
+                    ]
                   : []),
               ]}
             />
             {sealing ? (
-              <p className={`mt-3 text-sm ${gaveUp ? 'text-destructive' : 'text-muted-foreground'}`}>
+              <p
+                className={`mt-3 text-sm ${gaveUp ? 'text-destructive' : 'text-muted-foreground'}`}
+              >
                 {request.finalize_error === null
                   ? t('esign.detail.sealing')
                   : gaveUp
@@ -128,7 +202,11 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
                     : t('esign.detail.finalizeRetrying', { error: request.finalize_error })}
               </p>
             ) : null}
-            {request.message ? <p className="mt-3 rounded-lg bg-muted/50 p-3 text-sm whitespace-pre-wrap">{request.message}</p> : null}
+            {request.message ? (
+              <p className="mt-3 rounded-lg bg-muted/50 p-3 text-sm whitespace-pre-wrap">
+                {request.message}
+              </p>
+            ) : null}
           </SectionCard>
           <SectionCard title={t('esign.field.signers')}>
             <ul className="grid gap-3">
@@ -137,11 +215,15 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">
-                        {request.signing_order === 'sequential' ? `${String(signer.position + 1)}. ` : ''}
+                        {request.signing_order === 'sequential'
+                          ? `${String(signer.position + 1)}. `
+                          : ''}
                         {signer.party_name}
                       </p>
                       <p className="truncate text-sm font-medium">{signer.name || signer.email}</p>
-                      {signer.name ? <p className="truncate text-xs text-muted-foreground">{signer.email}</p> : null}
+                      {signer.name ? (
+                        <p className="truncate text-xs text-muted-foreground">{signer.email}</p>
+                      ) : null}
                     </div>
                     <SignerStatusPill status={signer.status} />
                   </div>
@@ -150,12 +232,22 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
                     <dd>{dates.dateTime(signer.sent_at)}</dd>
                     <dt>{t('esign.signer.opened')}</dt>
                     <dd>{dates.dateTime(signer.opened_at)}</dd>
-                    <dt>{signer.status === 'declined' ? t('esign.signer.declined') : t('esign.signer.signed')}</dt>
-                    <dd>{dates.dateTime(signer.status === 'declined' ? signer.declined_at : signer.completed_at)}</dd>
+                    <dt>
+                      {signer.status === 'declined'
+                        ? t('esign.signer.declined')
+                        : t('esign.signer.signed')}
+                    </dt>
+                    <dd>
+                      {dates.dateTime(
+                        signer.status === 'declined' ? signer.declined_at : signer.completed_at,
+                      )}
+                    </dd>
                     <dt>{t('esign.signer.reminders')}</dt>
                     <dd>
                       {signer.reminders_sent}
-                      {signer.next_reminder_at !== null && AWAITING.has(signer.status) ? ` · ${t('esign.signer.next', { when: dates.dateTime(signer.next_reminder_at) })}` : ''}
+                      {signer.next_reminder_at !== null && AWAITING.has(signer.status)
+                        ? ` · ${t('esign.signer.next', { when: dates.dateTime(signer.next_reminder_at) })}`
+                        : ''}
                     </dd>
                     {signer.otp_verified_at !== null ? (
                       <>
@@ -164,15 +256,28 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
                       </>
                     ) : null}
                   </dl>
-                  {signer.decline_reason ? <p className="rounded-md bg-red-500/10 p-2 text-xs">{signer.decline_reason}</p> : null}
+                  {signer.decline_reason ? (
+                    <p className="rounded-md bg-red-500/10 p-2 text-xs">{signer.decline_reason}</p>
+                  ) : null}
                   {writable && open && AWAITING.has(signer.status) ? (
                     <div className="flex flex-wrap gap-1.5">
                       {inTurn.has(signer.id) ? (
-                        <Button type="button" size="sm" variant="outline" onClick={() => remind.mutate(signer.id)} disabled={remind.isPending}>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => remind.mutate(signer.id)}
+                          disabled={remind.isPending}
+                        >
                           <BellRing aria-hidden /> {t('esign.detail.remind')}
                         </Button>
                       ) : null}
-                      <Button type="button" size="sm" variant="outline" onClick={() => void copyLink(signer)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void copyLink(signer)}
+                      >
                         <Link2 aria-hidden /> {t('esign.detail.copyLink')}
                       </Button>
                     </div>
@@ -186,7 +291,11 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
           <p className="mb-3 text-xs text-muted-foreground">{t('esign.detail.auditHint')}</p>
           <ol className="relative grid gap-3 border-l pl-4">
             {request.events.map((event) => (
-              <AuditEvent key={event.id} event={event} signer={event.signer_id === null ? null : (signerName.get(event.signer_id) ?? null)} />
+              <AuditEvent
+                key={event.id}
+                event={event}
+                signer={event.signer_id === null ? null : (signerName.get(event.signer_id) ?? null)}
+              />
             ))}
           </ol>
         </SectionCard>
@@ -198,7 +307,8 @@ function RequestDetail({ request }: { request: EsignRequestDetail }) {
 
 function metaText(value: unknown): string {
   if (value === null || value === undefined) return '';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+    return String(value);
   if (Array.isArray(value)) return value.map(metaText).join(', ');
   return JSON.stringify(value);
 }
@@ -209,14 +319,21 @@ function AuditEvent({ event, signer }: { event: EsignEvent; signer: string | nul
   const { t } = useI18n();
   const dates = useEsignDates();
   const facts = Object.entries(event.meta).filter(([, value]) => metaText(value) !== '');
-  const label = KNOWN_EVENTS.has(event.type) ? t(`esign.event.${event.type as EsignEventType}`) : event.type;
+  const label = KNOWN_EVENTS.has(event.type)
+    ? t(`esign.event.${event.type as EsignEventType}`)
+    : event.type;
   return (
     <li className="relative">
-      <span className="absolute top-1.5 -left-[1.36rem] size-2.5 rounded-full border-2 border-background bg-primary" aria-hidden />
+      <span
+        className="absolute top-1.5 -left-[1.36rem] size-2.5 rounded-full border-2 border-background bg-primary"
+        aria-hidden
+      />
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <p className="text-sm font-medium">
           {label}
-          {signer !== null ? <span className="font-normal text-muted-foreground"> · {signer}</span> : null}
+          {signer !== null ? (
+            <span className="font-normal text-muted-foreground"> · {signer}</span>
+          ) : null}
         </p>
         <time className="text-xs text-muted-foreground tabular-nums" dateTime={event.occurred_at}>
           {dates.precise(event.occurred_at)}
@@ -266,13 +383,26 @@ function VoidDialog({ requestId, onClose }: { requestId: string; onClose: () => 
           <DialogDescription>{t('esign.detail.voidDescription')}</DialogDescription>
         </DialogHeader>
         <FormField label={t('esign.field.reason')}>
-          {(id) => <Textarea id={id} rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
+          {(id) => (
+            <Textarea
+              id={id}
+              rows={3}
+              maxLength={500}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          )}
         </FormField>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button type="button" variant="destructive" disabled={voidRequest.isPending} onClick={() => voidRequest.mutate(undefined)}>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={voidRequest.isPending}
+            onClick={() => voidRequest.mutate(undefined)}
+          >
             {t('esign.detail.void')}
           </Button>
         </DialogFooter>

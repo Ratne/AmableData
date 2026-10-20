@@ -9,6 +9,15 @@ import { FORMS_WIDGET_BUNDLE, FORMS_WIDGET_BUNDLE_HASH } from '@amable/forms/bun
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env';
 import { callCore, clientInfo, GatewayCallError, tenantRef } from '../gateway';
+import {
+  CROSS_ORIGIN_BUNDLE,
+  escapeHtml,
+  HOSTED_WIDGET_CSP,
+  jsonResponders,
+  OPEN_CORS,
+  readBoundedText,
+  serveBundle,
+} from '../public/http';
 
 /**
  * Hosted forms on the edge (customer zone or the edge origin):
@@ -27,52 +36,12 @@ export const MAX_SUBMIT_BYTES = 64 * 1024;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,99}$/i;
 
-const CORS: Record<string, string> = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, POST, OPTIONS',
-  'access-control-allow-headers': 'content-type, accept',
-  'access-control-max-age': '86400',
-};
-
-const HOSTED_CSP = [
-  "default-src 'none'",
-  "script-src 'self' https://challenges.cloudflare.com",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https:",
-  "connect-src 'self'",
-  'frame-src https://challenges.cloudflare.com',
-  "form-action 'self'",
-  "base-uri 'none'",
-].join('; ');
+const { errorJson, okJson, fromGatewayError } = jsonResponders('forms', 'form service unavailable', OPEN_CORS);
 
 function validRef(c: Ctx): { slug: string; formId: string } | null {
   const slug = c.req.param('slug') ?? '';
   const formId = c.req.param('formId') ?? '';
   return SLUG_RE.test(slug) && ID_RE.test(formId) ? { slug, formId } : null;
-}
-
-function errorJson(c: Ctx, status: number, error: string, message: string, details?: unknown): Response {
-  return new Response(JSON.stringify({ error, message, ...(details === undefined ? {} : { details }) }), {
-    status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS },
-  });
-}
-
-function fromGatewayError(c: Ctx, error: unknown): Response {
-  if (error instanceof GatewayCallError) {
-    return errorJson(c, error.body.status, error.body.code, error.body.message, error.body.details);
-  }
-  console.error('[forms] gateway call failed', error);
-  return errorJson(c, 502, 'gateway_error', 'form service unavailable');
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function page(locale: string, title: string, body: string): string {
@@ -103,7 +72,7 @@ function htmlHeaders(cache: string): Record<string, string> {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': cache,
     'x-robots-tag': 'noindex, nofollow',
-    'content-security-policy': HOSTED_CSP,
+    'content-security-policy': HOSTED_WIDGET_CSP,
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'strict-origin-when-cross-origin',
   };
@@ -111,31 +80,16 @@ function htmlHeaders(cache: string): Record<string, string> {
 
 // -------------------------------------------------------------- widget script
 
-formsEdgeRoutes.get('/forms.js', (c) => {
-  const etag = `"${FORMS_WIDGET_BUNDLE_HASH}"`;
-  const headers: Record<string, string> = {
-    'content-type': 'application/javascript; charset=utf-8',
-    'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
-    etag,
-    'access-control-allow-origin': '*',
-    'cross-origin-resource-policy': 'cross-origin',
-    'x-content-type-options': 'nosniff',
-  };
-  const inm = c.req.header('if-none-match');
-  if (inm !== undefined && inm.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)) {
-    return new Response(null, { status: 304, headers });
-  }
-  return new Response(FORMS_WIDGET_BUNDLE, { status: 200, headers });
-});
+formsEdgeRoutes.get('/forms.js', (c) => serveBundle(c, FORMS_WIDGET_BUNDLE, FORMS_WIDGET_BUNDLE_HASH, CROSS_ORIGIN_BUNDLE));
 
 // --------------------------------------------------------------------- config
 
-formsEdgeRoutes.options('/f/:slug/:formId/config', () => new Response(null, { status: 204, headers: CORS }));
-formsEdgeRoutes.options('/f/:slug/:formId', () => new Response(null, { status: 204, headers: CORS }));
+formsEdgeRoutes.options('/f/:slug/:formId/config', () => new Response(null, { status: 204, headers: OPEN_CORS }));
+formsEdgeRoutes.options('/f/:slug/:formId', () => new Response(null, { status: 204, headers: OPEN_CORS }));
 
 formsEdgeRoutes.get('/f/:slug/:formId/config', async (c) => {
   const ref = validRef(c);
-  if (ref === null) return errorJson(c, 404, 'not_found', 'form not found');
+  if (ref === null) return errorJson(404, 'not_found', 'form not found');
   try {
     const { value } = await callCore<FormsGatewayOps, 'forms.config'>(
       c.env,
@@ -144,12 +98,9 @@ formsEdgeRoutes.get('/f/:slug/:formId/config', async (c) => {
       clientInfo(c),
       { formId: ref.formId },
     );
-    return new Response(JSON.stringify(value), {
-      status: 200,
-      headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=30', ...CORS },
-    });
+    return okJson(value, 'public, max-age=30');
   } catch (error) {
-    return fromGatewayError(c, error);
+    return fromGatewayError(error);
   }
 });
 
@@ -207,13 +158,9 @@ export function payloadFromForm(params: URLSearchParams, referer: string | null)
 
 formsEdgeRoutes.post('/f/:slug/:formId', async (c) => {
   const ref = validRef(c);
-  if (ref === null) return errorJson(c, 404, 'not_found', 'form not found');
-  const declared = Number(c.req.header('content-length') ?? '0');
-  if (declared > MAX_SUBMIT_BYTES) return errorJson(c, 413, 'payload_too_large', 'submission too large');
-  const raw = await c.req.text();
-  if (new TextEncoder().encode(raw).length > MAX_SUBMIT_BYTES) {
-    return errorJson(c, 413, 'payload_too_large', 'submission too large');
-  }
+  if (ref === null) return errorJson(404, 'not_found', 'form not found');
+  const raw = await readBoundedText(c, MAX_SUBMIT_BYTES);
+  if (raw === null) return errorJson(413, 'payload_too_large', 'submission too large');
   const contentType = (c.req.header('content-type') ?? '').toLowerCase();
   const isJson = contentType.includes('application/json');
   let payload: unknown;
@@ -221,12 +168,12 @@ formsEdgeRoutes.post('/f/:slug/:formId', async (c) => {
     try {
       payload = JSON.parse(raw);
     } catch {
-      return errorJson(c, 400, 'bad_request', 'invalid JSON');
+      return errorJson(400, 'bad_request', 'invalid JSON');
     }
   } else if (contentType.includes('application/x-www-form-urlencoded')) {
     payload = payloadFromForm(new URLSearchParams(raw), c.req.header('referer') ?? null);
   } else {
-    return errorJson(c, 415, 'unsupported_media_type', 'send JSON or a urlencoded form');
+    return errorJson(415, 'unsupported_media_type', 'send JSON or a urlencoded form');
   }
 
   const locale = resolveWidgetLocale('auto', acceptLanguageTags(c.req.header('accept-language') ?? null));
@@ -240,10 +187,7 @@ formsEdgeRoutes.post('/f/:slug/:formId', async (c) => {
       { formId: ref.formId, payload: payload as SubmitPayloadInput },
     );
     if (isJson) {
-      return new Response(JSON.stringify(value), {
-        status: 200,
-        headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS },
-      });
+      return okJson(value);
     }
     if (value.success_mode === 'redirect' && value.redirect_url !== '') {
       return new Response(null, { status: 303, headers: { location: value.redirect_url } });
@@ -251,7 +195,7 @@ formsEdgeRoutes.post('/f/:slug/:formId', async (c) => {
     const message = value.success_message || strings.success;
     return c.body(page(locale, message, `<p>${escapeHtml(message)}</p>`), 200, htmlHeaders('no-store'));
   } catch (error) {
-    if (isJson) return fromGatewayError(c, error);
+    if (isJson) return fromGatewayError(error);
     const status = error instanceof GatewayCallError ? error.body.status : 502;
     const message =
       error instanceof GatewayCallError && error.body.code === 'validation_failed'

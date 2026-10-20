@@ -11,7 +11,7 @@ import { toast } from '@amable/ui';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useI18n } from '../../i18n';
-import { request } from '../crm/api/client';
+import { request } from '../../lib/tenant-api';
 import { errorMessage, useTenantSlug } from '../crm/api/hooks';
 
 const PATHS: Record<FolderKind, string> = {

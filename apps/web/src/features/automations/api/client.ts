@@ -13,7 +13,7 @@ import type {
   ValidationResult,
 } from '@amable/api-types';
 import type { Contact, Page } from '@amable/api-types/crm';
-import { request } from '../../crm/api/client';
+import { request } from '../../../lib/tenant-api';
 
 /**
  * Typed client of the automation REST v2 surface (`/api/v2/t/{slug}/automations…`)
@@ -48,8 +48,7 @@ export function automationClient(slug: string) {
         folder_id?: string;
         include_subfolders?: 'true';
       } = {},
-    ) =>
-      request<Page<Automation>>(`${base}/automations`, { query: { limit: 200, ...params } }),
+    ) => request<Page<Automation>>(`${base}/automations`, { query: { limit: 200, ...params } }),
     get: (automationId: string) => request<AutomationDetail>(one(automationId)),
     create: (input: {
       name: string;

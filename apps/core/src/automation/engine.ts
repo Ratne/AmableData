@@ -31,6 +31,7 @@ import type {
 } from '@amable/api-types';
 import { EMPTY_GRAPH, LOG_KINDS } from '@amable/api-types';
 import type { AutomationInboundEvent } from '@amable/core';
+import { mapLimited } from '../concurrency';
 import { first, placeholders, type SqlDb, type SqlValue } from '../crm/db/sql';
 import { CrmError, invalidMany, notFound } from '../crm/errors';
 import { decodeCursor, encodeCursor, parseJson } from '../crm/util';
@@ -96,6 +97,8 @@ const OUTBOX_BATCH = 90;
 const JOBS_PER_ROUND = 100;
 const STEPS_PER_RUN = 25;
 const CONCURRENCY = 8;
+/** CRM lookups in flight during the hourly anniversary scan. */
+const ANNIVERSARY_LOOKUP_CONCURRENCY = 4;
 const PROCESSED_EVENTS_TTL_MS = 7 * 24 * 60 * 60_000;
 /** Execution logs older than this are deleted by the daily prune job. */
 export const LOG_RETENTION_MS = 90 * 24 * 60 * 60_000;
@@ -406,8 +409,9 @@ export class AutomationEngine implements StepHost {
   listVersions(input: { id: string }): AutomationVersionSummary[] {
     this.automationOrThrow(input.id);
     return this.db
-      .all<VersionRowLike>(
-        `SELECT * FROM eng_versions WHERE automation_id = ? ORDER BY number DESC`,
+      .all<VersionSummaryRow>(
+        `SELECT id, automation_id, number, settings, published_by, published_at
+           FROM eng_versions WHERE automation_id = ? ORDER BY number DESC`,
         input.id,
       )
       .map((v) => this.toVersionSummary(v));
@@ -1304,7 +1308,13 @@ export class AutomationEngine implements StepHost {
    */
   async anniversaryScan(): Promise<number> {
     const now = this.now();
-    let fired = 0;
+    const due: Array<{
+      automationId: string;
+      nodeId: string;
+      triggerIndex: number;
+      today: string;
+      lookup: { field: string; monthDay: string; includeLeapDay: boolean };
+    }> = [];
     for (const automation of this.activeAutomations()) {
       if (automation.published_version_id === null) continue;
       const version = this.version(automation.published_version_id);
@@ -1321,24 +1331,32 @@ export class AutomationEngine implements StepHost {
         const today = { year: local.year, month: local.month, day: local.day };
         const target = addDays(today, -(trigger.offset_days ?? 0));
         const monthDay = formatDate(target).slice(5);
-        const ids = await crmCall(this.ports.crm, 'automation.contactIdsByMonthDay', {
-          field: trigger.field,
-          monthDay,
-          includeLeapDay: monthDay === '02-28' && !isLeap(target.year),
-        });
-        this.db.transaction(() => {
-          for (const contactId of ids) {
-            const result = this.handleEvent({
-              id: `anniv:${automation.id}:${ref.node.id}:${ref.triggerIndex}:${contactId}:${formatDate(today)}`,
-              type: 'automation.date_anniversary',
-              occurredAt: iso(now),
-              payload: { contactId, automationId: automation.id, nodeId: ref.node.id },
-            });
-            fired += result.matched.length;
-          }
+        due.push({
+          automationId: automation.id,
+          nodeId: ref.node.id,
+          triggerIndex: ref.triggerIndex,
+          today: formatDate(today),
+          lookup: { field: trigger.field, monthDay, includeLeapDay: monthDay === '02-28' && !isLeap(target.year) },
         });
       }
     }
+    const contactIds = await mapLimited(due, ANNIVERSARY_LOOKUP_CONCURRENCY, (goal) =>
+      crmCall(this.ports.crm, 'automation.contactIdsByMonthDay', goal.lookup),
+    );
+    let fired = 0;
+    due.forEach((goal, index) => {
+      this.db.transaction(() => {
+        for (const contactId of contactIds[index] ?? []) {
+          const result = this.handleEvent({
+            id: `anniv:${goal.automationId}:${goal.nodeId}:${goal.triggerIndex}:${contactId}:${goal.today}`,
+            type: 'automation.date_anniversary',
+            occurredAt: iso(now),
+            payload: { contactId, automationId: goal.automationId, nodeId: goal.nodeId },
+          });
+          fired += result.matched.length;
+        }
+      });
+    });
     const next = Math.floor(now / 3_600_000) * 3_600_000 + 3_600_000;
     if (this.activeAutomations().length > 0) {
       scheduleNoLaterThan(this.db, this.ports.newId(), 'anniversary', '', next);
@@ -1815,7 +1833,7 @@ export class AutomationEngine implements StepHost {
     };
   }
 
-  private toVersionSummary(row: VersionRowLike): AutomationVersionSummary {
+  private toVersionSummary(row: VersionSummaryRow): AutomationVersionSummary {
     return {
       id: row.id,
       automation_id: row.automation_id,
@@ -1865,7 +1883,10 @@ export class AutomationEngine implements StepHost {
   }
 }
 
-type VersionRowLike = NonNullable<ReturnType<typeof getVersionRow>>;
+type VersionSummaryRow = Pick<
+  NonNullable<ReturnType<typeof getVersionRow>>,
+  'id' | 'automation_id' | 'number' | 'settings' | 'published_by' | 'published_at'
+>;
 
 interface LogRow {
   id: string;

@@ -9,6 +9,7 @@ export type { AppEnv, AuthContext, AuthUser, AuthSession, AuthApiKey, TenantCont
 export {
   requireAuth,
   requireTenant,
+  requireAnyPermission,
   requirePermission,
   requireStepUp,
   requireStepUpForSession,

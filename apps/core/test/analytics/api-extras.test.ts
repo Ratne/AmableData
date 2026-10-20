@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ev, FakeAnalyticsNamespace, T0 } from '../../../edge/test/helpers';
 import { signShareToken, verifyShareToken } from '../../src/analytics/share';
+import { mergedOpenApiDocument } from '../../src/developers/openapi';
 import type { Env } from '../../src/env';
 import { fakeTenantDbNamespace } from '../crm/helpers';
 import {
@@ -196,6 +197,16 @@ describe('saved views and configuration', () => {
     expect(((await viewer.get(`${BASE}/segments?site_id=${siteId}`)).body['data'] as unknown[]).length).toBe(1);
     expect((await analyst.post(`${BASE}/alerts?site_id=${siteId}`, { name: 'a', goal: 'signup' })).status).toBe(403);
     expect((await analyst.delete(`${BASE}/funnels/${id}?site_id=${siteId}`)).status).toBe(200);
+  });
+
+  it('documents the any-of writer permission of saved views', () => {
+    const doc = mergedOpenApiDocument() as { paths: Record<string, Record<string, Record<string, unknown>>> };
+    const path = Object.keys(doc.paths).find((p) => p.endsWith('/analytics/funnels'));
+    expect(path).toBeDefined();
+    const create = doc.paths[path!]!['post']!;
+    expect(create['x-amable-permission']).toBe('analytics:read');
+    expect(create['x-amable-permission-any']).toEqual(['analytics:configure', 'reports:create']);
+    expect(doc.paths[path!]!['get']!['x-amable-permission-any']).toBeUndefined();
   });
 
   it('creates alerts for members only and shows the webhook secret once', async () => {

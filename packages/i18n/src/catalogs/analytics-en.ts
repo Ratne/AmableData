@@ -630,7 +630,6 @@ export const analyticsEn = {
   'analytics.performance.total': 'Total',
   'analytics.performance.unattributed': '(unattributed)',
   'analytics.performance.none': '(none)',
-  'analytics.performance.drillAll': 'All',
   'analytics.performance.drillOpen': 'Open {name}',
   'analytics.performance.expand': 'Expand',
   'analytics.performance.collapse': 'Collapse',
@@ -646,7 +645,6 @@ export const analyticsEn = {
   'analytics.ltv.model.first_click': 'First click',
   'analytics.ltv.model.last_click': 'Last click',
   'analytics.ltv.days': '{days} d',
-  'analytics.ltv.name': 'Channel',
   'analytics.ltv.customers': 'Customers',
   'analytics.ltv.cost': 'Spend',
   'analytics.ltv.cac': 'CAC',
@@ -752,7 +750,6 @@ export const analyticsEn = {
   'analytics.domains.error.unavailable': 'Custom tracking domains are not configured on this installation.',
   'analytics.domains.error.provider': 'The certificate service did not answer. Try again in a moment.',
   'analytics.settings.tab.domains': 'Domains',
-  'analytics.stub.soon': 'This section is coming soon.',
 
   'analytics.funnelBuilder.title': 'Funnel builder',
   'analytics.funnelBuilder.back': 'Back to funnels',
@@ -763,9 +760,6 @@ export const analyticsEn = {
   'analytics.funnelBuilder.discarded': 'Changes discarded',
   'analytics.funnelBuilder.undo': 'Undo',
   'analytics.funnelBuilder.unsaved': 'Unsaved changes',
-  'analytics.funnelBuilder.upToDate': 'All changes saved',
-  'analytics.funnelBuilder.mockNotice':
-    'Preview with sample data: saving is not sent to the server yet.',
   'analytics.funnelBuilder.issues': '{count} issues',
   'analytics.funnelBuilder.noIssues': 'No issues',
   'analytics.funnelBuilder.deleted': 'Deleted ({count})',
@@ -773,7 +767,6 @@ export const analyticsEn = {
   'analytics.funnelBuilder.restore': 'Restore',
   'analytics.funnelBuilder.pathTrace': 'Path trace',
   'analytics.funnelBuilder.pathTraceHint': 'Select a node to highlight the paths through it.',
-  'analytics.funnelBuilder.fitView': 'Fit to screen',
   'analytics.funnelBuilder.heatmap.label': 'Heatmap',
   'analytics.funnelBuilder.heatmap.off': 'Off',
   'analytics.funnelBuilder.heatmap.visits': 'Visits',
@@ -814,8 +807,6 @@ export const analyticsEn = {
   'analytics.funnelBuilder.panel.id': 'Node ID',
   'analytics.funnelBuilder.panel.delete': 'Delete node',
   'analytics.funnelBuilder.panel.close': 'Close',
-  'analytics.funnelBuilder.panel.trafficInfo':
-    'Entry point of the funnel: split the traffic with weighted connections.',
   'analytics.funnelBuilder.panel.proxyInfo':
     'Passes the visitor to its single exit and keeps the action number, so a following page node with “Map incoming action to page number” opens page N.',
   'analytics.funnelBuilder.panel.stickiness': 'Stickiness',

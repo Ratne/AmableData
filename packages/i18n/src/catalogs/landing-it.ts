@@ -2,7 +2,6 @@ import type { LandingMessageKey } from './landing-en';
 
 /** Italian strings of landing pages, canvas editor and publishing — must cover every key of landing-en. */
 export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
-  'landing.title': 'Landing page',
   'landing.untitled': '(senza titolo)',
   'landing.tab.editor': 'Editor',
   'landing.tab.settings': 'Impostazioni',

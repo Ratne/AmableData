@@ -5,7 +5,7 @@ import type {
 } from '@amable/api-types';
 import { useQuery } from '@tanstack/react-query';
 import { useDefaultPhoneCountry } from '../../components/locale/phone-input';
-import { request } from '../crm/api/client';
+import { request } from '../../lib/tenant-api';
 import { useTenantSlug } from '../crm/api/hooks';
 
 const base = (slug: string) => `/api/v2/t/${encodeURIComponent(slug)}`;

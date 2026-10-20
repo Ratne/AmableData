@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { idParam, siteQuery } from './params';
 import {
   createTrackingDomainSchema,
   TRACKING_DOMAIN_CHECK_PATH,
@@ -35,8 +36,6 @@ import { siteIdParam, siteRecord } from './service';
 type Ctx = Context<AppEnv>;
 
 const tags = ['Analytics'];
-const siteQuery = z.object({ site_id: z.string().min(1).max(64) });
-const idParam = z.object({ id: z.string().min(1).max(64) });
 const nextId = monotonicFactory();
 
 /** Gateway op answered by the core worker for the edge (see `apps/edge/src/analytics/tracking-domains.ts`). */

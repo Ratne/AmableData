@@ -53,8 +53,9 @@ import type {
   UpdateTagInput,
   UpdateTaskInput,
 } from '@amable/api-types/crm';
-import type { Permission, Role } from '@amable/core';
-import { stepUpFetch } from '../../../lib/step-up';
+import { request, tenantRest } from '../../../lib/tenant-api';
+
+export { TenantApiError as CrmApiError } from '../../../lib/tenant-api';
 
 /**
  * Typed client of the CRM REST v2 surface (`/api/v2/t/{slug}`) and of the
@@ -62,118 +63,6 @@ import { stepUpFetch } from '../../../lib/step-up';
  * Request/response types come from the shared Zod schemas in
  * `@amable/api-types/crm`, so a server contract change breaks the build here.
  */
-
-const CSRF_HEADER = 'x-amable-csrf';
-
-export interface ApiErrorDetail {
-  readonly path: string;
-  readonly message: string;
-}
-
-export class CrmApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    readonly detail: string | null,
-    readonly details: readonly ApiErrorDetail[],
-  ) {
-    super(detail ?? `API ${String(status)} ${code}`);
-  }
-
-  get isForbidden(): boolean {
-    return this.status === 403;
-  }
-
-  get isNotFound(): boolean {
-    return this.status === 404;
-  }
-}
-
-let redirecting = false;
-
-/** Session gone (expired, revoked, signed out elsewhere): back to the sign-in page. */
-function onUnauthorized(): void {
-  if (redirecting || window.location.pathname === '/login') return;
-  redirecting = true;
-  window.location.assign('/login');
-}
-
-type QueryValue = string | number | boolean | null | undefined;
-
-/** Query string parameters: any object whose values are scalars (unset values are skipped). */
-export type QueryParams = object;
-
-export interface RequestOptions {
-  readonly method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  readonly query?: QueryParams;
-  /** JSON body. */
-  readonly json?: unknown;
-  /** Raw body (CSV upload). */
-  readonly raw?: BodyInit;
-  readonly contentType?: string;
-  readonly signal?: AbortSignal;
-}
-
-export function buildQuery(query: QueryParams | undefined): string {
-  if (query === undefined) return '';
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query) as Array<[string, QueryValue | object]>) {
-    if (value === undefined || value === null || value === '' || typeof value === 'object')
-      continue;
-    params.set(key, String(value));
-  }
-  const text = params.toString();
-  return text === '' ? '' : `?${text}`;
-}
-
-export async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
-  const method = options.method ?? 'GET';
-  const headers = new Headers();
-  let body: BodyInit | undefined;
-  if (options.json !== undefined) {
-    headers.set('content-type', 'application/json');
-    body = JSON.stringify(options.json);
-  } else if (options.raw !== undefined) {
-    headers.set('content-type', options.contentType ?? 'application/octet-stream');
-    body = options.raw;
-  }
-  if (method !== 'GET') headers.set(CSRF_HEADER, '1');
-  if (method === 'POST') headers.set('idempotency-key', crypto.randomUUID());
-
-  const response = await stepUpFetch(`${url}${buildQuery(options.query)}`, {
-    method,
-    headers,
-    body,
-    credentials: 'same-origin',
-    signal: options.signal,
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-      message?: string;
-      details?: ApiErrorDetail[];
-    } | null;
-    if (response.status === 401) onUnauthorized();
-    throw new CrmApiError(
-      response.status,
-      payload?.error ?? 'http_error',
-      payload?.message ?? null,
-      payload?.details ?? [],
-    );
-  }
-  return (await response.json()) as T;
-}
-
-export interface TenantMe {
-  readonly tenant: { readonly id: string; readonly slug: string; readonly name: string };
-  readonly role: Role;
-  readonly permissions: readonly Permission[];
-}
-
-export interface DirectoryMember {
-  readonly id: string;
-  readonly name: string;
-}
 
 export interface SearchFieldDescription {
   readonly field: string;
@@ -191,27 +80,17 @@ export interface ListParams {
   readonly cursor?: string;
 }
 
-type Deleted = { id: string; deleted: true };
-
 /** Saved search body as sent (the query keeps its optional defaults, e.g. sort direction). */
 export type SavedSearchWrite = Omit<CreateSavedSearchInput, 'query'> & { query: SearchQueryInput };
 
 /** Every endpoint the CRM pages use, bound to one tenant. */
 export function crmClient(slug: string) {
-  const base = `/api/v2/t/${encodeURIComponent(slug)}`;
-  const tenantBase = `/api/t/${encodeURIComponent(slug)}`;
-  const get = <T>(path: string, query?: RequestOptions['query']) =>
-    request<T>(`${base}${path}`, { query });
-  const post = <T>(path: string, json: unknown = {}) =>
-    request<T>(`${base}${path}`, { method: 'POST', json });
-  const patch = <T>(path: string, json: unknown) =>
-    request<T>(`${base}${path}`, { method: 'PATCH', json });
-  const del = <T = Deleted>(path: string) => request<T>(`${base}${path}`, { method: 'DELETE' });
+  const { base, get, post, patch, del, me, directory } = tenantRest(slug);
   const id = (value: string) => encodeURIComponent(value);
 
   return {
-    me: () => request<TenantMe>(`${tenantBase}/me`),
-    directory: () => request<{ members: DirectoryMember[] }>(`${tenantBase}/directory`),
+    me,
+    directory,
 
     contacts: {
       list: (params: ListParams & { q?: string; tag_id?: string; company_id?: string } = {}) =>
@@ -248,8 +127,7 @@ export function crmClient(slug: string) {
     tags: {
       list: (
         params: ListParams & { category_id?: string; name?: string; q?: string; ids?: string } = {},
-      ) =>
-        get<Page<Tag>>('/tags', { limit: 200, ...params }),
+      ) => get<Page<Tag>>('/tags', { limit: 200, ...params }),
       create: (input: CreateTagInput) => post<Tag>('/tags', input),
       update: (tagId: string, input: UpdateTagInput) => patch<Tag>(`/tags/${id(tagId)}`, input),
       remove: (tagId: string) => del(`/tags/${id(tagId)}`),
@@ -389,19 +267,3 @@ export function crmClient(slug: string) {
 }
 
 export type CrmClient = ReturnType<typeof crmClient>;
-
-/** Drains a cursor-paginated endpoint (bounded: small reference lists only). */
-export async function fetchAllPages<T>(
-  load: (cursor: string | undefined) => Promise<Page<T>>,
-  maxPages = 20,
-): Promise<T[]> {
-  const rows: T[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < maxPages; page += 1) {
-    const result = await load(cursor);
-    rows.push(...result.data);
-    if (result.next_cursor === null) break;
-    cursor = result.next_cursor;
-  }
-  return rows;
-}

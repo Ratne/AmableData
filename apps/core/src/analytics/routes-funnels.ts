@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { idParam, siteQuery } from './params';
 import {
   CONDITION_SUGGEST_ATTRS,
   conditionValuesSchema,
@@ -41,8 +42,6 @@ import { edgeOrigin, namespace, siteForQuery, siteRecord, snippetFor, unwrap } f
 type Ctx = Context<AppEnv>;
 
 const tags = ['Analytics'];
-const siteQuery = z.object({ site_id: z.string().min(1).max(64) });
-const idParam = z.object({ id: z.string().min(1).max(64) });
 
 const invalidGraphSchema = z.object({
   error: z.literal('invalid_graph'),

@@ -12,7 +12,6 @@
   "dependencies": {
     "@amable/api-types": "workspace:*",
     "@amable/app-bridge": "workspace:*",
-    "@amable/booking": "workspace:*",
     "@amable/builder": "workspace:*",
     "@amable/core": "workspace:*",
     "@amable/editor": "workspace:*",
@@ -21,8 +20,6 @@
     "@amable/i18n": "workspace:*",
     "@amable/ui": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-query": "^5.104.3",
     "@tanstack/react-router": "^1.170.44",
     "@xyflow/react": "^12.12.0",

@@ -1,7 +1,11 @@
 import {
   AD_PLATFORMS,
+  ADS_TOKEN_AUTH_EXPIRED,
+  ADS_TOKEN_GATEWAY_OP,
   EDGE_INSTALLATION_TENANT,
   type AdPlatform,
+  type AdsTokenOutput,
+  type AnalyticsGatewayOps,
   type FunnelTouch,
   type GatewayClientInfo,
   type OutboundConversionJob,
@@ -23,7 +27,13 @@ import {
 import { z } from 'zod';
 import type { Env } from '../env';
 import { callCore, GatewayCallError } from '../gateway';
-import type { AdConnectionRecord, AnalyticsStore, ConversionRecord, OutboundOutcome } from './store/index';
+import type {
+  AdConnectionRecord,
+  AnalyticsStore,
+  ConversionRecord,
+  OutboundEnqueueInput,
+  OutboundOutcome,
+} from './store/index';
 import {
   outboundGate,
   outboundKindOf,
@@ -198,15 +208,9 @@ export async function enqueueForConversion(
 
   const kind = outboundKindOf(conversion.event);
   const eventId = await outboundEventId(route.connection_id, conversion);
-  const existing = store.listOutbound({ event_id: eventId, limit: 1 })[0];
-  if (existing !== undefined) return { status: 'duplicate', job_id: existing.id, event_id: eventId };
-  const skip = outboundGate(source, {
-    revenue_minor: conversion.revenue_minor,
-    status: conversion.status,
-    consent: input.consent,
-    blacklisted: isBlacklisted(store, input.pii),
-    rng: input.rng,
-  });
+  const gate = gateConversion(store, input, source, eventId);
+  if ('done' in gate) return gate.done;
+  const { skip } = gate;
 
   const tx = conversion.tx ?? '';
   const hasValue = conversion.revenue_minor > 0 || kind === 'purchase';
@@ -222,16 +226,51 @@ export async function enqueueForConversion(
     ...(skip === null ? piiFields(input.pii) : {}),
   };
   const delay = PLATFORM_SEND_DELAY_MS[route.platform];
-  const enqueued = store.enqueueOutbound({
-    platform: route.platform,
-    connection_id: route.connection_id,
-    kind,
-    payload,
-    event_id: eventId,
-    ...(delay > 0 ? { next_attempt_at: conversion.ts + delay } : {}),
-  });
+  return enqueueGated(
+    store,
+    {
+      platform: route.platform,
+      connection_id: route.connection_id,
+      kind,
+      payload,
+      event_id: eventId,
+      ...(delay > 0 ? { next_attempt_at: conversion.ts + delay } : {}),
+    },
+    skip,
+  );
+}
+
+/** An existing job for `eventId` (duplicate), else the gate verdict (`null` = send). */
+function gateConversion(
+  store: AnalyticsStore,
+  input: EnqueueForConversionInput,
+  source: TrafficSource,
+  eventId: string,
+): { done: EnqueueForConversionResult } | { skip: OutboundSkipReason | null } {
+  const existing = store.listOutbound({ event_id: eventId, limit: 1 })[0];
+  if (existing !== undefined) return { done: { status: 'duplicate', job_id: existing.id, event_id: eventId } };
+  const { conversion } = input;
+  return {
+    skip: outboundGate(source, {
+      revenue_minor: conversion.revenue_minor,
+      status: conversion.status,
+      consent: input.consent,
+      blacklisted: isBlacklisted(store, input.pii),
+      rng: input.rng,
+    }),
+  };
+}
+
+/** Enqueues the job; a gated one is recorded at once as `skipped`. */
+function enqueueGated(
+  store: AnalyticsStore,
+  job: OutboundEnqueueInput & { event_id: string },
+  skip: OutboundSkipReason | null,
+): EnqueueForConversionResult {
+  const enqueued = store.enqueueOutbound(job);
   if (!enqueued.ok) throw new Error(`outbound enqueue: ${enqueued.error.message}`);
   const { id, created } = enqueued.value;
+  const eventId = job.event_id;
   if (!created) return { status: 'duplicate', job_id: id, event_id: eventId };
   if (skip !== null) {
     store.finishOutbound(id, { status: 'skipped', error: skip });
@@ -304,42 +343,32 @@ async function enqueuePostback(
 ): Promise<EnqueueForConversionResult> {
   const { conversion } = input;
   const eventId = await outboundEventId(`postback:${source.id}`, conversion);
-  const existing = store.listOutbound({ event_id: eventId, limit: 1 })[0];
-  if (existing !== undefined) return { status: 'duplicate', job_id: existing.id, event_id: eventId };
-  const skip = outboundGate(source, {
-    revenue_minor: conversion.revenue_minor,
-    status: conversion.status,
-    consent: input.consent,
-    blacklisted: isBlacklisted(store, input.pii),
-    rng: input.rng,
-  });
+  const gate = gateConversion(store, input, source, eventId);
+  if ('done' in gate) return gate.done;
+  const { skip } = gate;
   const currency = conversion.currency ?? store.getSite()?.site.currency ?? null;
   const touch = conversionTouch(store, conversion, source.id);
   const tx = conversion.tx ?? '';
-  const enqueued = store.enqueueOutbound({
-    platform: 'postback',
-    connection_id: source.id,
-    kind: outboundKindOf(conversion.event),
-    payload: {
-      event_name: conversion.event,
-      event_time: conversion.ts,
-      value_minor: outboundValueMinor(source, conversion.revenue_minor),
-      currency,
-      order_id: tx === '' ? conversion.id : tx,
-      click_ids: {},
-      external_id: conversion.visitor_id,
-      url: postbackUrl(template, source, conversion, touch, currency).slice(0, 4096),
+  return enqueueGated(
+    store,
+    {
+      platform: 'postback',
+      connection_id: source.id,
+      kind: outboundKindOf(conversion.event),
+      payload: {
+        event_name: conversion.event,
+        event_time: conversion.ts,
+        value_minor: outboundValueMinor(source, conversion.revenue_minor),
+        currency,
+        order_id: tx === '' ? conversion.id : tx,
+        click_ids: {},
+        external_id: conversion.visitor_id,
+        url: postbackUrl(template, source, conversion, touch, currency).slice(0, 4096),
+      },
+      event_id: eventId,
     },
-    event_id: eventId,
-  });
-  if (!enqueued.ok) throw new Error(`outbound enqueue: ${enqueued.error.message}`);
-  const { id, created } = enqueued.value;
-  if (!created) return { status: 'duplicate', job_id: id, event_id: eventId };
-  if (skip !== null) {
-    store.finishOutbound(id, { status: 'skipped', error: skip });
-    return { status: 'skipped', job_id: id, event_id: eventId, reason: skip };
-  }
-  return { status: 'enqueued', job_id: id, event_id: eventId };
+    skip,
+  );
 }
 
 const optionalText = (max: number) => z.string().max(max).nullable().optional();
@@ -575,32 +604,6 @@ export async function processOutboundBatch(
 
 // ----------------------------------------------------- credentials from core
 
-/** Gateway op answered by the core: decrypted (refreshed if needed) access token of a connection. */
-export const ADS_TOKEN_GATEWAY_OP = 'analytics.adsToken';
-
-export interface AdsTokenGatewayInput {
-  tenant_id: string;
-  site_id: string;
-  connection_id: string;
-}
-
-/** Null when the connection is unknown to the core or disconnected. */
-export type AdsTokenGatewayOutput = {
-  platform: AdPlatform;
-  access_token: string;
-  /** Google Ads only. */
-  developer_token?: string | null;
-  login_customer_id?: string | null;
-  api_version?: string | null;
-} | null;
-
-export type AnalyticsGatewayOps = {
-  [ADS_TOKEN_GATEWAY_OP]: { input: AdsTokenGatewayInput; output: AdsTokenGatewayOutput };
-};
-
-/** Error code the core answers when the connection's refresh token is revoked. */
-export const ADS_TOKEN_AUTH_EXPIRED = 'auth_expired';
-
 const NO_CLIENT: GatewayClientInfo = {
   ip: null,
   userAgent: null,
@@ -621,7 +624,7 @@ export function coreProviderResolver(
   deps: { fetch?: typeof fetch; now?: () => number } = {},
 ): ProviderResolver {
   return async (connectionId) => {
-    let value: AdsTokenGatewayOutput;
+    let value: AdsTokenOutput;
     try {
       value = (
         await callCore<AnalyticsGatewayOps, typeof ADS_TOKEN_GATEWAY_OP>(

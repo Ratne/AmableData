@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
-/**
- * Zod schemas shared between the SPA and the API.
- * Foundations phase ships only a minimal set (health, me, tenant); the REST v2
- * surface is generated OpenAPI-first from schemas like these in later phases.
- */
+/** Zod schemas shared between the SPA, the core worker and the edge worker. */
 
 export const healthResponseSchema = z.object({
   ok: z.literal(true),
@@ -12,28 +8,6 @@ export const healthResponseSchema = z.object({
   schemaVersion: z.number().int().nonnegative(),
 });
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
-
-export const localeSchema = z.enum(['en', 'it']);
-export type Locale = z.infer<typeof localeSchema>;
-
-export const themeSchema = z.enum(['light', 'dark', 'system']);
-export type Theme = z.infer<typeof themeSchema>;
-
-export const meResponseSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  name: z.string().nullable(),
-  locale: localeSchema,
-  theme: themeSchema,
-});
-export type MeResponse = z.infer<typeof meResponseSchema>;
-
-export const tenantSchema = z.object({
-  id: z.string(),
-  slug: z.string(),
-  name: z.string(),
-});
-export type Tenant = z.infer<typeof tenantSchema>;
 
 /** CRM REST v2 schemas (contacts, companies, tags, custom fields, search, …). */
 export * from './crm/index';

@@ -12,9 +12,6 @@
  *   TenantDb outbox.
  */
 
-/** Queue name (wrangler `queues.producers[].queue`) carrying `EmailSendRequest`. */
-export const EMAIL_SEND_QUEUE = 'email-send';
-
 /** Where an email send originates; echoed back by tracking events (opens, clicks). */
 export type EmailSendSource =
   | {

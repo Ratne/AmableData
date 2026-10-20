@@ -179,7 +179,6 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.contacts.created': 'Contatto creato',
 
   'crm.contact.details': 'Dettagli',
-  'crm.contact.marketing': 'Responsabile e marketing',
   'crm.contact.primary': 'principale',
   'crm.contact.label': 'Etichetta',
   'crm.contact.phones': 'Telefoni',

@@ -17,7 +17,6 @@ export const automationsIt: Readonly<Record<AutomationsMessageKey, string>> = {
   'auto.open': 'Apri',
   'auto.copy': 'Copia',
   'auto.copied': 'Copiato',
-  'auto.none': 'Nessuno',
   'auto.loading': 'Caricamento…',
 
   'auto.status.draft': 'Bozza',
@@ -37,7 +36,6 @@ export const automationsIt: Readonly<Record<AutomationsMessageKey, string>> = {
   'auto.list.emptyHint':
     "Un goal avvia l'automazione, le sequenze eseguono i passi, le decisioni dividono il flusso.",
   'auto.list.created': 'Automazione creata',
-  'auto.list.deleted': 'Automazione eliminata',
 
   'auto.editor.publish': 'Pubblica',
   'auto.editor.unpublish': 'Sospendi',
@@ -339,8 +337,6 @@ export const automationsIt: Readonly<Record<AutomationsMessageKey, string>> = {
 
   'auto.note.color': 'Colore',
 
-  'auto.issues.title': 'Problemi',
-  'auto.issues.none': 'Nessun problema',
   'auto.issues.count': '{errors} errori, {warnings} avvisi',
 
   'auto.settings.title': "Impostazioni dell'automazione",
@@ -391,7 +387,6 @@ export const automationsIt: Readonly<Record<AutomationsMessageKey, string>> = {
   'auto.enroll.node': 'Parti da',
   'auto.enroll.firstGoal': 'Primo goal di ingresso',
   'auto.enroll.done': 'Contatto aggiunto',
-  'auto.enroll.needsPublish': "Prima pubblica l'automazione.",
 
   'auto.keys.title': 'Scorciatoie da tastiera',
   'auto.keys.save': 'Salva subito',

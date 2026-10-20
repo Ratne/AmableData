@@ -5,6 +5,7 @@ import {
   verifyPlatformRequest,
 } from '@amable/core/platform';
 import type { Context } from 'hono';
+import type { z } from 'zod';
 import type { Env } from '../env';
 import type { AppEnv } from '../middleware';
 
@@ -42,4 +43,25 @@ export async function verifiedControlPlaneBody(c: Context<AppEnv>): Promise<stri
     nowMs: c.get('services').now(),
   });
   return check.ok ? body : null;
+}
+
+/**
+ * Signed control plane JSON body validated against `schema`: the parsed data,
+ * or the error response to return as is (401 signature, 400 JSON, 422 schema).
+ */
+export async function verifiedControlPlaneJson<S extends z.ZodType>(
+  c: Context<AppEnv>,
+  schema: S,
+): Promise<{ ok: true; data: z.infer<S> } | { ok: false; response: Response }> {
+  const body = await verifiedControlPlaneBody(c);
+  if (body === null) return { ok: false, response: c.json({ error: 'invalid_signature' }, 401) };
+  let json: unknown;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    return { ok: false, response: c.json({ error: 'invalid_json' }, 400) };
+  }
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) return { ok: false, response: c.json({ error: 'validation_failed' }, 422) };
+  return { ok: true, data: parsed.data };
 }

@@ -12,7 +12,7 @@ import type {
   UpdateCustomReportInput,
   UpdateDashboardInput,
 } from '@amable/api-types/reports';
-import { request } from '../../crm/api/client';
+import { request } from '../../../lib/tenant-api';
 
 /**
  * Typed client of the report REST v2 surface (`/api/v2/t/{slug}/reports…`,

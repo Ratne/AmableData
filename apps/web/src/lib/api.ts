@@ -1,3 +1,4 @@
+import type { Page } from '@amable/api-types';
 import type { Permission, Role } from '@amable/core';
 import { useQuery } from '@tanstack/react-query';
 import { stepUpFetch } from './step-up';
@@ -25,6 +26,22 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     throw new ApiError(response.status, body?.error ?? null);
   }
   return (await response.json()) as T;
+}
+
+/** Drains a cursor-paginated endpoint (bounded: small reference lists only). */
+export async function fetchAllPages<T>(
+  load: (cursor: string | undefined) => Promise<Page<T>>,
+  maxPages = 20,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < maxPages; page += 1) {
+    const result = await load(cursor);
+    rows.push(...result.data);
+    if (result.next_cursor === null) break;
+    cursor = result.next_cursor;
+  }
+  return rows;
 }
 
 export interface MeMembership {

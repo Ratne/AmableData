@@ -32,7 +32,8 @@ import { CountrySelect } from '../../../components/locale/country-select';
 import { TimeZoneSelect } from '../../../components/locale/timezone-select';
 import { useI18n } from '../../../i18n';
 import { CurrencySelect } from '../../commerce/components/currency-select';
-import { FormField, PageState, SectionCard } from '../../commerce/components/common';
+import { FormField, SectionCard } from '../../../components/feature-kit';
+import { PageState } from '../../commerce/components/common';
 import { errorMessage, usePermissions, useTenantSlug } from '../../crm/api/hooks';
 import { workspaceApi, workspaceKeys } from '../api';
 

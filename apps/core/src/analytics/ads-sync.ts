@@ -1,13 +1,17 @@
 import { isProviderError, ProviderError, type AdsProvider as AdPlatformClient } from '@amable/ads-providers';
-import type {
-  AdConnection,
-  AdConnectionSettings,
-  AdEntity,
-  AdEntityLevel,
-  AdPlatform,
-  AdSpendDay,
-  GatewayResponse,
-  GatewayTenantInfo,
+import {
+  ADS_TOKEN_AUTH_EXPIRED,
+  adsTokenInputSchema,
+  type AdConnection,
+  type AdConnectionSettings,
+  type AdEntity,
+  type AdEntityLevel,
+  type AdPlatform,
+  type AdsTokenInput,
+  type AdsTokenOutput,
+  type AdSpendDay,
+  type GatewayResponse,
+  type GatewayTenantInfo,
 } from '@amable/api-types';
 import {
   siteStub,
@@ -22,7 +26,6 @@ import {
 } from '@amable/app-edge/analytics';
 import type { OAuthKeyValueStore, OAuthSealer, SystemEmail } from '@amable/core';
 import { renderEmailLayout } from '@amable/i18n';
-import { z } from 'zod';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
 import { authSealer, d1OAuthStore } from '../providers/select';
@@ -745,24 +748,6 @@ export async function disconnectAdConnection(
 
 // ------------------------------------------------- tokens for the edge worker
 
-/** Gateway op of the edge outbound queue (same name and shapes as the edge's `AnalyticsGatewayOps`). */
-export const ADS_TOKEN_GATEWAY_OP = 'analytics.adsToken';
-
-export const adsTokenInputSchema = z.strictObject({
-  tenant_id: z.string().min(1).max(64),
-  site_id: z.string().min(1).max(64),
-  connection_id: z.string().min(1).max(64),
-});
-export type AdsTokenInput = z.infer<typeof adsTokenInputSchema>;
-
-export type AdsTokenOutput = {
-  platform: AdPlatform;
-  access_token: string;
-  developer_token?: string | null;
-  login_customer_id?: string | null;
-  api_version?: string | null;
-} | null;
-
 /**
  * Access token of a connection (refreshed and saved first when close to its
  * expiry). Null for an unknown site / connection, another tenant's site or a
@@ -879,7 +864,7 @@ export async function handleAdsTokenOp(
     });
     return { status: 200, body: { ok: true, tenant, value } };
   } catch (error) {
-    if (isProviderError(error) && error.kind === 'auth_expired') return fail(409, 'auth_expired', errorText(error));
+    if (isProviderError(error) && error.kind === 'auth_expired') return fail(409, ADS_TOKEN_AUTH_EXPIRED, errorText(error));
     if (isProviderError(error)) return fail(503, 'provider_unavailable', errorText(error));
     console.error(`[analytics] ads token of ${parsed.data.connection_id} failed: ${errorText(error)}`);
     return fail(500, 'internal_error', 'internal error');

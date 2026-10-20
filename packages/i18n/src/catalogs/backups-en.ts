@@ -18,7 +18,6 @@ export const backupsEn = {
   'backups.kind.manual': 'Manual',
   'backups.retention': 'The last {scheduled} daily and {manual} manual backups are kept.',
   'backups.ownerOnly': 'Only the workspace owner can manage backups.',
-  'backups.stepUp': 'Confirm it is you to continue',
   'backups.restore.title': 'Restore this backup?',
   'backups.restore.body':
     'Every contact, deal, order, email and automation of the workspace is replaced with the content of the backup taken on {date}. A safety backup of the current data is created first. Members, API keys and the audit log are not changed.',

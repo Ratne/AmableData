@@ -33,7 +33,8 @@ import { LogOut, Trash2, UserPlus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { useMe } from '../../../lib/api';
-import { FormField, PageState, SectionCard } from '../../commerce/components/common';
+import { FormField, SectionCard } from '../../../components/feature-kit';
+import { PageState } from '../../commerce/components/common';
 import {
   memberErrorCode,
   memberKeys,

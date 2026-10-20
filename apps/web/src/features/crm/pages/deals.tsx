@@ -28,7 +28,7 @@ import { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 're
 import { useI18n } from '../../../i18n';
 import { CurrencySelect } from '../../commerce/components/currency-select';
 import { listTableLabels } from '../../../lib/labels';
-import { fetchAllPages } from '../api/client';
+import { fetchAllPages } from '../../../lib/api';
 import {
   crmKeys,
   errorMessage,
@@ -531,7 +531,8 @@ export function DealsPage() {
                         restore.mutateAsync(rows).then((restored) => {
                           const moved = restored.find((d) => d.pipeline_id !== pipelineId);
                           if (moved === undefined) return;
-                          const name = pipelines.data?.find((p) => p.id === moved.pipeline_id)?.name ?? '';
+                          const name =
+                            pipelines.data?.find((p) => p.id === moved.pipeline_id)?.name ?? '';
                           toast.info(t('crm.deals.restoredElsewhere', { pipeline: name }), {
                             action: {
                               label: t('crm.deals.showPipeline'),

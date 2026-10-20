@@ -37,7 +37,6 @@ export type {
 } from './publishing-events';
 
 export {
-  EMAIL_SEND_QUEUE,
   allowAllQuotaGuard,
   AUTOMATION_EVENT_TYPES,
   TRANSACTIONAL_EMAIL_PURPOSES,
@@ -82,15 +81,11 @@ export {
   ensurePostShibaWebhook,
   findPostShibaDomain,
   postshibaDnsRecords,
-  postshibaInject,
   postshibaInjectUrl,
   postshibaVerification,
   PostShibaAccount,
-  POSTSHIBA_DEFAULT_BASE_URL,
   POSTSHIBA_DEFAULT_INJECT_URL,
-  POSTSHIBA_WEBHOOK_EVENTS,
 } from './providers/postshiba-api';
-export { FakePostShibaAccount } from './providers/postshiba-fake';
 export type {
   PostShibaAccountApi,
   PostShibaAccountConfig,
@@ -110,7 +105,6 @@ export { FakeEmailMarketingProvider } from './providers/fake';
 export { CloudflareSystemEmailProvider, UnconfiguredSystemEmailProvider } from './providers/cloudflare-email';
 export type { CloudflareSystemEmailConfig, SendEmailBindingLike } from './providers/cloudflare-email';
 export {
-  GOOGLE_AUTHORIZE_URL,
   GOOGLE_REVOKE_URL,
   GOOGLE_TOKEN_URL,
   GoogleOAuthError,
@@ -136,7 +130,7 @@ export type {
 export { EMAIL_EVENT_TYPES } from './email/events';
 export type { EmailEventPayloads, EmailEventType, EmailOutboxEvent } from './email/events';
 
-export { ANALYTICS_AUTOMATION_EVENTS, RESERVED_ANALYTICS_GOALS } from './analytics';
+export { ANALYTICS_AUTOMATION_EVENTS } from './analytics';
 export type {
   AnalyticsAutomationEventPayloads,
   AnalyticsAutomationEventType,

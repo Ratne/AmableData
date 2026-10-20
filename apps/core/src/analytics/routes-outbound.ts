@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { siteQuery } from './params';
 import {
   OUTBOUND_STATUSES,
   OUTBOUND_TARGETS,
@@ -14,7 +15,6 @@ import { epochBound, rangeBound } from './routes-funnels';
 import { namespace, siteForQuery, siteRecord, unwrap } from './service';
 
 const tags = ['Analytics'];
-const siteQuery = z.object({ site_id: z.string().min(1).max(64) });
 const idParam = z.object({ id: z.string().min(1).max(128) });
 
 const filterShape = {

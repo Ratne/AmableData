@@ -1,12 +1,19 @@
 import type { Permission } from '@amable/core';
-import { toast } from '@amable/ui';
-import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 import { useI18n } from '../../../i18n';
+import {
+  apiErrorMessage,
+  type ApiMutationOptions,
+  REFERENCE_STALE_MS,
+  useApiMutation,
+  useGrantedPermissions,
+} from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { formatMoney } from '../lib/money';
-import { CommerceApiError, commerceClient, fetchAllPages, type CommerceClient } from './client';
+import { fetchAllPages } from '../../../lib/api';
+import { commerceClient, type CommerceClient } from './client';
 
 /** Every commerce query of a tenant lives under ['commerce', slug, …]. */
 export const commerceKeys = {
@@ -38,8 +45,6 @@ export function useCommerce(): { slug: string; api: CommerceClient } {
   return { slug, api };
 }
 
-const REFERENCE_STALE_MS = 60_000;
-
 /** Active membership: tenant, role and permissions (`GET /api/t/:slug/me`). */
 export function useTenantMe() {
   const { slug, api } = useCommerce();
@@ -57,9 +62,7 @@ export function useTenantMe() {
  */
 export function usePermissions(): { can: (permission: Permission) => boolean; ready: boolean } {
   const me = useTenantMe();
-  const granted = useMemo(() => new Set(me.data?.permissions ?? []), [me.data]);
-  const can = useCallback((permission: Permission) => granted.has(permission), [granted]);
-  return { can, ready: me.data !== undefined };
+  return useGrantedPermissions(me.data);
 }
 
 /** `formatMoney` bound to the UI locale. */
@@ -180,52 +183,20 @@ type Translate = ReturnType<typeof useI18n>['t'];
 
 /** User-facing text for an API failure. */
 export function errorMessage(t: Translate, error: unknown): string {
-  if (error instanceof CommerceApiError) {
-    if (error.status === 403) return t('commerce.error.forbidden');
-    if (error.status === 404) return t('commerce.error.notFound');
-    if (error.status === 409) return error.detail ?? t('commerce.error.conflict');
-    if (error.status === 422 || error.status === 400) {
-      const first = error.details[0];
-      if (first !== undefined)
-        return first.path ? `${first.path}: ${first.message}` : first.message;
-      return error.detail ?? t('commerce.error.validation');
-    }
-  }
-  return t('common.error');
+  return apiErrorMessage(t, error, {
+    forbidden: 'commerce.error.forbidden',
+    notFound: 'commerce.error.notFound',
+    conflict: 'commerce.error.conflict',
+    validation: 'commerce.error.validation',
+  });
 }
 
-export interface CommerceMutationOptions<TInput, TResult> {
-  readonly mutationFn: (input: TInput) => Promise<TResult>;
-  /** Query keys refreshed after success. Default: the whole tenant commerce cache. */
-  readonly invalidate?: readonly QueryKey[];
-  readonly success?: string | ((result: TResult) => string);
-  readonly onSuccess?: (result: TResult, input: TInput) => void;
-  /** Return true to skip the default error toast (the caller shows the error inline). */
-  readonly onError?: (error: unknown) => boolean | void;
-}
+export type CommerceMutationOptions<TInput, TResult> = ApiMutationOptions<TInput, TResult>;
 
 /** `useMutation` with tenant cache invalidation and toasts. */
 export function useCommerceMutation<TInput, TResult>(
   options: CommerceMutationOptions<TInput, TResult>,
 ) {
   const { slug } = useCommerce();
-  const { t } = useI18n();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: options.mutationFn,
-    onSuccess: async (result, input) => {
-      const keys = options.invalidate ?? [commerceKeys.root(slug)];
-      await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
-      if (options.success !== undefined) {
-        toast.success(
-          typeof options.success === 'function' ? options.success(result) : options.success,
-        );
-      }
-      options.onSuccess?.(result, input);
-    },
-    onError: (error) => {
-      if (options.onError?.(error) === true) return;
-      toast.error(errorMessage(t, error));
-    },
-  });
+  return useApiMutation(options, commerceKeys.root(slug), errorMessage);
 }

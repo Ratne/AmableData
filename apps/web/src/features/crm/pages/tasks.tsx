@@ -34,7 +34,7 @@ import {
 import { useMemo, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
-import { fetchAllPages } from '../api/client';
+import { fetchAllPages } from '../../../lib/api';
 import { crmKeys, useCrm, useCrmMutation, useDirectory, usePermissions } from '../api/hooks';
 import {
   bucketByDay,

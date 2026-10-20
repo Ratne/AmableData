@@ -15,7 +15,6 @@ export const automationsEn = {
   'auto.open': 'Open',
   'auto.copy': 'Copy',
   'auto.copied': 'Copied',
-  'auto.none': 'None',
   'auto.loading': 'Loading…',
 
   'auto.status.draft': 'Draft',
@@ -35,7 +34,6 @@ export const automationsEn = {
   'auto.list.emptyHint':
     'A goal starts the automation, sequences run the steps, decisions split the flow.',
   'auto.list.created': 'Automation created',
-  'auto.list.deleted': 'Automation deleted',
 
   'auto.editor.publish': 'Publish',
   'auto.editor.unpublish': 'Unpublish',
@@ -336,8 +334,6 @@ export const automationsEn = {
 
   'auto.note.color': 'Color',
 
-  'auto.issues.title': 'Problems',
-  'auto.issues.none': 'No problems',
   'auto.issues.count': '{errors} error(s), {warnings} warning(s)',
 
   'auto.settings.title': 'Automation settings',
@@ -388,7 +384,6 @@ export const automationsEn = {
   'auto.enroll.node': 'Start at',
   'auto.enroll.firstGoal': 'First entry goal',
   'auto.enroll.done': 'Contact added',
-  'auto.enroll.needsPublish': 'Publish the automation first.',
 
   'auto.keys.title': 'Keyboard shortcuts',
   'auto.keys.save': 'Save now',

@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { idParam, siteQuery } from './params';
 import { trafficSourceInputSchema, trafficSourceSchema, trafficSourceTemplateSchema } from '@amable/api-types';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { crmRoute, json, jsonBody } from '../crm/api/core';
@@ -8,8 +9,6 @@ import { siteForQuery, unwrap } from './service';
 import { TRAFFIC_SOURCE_TEMPLATE_DEFS } from './traffic-source-templates';
 
 const tags = ['Analytics'];
-const siteQuery = z.object({ site_id: z.string().min(1).max(64) });
-const idParam = z.object({ id: z.string().min(1).max(64) });
 
 /** Traffic sources (tracking fields, conversion config) and their static templates. */
 export function registerSourceRoutes(api: OpenAPIHono<AppEnv>): void {

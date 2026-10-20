@@ -10,13 +10,9 @@ import type { JSONContent } from '@tiptap/core';
 
 export type { JSONContent };
 
-/** Tiptap JSON document, stored as-is and re-editable. */
-export type EditorDocument = JSONContent & { readonly type: 'doc' };
-
 export { AmableEditor, type AmableEditorProps } from './amable/amable-editor';
 export { EmailPreview, type EmailPreviewProps } from './amable/email-preview';
-export { createExtensions, type EditorFeatures, type UploadImage } from './amable/extensions';
-export { cleanPastedHtml } from './amable/extensions/document';
+export type { EditorFeatures, UploadImage } from './amable/extensions';
 export {
   defaultLiquidFields,
   searchFields,
@@ -25,11 +21,9 @@ export {
   type LiquidFieldGroup,
   type LiquidFieldGroupId,
 } from './amable/fields';
-export { DEFAULT_EDITOR_LABELS, type EditorLabels } from './amable/labels';
+export type { EditorLabels } from './amable/labels';
 export {
   LiquidHelperProvider,
-  insertLiquid,
-  documentLiquidSource,
   type LiquidHelperHost,
   type LiquidHelperRenderProps,
   type LiquidHelperSlot,

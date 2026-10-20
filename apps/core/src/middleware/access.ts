@@ -298,6 +298,16 @@ export function requirePermission(...required: Permission[]): MiddlewareHandler<
   };
 }
 
+/** At least one of `anyOf` (on top of the route's own permission). */
+export function requireAnyPermission(anyOf: readonly Permission[]): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const tenant = c.get('tenant');
+    if (tenant === undefined) throw new Error('requireAnyPermission() used without requireTenant()');
+    if (!anyOf.some((p) => tenant.permissions.has(p))) return jsonError(c, 403, 'forbidden', { missing: [...anyOf] });
+    return next();
+  };
+}
+
 /**
  * Sensitive actions require a recently re-entered second factor
  * (POST /api/auth/step-up/*). API keys can never satisfy a step-up.

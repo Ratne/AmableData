@@ -83,7 +83,8 @@
   ],
 
   // Local default. The installer / fleet manager sets ENVIRONMENT=production on
-  // deploy, which removes every /api/dev/* route.
+  // deploy: every /api/dev/* route and dev seed then refuses at runtime (404 / throw).
+  // The dev and seed code is still part of the deployed bundle.
   // EDGE_ORIGIN: public origin of the edge worker, used in tracking snippets.
   // EMAIL_ALLOW_UNVERIFIED_DOMAIN: local sends without a verified domain (ignored outside dev).
   // Custom tracking domains. Domains added as zones of the same Cloudflare account

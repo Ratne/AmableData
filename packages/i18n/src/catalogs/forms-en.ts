@@ -1,6 +1,5 @@
 /** English strings of hosted forms, form builder, submissions and connections (spread into the main catalog). */
 export const formsEn = {
-  'forms.title': 'Forms',
   'forms.tab.builder': 'Builder',
   'forms.tab.submissions': 'Submissions',
   'forms.tab.connections': 'Connections',
@@ -143,7 +142,6 @@ export const formsEn = {
   'forms.crm.none': 'None',
   'forms.crm.tags': 'Tags to apply',
   'forms.crm.tagsHint': 'Applied to the contact on every submission.',
-  'forms.crm.noTags': 'No tags yet.',
   'forms.crm.attribution':
     'UTM parameters, referrer, page and the analytics visitor are captured automatically and saved on new contacts.',
 

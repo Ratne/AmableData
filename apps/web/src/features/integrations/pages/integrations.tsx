@@ -7,8 +7,9 @@ import { Link } from '@tanstack/react-router';
 import { MapPin, Store } from 'lucide-react';
 import { useI18n } from '../../../i18n';
 import { AppIcon } from '../../apps/components';
-import { PageState, SectionCard } from '../../commerce/components/common';
-import { request } from '../../crm/api/client';
+import { SectionCard } from '../../../components/feature-kit';
+import { PageState } from '../../commerce/components/common';
+import { request } from '../../../lib/tenant-api';
 import { useTenantSlug } from '../../crm/api/hooks';
 
 export function IntegrationsPage() {
@@ -18,7 +19,9 @@ export function IntegrationsPage() {
   const settings = useQuery({
     queryKey: ['tenant', slug, 'addressLookupSettings'] as const,
     queryFn: () =>
-      request<AddressLookupSettings>(`/api/v2/t/${encodeURIComponent(slug)}/settings/addressLookup`),
+      request<AddressLookupSettings>(
+        `/api/v2/t/${encodeURIComponent(slug)}/settings/addressLookup`,
+      ),
   });
   return (
     <PageState isPending={settings.isPending} error={settings.error}>

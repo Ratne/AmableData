@@ -20,7 +20,6 @@ export const backupsIt: Readonly<Record<BackupsMessageKey, string>> = {
   'backups.kind.manual': 'Manuale',
   'backups.retention': 'Vengono conservati gli ultimi {scheduled} backup giornalieri e {manual} manuali.',
   'backups.ownerOnly': 'Solo il proprietario dello spazio di lavoro può gestire i backup.',
-  'backups.stepUp': 'Conferma la tua identità per continuare',
   'backups.restore.title': 'Ripristinare questo backup?',
   'backups.restore.body':
     "Contatti, opportunità, ordini, email e automazioni dello spazio di lavoro vengono sostituiti con il contenuto del backup del {date}. Prima viene creato un backup di sicurezza dei dati attuali. Membri, chiavi API e registro attività non cambiano.",

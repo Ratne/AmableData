@@ -12,6 +12,16 @@ import { BOOKING_WIDGET_BUNDLE, BOOKING_WIDGET_BUNDLE_HASH } from '@amable/booki
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env';
 import { callCore, callCoreRaw, clientInfo, GatewayCallError, tenantRef } from '../gateway';
+import {
+  CROSS_ORIGIN_BUNDLE,
+  escapeHtml,
+  HOSTED_WIDGET_CSP,
+  inlineJson,
+  jsonResponders,
+  OPEN_CORS,
+  readBoundedText,
+  serveBundle,
+} from '../public/http';
 
 /**
  * Booking pages on the edge (customer zone or the edge origin):
@@ -33,54 +43,7 @@ const EVENT_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-const CORS: Record<string, string> = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, POST, OPTIONS',
-  'access-control-allow-headers': 'content-type, accept',
-  'access-control-max-age': '86400',
-};
-
-const HOSTED_CSP = [
-  "default-src 'none'",
-  "script-src 'self' https://challenges.cloudflare.com",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https:",
-  "connect-src 'self'",
-  'frame-src https://challenges.cloudflare.com',
-  "form-action 'self'",
-  "base-uri 'none'",
-].join('; ');
-
-function errorJson(status: number, error: string, message: string, details?: unknown): Response {
-  return new Response(JSON.stringify({ error, message, ...(details === undefined ? {} : { details }) }), {
-    status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS },
-  });
-}
-
-function okJson(value: unknown, cache = 'no-store'): Response {
-  return new Response(JSON.stringify(value), {
-    status: 200,
-    headers: { 'content-type': 'application/json', 'cache-control': cache, ...CORS },
-  });
-}
-
-function fromGatewayError(error: unknown): Response {
-  if (error instanceof GatewayCallError) {
-    return errorJson(error.body.status, error.body.code, error.body.message, error.body.details);
-  }
-  console.error('[booking] gateway call failed', error);
-  return errorJson(502, 'gateway_error', 'booking service unavailable');
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-/** JSON inside `<script type="application/json">`: no way to close the tag. */
-function inlineJson(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-}
+const { errorJson, okJson, fromGatewayError } = jsonResponders('booking', 'booking service unavailable', OPEN_CORS);
 
 function page(locale: string, title: string, body: string): string {
   return `<!doctype html>
@@ -110,7 +73,7 @@ function htmlHeaders(cache: string): Record<string, string> {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': cache,
     'x-robots-tag': 'noindex, nofollow',
-    'content-security-policy': HOSTED_CSP,
+    'content-security-policy': HOSTED_WIDGET_CSP,
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'no-referrer',
   };
@@ -139,12 +102,8 @@ function manageRef(c: Ctx): { slug: string; token: string } | null {
 }
 
 async function readJson(c: Ctx): Promise<{ ok: true; value: unknown } | { ok: false; response: Response }> {
-  const declared = Number(c.req.header('content-length') ?? '0');
-  if (declared > MAX_BOOK_BYTES) return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
-  const raw = await c.req.text();
-  if (new TextEncoder().encode(raw).length > MAX_BOOK_BYTES) {
-    return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
-  }
+  const raw = await readBoundedText(c, MAX_BOOK_BYTES);
+  if (raw === null) return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
   try {
     return { ok: true, value: raw === '' ? {} : (JSON.parse(raw) as unknown) };
   } catch {
@@ -156,26 +115,11 @@ const scriptTag = `<script async src="/booking.js?v=${BOOKING_WIDGET_BUNDLE_HASH
 
 // -------------------------------------------------------------- widget script
 
-bookingEdgeRoutes.get('/booking.js', (c) => {
-  const etag = `"${BOOKING_WIDGET_BUNDLE_HASH}"`;
-  const headers: Record<string, string> = {
-    'content-type': 'application/javascript; charset=utf-8',
-    'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
-    etag,
-    'access-control-allow-origin': '*',
-    'cross-origin-resource-policy': 'cross-origin',
-    'x-content-type-options': 'nosniff',
-  };
-  const inm = c.req.header('if-none-match');
-  if (inm !== undefined && inm.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)) {
-    return new Response(null, { status: 304, headers });
-  }
-  return new Response(BOOKING_WIDGET_BUNDLE, { status: 200, headers });
-});
+bookingEdgeRoutes.get('/booking.js', (c) => serveBundle(c, BOOKING_WIDGET_BUNDLE, BOOKING_WIDGET_BUNDLE_HASH, CROSS_ORIGIN_BUNDLE));
 
 // ------------------------------------------------------------------- manage
 
-bookingEdgeRoutes.options('/b/:slug/manage/:token/:action', () => new Response(null, { status: 204, headers: CORS }));
+bookingEdgeRoutes.options('/b/:slug/manage/:token/:action', () => new Response(null, { status: 204, headers: OPEN_CORS }));
 
 bookingEdgeRoutes.get('/b/:slug/manage/:token', async (c) => {
   const { strings } = visitorStrings(c);
@@ -249,7 +193,7 @@ bookingEdgeRoutes.post('/b/:slug/manage/:token/reschedule', async (c) => {
 // -------------------------------------------------------------- event pages
 
 for (const path of ['/b/:slug/:eventSlug/config', '/b/:slug/:eventSlug/slots', '/b/:slug/:eventSlug/version', '/b/:slug/:eventSlug/book']) {
-  bookingEdgeRoutes.options(path, () => new Response(null, { status: 204, headers: CORS }));
+  bookingEdgeRoutes.options(path, () => new Response(null, { status: 204, headers: OPEN_CORS }));
 }
 
 bookingEdgeRoutes.get('/b/:slug/:eventSlug/config', async (c) => {

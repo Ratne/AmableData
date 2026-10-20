@@ -2,7 +2,6 @@ import type { FormsMessageKey } from './forms-en';
 
 /** Italian strings of hosted forms, form builder, submissions and connections — must cover every key of forms-en. */
 export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
-  'forms.title': 'Form',
   'forms.tab.builder': 'Editor',
   'forms.tab.submissions': 'Risposte',
   'forms.tab.connections': 'Connessioni',
@@ -145,7 +144,6 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.crm.none': 'Nessuno',
   'forms.crm.tags': 'Tag da applicare',
   'forms.crm.tagsHint': 'Applicati al contatto a ogni risposta.',
-  'forms.crm.noTags': 'Nessun tag.',
   'forms.crm.attribution':
     'Parametri UTM, referrer, pagina e visitatore dell’analitica vengono catturati in automatico e salvati sui nuovi contatti.',
 

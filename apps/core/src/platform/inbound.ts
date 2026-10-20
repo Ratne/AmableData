@@ -2,6 +2,7 @@ import type { ResumeEmailResponse } from '@amable/core/platform';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 import { revokeApp } from '../apps/lifecycle';
+import { mapLimited } from '../concurrency';
 import type { Env } from '../env';
 import type { AppEnv } from '../middleware';
 import { appOrigin } from '../middleware/security';
@@ -10,7 +11,7 @@ import { sendHeartbeat } from './heartbeat';
 import { platformLink } from './license';
 import { dropQuotaMemoryCache, quotaSnapshotSchema, storeQuotaSnapshot } from './quota';
 import { POINT_IN_TIME_WINDOW_MS, restoreTenantObjects } from './restore';
-import { verifiedControlPlaneBody } from './signature';
+import { verifiedControlPlaneBody, verifiedControlPlaneJson } from './signature';
 import { flushUsage } from './usage';
 
 const restoreSchema = z.strictObject({ at: z.number().int().positive() });
@@ -31,33 +32,27 @@ const resumeEmailSchema = z.strictObject({
   quota: quotaSnapshotSchema,
 });
 
+const RESUME_CONCURRENCY = 8;
+
 /** Asks every tenant's Engine DO to re-check its paused email steps. */
 export async function resumeAllTenants(env: Env): Promise<{ tenants: number; resumed: number }> {
   const tenants = (await env.DB.prepare(`SELECT id FROM tenants`).all<{ id: string }>()).results;
-  let resumed = 0;
-  for (const { id } of tenants) {
+  const counts = await mapLimited(tenants, RESUME_CONCURRENCY, async ({ id }) => {
     try {
-      resumed += await env.ENGINE.get(env.ENGINE.idFromName(id)).resumeEmailSteps(id);
+      return await env.ENGINE.get(env.ENGINE.idFromName(id)).resumeEmailSteps(id);
     } catch (error) {
       console.error(`[platform] resume email steps failed for tenant ${id}`, error);
+      return 0;
     }
-  }
-  return { tenants: tenants.length, resumed };
+  });
+  return { tenants: tenants.length, resumed: counts.reduce((sum, n) => sum + n, 0) };
 }
 
 /** Signed control plane → installation routes (`/api/platform/v1/*`). */
 export function mountPlatformInbound(app: Hono<AppEnv>): void {
   app.post('/platform/v1/resume-email', async (c) => {
-    const body = await verifiedControlPlaneBody(c);
-    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
-    let json: unknown;
-    try {
-      json = JSON.parse(body);
-    } catch {
-      return c.json({ error: 'invalid_json' }, 400);
-    }
-    const parsed = resumeEmailSchema.safeParse(json);
-    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    const parsed = await verifiedControlPlaneJson(c, resumeEmailSchema);
+    if (!parsed.ok) return parsed.response;
     dropQuotaMemoryCache(c.env.DB);
     await storeQuotaSnapshot(c.env.DB, parsed.data.quota, c.get('services').now());
     const result = await resumeAllTenants(c.env);
@@ -66,16 +61,8 @@ export function mountPlatformInbound(app: Hono<AppEnv>): void {
   });
 
   app.post('/platform/v1/restore', async (c) => {
-    const body = await verifiedControlPlaneBody(c);
-    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
-    let json: unknown;
-    try {
-      json = JSON.parse(body);
-    } catch {
-      return c.json({ error: 'invalid_json' }, 400);
-    }
-    const parsed = restoreSchema.safeParse(json);
-    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    const parsed = await verifiedControlPlaneJson(c, restoreSchema);
+    if (!parsed.ok) return parsed.response;
     const now = c.get('services').now();
     if (parsed.data.at > now || parsed.data.at < now - POINT_IN_TIME_WINDOW_MS) {
       return c.json({ error: 'restore_point_out_of_range' }, 422);
@@ -85,16 +72,8 @@ export function mountPlatformInbound(app: Hono<AppEnv>): void {
 
   // Marketplace kill switch pushed by the control plane (the catalog sync would get it within 6 hours).
   app.post('/platform/v1/apps/revoke', async (c) => {
-    const body = await verifiedControlPlaneBody(c);
-    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
-    let json: unknown;
-    try {
-      json = JSON.parse(body);
-    } catch {
-      return c.json({ error: 'invalid_json' }, 400);
-    }
-    const parsed = revokeAppSchema.safeParse(json);
-    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    const parsed = await verifiedControlPlaneJson(c, revokeAppSchema);
+    if (!parsed.ok) return parsed.response;
     const now = c.get('services').now();
     await c.env.DB.prepare(`UPDATE app_catalog SET revoked = 1, revoked_reason = ? WHERE app_id = ?`)
       .bind(parsed.data.reason, parsed.data.app_id)
@@ -104,16 +83,8 @@ export function mountPlatformInbound(app: Hono<AppEnv>): void {
   });
 
   app.post('/platform/v1/bootstrap-owner', async (c) => {
-    const body = await verifiedControlPlaneBody(c);
-    if (body === null) return c.json({ error: 'invalid_signature' }, 401);
-    let json: unknown;
-    try {
-      json = JSON.parse(body);
-    } catch {
-      return c.json({ error: 'invalid_json' }, 400);
-    }
-    const parsed = bootstrapOwnerSchema.safeParse(json);
-    if (!parsed.success) return c.json({ error: 'validation_failed' }, 422);
+    const parsed = await verifiedControlPlaneJson(c, bootstrapOwnerSchema);
+    if (!parsed.ok) return parsed.response;
     return c.json(await bootstrapOwner(c.env, parsed.data, appOrigin(c), c.get('services').now()));
   });
 

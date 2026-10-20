@@ -1,4 +1,5 @@
 import {
+  ADS_TOKEN_GATEWAY_OP,
   EDGE_GATEWAY_PATH,
   EDGE_GATEWAY_SIGNATURE_HEADER,
   EDGE_INSTALLATION_TENANT,
@@ -8,7 +9,6 @@ import { signWebhook } from '@amable/auth/security';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { FakeAnalyticsNamespace, siteInit } from '../../../edge/test/helpers';
 import {
-  ADS_TOKEN_GATEWAY_OP,
   adConnectionId,
   adsStub,
   adsSyncPorts,

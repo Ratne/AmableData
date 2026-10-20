@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { siteIdPath } from './params';
 import {
   adsReportSchema,
   analyticsInsightsParamsSchema,
@@ -38,7 +39,6 @@ import { forwardRealtimeSocket } from './ws';
 const tags = ['Analytics'];
 const filterNote =
   'Filters: `filter_<dimension>=value` (is), `=!value` (is not), `=~value` (contains). Default range: the last 7 days.';
-const siteIdParam = z.object({ siteId: z.string().min(1).max(64) });
 
 /** Purchases, realtime, insights, visitors, journeys, bots, ads, search, install checks. */
 export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
@@ -294,7 +294,7 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       path: '/sites/{siteId}/install-check',
       tags,
       summary: 'Whether the tracker is sending events (last event, events in 24 h)',
-      request: { params: siteIdParam },
+      request: { params: siteIdPath },
       responses: { 200: json(installCheckSchema, 'Install check') },
     }),
     async (c) => {
@@ -312,7 +312,7 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       path: '/sites/{siteId}/crawler-snippets',
       tags,
       summary: 'Server-side snippets (Worker, Node, PHP) reporting AI crawlers to /e/server',
-      request: { params: siteIdParam },
+      request: { params: siteIdPath },
       responses: { 200: json(crawlerSnippetsSchema, 'Snippets') },
     }),
     async (c) => {

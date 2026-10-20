@@ -20,7 +20,6 @@ export const foldersIt: Readonly<Record<FoldersMessageKey, string>> = {
   'folders.actions': 'Azioni per {name}',
   'folders.toggle': 'Mostra cartelle',
   'folders.includeSub': 'Includi sottocartelle',
-  'folders.count': '{n} elementi',
   'folders.created': 'Cartella creata',
   'folders.renamed': 'Cartella rinominata',
   'folders.deleted': 'Cartella eliminata',

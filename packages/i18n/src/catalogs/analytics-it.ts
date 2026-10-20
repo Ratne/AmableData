@@ -629,7 +629,6 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.performance.total': 'Totale',
   'analytics.performance.unattributed': '(non attribuito)',
   'analytics.performance.none': '(nessuno)',
-  'analytics.performance.drillAll': 'Tutte',
   'analytics.performance.drillOpen': 'Apri {name}',
   'analytics.performance.expand': 'Espandi',
   'analytics.performance.collapse': 'Comprimi',
@@ -645,7 +644,6 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.ltv.model.first_click': 'Primo clic',
   'analytics.ltv.model.last_click': 'Ultimo clic',
   'analytics.ltv.days': '{days} gg',
-  'analytics.ltv.name': 'Canale',
   'analytics.ltv.customers': 'Clienti',
   'analytics.ltv.cost': 'Spesa',
   'analytics.ltv.cac': 'CAC',
@@ -751,7 +749,6 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.domains.error.unavailable': 'I domini di tracciamento personalizzati non sono configurati su questa installazione.',
   'analytics.domains.error.provider': 'Il servizio certificati non ha risposto. Riprova tra poco.',
   'analytics.settings.tab.domains': 'Domini',
-  'analytics.stub.soon': 'Questa sezione arriverà a breve.',
 
   'analytics.funnelBuilder.title': 'Builder funnel',
   'analytics.funnelBuilder.back': 'Torna ai funnel',
@@ -762,9 +759,6 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.discarded': 'Modifiche annullate',
   'analytics.funnelBuilder.undo': 'Ripristina',
   'analytics.funnelBuilder.unsaved': 'Modifiche non salvate',
-  'analytics.funnelBuilder.upToDate': 'Tutte le modifiche salvate',
-  'analytics.funnelBuilder.mockNotice':
-    'Anteprima con dati di esempio: il salvataggio non viene ancora inviato al server.',
   'analytics.funnelBuilder.issues': '{count} problemi',
   'analytics.funnelBuilder.noIssues': 'Nessun problema',
   'analytics.funnelBuilder.deleted': 'Eliminati ({count})',
@@ -773,7 +767,6 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.pathTrace': 'Traccia percorso',
   'analytics.funnelBuilder.pathTraceHint':
     'Seleziona un nodo per evidenziare i percorsi che lo attraversano.',
-  'analytics.funnelBuilder.fitView': 'Adatta allo schermo',
   'analytics.funnelBuilder.heatmap.label': 'Heatmap',
   'analytics.funnelBuilder.heatmap.off': 'Disattivata',
   'analytics.funnelBuilder.heatmap.visits': 'Visite',
@@ -814,8 +807,6 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.panel.id': 'ID nodo',
   'analytics.funnelBuilder.panel.delete': 'Elimina nodo',
   'analytics.funnelBuilder.panel.close': 'Chiudi',
-  'analytics.funnelBuilder.panel.trafficInfo':
-    'Punto di ingresso del funnel: ripartisci il traffico con connessioni pesate.',
   'analytics.funnelBuilder.panel.proxyInfo':
     'Passa il visitatore alla sua unica uscita mantenendo il numero di azione: un nodo pagina successivo con “Associa l’azione in ingresso al numero di pagina” apre la pagina N.',
   'analytics.funnelBuilder.panel.stickiness': 'Persistenza',

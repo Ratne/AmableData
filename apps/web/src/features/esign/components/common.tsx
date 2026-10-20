@@ -1,60 +1,62 @@
-import type { Contact, EsignRequestStatus, EsignSignerStatus, EsignTemplate } from '@amable/api-types';
-import { PageBody, usePageChrome } from '@amable/ui';
-import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
+import type {
+  Contact,
+  EsignRequestStatus,
+  EsignSignerStatus,
+  EsignTemplate,
+} from '@amable/api-types';
+import { usePageChrome } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
-import { Skeleton } from '@amable/ui/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Search, ShieldAlert, TriangleAlert, UserRound, X } from 'lucide-react';
+import { Search, UserRound, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '../../../i18n';
-import { Pill, useDebounced } from '../../commerce/components/common';
-import { EsignApiError } from '../api/client';
-import { errorMessage, esignKeys, useEsign } from '../api/hooks';
+import {
+  ApiErrorNotice,
+  Pill,
+  QueryPageState,
+  useDebounced,
+  type Tone,
+} from '../../../components/feature-kit';
 
-type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+import { errorMessage, esignKeys, useEsign } from '../api/hooks';
 
 export function ErrorNotice({ error }: { error: unknown }) {
   const { t } = useI18n();
-  const forbidden = error instanceof EsignApiError && error.status === 403;
   return (
-    <Alert variant={forbidden ? 'default' : 'destructive'} role="alert">
-      {forbidden ? <ShieldAlert aria-hidden /> : <TriangleAlert aria-hidden />}
-      <AlertTitle>{forbidden ? t('esign.error.forbiddenTitle') : t('common.error')}</AlertTitle>
-      <AlertDescription>{errorMessage(t, error)}</AlertDescription>
-    </Alert>
+    <ApiErrorNotice
+      error={error}
+      message={errorMessage(t, error)}
+      forbiddenTitle={t('esign.error.forbiddenTitle')}
+    />
   );
 }
 
-export function PageState({ isPending, error, children }: { isPending: boolean; error: unknown; children: () => ReactNode }) {
-  if (error) {
-    return (
-      <PageBody className="pt-4">
-        <ErrorNotice error={error} />
-      </PageBody>
-    );
-  }
-  if (isPending) {
-    return (
-      <PageBody className="grid gap-3 pt-4">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-40 w-full" />
-      </PageBody>
-    );
-  }
-  return <>{children()}</>;
+export function PageState(props: {
+  isPending: boolean;
+  error: unknown;
+  children: () => ReactNode;
+}) {
+  return <QueryPageState {...props} notice={(error) => <ErrorNotice error={error} />} />;
 }
 
 export type EsignSection = 'requests' | 'templates';
 
-const SECTION_PATHS: Record<EsignSection, '/t/$tenant/signatures' | '/t/$tenant/signatures/templates'> = {
+const SECTION_PATHS: Record<
+  EsignSection,
+  '/t/$tenant/signatures' | '/t/$tenant/signatures/templates'
+> = {
   requests: '/t/$tenant/signatures',
   templates: '/t/$tenant/signatures/templates',
 };
 
 /** Header of the signatures area: requests / templates tabs. */
-export function useEsignChrome(section: EsignSection, title?: string, status?: { label: string; tone: 'success' | 'warning' | 'neutral' }): void {
+export function useEsignChrome(
+  section: EsignSection,
+  title?: string,
+  status?: { label: string; tone: 'success' | 'warning' | 'neutral' },
+): void {
   const { t } = useI18n();
   const { slug } = useEsign();
   const navigate = useNavigate();
@@ -62,7 +64,10 @@ export function useEsignChrome(section: EsignSection, title?: string, status?: {
     title: title ?? t('nav.signatures'),
     status: status?.label,
     statusTone: status?.tone,
-    tabs: (['requests', 'templates'] as const).map((value) => ({ value, label: t(`esign.tab.${value}`) })),
+    tabs: (['requests', 'templates'] as const).map((value) => ({
+      value,
+      label: t(`esign.tab.${value}`),
+    })),
     tab: section,
     onTabChange: (value) => {
       const next = value as EsignSection;
@@ -122,7 +127,15 @@ function contactLabel(contact: Contact): PickedContact {
 }
 
 /** CRM contact search with a single selection (only contacts with an email can sign). */
-export function ContactPicker({ value, onChange, label }: { value: PickedContact | null; onChange: (contact: PickedContact | null) => void; label: string }) {
+export function ContactPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: PickedContact | null;
+  onChange: (contact: PickedContact | null) => void;
+  label: string;
+}) {
   const { t } = useI18n();
   const { slug, api } = useEsign();
   const [q, setQ] = useState('');
@@ -130,7 +143,8 @@ export function ContactPicker({ value, onChange, label }: { value: PickedContact
   const results = useQuery({
     queryKey: esignKeys.contacts(slug, debounced),
     enabled: value === null,
-    queryFn: async () => (await api.contacts.search(debounced)).data.map(contactLabel).filter((c) => c.email !== ''),
+    queryFn: async () =>
+      (await api.contacts.search(debounced)).data.map(contactLabel).filter((c) => c.email !== ''),
     staleTime: 30_000,
   });
 
@@ -140,9 +154,17 @@ export function ContactPicker({ value, onChange, label }: { value: PickedContact
         <UserRound className="size-4 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{value.name || value.email}</p>
-          {value.name ? <p className="truncate text-xs text-muted-foreground">{value.email}</p> : null}
+          {value.name ? (
+            <p className="truncate text-xs text-muted-foreground">{value.email}</p>
+          ) : null}
         </div>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={t('esign.send.changeContact')} onClick={() => onChange(null)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('esign.send.changeContact')}
+          onClick={() => onChange(null)}
+        >
           <X aria-hidden />
         </Button>
       </div>
@@ -153,15 +175,27 @@ export function ContactPicker({ value, onChange, label }: { value: PickedContact
   return (
     <div className="grid gap-1.5">
       <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input type="search" value={q} className="pl-9" placeholder={t('esign.send.searchContact')} aria-label={label} onChange={(event) => setQ(event.target.value)} />
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          type="search"
+          value={q}
+          className="pl-9"
+          placeholder={t('esign.send.searchContact')}
+          aria-label={label}
+          onChange={(event) => setQ(event.target.value)}
+        />
       </div>
       {debounced !== '' ? (
         <ul className="grid max-h-44 gap-0.5 overflow-auto" role="listbox" aria-label={label}>
           {results.isPending ? (
             <li className="px-3 py-1.5 text-sm text-muted-foreground">{t('common.loading')}</li>
           ) : rows.length === 0 ? (
-            <li className="px-3 py-1.5 text-sm text-muted-foreground">{t('esign.send.noContacts')}</li>
+            <li className="px-3 py-1.5 text-sm text-muted-foreground">
+              {t('esign.send.noContacts')}
+            </li>
           ) : (
             rows.map((contact) => (
               <li key={contact.id} role="option" aria-selected={false}>
@@ -171,7 +205,9 @@ export function ContactPicker({ value, onChange, label }: { value: PickedContact
                   onClick={() => onChange(contact)}
                 >
                   <span className="truncate font-medium">{contact.name || contact.email}</span>
-                  {contact.name ? <span className="truncate text-xs text-muted-foreground">{contact.email}</span> : null}
+                  {contact.name ? (
+                    <span className="truncate text-xs text-muted-foreground">{contact.email}</span>
+                  ) : null}
                 </button>
               </li>
             ))

@@ -1,11 +1,18 @@
 import type { Permission } from '@amable/core';
-import { toast } from '@amable/ui';
-import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
+import {
+  apiErrorMessage,
+  type ApiErrorMessages,
+  type ApiMutationOptions,
+  REFERENCE_STALE_MS,
+  useApiMutation,
+  useGrantedPermissions,
+} from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
-import { LandingApiError, landingClient, type LandingClient } from './client';
+import { landingClient, type LandingClient } from './client';
 
 /** Every landing query of a tenant lives under ['landing', slug, …]. */
 export const landingKeys = {
@@ -25,20 +32,28 @@ export function useLanding(): { slug: string; api: LandingClient } {
   return { slug, api };
 }
 
-const REFERENCE_STALE_MS = 60_000;
-
 /** Permissions of the active membership; actions stay hidden until known (the server enforces them). */
-export function usePermissions(): { can: (permission: Permission) => boolean; ready: boolean; userId: string | null } {
+export function usePermissions(): {
+  can: (permission: Permission) => boolean;
+  ready: boolean;
+  userId: string | null;
+} {
   const { slug, api } = useLanding();
-  const me = useQuery({ queryKey: landingKeys.me(slug), queryFn: () => api.me(), staleTime: REFERENCE_STALE_MS, retry: false });
-  const granted = useMemo(() => new Set(me.data?.permissions ?? []), [me.data]);
-  const can = useCallback((permission: Permission) => granted.has(permission), [granted]);
-  return { can, ready: me.data !== undefined, userId: me.data?.user?.id ?? null };
+  const me = useQuery({
+    queryKey: landingKeys.me(slug),
+    queryFn: () => api.me(),
+    staleTime: REFERENCE_STALE_MS,
+    retry: false,
+  });
+  return { ...useGrantedPermissions(me.data), userId: me.data?.user?.id ?? null };
 }
 
 export function usePage(pageId: string) {
   const { slug, api } = useLanding();
-  return useQuery({ queryKey: landingKeys.page(slug, pageId), queryFn: () => api.pages.get(pageId) });
+  return useQuery({
+    queryKey: landingKeys.page(slug, pageId),
+    queryFn: () => api.pages.get(pageId),
+  });
 }
 
 export function useAnalyticsSites() {
@@ -87,48 +102,28 @@ export function useDates(): { dateTime: (iso: string | null | undefined) => stri
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
+const LANDING_ERRORS: ApiErrorMessages = {
+  forbidden: 'landing.error.forbidden',
+  notFound: 'landing.error.notFound',
+  conflict: 'landing.error.conflict',
+  tooLarge: 'landing.error.tooLarge',
+  validation: 'landing.error.validation',
+};
+
 export function errorMessage(t: Translate, error: unknown): string {
-  if (error instanceof LandingApiError) {
-    if (error.status === 403) return t('landing.error.forbidden');
-    if (error.status === 404) return t('landing.error.notFound');
-    if (error.status === 409 && error.code === 'stale_draft') return t('landing.error.staleDraft');
-    if (error.status === 409) return error.detail ?? t('landing.error.conflict');
-    if (error.status === 423) return t('landing.error.locked');
-    if (error.status === 413) return t('landing.error.tooLarge');
-    if (error.status === 422 || error.status === 400) {
-      const first = error.details[0];
-      if (first !== undefined) return first.path ? `${first.path}: ${first.message}` : first.message;
-      return error.detail ?? t('landing.error.validation');
-    }
-  }
-  return t('common.error');
+  return apiErrorMessage(t, error, LANDING_ERRORS, (e) => {
+    if (e.status === 409 && e.code === 'stale_draft') return t('landing.error.staleDraft');
+    if (e.status === 423) return t('landing.error.locked');
+    return null;
+  });
 }
 
-export interface LandingMutationOptions<TInput, TResult> {
-  readonly mutationFn: (input: TInput) => Promise<TResult>;
-  /** Default: the whole tenant landing cache. */
-  readonly invalidate?: readonly QueryKey[];
-  readonly success?: string | ((result: TResult) => string);
-  readonly onSuccess?: (result: TResult, input: TInput) => void;
-}
+export type LandingMutationOptions<TInput, TResult> = ApiMutationOptions<TInput, TResult>;
 
 /** `useMutation` with cache invalidation and toasts. */
-export function useLandingMutation<TInput, TResult>(options: LandingMutationOptions<TInput, TResult>) {
+export function useLandingMutation<TInput, TResult>(
+  options: LandingMutationOptions<TInput, TResult>,
+) {
   const { slug } = useLanding();
-  const { t } = useI18n();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: options.mutationFn,
-    onSuccess: async (result, input) => {
-      const keys = options.invalidate ?? [landingKeys.root(slug)];
-      await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
-      if (options.success !== undefined) {
-        toast.success(typeof options.success === 'function' ? options.success(result) : options.success);
-      }
-      options.onSuccess?.(result, input);
-    },
-    onError: (error) => {
-      toast.error(errorMessage(t, error));
-    },
-  });
+  return useApiMutation(options, landingKeys.root(slug), errorMessage);
 }

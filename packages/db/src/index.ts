@@ -6,7 +6,6 @@ export { tenantMigrations } from './migrations/tenant/index';
 
 export {
   runMigrations,
-  sortAndValidate,
   MigrationOrderError,
   MigrationLockTimeoutError,
 } from './runner/runner';

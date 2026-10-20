@@ -8,7 +8,7 @@ import type {
 } from '@amable/api-types';
 import type { ContactCounts, ContactTag, Page } from '@amable/api-types/crm';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { request } from './client';
+import { request } from '../../../lib/tenant-api';
 import { crmKeys, useCrm } from './hooks';
 
 /**

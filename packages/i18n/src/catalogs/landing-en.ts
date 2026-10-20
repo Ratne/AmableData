@@ -1,6 +1,5 @@
 /** English strings of landing pages, canvas editor and publishing (spread into the main catalog). */
 export const landingEn = {
-  'landing.title': 'Landing pages',
   'landing.untitled': '(untitled)',
   'landing.tab.editor': 'Editor',
   'landing.tab.settings': 'Settings',

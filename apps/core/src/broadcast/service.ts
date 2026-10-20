@@ -52,24 +52,45 @@ const QUEUE_BATCH = 100;
 
 // ------------------------------------------------------------------ shapes
 
-function progressOf(deps: MailDeps, id: string): Broadcast['progress'] {
-  const row = deps.db.all<{ total: number; pending: number; enqueued: number; cancelled: number }>(
-    `SELECT COUNT(*) AS total,
-            COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
-            COALESCE(SUM(CASE WHEN status = 'enqueued' THEN 1 ELSE 0 END), 0) AS enqueued,
-            COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
-       FROM mail_broadcast_recipients WHERE broadcast_id = ?`,
-    id,
-  )[0];
-  return {
-    recipients: row?.total ?? 0,
-    pending: row?.pending ?? 0,
-    enqueued: row?.enqueued ?? 0,
-    cancelled: row?.cancelled ?? 0,
-  };
+type Progress = Broadcast['progress'];
+const NO_PROGRESS: Progress = { recipients: 0, pending: 0, enqueued: 0, cancelled: 0 };
+
+/** Recipient counters of the broadcasts in `ids` (one grouped query per chunk). */
+function progressOf(deps: MailDeps, ids: readonly string[]): Map<string, Progress> {
+  const progress = new Map<string, Progress>();
+  for (const chunk of chunked([...ids])) {
+    for (const row of deps.db.all<{
+      broadcast_id: string;
+      total: number;
+      pending: number;
+      enqueued: number;
+      cancelled: number;
+    }>(
+      `SELECT broadcast_id,
+              COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
+              COALESCE(SUM(CASE WHEN status = 'enqueued' THEN 1 ELSE 0 END), 0) AS enqueued,
+              COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled
+         FROM mail_broadcast_recipients WHERE broadcast_id IN (${chunk.map(() => '?').join(', ')})
+        GROUP BY broadcast_id`,
+      ...chunk,
+    )) {
+      progress.set(row.broadcast_id, {
+        recipients: row.total,
+        pending: row.pending,
+        enqueued: row.enqueued,
+        cancelled: row.cancelled,
+      });
+    }
+  }
+  return progress;
 }
 
-function toBroadcast(deps: MailDeps, row: BroadcastRow): Broadcast {
+function progressOfOne(deps: MailDeps, id: string): Progress {
+  return progressOf(deps, [id]).get(id) ?? NO_PROGRESS;
+}
+
+function toSummaryFields(row: BroadcastRow, progress: Progress): Omit<Broadcast, 'body'> {
   return {
     id: row.id,
     name: row.name,
@@ -77,18 +98,24 @@ function toBroadcast(deps: MailDeps, row: BroadcastRow): Broadcast {
     segment: parseJson<BroadcastSegment | null>(row.segment, null),
     template_id: row.template_id,
     subject: row.subject,
-    body: row.body === null ? null : parseJson(row.body, { type: 'doc' as const }),
     from_name: row.from_name,
     reply_to: row.reply_to,
     throttle_per_hour: row.throttle_per_hour,
     schedule: parseJson<BroadcastSchedule | null>(row.schedule, null),
-    progress: progressOf(deps, row.id),
+    progress,
     next_send_at: toIso(row.next_send_at),
     created_by: row.created_by,
     created_at: isoOf(row.created_at),
     updated_at: isoOf(row.updated_at),
     started_at: toIso(row.started_at),
     completed_at: toIso(row.completed_at),
+  };
+}
+
+function toBroadcast(deps: MailDeps, row: BroadcastRow): Broadcast {
+  return {
+    ...toSummaryFields(row, progressOfOne(deps, row.id)),
+    body: row.body === null ? null : parseJson(row.body, { type: 'doc' as const }),
   };
 }
 
@@ -130,12 +157,13 @@ export function listBroadcasts(deps: MailDeps, input: ListBroadcastsQuery): Page
       stats.set(s.broadcast_id, { sent: s.sent, opened: s.opened, clicked: s.clicked });
     }
   }
+  const progress = progressOf(deps, ids);
   const last = page.at(-1);
   return {
-    data: page.map((row) => {
-      const { body: _body, ...rest } = toBroadcast(deps, row);
-      return { ...rest, stats: stats.get(row.id) ?? { sent: 0, opened: 0, clicked: 0 } };
-    }),
+    data: page.map((row) => ({
+      ...toSummaryFields(row, progress.get(row.id) ?? NO_PROGRESS),
+      stats: stats.get(row.id) ?? { sent: 0, opened: 0, clicked: 0 },
+    })),
     next_cursor:
       rows.length > input.limit && last !== undefined ? encodeCursor([last.created_at, last.id]) : null,
   };
@@ -589,7 +617,7 @@ export function broadcastStats(deps: MailDeps, input: { id: string }): Broadcast
   )[0] ?? {
     total: 0, sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, unsubscribed: 0, failed: 0, skipped: 0,
   };
-  const progress = progressOf(deps, row.id);
+  const progress = progressOfOne(deps, row.id);
   const known = new Map<string, { url: string; position: number; clicks: number; unique_clicks: number }>();
   for (const l of deps.db.all<{ url: string; position: number }>(
     `SELECT l.url AS url, MIN(l.position) AS position FROM mail_message_links l

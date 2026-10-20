@@ -6,7 +6,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { MapPin, Search } from 'lucide-react';
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { useI18n } from '../../../i18n';
-import { request } from '../api/client';
+import { request } from '../../../lib/tenant-api';
 import { useCrm } from '../api/hooks';
 
 const MIN_CHARS = 3;
@@ -120,10 +120,14 @@ export function AddressSearch({ country, onPick }: AddressSearchProps) {
           className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-sm shadow-md"
         >
           {search.isError ? (
-            <li className="px-2 py-1.5 text-muted-foreground">{t('crm.address.searchUnavailable')}</li>
+            <li className="px-2 py-1.5 text-muted-foreground">
+              {t('crm.address.searchUnavailable')}
+            </li>
           ) : suggestions.length === 0 ? (
             <li className="px-2 py-1.5 text-muted-foreground">
-              {search.isFetching || q !== text.trim() ? t('crm.address.searching') : t('crm.address.searchEmpty')}
+              {search.isFetching || q !== text.trim()
+                ? t('crm.address.searching')
+                : t('crm.address.searchEmpty')}
             </li>
           ) : (
             suggestions.map((s, index) => (
@@ -147,7 +151,10 @@ export function AddressSearch({ country, onPick }: AddressSearchProps) {
             ))
           )}
           {suggestions.length > 0 && search.data?.attribution ? (
-            <li aria-hidden className="mt-1 border-t px-2 pt-1 text-right text-[10px] text-muted-foreground">
+            <li
+              aria-hidden
+              className="mt-1 border-t px-2 pt-1 text-right text-[10px] text-muted-foreground"
+            >
               {search.data.attribution}
             </li>
           ) : null}

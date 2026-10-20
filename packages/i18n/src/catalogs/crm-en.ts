@@ -176,7 +176,6 @@ export const crmEn = {
   'crm.contacts.created': 'Contact created',
 
   'crm.contact.details': 'Details',
-  'crm.contact.marketing': 'Owner and marketing',
   'crm.contact.primary': 'primary',
   'crm.contact.label': 'Label',
   'crm.contact.phones': 'Phones',
