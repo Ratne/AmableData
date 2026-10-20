@@ -43,6 +43,7 @@ const PILL_SPRING = { type: 'spring', stiffness: 520, damping: 38, mass: 0.7 } a
 /** Menus and popovers settle from a slight squash with a small overshoot. */
 const LAYER_SPRING = { type: 'spring', stiffness: 560, damping: 26, mass: 0.7 } as const;
 const RESIZE_STEP = 10;
+const NO_SECTIONS: readonly string[] = [];
 /** The sidebar docks beside the content from this container width, in rem. Keep in sync with `@2xl/dashboard-shell`. */
 const DOCKED_SIDEBAR_REM = 42;
 
@@ -579,6 +580,12 @@ export type DashboardShellProps = Omit<ComponentProps<'div'>, 'title' | 'childre
   activeItemId?: string;
   defaultActiveItemId?: string;
   onActiveItemChange?: (id: string) => void;
+  /** Section titles become buttons that open and close their items. */
+  collapsibleSections?: boolean;
+  /** Ids of the closed sections. */
+  collapsedSections?: readonly string[];
+  defaultCollapsedSections?: readonly string[];
+  onCollapsedSectionsChange?: (ids: readonly string[]) => void;
   title: ReactNode;
   headingLevel?: 1 | 2 | 3;
   /** A short label in a pill beside the title, such as "Active". */
@@ -658,6 +665,10 @@ export function DashboardShell({
   activeItemId,
   defaultActiveItemId,
   onActiveItemChange,
+  collapsibleSections = false,
+  collapsedSections,
+  defaultCollapsedSections = NO_SECTIONS,
+  onCollapsedSectionsChange,
   title,
   headingLevel = 1,
   status,
@@ -698,6 +709,16 @@ export function DashboardShell({
     activeItemId,
     defaultActiveItemId ?? navigation[0]?.items[0]?.id ?? '',
     onActiveItemChange,
+  );
+  const [collapsed, setCollapsed] = useControllableState(
+    collapsedSections,
+    defaultCollapsedSections,
+    onCollapsedSectionsChange,
+  );
+  const toggleSection = useCallback(
+    (id: string) =>
+      setCollapsed(collapsed.includes(id) ? collapsed.filter((other) => other !== id) : [...collapsed, id]),
+    [collapsed, setCollapsed],
   );
   const [activeTab, setActiveTab] = useControllableState(
     tab,
@@ -827,6 +848,8 @@ export function DashboardShell({
     footer: sidebarFooter,
     activeItemId: activeItem,
     navigationLabel,
+    collapsedSections: collapsibleSections ? collapsed : undefined,
+    onToggleSection: toggleSection,
   };
 
   const renderHeader = (tabList?: ReactNode) => (
@@ -1118,6 +1141,9 @@ type SidebarContentProps = {
   footer?: ReactNode;
   activeItemId?: string;
   navigationLabel: string;
+  /** Undefined when sections cannot be closed. */
+  collapsedSections?: readonly string[];
+  onToggleSection: (id: string) => void;
   onSelect: (id: string) => void;
   onClose?: () => void;
   closeButtonRef?: Ref<HTMLButtonElement>;
@@ -1130,6 +1156,8 @@ const SidebarContent = memo(function SidebarContent({
   footer,
   activeItemId,
   navigationLabel,
+  collapsedSections,
+  onToggleSection,
   onSelect,
   onClose,
   closeButtonRef,
@@ -1182,6 +1210,12 @@ const SidebarContent = memo(function SidebarContent({
               activeItemId={activeItemId}
               pillId={pillId}
               onSelect={onSelect}
+              isOpen={
+                collapsedSections === undefined || section.title === undefined
+                  ? undefined
+                  : !collapsedSections.includes(section.id)
+              }
+              onToggle={() => onToggleSection(section.id)}
               className={
                 index < navigation.length - 1
                   ? 'border-b border-(--obsidian-dashboard-shell-border)'
@@ -1219,6 +1253,9 @@ type NavSectionProps = {
   activeItemId?: string;
   pillId: string;
   onSelect: (id: string) => void;
+  /** Undefined for a section that is always open. */
+  isOpen?: boolean;
+  onToggle?: () => void;
   isQuiet?: boolean;
   className?: string;
 };
@@ -1229,33 +1266,86 @@ function NavSection({
   activeItemId,
   pillId,
   onSelect,
+  isOpen,
+  onToggle,
   isQuiet = false,
   className,
 }: NavSectionProps) {
   const titleId = useId();
+  const listId = useId();
+  const reduceMotion = useReducedMotion();
+  const titleClassName =
+    'block py-1 text-xs font-medium uppercase leading-none tracking-[1px] text-(--obsidian-dashboard-shell-text-subtle)';
+
+  const list = (
+    <ul id={listId} aria-labelledby={title ? titleId : undefined} className="flex flex-col gap-px">
+      {items.map((item) => (
+        <NavItem
+          key={item.id}
+          item={item}
+          isActive={item.id === activeItemId}
+          isQuiet={isQuiet}
+          pillId={pillId}
+          onSelect={onSelect}
+        />
+      ))}
+    </ul>
+  );
+
+  if (isOpen === undefined) {
+    return (
+      <div className={cn('flex flex-col gap-1 p-3', className)}>
+        {title && (
+          <span id={titleId} className={titleClassName}>
+            {title}
+          </span>
+        )}
+        {list}
+      </div>
+    );
+  }
+
+  const holdsActive = !isOpen && items.some((item) => item.id === activeItemId);
 
   return (
-    <div className={cn('flex flex-col gap-1 p-3', className)}>
-      {title && (
-        <span
-          id={titleId}
-          className="block py-1 text-xs font-medium uppercase leading-none tracking-[1px] text-(--obsidian-dashboard-shell-text-subtle)"
-        >
-          {title}
-        </span>
-      )}
-      <ul aria-labelledby={title ? titleId : undefined} className="flex flex-col gap-px">
-        {items.map((item) => (
-          <NavItem
-            key={item.id}
-            item={item}
-            isActive={item.id === activeItemId}
-            isQuiet={isQuiet}
-            pillId={pillId}
-            onSelect={onSelect}
-          />
-        ))}
-      </ul>
+    <div className={cn('flex flex-col p-3', isOpen && 'gap-1', className)}>
+      <button
+        type="button"
+        id={titleId}
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? listId : undefined}
+        onClick={onToggle}
+        className={cn(
+          titleClassName,
+          'flex w-full cursor-pointer items-center gap-1.5 rounded-md text-left outline-none transition-colors duration-150 hover:text-(--obsidian-dashboard-shell-foreground) focus-visible:ring-2 focus-visible:ring-(--obsidian-dashboard-shell-ring)',
+        )}
+      >
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {holdsActive && (
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-(--obsidian-dashboard-shell-foreground)" />
+        )}
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            'size-3.5 shrink-0 transition-transform duration-200 ease-[cubic-bezier(0.25,1,0.5,1)]',
+            !isOpen && '-rotate-90',
+          )}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            key="items"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: EASE_OUT }}
+            className="-m-0.5 overflow-hidden p-0.5"
+          >
+            {list}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

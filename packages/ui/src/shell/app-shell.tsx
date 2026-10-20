@@ -100,6 +100,8 @@ export interface AppShellProps {
   readonly fallbackTitle?: string;
   /** localStorage key for the resizable sidebar width. */
   readonly sidebarStorageKey?: string;
+  /** localStorage key for the closed navigation sections. */
+  readonly sectionsStorageKey?: string;
   readonly className?: string;
   readonly children: ReactNode;
 }
@@ -108,6 +110,17 @@ function readWidth(key: string): number {
   if (typeof localStorage === 'undefined') return 220;
   const stored = Number(localStorage.getItem(key));
   return Number.isFinite(stored) && stored >= 180 && stored <= 400 ? stored : 220;
+}
+
+/** Null until the user opens or closes a section. */
+function readCollapsed(key: string): readonly string[] | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return Array.isArray(stored) && stored.every((id) => typeof id === 'string') ? stored : null;
+  } catch {
+    return null;
+  }
 }
 
 export function AppShell({
@@ -121,11 +134,34 @@ export function AppShell({
   navigationLabel,
   fallbackTitle = '',
   sidebarStorageKey = 'amable.sidebar-width',
+  sectionsStorageKey = 'amable.sidebar-collapsed',
   className,
   children,
 }: AppShellProps) {
   const [chrome, setChrome] = useState<PageChromeState | null>(null);
   const [width, setWidth] = useState(() => readWidth(sidebarStorageKey));
+
+  // First visit: only the first section is open.
+  const [storedCollapsed, setStoredCollapsed] = useState(() => readCollapsed(sectionsStorageKey));
+  const collapsed = storedCollapsed ?? navigation.slice(1).map((section) => section.id);
+  const activeSection = navigation.find((section) => section.items.some((item) => item.id === activeItemId))?.id;
+  // Landing on a page, from the sidebar or a direct link, opens its section.
+  const landing = `${activeItemId ?? ''}|${activeSection ?? ''}`;
+  const [openedFor, setOpenedFor] = useState('');
+  if (openedFor !== landing) {
+    setOpenedFor(landing);
+    if (activeSection !== undefined && collapsed.includes(activeSection)) {
+      setStoredCollapsed(collapsed.filter((id) => id !== activeSection));
+    }
+  }
+
+  const onCollapsedChange = useCallback(
+    (next: readonly string[]) => {
+      setStoredCollapsed(next);
+      localStorage.setItem(sectionsStorageKey, JSON.stringify(next));
+    },
+    [sectionsStorageKey],
+  );
 
   const onWidthChange = useCallback(
     (next: number) => {
@@ -147,6 +183,9 @@ export function AppShell({
         secondaryNavigation={secondaryNavigation}
         sidebarFooter={sidebarFooter}
         activeItemId={activeItemId ?? ''}
+        collapsibleSections
+        collapsedSections={collapsed}
+        onCollapsedSectionsChange={onCollapsedChange}
         title={chrome?.title || fallbackTitle}
         status={chrome?.status}
         statusTone={chrome?.statusTone}
