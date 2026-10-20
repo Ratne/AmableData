@@ -180,6 +180,10 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
 
   'crm.contact.details': 'Dettagli',
   'crm.contact.primary': 'principale',
+  'crm.contact.emailStatus.deliverable': 'Email verificata: riceve posta',
+  'crm.contact.emailStatus.risky': 'Email a rischio: potrebbe non ricevere posta',
+  'crm.contact.emailStatus.unknown': 'Verifica senza esito certo',
+  'crm.contact.emailStatus.undeliverable': 'Email non valida: non riceve posta',
   'crm.contact.label': 'Etichetta',
   'crm.contact.phones': 'Telefoni',
   'crm.contact.phoneType': 'Tipo di telefono',

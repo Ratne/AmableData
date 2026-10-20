@@ -40,7 +40,13 @@ import { PageState, SectionCard } from '../../components/states';
 import { ContactAppActions, ContactAppCards } from '../../../apps/slots';
 import { ContactConversations } from '../../../conversations/contact-panel';
 import { AddressesEditor, toAddressInputs } from './addresses';
-import { EmailsEditor, PhonesEditor, toEmailInputs, toPhoneInputs } from './emails-phones';
+import {
+  emailVerificationState,
+  EmailsEditor,
+  PhonesEditor,
+  toEmailInputs,
+  toPhoneInputs,
+} from './emails-phones';
 import { LanguageDisplay, MarketingFields } from './marketing';
 import { CustomFieldsTab, ContactTabs } from './tabs';
 
@@ -192,6 +198,7 @@ function ContactView({ contact }: { contact: Contact }) {
             <EmailsEditor
               label={t('crm.field.emails')}
               items={toEmailInputs(contact)}
+              verification={emailVerificationState(contact)}
               max={5}
               canEdit={canEdit}
               className={FIELD}

@@ -177,6 +177,10 @@ export const crmEn = {
 
   'crm.contact.details': 'Details',
   'crm.contact.primary': 'primary',
+  'crm.contact.emailStatus.deliverable': 'Verified email: receives mail',
+  'crm.contact.emailStatus.risky': 'Risky email: it may not receive mail',
+  'crm.contact.emailStatus.unknown': 'Verification gave no clear answer',
+  'crm.contact.emailStatus.undeliverable': 'Invalid email: it does not receive mail',
   'crm.contact.label': 'Label',
   'crm.contact.phones': 'Phones',
   'crm.contact.phoneType': 'Phone type',

@@ -2,6 +2,8 @@ import type { Contact, ContactEmailInput, ContactPhoneInput } from '@amable/api-
 import { Badge } from '@amable/ui/ui/badge';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@amable/ui/ui/tooltip';
+import { cn } from '@amable/ui';
 import { Plus, X } from 'lucide-react';
 import {
   flagEmoji,
@@ -16,6 +18,50 @@ import { InlineEdit } from '../../components/inline-field';
 import { ChoiceSelect } from '../../components/inputs';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const EMAIL_STATUSES = ['deliverable', 'risky', 'unknown', 'undeliverable'] as const;
+export type EmailStatus = (typeof EMAIL_STATUSES)[number];
+
+const STATUS_KEY = /^app_[a-z0-9_]+_email_status$/;
+
+/** Verdict on the primary email written by a verification app (`app_<id>_email_status`), if any. */
+export function emailVerificationState(
+  contact: Pick<Contact, 'custom_fields'>,
+): EmailStatus | null {
+  for (const [key, value] of Object.entries(contact.custom_fields)) {
+    if (!STATUS_KEY.test(key) || typeof value !== 'string') continue;
+    const status = EMAIL_STATUSES.find((s) => s === value);
+    if (status !== undefined) return status;
+  }
+  return null;
+}
+
+const STATUS_COLOR: Record<EmailStatus, string> = {
+  deliverable: 'bg-success',
+  risky: 'bg-warning',
+  unknown: 'bg-warning',
+  undeliverable: 'bg-destructive',
+};
+
+function EmailStatusDot({ status }: { status: EmailStatus }) {
+  const { t } = useI18n();
+  const text = t(`crm.contact.emailStatus.${status}`);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={text}
+          className={cn(
+            'mr-1.5 inline-block size-2 shrink-0 rounded-full align-middle',
+            STATUS_COLOR[status],
+          )}
+        />
+      </TooltipTrigger>
+      <TooltipContent>{text}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export type EditableList<T> = {
   readonly label: string;
@@ -33,7 +79,8 @@ export function EmailsEditor({
   canEdit,
   onSave,
   className,
-}: EditableList<ContactEmailInput>) {
+  verification = null,
+}: EditableList<ContactEmailInput> & { readonly verification?: EmailStatus | null }) {
   const { t } = useI18n();
   return (
     <InlineEdit<ContactEmailInput[]>
@@ -52,6 +99,9 @@ export function EmailsEditor({
           <span className="flex flex-col">
             {items.map((item, index) => (
               <a key={item.email} href={`mailto:${item.email}`} className="hover:underline">
+                {index === 0 && verification !== null ? (
+                  <EmailStatusDot status={verification} />
+                ) : null}
                 {item.email}
                 {index === 0 ? (
                   <Badge variant="outline" className="ml-2 text-[10px]">
