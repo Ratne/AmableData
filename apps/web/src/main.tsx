@@ -5,9 +5,13 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { StepUpProvider } from './features/auth/step-up';
 import { I18nProvider } from './i18n';
+import { installActivityTracking } from './lib/activity';
 import { savePreferences } from './lib/api';
 import { router } from './router';
+import { ActivityBar } from './shell/activity-bar';
 import './styles.css';
+
+installActivityTracking();
 
 const queryClient = new QueryClient();
 
@@ -22,6 +26,7 @@ createRoot(rootElement).render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider onLocaleChange={(locale) => savePreferences({ locale })}>
         <ThemeProvider onThemeChange={(theme) => savePreferences({ theme })}>
+          <ActivityBar />
           <RouterProvider router={router} />
           <StepUpProvider />
           <Toaster />

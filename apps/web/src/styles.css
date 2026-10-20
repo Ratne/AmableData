@@ -4,3 +4,70 @@
 /* Workspace packages are consumed as source; Tailwind must scan them for classes. */
 @source '../../../packages/ui/src';
 @source '../../../packages/editor/src';
+
+/* Request feedback (lib/activity.ts, shell/activity-bar.tsx). */
+@keyframes amb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes amb-activity {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+/* The button that started a request: spinner in place of its icon (or before its label), no second click. */
+[data-busy] {
+  pointer-events: none;
+  cursor: progress;
+}
+[data-busy] > svg {
+  display: none;
+}
+[data-busy]::before {
+  content: '';
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 9999px;
+  animation: amb-spin 0.7s linear infinite;
+}
+[data-busy]:not([class*='inline-flex']):not([class*='flex '])::before {
+  margin-inline-end: 0.5em;
+}
+
+.amb-activity-bar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 2147483000;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--color-primary) 20%, transparent);
+}
+.amb-activity-bar > span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: var(--color-primary);
+  animation: amb-activity 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-busy]::before {
+    animation-duration: 2s;
+  }
+  .amb-activity-bar > span {
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
+}
