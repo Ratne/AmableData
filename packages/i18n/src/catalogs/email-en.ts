@@ -71,6 +71,9 @@ export const emailEn = {
   'email.settings.physicalAddress': 'Physical address (printed in every footer)',
   'email.settings.timezone': 'Workspace timezone (fallback for contacts without one)',
   'email.settings.rate': 'Max emails per minute',
+  'email.settings.rateManaged':
+    'Set by your plan from its hourly sending limit. To send faster, add dedicated capacity from the billing page.',
+  'email.settings.rateIncrease': 'Increase capacity',
   'email.settings.domains': 'Sending domains',
   'email.settings.domainsPlaceholder':
     'Domain setup (SPF, DKIM, DMARC and the tracking subdomain) arrives with the domains wizard. Until a sending domain is verified, only test emails can be sent.',

@@ -73,6 +73,9 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.settings.physicalAddress': 'Indirizzo fisico (stampato in ogni footer)',
   'email.settings.timezone': 'Fuso orario dello spazio (per i contatti senza fuso)',
   'email.settings.rate': 'Email massime al minuto',
+  'email.settings.rateManaged':
+    "Lo stabilisce il tuo piano in base al suo limite di invio orario. Per inviare più velocemente aggiungi capacità dedicata dalla pagina di fatturazione.",
+  'email.settings.rateIncrease': 'Aumenta capacità',
   'email.settings.domains': 'Domini di invio',
   'email.settings.domainsPlaceholder':
     'La configurazione dei domini (SPF, DKIM, DMARC e sottodominio di tracking) arriva con il wizard dei domini. Finché un dominio di invio non è verificato si possono inviare solo email di prova.',

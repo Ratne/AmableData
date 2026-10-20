@@ -183,6 +183,8 @@ export const emailSettingsSchema = z.object({
   physical_address: z.string().nullable(),
   timezone: z.string(),
   rate_per_minute: z.number().int(),
+  /** The managed plan sets `rate_per_minute` (its hourly cap / 60); updates of it are rejected with 422 `rate_managed`. */
+  rate_managed: z.boolean(),
   sending: z.object({
     state: z.enum(SENDING_STATES),
     domains: z.array(

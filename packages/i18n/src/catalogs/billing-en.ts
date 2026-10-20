@@ -32,6 +32,7 @@ export const billingEn = {
   'billing.email.noCap': 'no limit',
   'billing.email.explain':
     'The included quota resets at every renewal. Beyond it, emails are paid from the wallet at {price} every 1,000. Before a broadcast starts its cost is estimated: if the balance does not cover it, the send does not start; automation emails pause when the wallet is empty and resume after a top-up.',
+  'billing.email.increase': 'Increase capacity',
   'billing.email.unavailable':
     'Quota data is not available yet: it appears after the first contact with the platform.',
   'billing.wallet.title': 'Wallet',

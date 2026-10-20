@@ -20,6 +20,7 @@ function portalUrls(c: Context<AppEnv>): BillingOverview['portal'] {
     url,
     billing_url: `${url}/billing`,
     wallet_url: `${url}/wallet`,
+    capacity_url: `${url}/capacity`,
     connect_url: `${url}/signup`,
   };
 }

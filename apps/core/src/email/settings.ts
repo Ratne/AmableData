@@ -69,7 +69,9 @@ export function tenantTimeZone(deps: MailDeps): string {
   return tz !== null && isValidTimeZone(tz) ? tz : 'UTC';
 }
 
-export function ratePerMinute(deps: MailDeps): number {
+/** The plan's rate when the managed offering sets one (`planRate`), else the workspace setting. */
+export function ratePerMinute(deps: MailDeps, planRate: number | null = null): number {
+  if (planRate !== null) return planRate;
   const value = Number(getSetting(deps, 'rate_per_minute'));
   return Number.isInteger(value) && value > 0 ? value : DEFAULT_RATE_PER_MINUTE;
 }
@@ -124,8 +126,11 @@ export type SlotDecision =
  * Reserves one send slot (daily warm-up cap + per-minute rate). Synchronous so
  * the check and the increment are atomic inside the DO.
  */
-/** `ignoreWarmup`: transactional sends still count towards the caps but are never held by them. */
-export function reserveSlot(deps: MailDeps, options: { ignoreWarmup?: boolean } = {}): SlotDecision {
+/**
+ * `ignoreWarmup`: transactional sends still count towards the caps but are never held by them.
+ * `planRate`: per-minute rate of the managed plan, overriding the workspace setting.
+ */
+export function reserveSlot(deps: MailDeps, options: { ignoreWarmup?: boolean; planRate?: number | null } = {}): SlotDecision {
   const now = deps.now();
   const warmup = warmupState(deps);
   if (
@@ -136,7 +141,7 @@ export function reserveSlot(deps: MailDeps, options: { ignoreWarmup?: boolean } 
     const nextDay = (Math.floor(now / DAY_MS) + 1) * DAY_MS;
     return { ok: false, reason: 'warmup_cap', retryAfterSeconds: Math.ceil((nextDay - now) / 1000) + 5 };
   }
-  if (counter(deps, minuteBucket(now)) >= ratePerMinute(deps)) {
+  if (counter(deps, minuteBucket(now)) >= ratePerMinute(deps, options.planRate ?? null)) {
     const nextMinute = (Math.floor(now / 60_000) + 1) * 60_000;
     return { ok: false, reason: 'rate_limit', retryAfterSeconds: Math.ceil((nextMinute - now) / 1000) + 1 };
   }
@@ -268,6 +273,7 @@ export function fromAddress(deps: MailDeps, fromName: string | null): string {
 
 export async function readSettings(deps: MailDeps): Promise<EmailSettings> {
   const sending = await deps.sending();
+  const planRate = (await deps.quota.ratePerMinute?.()) ?? null;
   const gate = sendGate(deps, sending);
   const warmup = warmupState(deps);
   const s = suspension(deps);
@@ -278,7 +284,8 @@ export async function readSettings(deps: MailDeps): Promise<EmailSettings> {
     reply_to: getSetting(deps, 'reply_to'),
     physical_address: getSetting(deps, 'physical_address'),
     timezone: tenantTimeZone(deps),
-    rate_per_minute: ratePerMinute(deps),
+    rate_per_minute: ratePerMinute(deps, planRate),
+    rate_managed: planRate !== null,
     sending: {
       state: sending.state,
       domains: sending.domains.map((d) => ({ hostname: d.hostname, kind: d.kind, status: d.status })),
@@ -308,6 +315,9 @@ export async function updateSettings(
 ): Promise<EmailSettings> {
   if (input.timezone !== undefined && !isValidTimeZone(input.timezone)) {
     throw new MailError('validation_failed', 422, `unknown timezone ${input.timezone}`);
+  }
+  if (input.rate_per_minute !== undefined && ((await deps.quota.ratePerMinute?.()) ?? null) !== null) {
+    throw new MailError('rate_managed', 422, 'the sending rate is set by your plan');
   }
   deps.db.transaction(() => {
     const text = (key: SettingKey, value: string | null | undefined): void => {

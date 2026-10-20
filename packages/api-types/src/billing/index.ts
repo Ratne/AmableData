@@ -68,6 +68,8 @@ export const billingOverviewSchema = z.object({
     url: z.string(),
     billing_url: z.string(),
     wallet_url: z.string(),
+    /** Dedicated sending capacity (plan tiers and extra IPs) for this installation. */
+    capacity_url: z.string(),
     /** Account creation, to link an open source installation and buy credits. */
     connect_url: z.string(),
   }),

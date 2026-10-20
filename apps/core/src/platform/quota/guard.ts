@@ -69,6 +69,7 @@ export function decideQuota(
       };
     }
   }
+  if (snapshot.emailMetered === false) return { action: 'allow' };
   const priorExcess = Math.max(usage.unreported - snapshot.includedRemaining, 0);
   const remaining = Math.max(snapshot.includedRemaining - usage.unreported, 0);
   const excess = Math.max(input.count - remaining, 0);
@@ -145,5 +146,15 @@ export function createPlatformQuotaGuard(
         console.error('[platform] usage metering failed', error);
       }
     },
+    async ratePerMinute() {
+      const { snapshot } = await loadQuotaSnapshot(env, now());
+      return snapshot === null ? null : planRatePerMinute(snapshot);
+    },
   };
+}
+
+/** The plan's hourly cap spread over the hour; null when the plan sets no cap (self-hosted). */
+export function planRatePerMinute(snapshot: Pick<QuotaSnapshot, 'caps'>): number | null {
+  const hourly = snapshot.caps.hourly;
+  return hourly === null ? null : Math.max(1, Math.floor(hourly / 60));
 }

@@ -172,6 +172,25 @@ export interface PostShibaWebhookEndpoint {
   readonly secret: string | null;
 }
 
+/** Monthly capacity plans a cluster can be created with or moved to (beta list of the API). */
+export const POSTSHIBA_PLANS = ['nano', 'micro', 'small', 'medium', 'large'] as const;
+export type PostShibaPlan = (typeof POSTSHIBA_PLANS)[number];
+
+/** A sending IP of the Network: one the team can buy (`available`) or one it uses (`owned` / on its clusters). */
+export interface PostShibaIp {
+  readonly id: string;
+  /** Shared addresses hide the last octet until assigned. */
+  readonly address: string;
+  /** `active`, `warming`, `reserved`, … */
+  readonly status: string;
+  readonly warmupEndsAt: string | null;
+  readonly kind: 'shared' | 'dedicated';
+  readonly classification: 'bulk' | 'transactional';
+  readonly owned: boolean;
+  readonly available: boolean;
+  readonly clusterIds: readonly string[];
+}
+
 export interface PostShibaCluster {
   readonly id: string;
   readonly name: string;
@@ -273,6 +292,21 @@ function toCluster(value: unknown): PostShibaCluster {
   };
 }
 
+function toIp(value: unknown): PostShibaIp {
+  if (!isRecord(value) || typeof value['id'] !== 'string') throw new EmailProviderError('unexpected network response', true);
+  return {
+    id: value['id'],
+    address: str(value['address']),
+    status: str(value['status']),
+    warmupEndsAt: str(value['warmup_ends_at']) || null,
+    kind: value['kind'] === 'dedicated' ? 'dedicated' : 'shared',
+    classification: value['classification'] === 'transactional' ? 'transactional' : 'bulk',
+    owned: value['owned'] === true,
+    available: value['available'] === true,
+    clusterIds: list(value['cluster_ids'], str),
+  };
+}
+
 function toTeamStatus(value: unknown): PostShibaTeamStatus {
   const record = isRecord(value) ? value : {};
   return {
@@ -319,6 +353,13 @@ export interface PostShibaAccountApi {
   updateWebhookEndpointUrl(id: string, url: string): Promise<PostShibaWebhookEndpoint>;
   deleteWebhookEndpoint(id: string): Promise<void>;
   listClusters(): Promise<PostShibaCluster[]>;
+  createCluster(input: { name: string; plan: PostShibaPlan; classification: PostShibaCluster['classification'] }): Promise<PostShibaCluster>;
+  updateClusterPlan(id: string, plan: PostShibaPlan): Promise<PostShibaCluster>;
+  deleteCluster(id: string): Promise<void>;
+  listNetwork(filter: { clusterId?: string }): Promise<PostShibaIp[]>;
+  addNetworkIp(input: { ipAddressId: string; clusterId: string; percents?: Readonly<Record<string, number>> }): Promise<PostShibaIp>;
+  unassignNetworkIp(input: { ipAddressId: string; clusterId: string }): Promise<PostShibaIp>;
+  releaseNetworkIp(ipAddressId: string): Promise<PostShibaIp>;
   teamStatus(): Promise<PostShibaTeamStatus>;
 }
 
@@ -426,6 +467,55 @@ export class PostShibaAccount implements PostShibaAccountApi {
   /** Live clusters of the team (deprovisioned ones excluded). */
   async listClusters(): Promise<PostShibaCluster[]> {
     return list(await this.call('GET', `${this.team}/clusters`), toCluster);
+  }
+
+  /** Shared-IP cluster on its own plan; 403 `payment_required` / `kyc_required`, 422 when no IP of the class is free. */
+  async createCluster(input: { name: string; plan: PostShibaPlan; classification: PostShibaCluster['classification'] }): Promise<PostShibaCluster> {
+    return toCluster(
+      await this.call('POST', `${this.team}/clusters`, {
+        cluster: { name: input.name, size: 'small', region: 'manual', plan: input.plan, classification: input.classification },
+      }),
+    );
+  }
+
+  /** Throttles follow the new plan at once; 422 while a boost is active or scheduled. */
+  async updateClusterPlan(id: string, plan: PostShibaPlan): Promise<PostShibaCluster> {
+    return toCluster(await this.call('PATCH', `/clusters/${encodeURIComponent(id)}`, { cluster: { plan } }));
+  }
+
+  /** Deprovisions the cluster and disables its SMTP credentials. */
+  async deleteCluster(id: string): Promise<void> {
+    await this.call('DELETE', `/clusters/${encodeURIComponent(id)}`);
+  }
+
+  /** IPs the team can buy and the ones it uses; `clusterId` narrows to that cluster's class. */
+  async listNetwork(filter: { clusterId?: string }): Promise<PostShibaIp[]> {
+    const query = filter.clusterId === undefined ? '' : `?cluster_id=${encodeURIComponent(filter.clusterId)}`;
+    return list(await this.call('GET', `${this.team}/network${query}`), toIp);
+  }
+
+  /**
+   * Buys `ipAddressId` onto the cluster (shared extra $15/month, dedicated $50/month).
+   * `percents` (current IP ids + `new`, summing to 100) sets the send split; default 90/10.
+   */
+  async addNetworkIp(input: { ipAddressId: string; clusterId: string; percents?: Readonly<Record<string, number>> }): Promise<PostShibaIp> {
+    return toIp(
+      await this.call('POST', `${this.team}/network`, {
+        ip_address_id: input.ipAddressId,
+        cluster_id: input.clusterId,
+        ...(input.percents === undefined ? {} : { split: 'custom', percents: input.percents }),
+      }),
+    );
+  }
+
+  /** Takes the IP off the cluster; 422 `last_ip` when it is the only one. */
+  async unassignNetworkIp(input: { ipAddressId: string; clusterId: string }): Promise<PostShibaIp> {
+    return toIp(await this.call('POST', `${this.team}/network/unassign`, { ip_address_id: input.ipAddressId, cluster_id: input.clusterId }));
+  }
+
+  /** Returns an owned dedicated IP to inventory and stops its bill. */
+  async releaseNetworkIp(ipAddressId: string): Promise<PostShibaIp> {
+    return toIp(await this.call('POST', `${this.team}/network/release`, { ip_address_id: ipAddressId }));
   }
 
   /** Clusters at their cap, held tenants, team suspension. */

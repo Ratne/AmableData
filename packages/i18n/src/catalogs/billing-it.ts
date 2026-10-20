@@ -34,6 +34,7 @@ export const billingIt: Readonly<Record<BillingMessageKey, string>> = {
   'billing.email.noCap': 'nessun limite',
   'billing.email.explain':
     "La quota inclusa si azzera a ogni rinnovo. Oltre la quota le email si pagano dal wallet a {price} ogni 1.000. Prima che parta un broadcast se ne stima il costo: se il saldo non lo copre l'invio non parte; le email delle automazioni vanno in pausa a wallet vuoto e riprendono dopo la ricarica.",
+  'billing.email.increase': 'Aumenta capacità',
   'billing.email.unavailable':
     'I dati della quota non sono ancora disponibili: compaiono dopo il primo contatto con la piattaforma.',
   'billing.wallet.title': 'Wallet',

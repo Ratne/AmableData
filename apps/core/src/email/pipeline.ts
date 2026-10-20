@@ -269,6 +269,8 @@ async function processOne(
     }
   }
 
+  const planRate = (await deps.quota.ratePerMinute?.()) ?? null;
+
   const data = contacts.get(request.contactId);
   if (data === undefined) return finish(deps, row, 'skipped', 'contact_not_found');
   const email = recipientEmail(data, request);
@@ -331,7 +333,7 @@ async function processOne(
   if (row.status !== 'queued' || (row.lease_until !== null && row.lease_until > deps.now())) {
     return { id: request.id, action: 'ack', status: 'duplicate' };
   }
-  const slot = reserveSlot(deps, { ignoreWarmup: transactional });
+  const slot = reserveSlot(deps, { ignoreWarmup: transactional, planRate });
   if (!slot.ok) {
     return {
       id: request.id,

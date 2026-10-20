@@ -117,7 +117,10 @@ export function createMailWorld(options: { verified?: boolean } = {}): MailWorld
         return Promise.resolve();
       },
     },
-    quota: { check: (input) => quota.current.check(input) },
+    quota: {
+      check: (input) => quota.current.check(input),
+      ratePerMinute: () => quota.current.ratePerMinute?.() ?? Promise.resolve(null),
+    },
     sending: () => Promise.resolve(sending.current),
     tokenSecrets: [SECRET],
     automation: {

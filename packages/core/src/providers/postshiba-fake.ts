@@ -2,6 +2,8 @@ import { EmailProviderError } from './email-marketing';
 import type {
   PostShibaAccountApi,
   PostShibaCluster,
+  PostShibaIp,
+  PostShibaPlan,
   PostShibaSendingDomain,
   PostShibaSmtpCredential,
   PostShibaTeamStatus,
@@ -23,6 +25,23 @@ const fakeCluster = (id: string, name: string): PostShibaCluster => ({
   httpEndpoint: 'inject.postshiba.test:443',
 });
 
+const FAKE_THROTTLES: Readonly<Record<PostShibaPlan, { hourly: number; daily: number }>> = {
+  nano: { hourly: 100, daily: 600 },
+  micro: { hourly: 4_000, daily: 24_000 },
+  small: { hourly: 40_000, daily: 240_000 },
+  medium: { hourly: 100_000, daily: 600_000 },
+  large: { hourly: 200_000, daily: 1_200_000 },
+};
+
+const withPlan = (cluster: PostShibaCluster, plan: PostShibaPlan): PostShibaCluster => ({
+  ...cluster,
+  plan,
+  emailsPerHour: FAKE_THROTTLES[plan].hourly,
+  emailsPerDay: FAKE_THROTTLES[plan].daily,
+  baseEmailsPerHour: FAKE_THROTTLES[plan].hourly,
+  baseEmailsPerDay: FAKE_THROTTLES[plan].daily,
+});
+
 /**
  * In-memory PostShiba team (dev, staging, tests): same answers as the real
  * API, no network. `failNext` makes the next call of a method fail once;
@@ -37,6 +56,10 @@ export class FakePostShibaAccount implements PostShibaAccountApi {
     ['FakeCluster', fakeCluster('FakeCluster', 'fake-small')],
     ['FakeCluster2', fakeCluster('FakeCluster2', 'fake-small-2')],
   ]);
+  /** Network inventory: free IPs are `available`, assigned ones list their clusters (see `stockIps`). */
+  readonly ips = new Map<string, PostShibaIp>();
+  /** Last `percents` sent per cluster. */
+  readonly splits = new Map<string, Readonly<Record<string, number>>>();
   /** Ids reported in `clusters_at_cap`. */
   readonly atCap = new Set<string>();
   readonly calls: string[] = [];
@@ -198,6 +221,88 @@ export class FakePostShibaAccount implements PostShibaAccountApi {
   listClusters(): Promise<PostShibaCluster[]> {
     this.enter('listClusters');
     return Promise.resolve([...this.clusters.values()]);
+  }
+
+  createCluster(input: { name: string; plan: PostShibaPlan; classification: PostShibaCluster['classification'] }): Promise<PostShibaCluster> {
+    this.enter('createCluster');
+    const id = this.id('Clu');
+    const cluster = withPlan({ ...fakeCluster(id, input.name), classification: input.classification }, input.plan);
+    this.clusters.set(id, cluster);
+    return Promise.resolve(cluster);
+  }
+
+  updateClusterPlan(id: string, plan: PostShibaPlan): Promise<PostShibaCluster> {
+    this.enter('updateClusterPlan');
+    const cluster = this.clusters.get(id);
+    if (cluster === undefined) return Promise.reject(new EmailProviderError('not found', false, 404, null, 'not_found'));
+    const updated = withPlan(cluster, plan);
+    this.clusters.set(id, updated);
+    return Promise.resolve(updated);
+  }
+
+  /** Puts `count` buyable IPs of `kind` in the inventory (bulk class). */
+  stockIps(kind: PostShibaIp['kind'], count: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const id = this.id(kind === 'shared' ? 'Shr' : 'Ded');
+      this.ips.set(id, { id, address: `203.0.113.${String(this.seq)}`, status: 'active', warmupEndsAt: null, kind, classification: 'bulk', owned: false, available: true, clusterIds: [] });
+    }
+  }
+
+  listNetwork(filter: { clusterId?: string }): Promise<PostShibaIp[]> {
+    this.enter('listNetwork');
+    const cluster = filter.clusterId === undefined ? undefined : this.clusters.get(filter.clusterId);
+    return Promise.resolve([...this.ips.values()].filter((ip) => cluster === undefined || ip.classification === cluster.classification));
+  }
+
+  addNetworkIp(input: { ipAddressId: string; clusterId: string; percents?: Readonly<Record<string, number>> }): Promise<PostShibaIp> {
+    this.enter('addNetworkIp');
+    const ip = this.ips.get(input.ipAddressId);
+    if (ip === undefined || !ip.available) return Promise.reject(new EmailProviderError('already claimed', false, 422, null, 'already_claimed'));
+    if (!this.clusters.has(input.clusterId)) return Promise.reject(new EmailProviderError('not found', false, 404, null, 'not_found'));
+    const onCluster = [...this.ips.values()].filter((i) => i.clusterIds.includes(input.clusterId));
+    if (ip.kind === 'dedicated' && onCluster.some((i) => i.kind === 'dedicated')) {
+      return Promise.reject(new EmailProviderError('dedicated taken', false, 422, null, 'dedicated_taken'));
+    }
+    const added: PostShibaIp = {
+      ...ip,
+      owned: ip.kind === 'dedicated',
+      available: false,
+      status: ip.kind === 'dedicated' ? 'warming' : 'active',
+      clusterIds: [input.clusterId],
+    };
+    this.ips.set(ip.id, added);
+    if (input.percents !== undefined) this.splits.set(input.clusterId, input.percents);
+    return Promise.resolve(added);
+  }
+
+  unassignNetworkIp(input: { ipAddressId: string; clusterId: string }): Promise<PostShibaIp> {
+    this.enter('unassignNetworkIp');
+    const ip = this.ips.get(input.ipAddressId);
+    if (ip === undefined || !ip.clusterIds.includes(input.clusterId)) return Promise.reject(new EmailProviderError('not found', false, 404, null, 'not_found'));
+    const updated: PostShibaIp = { ...ip, clusterIds: ip.clusterIds.filter((c) => c !== input.clusterId), available: ip.kind === 'shared' };
+    this.ips.set(ip.id, updated);
+    return Promise.resolve(updated);
+  }
+
+  releaseNetworkIp(ipAddressId: string): Promise<PostShibaIp> {
+    this.enter('releaseNetworkIp');
+    const ip = this.ips.get(ipAddressId);
+    if (ip === undefined || !ip.owned) return Promise.reject(new EmailProviderError('not found', false, 404, null, 'not_found'));
+    const released: PostShibaIp = { ...ip, owned: false, available: false, status: 'reserved', clusterIds: [] };
+    this.ips.set(ip.id, released);
+    return Promise.resolve(released);
+  }
+
+  deleteCluster(id: string): Promise<void> {
+    this.enter('deleteCluster');
+    this.clusters.delete(id);
+    for (const ip of this.ips.values()) {
+      if (ip.clusterIds.includes(id)) this.ips.set(ip.id, { ...ip, clusterIds: ip.clusterIds.filter((c) => c !== id), available: ip.kind === 'shared' });
+    }
+    for (const [credentialId, credential] of this.credentials) {
+      if (credential.clusterId === id) this.credentials.set(credentialId, { ...credential, disabled: true });
+    }
+    return Promise.resolve();
   }
 
   teamStatus(): Promise<PostShibaTeamStatus> {

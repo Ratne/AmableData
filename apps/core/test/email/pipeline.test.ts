@@ -164,6 +164,20 @@ describe('send pipeline', () => {
     expect(outcomes[2]).toMatchObject({ reason: 'rate_limit' });
   });
 
+  it('uses the plan rate when the managed offering sets one, and refuses to change it', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    world.quota.current = { check: () => Promise.resolve({ action: 'allow' }), ratePerMinute: () => Promise.resolve(1) };
+    expect(await world.op('settings.get', {})).toMatchObject({ rate_per_minute: 1, rate_managed: true });
+    await expect(world.op('settings.update', { rate_per_minute: 5000 })).rejects.toThrow(/^rate_managed/);
+    const ids = [world.contact({ email: 'a@x.test' }), world.contact({ email: 'b@x.test' })];
+    const outcomes = await world.op('send.process', {
+      batch: ids.map((id, i) => ({ request: sendRequest(id, { id: `pr${String(i)}` }), queueAttempts: 1 })),
+    });
+    expect(outcomes.map((o) => o.action)).toEqual(['ack', 'retry']);
+    expect(outcomes[1]).toMatchObject({ reason: 'rate_limit' });
+  });
+
   it('formats dates in the tenant timezone, in the body, subject and snippets; explicit zones still win', async () => {
     const world = createMailWorld();
     await configureSender(world);

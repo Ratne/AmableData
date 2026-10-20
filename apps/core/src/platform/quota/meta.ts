@@ -22,6 +22,7 @@ export const quotaSnapshotSchema = z.object({
     hourly: z.number().int().min(0).nullable(),
     daily: z.number().int().min(0).nullable(),
   }),
+  emailMetered: z.boolean().optional(),
   usedThisPeriod: z.number().int().min(0),
   issuedAt: z.string(),
   ttlSeconds: z.number().int().min(0),

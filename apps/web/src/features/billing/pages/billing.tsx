@@ -107,7 +107,7 @@ function BillingView({ data }: { data: BillingOverview }) {
       {data.mode === 'managed' ? (
         <>
           <PlanCard data={data} />
-          <EmailCard email={data.email} />
+          <EmailCard email={data.email} capacityUrl={data.portal.capacity_url} />
           <WalletCard wallet={data.wallet} email={data.email} portal={data.portal} />
         </>
       ) : (
@@ -195,7 +195,7 @@ function PlanCard({ data }: { data: BillingOverview }) {
   );
 }
 
-function EmailCard({ email }: { email: BillingEmailQuota | null }) {
+function EmailCard({ email, capacityUrl }: { email: BillingEmailQuota | null; capacityUrl: string }) {
   const { t, locale } = useI18n();
   if (email === null) {
     return (
@@ -245,6 +245,9 @@ function EmailCard({ email }: { email: BillingEmailQuota | null }) {
         <p className="text-sm text-muted-foreground">
           {t('billing.email.explain', { price: overage })}
         </p>
+        <div>
+          <PortalLink href={capacityUrl}>{t('billing.email.increase')}</PortalLink>
+        </div>
       </div>
     </SectionCard>
   );

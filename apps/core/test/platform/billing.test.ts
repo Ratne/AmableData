@@ -71,6 +71,7 @@ describe('GET /api/v2/t/:slug/billing', () => {
         url: CP_URL,
         billing_url: `${CP_URL}/billing`,
         wallet_url: `${CP_URL}/wallet`,
+        capacity_url: `${CP_URL}/capacity`,
         connect_url: `${CP_URL}/signup`,
       },
     });
@@ -150,6 +151,7 @@ describe('GET /api/v2/t/:slug/billing', () => {
           url: 'https://app.amabledata.com',
           billing_url: 'https://app.amabledata.com/billing',
           wallet_url: 'https://app.amabledata.com/wallet',
+          capacity_url: 'https://app.amabledata.com/capacity',
           connect_url: 'https://app.amabledata.com/signup',
         },
       });

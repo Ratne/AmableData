@@ -130,6 +130,36 @@ describe('platform quota guard — decisions', () => {
     expect(decideQuota(snapshot, usage, { count: 100, source: broadcast }, START)).toEqual({ action: 'allow' });
     expect(decideQuota(snapshot, usage, { count: 101, source: broadcast }, START).action).toBe('deny');
   });
+
+  it('unmetered email (dedicated capacity): no wallet check, suspension and caps still apply', () => {
+    const snapshot = {
+      serviceState: 'active' as const,
+      includedRemaining: 0,
+      includedMonthly: 100,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      balanceMicros: 0,
+      overagePer1000Micros: 1_000_000,
+      caps: { hourly: 10, daily: null },
+      usedThisPeriod: 0,
+      issuedAt: '2026-10-15T12:00:00.000Z',
+      ttlSeconds: 30,
+      emailMetered: false,
+    };
+    const usage = { unreported: 500, thisHour: 0, today: 0 };
+    expect(decideQuota(snapshot, usage, { count: 50_000, source: broadcast }, START)).toEqual({ action: 'allow' });
+    expect(decideQuota({ ...snapshot, serviceState: 'suspended' }, usage, { count: 1, source: broadcast }, START).action).toBe('deny');
+    expect(decideQuota(snapshot, { ...usage, thisHour: 10 }, { count: 1, source: automation }, START).action).toBe('pause');
+  });
+
+  it('exposes the plan rate as the hourly cap per minute, none without a cap', async () => {
+    const { h, cp: fake } = await setup();
+    expect(await guardOf(h).ratePerMinute?.()).toBeNull();
+    fake.caps = { hourly: 40_000, daily: 240_000 };
+    h.clock.advance(60_000);
+    expect(await guardOf(h).ratePerMinute?.()).toBe(666);
+    expect(await allowAllQuotaGuard.ratePerMinute?.()).toBeUndefined();
+  });
 });
 
 describe('platform quota guard — snapshot cache and outages', () => {

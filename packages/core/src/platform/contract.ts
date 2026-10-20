@@ -92,6 +92,11 @@ export interface QuotaSnapshot {
   readonly overagePer1000Micros: number;
   /** Sending caps assigned by the control plane (PostShiba capacity), null = no cap. */
   readonly caps: { readonly hourly: number | null; readonly daily: number | null };
+  /**
+   * `false` while the installation sends from a cluster it pays for (capacity add-on):
+   * emails then consume neither the included quota nor the wallet. Absent = metered.
+   */
+  readonly emailMetered?: boolean;
   /** Usage already reported in the current period, for display. */
   readonly usedThisPeriod: number;
   readonly issuedAt: string;

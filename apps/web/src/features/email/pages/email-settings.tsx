@@ -8,6 +8,7 @@ import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { Globe, Save, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../../i18n';
@@ -39,6 +40,7 @@ export function EmailSettingsPage() {
       rate: String(s.rate_per_minute),
     });
   }, [settings.data]);
+  const rateManaged = settings.data?.rate_managed === true;
   const save = useEmailMutation({
     mutationFn: () =>
       api.settings.update({
@@ -47,7 +49,7 @@ export function EmailSettingsPage() {
         reply_to: form.reply_to || null,
         physical_address: form.physical_address || null,
         timezone: form.timezone,
-        rate_per_minute: Number(form.rate) || 600,
+        ...(rateManaged ? {} : { rate_per_minute: Number(form.rate) || 600 }),
       }),
     invalidate: [emailKeys.settings(slug)],
     success: t('email.common.saved'),
@@ -118,7 +120,19 @@ export function EmailSettingsPage() {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="set-rate">{t('email.settings.rate')}</Label>
-              <Input id="set-rate" type="number" min={1} max={10000} {...field('rate')} />
+              {rateManaged ? (
+                <>
+                  <Input id="set-rate" type="number" value={form.rate} readOnly disabled />
+                  <p className="text-xs text-muted-foreground">
+                    {t('email.settings.rateManaged')}{' '}
+                    <Link to="/t/$tenant/settings/billing" params={{ tenant: slug }} className="underline">
+                      {t('email.settings.rateIncrease')}
+                    </Link>
+                  </p>
+                </>
+              ) : (
+                <Input id="set-rate" type="number" min={1} max={10000} {...field('rate')} />
+              )}
             </div>
           </CardContent>
         </Card>

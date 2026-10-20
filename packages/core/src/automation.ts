@@ -114,6 +114,8 @@ export interface QuotaGuard {
   check(input: QuotaCheck): Promise<QuotaDecision>;
   /** Called once per message actually handed to the provider (metering). Optional. */
   recordUsage?(usage: QuotaUsage): Promise<void>;
+  /** Per-minute send rate set by the plan (managed offering); null or absent = the workspace setting applies. */
+  ratePerMinute?(): Promise<number | null>;
 }
 
 /** Default guard of an installation without a control plane: always allows. */
