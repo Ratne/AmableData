@@ -1,4 +1,4 @@
-import { isProviderError, ProviderError, type AdsProvider as AdPlatformClient } from '@amable/ads-providers';
+import { isProviderError, META_DEFAULT_SCOPES, ProviderError, type AdsProvider as AdPlatformClient } from '@amable/ads-providers';
 import {
   ADS_TOKEN_AUTH_EXPIRED,
   adsTokenInputSchema,
@@ -29,6 +29,13 @@ import { renderEmailLayout } from '@amable/i18n';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
 import { authSealer, d1OAuthStore } from '../providers/select';
+import {
+  AdsBrokerError,
+  adsOAuthBrokerFor,
+  brokeredAdPlatform,
+  type AdsBrokerTokens,
+  type AdsOAuthBroker,
+} from './ads-broker';
 import {
   adPlatformClientsFor,
   adPlatformCredentials,
@@ -93,10 +100,13 @@ export interface AdGrant {
   tenantId: string;
   siteId: string;
   platform: AdPlatform;
+  /** Brokered grants cache the latest short-lived token here. */
   accessToken: string;
   refreshToken: string | null;
   /** Epoch ms; null when the platform token does not expire. */
   expiresAt: number | null;
+  /** Set when the authorization lives on the central broker: refresh and revocation go through it. */
+  broker?: { accountId: string };
 }
 
 export interface AdOAuthState {
@@ -105,6 +115,8 @@ export interface AdOAuthState {
   platform: AdPlatform;
   redirectUri: string;
   expiresAt: number;
+  /** The state was issued by the central broker (finish must go through it too). */
+  broker?: boolean;
 }
 
 export interface AdGrantStore {
@@ -330,6 +342,8 @@ export interface AdsSyncPorts {
   ns: AnalyticsNamespace;
   clients: AdPlatformClients;
   grants: AdGrantStore;
+  /** Central OAuth broker of the control plane; null when not licensed. */
+  broker?: AdsOAuthBroker | null;
   /** Tells the workspace a connection needs attention; must not throw. */
   notify(alert: AdConnectionAlert): Promise<void>;
   now(): number;
@@ -360,6 +374,7 @@ async function accessTokenOf(
   if (ref === null || grant === null) throw new ProviderError('auth_expired', 'authorization missing, reconnect the account');
   const now = ports.now();
   if (grant.expiresAt === null || grant.expiresAt - TOKEN_REFRESH_MARGIN_MS > now) return grant.accessToken;
+  if (grant.broker !== undefined) return brokerAccessToken(ports, ref, grant, grant.broker.accountId);
   if (grant.refreshToken === null) {
     if (grant.expiresAt > now) return grant.accessToken;
     throw new ProviderError('auth_expired', 'access token expired');
@@ -370,6 +385,27 @@ async function accessTokenOf(
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken ?? grant.refreshToken,
     expiresAt: tokens.expiresAt ?? null,
+  });
+  return tokens.accessToken;
+}
+
+/** Fresh access token of a brokered grant: asked to the control plane and cached in the sealed grant. */
+async function brokerAccessToken(ports: AdsSyncPorts, ref: GrantRef, grant: AdGrant, accountId: string): Promise<string> {
+  const broker = ports.broker ?? null;
+  if (broker === null) throw new ProviderError('retryable', 'ads broker unavailable');
+  let tokens: AdsBrokerTokens | null;
+  try {
+    tokens = await broker.token({ tenantId: ref.tenantId, accountId });
+  } catch (error) {
+    if (error instanceof AdsBrokerError) throw new ProviderError('retryable', error.message);
+    throw error;
+  }
+  if (tokens === null) throw new ProviderError('auth_expired', 'authorization revoked, reconnect the account');
+  await ports.grants.putGrant(ref, {
+    ...grant,
+    accessToken: tokens.accessToken,
+    refreshToken: null,
+    expiresAt: tokens.expiresAt,
   });
   return tokens.accessToken;
 }
@@ -627,10 +663,51 @@ export async function backfillAdConnection(
 
 // --------------------------------------------------------------------- OAuth
 
+/** Scopes requested from the central broker, by platform. */
+const BROKER_SCOPES: Partial<Record<AdPlatform, readonly string[]>> = {
+  meta: META_DEFAULT_SCOPES,
+};
+
+/** Maps a broker failure onto the sync error surface; rethrows anything else. */
+function brokerFailure(error: unknown): never {
+  if (error instanceof AdsBrokerError) {
+    if (error.code === 'invalid_grant') throw new AdsSyncError('invalid_state', 'invalid or expired authorization');
+    throw new AdsSyncError('unavailable', 'integration_unavailable');
+  }
+  throw error;
+}
+
 export async function startAdsConnect(
-  ports: Pick<AdsSyncPorts, 'clients' | 'grants' | 'now'>,
+  ports: Pick<AdsSyncPorts, 'clients' | 'grants' | 'now' | 'broker'>,
   input: { tenantId: string; tenantSlug: string; siteId: string; platform: AdPlatform; redirectUri: string },
 ): Promise<{ authorizeUrl: string; state: string }> {
+  if (ports.clients.mode(input.platform) === 'broker') {
+    const broker = ports.broker ?? null;
+    const scopes = BROKER_SCOPES[input.platform];
+    if (broker === null || scopes === undefined) throw new AdsSyncError('unavailable', 'integration_unavailable');
+    let started: { authorizeUrl: string; state: string };
+    try {
+      // The broker's own state comes back on the redirect; the pending flow is
+      // stored under it so the callback route finds tenant, site and platform.
+      started = await broker.start({
+        tenantId: input.tenantId,
+        platform: input.platform,
+        scopes,
+        returnUrl: input.redirectUri,
+      });
+    } catch (error) {
+      brokerFailure(error);
+    }
+    await ports.grants.putState(started.state, {
+      tenantId: input.tenantId,
+      siteId: input.siteId,
+      platform: input.platform,
+      redirectUri: input.redirectUri,
+      expiresAt: ports.now() + STATE_TTL_MS,
+      broker: true,
+    });
+    return started;
+  }
   const client = ports.clients.client(input.platform);
   if (client === null) throw new AdsSyncError('unavailable', 'integration_unavailable');
   // The slug lets the fixed redirect page find the workspace that started the flow.
@@ -645,12 +722,30 @@ export async function startAdsConnect(
   return { authorizeUrl: client.authorizeUrl({ redirectUri: input.redirectUri, state }), state };
 }
 
-async function releaseGrantIfUnused(ports: AdsSyncPorts, siteId: string, grantId: string | undefined): Promise<void> {
+async function releaseGrantIfUnused(
+  ports: AdsSyncPorts,
+  site: { tenantId: string; id: string },
+  grantId: string | undefined,
+): Promise<void> {
   if (grantId === undefined) return;
-  const inUse = (await adsStub(ports.ns, siteId).listAdConnections()).some(
+  const inUse = (await adsStub(ports.ns, site.id).listAdConnections()).some(
     (c) => c.status !== 'disconnected' && metaOf(c).grant_id === grantId,
   );
-  if (!inUse) await ports.grants.deleteGrant(grantId);
+  if (inUse) return;
+  // Brokered authorizations are also revoked centrally (best effort: the
+  // control plane drops its tokens and tells the platform).
+  const broker = ports.broker ?? null;
+  if (broker !== null) {
+    const grant = await ports.grants.getGrant({ tenantId: site.tenantId, siteId: site.id, grantId });
+    if (grant?.broker !== undefined) {
+      try {
+        await broker.revoke({ tenantId: site.tenantId, accountId: grant.broker.accountId });
+      } catch (error) {
+        console.warn(`[analytics] ads broker revoke of ${grantId} failed: ${errorText(error)}`);
+      }
+    }
+  }
+  await ports.grants.deleteGrant(grantId);
 }
 
 /**
@@ -679,9 +774,38 @@ export async function finishAdsConnect(
   }
   const client = ports.clients.client(input.platform);
   if (client === null) throw new AdsSyncError('unavailable', 'integration_unavailable');
-  const tokens = await client.exchangeCode({ code: input.code, redirectUri: pending.redirectUri });
+  let issued: Pick<AdGrant, 'accessToken' | 'refreshToken' | 'expiresAt' | 'broker'>;
+  if (pending.broker === true) {
+    const broker = ports.broker ?? null;
+    if (broker === null) throw new AdsSyncError('unavailable', 'integration_unavailable');
+    try {
+      const account = await broker.finish({
+        tenantId: input.tenantId,
+        platform: input.platform,
+        state: input.state,
+        code: input.code,
+      });
+      const tokens = await broker.token({ tenantId: input.tenantId, accountId: account.accountId });
+      if (tokens === null) throw new AdsSyncError('invalid_state', 'invalid or expired authorization');
+      issued = {
+        accessToken: tokens.accessToken,
+        refreshToken: null,
+        expiresAt: tokens.expiresAt,
+        broker: { accountId: account.accountId },
+      };
+    } catch (error) {
+      brokerFailure(error);
+    }
+  } else {
+    const tokens = await client.exchangeCode({ code: input.code, redirectUri: pending.redirectUri });
+    issued = {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken ?? null,
+      expiresAt: tokens.expiresAt ?? null,
+    };
+  }
   const wanted = input.accountIds === undefined ? null : new Set(input.accountIds);
-  const accounts = (await client.listAccounts(tokens.accessToken))
+  const accounts = (await client.listAccounts(issued.accessToken))
     .filter((a) => wanted === null || wanted.has(a.account_id))
     .slice(0, MAX_ACCOUNTS_PER_CONNECT);
   if (accounts.length === 0) throw new AdsSyncError('no_accounts', 'no ad account available for this authorization');
@@ -693,9 +817,7 @@ export async function finishAdsConnect(
       tenantId: input.tenantId,
       siteId: input.siteId,
       platform: input.platform,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken ?? null,
-      expiresAt: tokens.expiresAt ?? null,
+      ...issued,
     },
   );
   const stub = adsStub(ports.ns, input.siteId);
@@ -721,19 +843,21 @@ export async function finishAdsConnect(
       ),
     );
   }
-  for (const previous of previousGrants) await releaseGrantIfUnused(ports, input.siteId, previous);
+  for (const previous of previousGrants) {
+    await releaseGrantIfUnused(ports, { tenantId: input.tenantId, id: input.siteId }, previous);
+  }
   return created;
 }
 
 /** Stops syncing (data already synced is kept) and drops the grant once no connection uses it. */
 export async function disconnectAdConnection(
   ports: AdsSyncPorts,
-  siteId: string,
+  site: { tenantId: string; id: string },
   conn: AdConnectionRecord,
 ): Promise<AdConnectionRecord> {
   const { grant_id: grantId, ...rest } = metaOf(conn);
   const updated = must(
-    await adsStub(ports.ns, siteId).upsertAdConnection({
+    await adsStub(ports.ns, site.id).upsertAdConnection({
       id: conn.id,
       platform: conn.platform,
       account_id: conn.account_id,
@@ -742,7 +866,7 @@ export async function disconnectAdConnection(
       metadata: rest as Record<string, unknown>,
     }),
   );
-  await releaseGrantIfUnused(ports, siteId, grantId);
+  await releaseGrantIfUnused(ports, site, grantId);
   return updated;
 }
 
@@ -804,6 +928,11 @@ export function adConnectionAlertEmail(alert: AdConnectionAlert, to: string, app
   };
 }
 
+/**
+ * Redirect URI registered on the installation's own ad platform apps; for a
+ * brokered platform the same URL is the `returnUrl` the control plane redirects
+ * back to after its own fixed callback (it must stay on `APP_ORIGIN`).
+ */
 export function adsRedirectUri(env: Env, fallbackOrigin?: string): string {
   const configured = (env as Env & { ADS_OAUTH_REDIRECT_URI?: string }).ADS_OAUTH_REDIRECT_URI?.trim() ?? '';
   if (configured !== '') return configured;
@@ -815,7 +944,11 @@ export function adsSyncPorts(env: Env, ns: AnalyticsNamespace, now: () => number
   const appOrigin = (env.APP_ORIGIN ?? 'http://localhost:5173').replace(/\/+$/, '');
   return {
     ns,
-    clients: adPlatformClientsFor(env as Env & AdPlatformSecretsEnv, { now }),
+    clients: adPlatformClientsFor(env as Env & AdPlatformSecretsEnv, {
+      now,
+      brokered: (platform) => brokeredAdPlatform(env, platform),
+    }),
+    broker: adsOAuthBrokerFor(env),
     grants: kvAdGrantStore(d1OAuthStore(env.DB), authSealer(env), now),
     async notify(alert) {
       try {

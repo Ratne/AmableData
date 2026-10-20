@@ -412,6 +412,21 @@ describe('meta conversions api', () => {
   });
 });
 
+describe('meta without app secret (brokered tokens)', () => {
+  it('omits appsecret_proof on Graph reads and conversions', async () => {
+    const mock = queueFetch([{ body: { data: [] } }, { body: { events_received: 1 } }]);
+    const meta = createMetaProvider(config(mock.fetch, { clientSecret: '' }));
+    await meta.listAccounts('tok-1');
+    expect(query(mock.calls[0]!.url)).toEqual({
+      fields: 'account_id,name,currency,timezone_name',
+      limit: '500',
+    });
+    await meta.sendConversion('tok-1', job({ email: 'a@b.co' }), { pixelId: 'px-1' });
+    expect(query(mock.calls[1]!.url)).toEqual({});
+    expect(mock.calls[1]!.headers.authorization).toBe('Bearer tok-1');
+  });
+});
+
 describe('meta error mapping', () => {
   const cases: [number, unknown, string][] = [
     [400, { error: { code: 190, message: 'expired' } }, 'auth_expired'],

@@ -9,6 +9,54 @@ One Meta app lets workspace users connect their ad accounts to:
 Requested scopes (`META_DEFAULT_SCOPES` in `packages/ads-providers/src/meta.ts`):
 `ads_read`, `ads_management`, `business_management`.
 
+On the managed offering (`LICENSE_KEY` set) Meta is **brokered by the control plane**:
+the operator registers one central app on the control plane host and installations need
+no app, no secrets and no redirect URI of their own (see
+[Central app](#central-app-managed-cloud)). An own app (`META_APP_ID` +
+`META_APP_SECRET`), when configured, always takes precedence. Google Ads and TikTok stay
+own-app only: Google Ads needs a per-operator developer token on every API call and
+TikTok has no central upstream. Dev (`ENVIRONMENT=dev`) uses a fake client, no app
+needed.
+
+## Central app (managed cloud)
+
+Create the app as in [section 1](#1-create-the-app) — same type, products and review
+path — but register it against the **control plane**, not an installation:
+
+- *Facebook Login for Business → Settings → Valid OAuth Redirect URIs*:
+
+  ```text
+  https://<control plane host>/v1/oauth/callback/meta
+  ```
+
+- *Facebook Login for Business → Settings*: leave the deauthorize and data deletion
+  fields pointing at the control plane, which implements both callbacks
+  (`signed_request` verified with the app secret, tokens dropped / rows erased plus a
+  public status page):
+
+  ```text
+  https://<control plane host>/v1/oauth/meta/deauthorize
+  https://<control plane host>/v1/oauth/meta/data-deletion
+  ```
+
+- *App settings → Advanced*: keep **Require app secret proof for server API calls OFF**
+  — installations call the Graph API with short-lived brokered tokens and never hold the
+  app secret, so they cannot compute the proof.
+
+Secrets on the control plane worker:
+
+```sh
+cd control-plane
+wrangler secret put META_OAUTH_CLIENT_ID
+wrangler secret put META_OAUTH_CLIENT_SECRET
+```
+
+The Meta card then appears in every licensed installation. Tokens live encrypted on the
+control plane; an installation only receives short-lived access tokens of its own
+connected accounts and caches them in its sealed grant store. Disconnecting an account
+revokes the authorization centrally; a user removing the app from their Meta settings
+triggers the deauthorize callback and the next sync shows **auth expired**.
+
 ## 1. Create the app
 
 1. You need a Facebook account and a [Business Portfolio](https://business.facebook.com)
@@ -28,7 +76,10 @@ Requested scopes (`META_DEFAULT_SCOPES` in `packages/ads-providers/src/meta.ts`)
    URL, data deletion instructions URL, app icon and category — all required before the
    app can go live.
 
-## 2. Configure AmableData
+## 2. Configure AmableData (own app)
+
+Only needed for a self-hosted installation (or to override the central broker with an
+own app):
 
 ```sh
 cd apps/core

@@ -195,7 +195,7 @@ export function registerAdsRoutes(api: OpenAPIHono<AppEnv>): void {
     async (c) => {
       const { id } = c.req.valid('param');
       const { site, ports, conn } = await connectionOf(c, id);
-      await disconnectAdConnection(ports, site.id, conn);
+      await disconnectAdConnection(ports, site, conn);
       await audit(c, 'analytics.ads_disconnected', { target: id, details: { site: site.id } });
       return c.json({ id, deleted: true as const }, 200);
     },

@@ -20,6 +20,7 @@ import {
   type AdsSyncPorts,
   type SiteRef,
 } from '../../src/analytics/ads-sync';
+import { AdsBrokerError, type AdsOAuthBroker } from '../../src/analytics/ads-broker';
 import type { AdPlatformClients } from '../../src/analytics/integrations';
 
 const MIN = 60_000;
@@ -70,6 +71,7 @@ beforeEach(async () => {
   );
   const clients: AdPlatformClients = {
     fake: true,
+    mode: () => 'fake',
     client(platform) {
       const base = createFakeProvider(platform, 'dev');
       const merged: AdsProvider = { ...base, ...(overrides[platform]?.(base) ?? {}) };
@@ -195,9 +197,186 @@ describe('ad connections (OAuth)', () => {
     expect(again.id).toBe(first.id);
     expect(again.status).toBe('active');
     expect([...kv.keys()].filter((k) => k.startsWith('ads_grant:'))).toEqual([`ads_grant:${String(again.metadata['grant_id'])}`]);
-    await disconnectAdConnection(ports, SITE_A.id, again);
+    await disconnectAdConnection(ports, SITE_A, again);
     expect([...kv.keys()].filter((k) => k.startsWith('ads_grant:'))).toEqual([]);
     expect((await conn(SITE_A, first.id)).status).toBe('disconnected');
+  });
+});
+
+describe('brokered ad connections (central OAuth of the control plane)', () => {
+  const TOKEN_TTL = 10 * HOUR;
+  let brokerAccounts: Map<string, { tenantId: string; revoked: boolean; serial: number }>;
+  let brokerStates: Map<string, { tenantId: string; platform: AdPlatform }>;
+  let brokerCalls: string[];
+
+  function fakeBroker(): AdsOAuthBroker {
+    return {
+      start({ tenantId, platform, scopes, returnUrl }) {
+        brokerCalls.push('start');
+        const state = `cpstate${String(brokerStates.size + 1)}`;
+        brokerStates.set(state, { tenantId, platform });
+        return Promise.resolve({
+          authorizeUrl: `https://cp.test/v1/oauth/fake/authorize?state=${state}&scope=${scopes.join(',')}&redirect_uri=${encodeURIComponent(returnUrl)}`,
+          state,
+        });
+      },
+      finish({ tenantId, state, code }) {
+        brokerCalls.push('finish');
+        const pending = brokerStates.get(state);
+        brokerStates.delete(state);
+        if (pending === undefined || pending.tenantId !== tenantId || code !== 'cp-code') {
+          return Promise.reject(new AdsBrokerError('invalid_grant', 'invalid or expired authorization'));
+        }
+        const accountId = `cpacc_${tenantId}`;
+        brokerAccounts.set(accountId, { tenantId, revoked: false, serial: 0 });
+        return Promise.resolve({ accountId });
+      },
+      token({ tenantId, accountId }) {
+        brokerCalls.push('token');
+        const account = brokerAccounts.get(accountId);
+        if (account === undefined || account.revoked || account.tenantId !== tenantId) return Promise.resolve(null);
+        account.serial += 1;
+        return Promise.resolve({ accessToken: `cp-token-${String(account.serial)}`, expiresAt: clock.now + TOKEN_TTL });
+      },
+      revoke({ accountId }) {
+        brokerCalls.push('revoke');
+        const account = brokerAccounts.get(accountId);
+        if (account !== undefined) account.revoked = true;
+        return Promise.resolve();
+      },
+    };
+  }
+
+  beforeEach(() => {
+    brokerAccounts = new Map();
+    brokerStates = new Map();
+    brokerCalls = [];
+    const base = ports.clients;
+    ports = {
+      ...ports,
+      clients: {
+        fake: false,
+        mode: (platform) => (platform === 'meta' ? 'broker' : 'unavailable'),
+        client: (platform) => (platform === 'meta' ? base.client('meta') : null),
+      },
+      broker: fakeBroker(),
+    };
+  });
+
+  async function connectBroker(site: SiteRef) {
+    const start = await startAdsConnect(ports, {
+      tenantId: site.tenantId,
+      tenantSlug: 'acme',
+      siteId: site.id,
+      platform: 'meta',
+      redirectUri: 'https://app.test/oauth/ads/callback',
+    });
+    const [connection] = await finishAdsConnect(ports, {
+      tenantId: site.tenantId,
+      siteId: site.id,
+      platform: 'meta',
+      state: start.state,
+      code: 'cp-code',
+    });
+    if (connection === undefined) throw new Error('no connection');
+    calls = [];
+    return { start, connection };
+  }
+
+  it('connects through the broker: opaque state, no code exchange, account reference in the sealed grant', async () => {
+    const { start, connection } = await connectBroker(SITE_A);
+    expect(start.authorizeUrl).toContain('https://cp.test/');
+    expect(start.state).toBe('cpstate1');
+    expect(brokerCalls).toEqual(['start', 'finish', 'token']);
+    expect(connection).toMatchObject({ platform: 'meta', status: 'active' });
+    const ref = {
+      tenantId: SITE_A.tenantId,
+      siteId: SITE_A.id,
+      grantId: String(connection.metadata['grant_id']),
+    };
+    const grant = await ports.grants.getGrant(ref);
+    expect(grant).toMatchObject({
+      broker: { accountId: `cpacc_${SITE_A.tenantId}` },
+      accessToken: 'cp-token-1',
+      refreshToken: null,
+      expiresAt: clock.now + TOKEN_TTL,
+    });
+    const sealed = [...kv.entries()].filter(([k]) => k.startsWith('ads_grant:'));
+    expect(sealed[0]?.[1]).not.toContain('cp-token-1');
+  });
+
+  it('syncs with the cached token and refreshes it through the broker near expiry', async () => {
+    const { connection } = await connectBroker(SITE_A);
+    brokerCalls = [];
+    await syncAllAds(ports, tenants);
+    expect(brokerCalls).toEqual([]);
+    expect(fetches()[0]?.args[0]).toBe('cp-token-1');
+    clock.now += 9 * HOUR;
+    calls = [];
+    await syncAllAds(ports, tenants);
+    expect(brokerCalls).toEqual(['token']);
+    expect(fetches()[0]?.args[0]).toBe('cp-token-2');
+    expect((await conn(SITE_A, connection.id)).status).toBe('active');
+  });
+
+  it('an authorization revoked on the broker marks the connection auth_expired and alerts', async () => {
+    const { connection } = await connectBroker(SITE_A);
+    brokerAccounts.get(`cpacc_${SITE_A.tenantId}`)!.revoked = true;
+    clock.now += 9 * HOUR;
+    await syncAllAds(ports, tenants);
+    expect((await conn(SITE_A, connection.id)).status).toBe('auth_expired');
+    expect(alerts.some((a) => a.connection.id === connection.id)).toBe(true);
+  });
+
+  it('disconnecting revokes centrally and drops the grant', async () => {
+    const { connection } = await connectBroker(SITE_A);
+    brokerCalls = [];
+    await disconnectAdConnection(ports, SITE_A, connection);
+    expect(brokerCalls).toEqual(['revoke']);
+    expect(brokerAccounts.get(`cpacc_${SITE_A.tenantId}`)?.revoked).toBe(true);
+    expect([...kv.keys()].filter((k) => k.startsWith('ads_grant:'))).toEqual([]);
+    expect((await conn(SITE_A, connection.id)).status).toBe('disconnected');
+  });
+
+  it('maps broker failures: unavailable start, wrong code, used state', async () => {
+    ports = { ...ports, broker: { ...fakeBroker(), start: () => Promise.reject(new AdsBrokerError('unavailable', 'down')) } };
+    await expect(
+      startAdsConnect(ports, {
+        tenantId: SITE_A.tenantId,
+        tenantSlug: 'acme',
+        siteId: SITE_A.id,
+        platform: 'meta',
+        redirectUri: 'https://app.test/cb',
+      }),
+    ).rejects.toMatchObject({ code: 'unavailable' });
+
+    ports = { ...ports, broker: fakeBroker() };
+    const start = await startAdsConnect(ports, {
+      tenantId: SITE_A.tenantId,
+      tenantSlug: 'acme',
+      siteId: SITE_A.id,
+      platform: 'meta',
+      redirectUri: 'https://app.test/cb',
+    });
+    await expect(
+      finishAdsConnect(ports, {
+        tenantId: SITE_A.tenantId,
+        siteId: SITE_A.id,
+        platform: 'meta',
+        state: start.state,
+        code: 'wrong-code',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    // The local pending state is single use, like the own-app flow.
+    await expect(
+      finishAdsConnect(ports, {
+        tenantId: SITE_A.tenantId,
+        siteId: SITE_A.id,
+        platform: 'meta',
+        state: start.state,
+        code: 'cp-code',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
   });
 });
 
@@ -208,7 +387,7 @@ describe('ads sync cron', () => {
     expect(calls).toEqual([]);
     expect(grantReads).toBe(0);
     const c = await connect(SITE_A);
-    await disconnectAdConnection(ports, SITE_A.id, c);
+    await disconnectAdConnection(ports, SITE_A, c);
     await syncAllAds(ports, tenants);
     expect(calls).toEqual([]);
     expect(grantReads).toBe(0);

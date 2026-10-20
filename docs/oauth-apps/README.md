@@ -4,8 +4,10 @@ Some features let a workspace user connect an external account with OAuth: ad pl
 (spend import and server-side conversions) and Google (calendar bookings). The OAuth
 **apps** those flows run through belong to whoever operates the installation:
 
-- **Managed cloud** — the operator creates one app per platform and sets the secrets on
-  every installation it runs. Customers only click "Connect".
+- **Managed cloud** — Google (calendar) and Meta (ads) run through the **central broker
+  of the control plane**: one app per platform, registered once against the control
+  plane host; installations need no secrets and customers only click "Connect". The
+  other platforms still take one app whose secrets go on every installation.
 - **Self-hosted** — you create your own apps, once per installation (or shared across your
   installations), and you are the party the platforms verify.
 
@@ -14,7 +16,7 @@ platform's review process:
 
 | Guide | Unlocks | Secrets (core worker) | Callback URL |
 | --- | --- | --- | --- |
-| [Meta ads](meta-ads.md) | Spend import, Conversions API | `META_APP_ID`, `META_APP_SECRET` | `<APP_ORIGIN>/oauth/ads/callback` |
+| [Meta ads](meta-ads.md) | Spend import, Conversions API | `META_APP_ID`, `META_APP_SECRET` (own app; the managed cloud brokers it centrally instead) | `<APP_ORIGIN>/oauth/ads/callback` (central app: `<control plane>/v1/oauth/callback/meta`) |
 | [Google Ads](google-ads.md) | Spend import, click conversions | `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, optional `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | `<APP_ORIGIN>/oauth/ads/callback` |
 | [TikTok ads](tiktok-ads.md) | Spend import, Events API | `TIKTOK_APP_ID`, `TIKTOK_APP_SECRET` | `<APP_ORIGIN>/oauth/ads/callback` |
 | [Google Calendar](google-calendar-sheets.md) | Booking calendars | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | `<APP_ORIGIN>/oauth/google/callback` |
@@ -40,7 +42,8 @@ platform's review process:
   `ADS_OAUTH_REDIRECT_URI`; the Google one is fixed at `/oauth/google/callback`.
 - The OAuth callback must return to the **same origin that started the flow** (the
   pending connection is kept in the user's browser session). Fleet operators register one
-  redirect URI per installation origin on each app.
+  redirect URI per installation origin on each own app; brokered platforms need only the
+  control plane's fixed callback, whatever the fleet size.
 
 ## What is stored, and where
 
@@ -59,7 +62,7 @@ platform's review process:
 | --- | --- | --- |
 | `CF_ZONE_ID`, `CF_API_TOKEN` (*SSL and Certificates: Edit*), `TRACKING_CNAME_TARGET` | Custom tracking domains (Cloudflare for SaaS custom hostnames on the zone serving the edge worker) | comments in `apps/core/wrangler.jsonc` |
 | `SYSTEM_EMAIL` binding + `SYSTEM_EMAIL_FROM` | Transactional system email | top-level README |
-| `LICENSE_KEY` | Managed offering: control-plane services (brokered Google OAuth, notify email, wallet) | top-level README |
+| `LICENSE_KEY` | Managed offering: control-plane services (brokered Google + Meta ads OAuth, notify email, wallet) | top-level README |
 
 The legacy analytics integrations tab (organic search stats) is available only in dev
 (fake data) or through the managed control plane; it has no self-hosted app yet.

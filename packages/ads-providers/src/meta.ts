@@ -80,15 +80,24 @@ export function createMetaProvider(config: ProviderConfig): AdsProvider {
 
   const call = (req: HttpRequest) => requestJson(config, req, parseMetaError);
 
+  /**
+   * `appsecret_proof` of a call, or null without a client secret: brokered
+   * tokens (central app owned by the control plane) reach the installation
+   * without the app secret, so the central app must not require the proof.
+   */
+  async function appsecretProof(token: string): Promise<string | null> {
+    return config.clientSecret === '' ? null : hmacSha256Hex(config.clientSecret, token);
+  }
+
   async function graphGet(
     token: string,
     path: string,
     params: Record<string, string>,
   ): Promise<unknown> {
-    const proof = await hmacSha256Hex(config.clientSecret, token);
+    const proof = await appsecretProof(token);
     return call({
       method: 'GET',
-      url: withQuery(`${base}/${path}`, { ...params, appsecret_proof: proof }),
+      url: withQuery(`${base}/${path}`, proof === null ? params : { ...params, appsecret_proof: proof }),
       headers: { authorization: `Bearer ${token}` },
     });
   }
@@ -323,13 +332,14 @@ export function createMetaProvider(config: ProviderConfig): AdsProvider {
       if (p.page_url) event.event_source_url = p.page_url;
       if (Object.keys(customData).length > 0) event.custom_data = customData;
 
-      const proof = await hmacSha256Hex(config.clientSecret, token);
+      const proof = await appsecretProof(token);
       const res = asRecord(
         await call({
           method: 'POST',
-          url: withQuery(`${base}/${encodeURIComponent(datasetId)}/events`, {
-            appsecret_proof: proof,
-          }),
+          url: withQuery(
+            `${base}/${encodeURIComponent(datasetId)}/events`,
+            proof === null ? {} : { appsecret_proof: proof },
+          ),
           headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
           body: JSON.stringify({
             data: [event],

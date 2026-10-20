@@ -124,7 +124,7 @@ describe('analytics.adsToken gateway op', () => {
 
   it('answers null for a disconnected or unknown connection', async () => {
     const c = await connect(siteB);
-    await disconnectAdConnection(ports, siteB.id, c);
+    await disconnectAdConnection(ports, siteB, c);
     expect((await call(tokenInput(siteB, c))).body).toMatchObject({ ok: true, value: null });
     expect((await call({ ...tokenInput(siteB, c), connection_id: 'adc_missing' })).body).toMatchObject({
       ok: true,

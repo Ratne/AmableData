@@ -273,7 +273,9 @@ export async function syncIntegration(
 /**
  * OAuth apps of the installation for the ad platforms (Wrangler secrets). A
  * platform without credentials is unavailable outside dev/test, where the
- * deterministic fake client of `@amable/ads-providers` stands in (no network).
+ * deterministic fake client of `@amable/ads-providers` stands in (no network) —
+ * except Meta on the managed offering, which the central broker of the control
+ * plane serves without any installation-side app (see `ads-broker.ts`).
  */
 export interface AdPlatformSecretsEnv {
   ENVIRONMENT?: string;
@@ -288,10 +290,19 @@ export interface AdPlatformSecretsEnv {
   TIKTOK_APP_SECRET?: string;
 }
 
+/**
+ * How an ad platform is wired on this installation: deterministic fake
+ * (dev/test), own OAuth app (Wrangler secrets), central broker of the control
+ * plane (managed offering, no secrets needed), or not available at all. An own
+ * app always takes precedence over the broker.
+ */
+export type AdPlatformMode = 'fake' | 'own' | 'broker' | 'unavailable';
+
 export interface AdPlatformClients {
   readonly fake: boolean;
   /** Client of a platform, or null when the installation has no app for it. */
   client(platform: AdPlatform): AdPlatformClient | null;
+  mode(platform: AdPlatform): AdPlatformMode;
 }
 
 const trimmed = (v: string | undefined): string => v?.trim() ?? '';
@@ -321,18 +332,35 @@ export function adPlatformCredentials(
 
 export function adPlatformClientsFor(
   env: AdPlatformSecretsEnv,
-  deps: { fetch?: typeof fetch; now?: () => number } = {},
+  deps: { fetch?: typeof fetch; now?: () => number; brokered?: (platform: AdPlatform) => boolean } = {},
 ): AdPlatformClients {
   if (env.ENVIRONMENT === 'dev' || env.ENVIRONMENT === 'test') {
-    return { fake: true, client: (platform) => createFakeProvider(platform, 'dev') };
+    return { fake: true, client: (platform) => createFakeProvider(platform, 'dev'), mode: () => 'fake' };
   }
   const fetchFn = deps.fetch ?? ((input, init) => fetch(input, init));
   const now = deps.now ?? Date.now;
+  const mode = (platform: AdPlatform): AdPlatformMode => {
+    if (adPlatformCredentials(env, platform) !== null) return 'own';
+    if (deps.brokered?.(platform) === true) return 'broker';
+    return 'unavailable';
+  };
   return {
     fake: false,
+    mode,
     client(platform) {
-      const credentials = adPlatformCredentials(env, platform);
-      return credentials === null ? null : createProvider(platform, { ...credentials, fetch: fetchFn, now });
+      switch (mode(platform)) {
+        case 'own': {
+          const credentials = adPlatformCredentials(env, platform);
+          return credentials === null ? null : createProvider(platform, { ...credentials, fetch: fetchFn, now });
+        }
+        // API-only client: the brokered token is enough for Graph calls (no
+        // appsecret_proof without a secret) and the OAuth methods are never
+        // used — connect and refresh go through the central broker instead.
+        case 'broker':
+          return createProvider(platform, { clientId: '', clientSecret: '', fetch: fetchFn, now });
+        default:
+          return null;
+      }
     },
   };
 }

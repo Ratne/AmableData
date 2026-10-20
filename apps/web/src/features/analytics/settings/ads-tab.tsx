@@ -321,7 +321,7 @@ function ConnectionsPanel({
     {
       invalidate: [],
       onSuccess: (result, platform) => {
-        rememberAdsOAuth(result.state, { site_id: site.id, platform });
+        rememberAdsOAuth(result.state, { site_id: site.id, platform, slug: tenant });
         window.location.assign(result.authorize_url);
       },
       onError: (error) => adsErrorToast(t, error),

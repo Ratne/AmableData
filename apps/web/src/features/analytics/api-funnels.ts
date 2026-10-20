@@ -235,6 +235,8 @@ export type FunnelsApi = ReturnType<typeof funnelsApi>;
 export interface PendingAdsOAuth {
   readonly site_id: string;
   readonly platform: AdPlatform;
+  /** Workspace slug; brokered states are opaque, so it cannot come from the state prefix. */
+  readonly slug?: string;
 }
 
 const oauthKey = (state: string) => `amable.analytics.ads-oauth.${state}`;
@@ -255,14 +257,18 @@ export function takeAdsOAuth(state: string): PendingAdsOAuth | null {
     if (raw === null) return null;
     const value = JSON.parse(raw) as Partial<PendingAdsOAuth>;
     return typeof value.site_id === 'string' && typeof value.platform === 'string'
-      ? { site_id: value.site_id, platform: value.platform }
+      ? {
+          site_id: value.site_id,
+          platform: value.platform,
+          ...(typeof value.slug === 'string' ? { slug: value.slug } : {}),
+        }
       : null;
   } catch {
     return null;
   }
 }
 
-/** Workspace slug encoded in an ad OAuth `state` (`<slug>.<random>`). */
+/** Workspace slug encoded in an own-app ad OAuth `state` (`<slug>.<random>`); brokered states carry none. */
 export function slugFromAdsState(state: string): string | null {
   const dot = state.indexOf('.');
   const slug = dot > 0 ? state.slice(0, dot) : '';
