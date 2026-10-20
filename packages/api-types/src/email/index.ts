@@ -185,6 +185,8 @@ export const emailSettingsSchema = z.object({
   rate_per_minute: z.number().int(),
   /** The managed plan sets `rate_per_minute` (its hourly cap / 60); updates of it are rejected with 422 `rate_managed`. */
   rate_managed: z.boolean(),
+  /** Managed: the rate comes from capacity the customer bought (shown); otherwise the shared plan rate stays internal. */
+  rate_dedicated: z.boolean(),
   sending: z.object({
     state: z.enum(SENDING_STATES),
     domains: z.array(

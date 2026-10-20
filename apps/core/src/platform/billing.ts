@@ -77,6 +77,7 @@ async function billingOverview(c: Context<AppEnv>, nowMs: number): Promise<Billi
           overage_per_1000: snapshot.overagePer1000Micros / MICROS,
           currency: CURRENCY,
           caps: snapshot.caps,
+          dedicated: snapshot.emailMetered === false,
         }
       : null,
     wallet: { balance: balanceMicros / MICROS, balance_micros: balanceMicros, currency: CURRENCY },

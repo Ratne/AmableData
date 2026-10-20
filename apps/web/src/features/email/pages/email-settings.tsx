@@ -41,6 +41,7 @@ export function EmailSettingsPage() {
     });
   }, [settings.data]);
   const rateManaged = settings.data?.rate_managed === true;
+  const rateDedicated = settings.data?.rate_dedicated === true;
   const save = useEmailMutation({
     mutationFn: () =>
       api.settings.update({
@@ -118,22 +119,34 @@ export function EmailSettingsPage() {
                 ))}
               </datalist>
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="set-rate">{t('email.settings.rate')}</Label>
-              {rateManaged ? (
-                <>
-                  <Input id="set-rate" type="number" value={form.rate} readOnly disabled />
-                  <p className="text-xs text-muted-foreground">
-                    {t('email.settings.rateManaged')}{' '}
-                    <Link to="/t/$tenant/settings/billing" params={{ tenant: slug }} className="underline">
-                      {t('email.settings.rateIncrease')}
-                    </Link>
-                  </p>
-                </>
-              ) : (
-                <Input id="set-rate" type="number" min={1} max={10000} {...field('rate')} />
-              )}
-            </div>
+            {rateManaged && !rateDedicated ? (
+              <div className="grid gap-1.5">
+                <Label>{t('email.settings.capacity')}</Label>
+                <p className="text-sm text-muted-foreground">
+                  {t('email.settings.capacityShared')}{' '}
+                  <Link to="/t/$tenant/settings/billing" params={{ tenant: slug }} className="font-medium underline">
+                    {t('email.settings.capacityIncrease')}
+                  </Link>
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-1.5">
+                <Label htmlFor="set-rate">{t('email.settings.rate')}</Label>
+                {rateManaged ? (
+                  <>
+                    <Input id="set-rate" type="number" value={form.rate} readOnly disabled />
+                    <p className="text-xs text-muted-foreground">
+                      {t('email.settings.rateManaged')}{' '}
+                      <Link to="/t/$tenant/settings/billing" params={{ tenant: slug }} className="underline">
+                        {t('email.settings.rateIncrease')}
+                      </Link>
+                    </p>
+                  </>
+                ) : (
+                  <Input id="set-rate" type="number" min={1} max={10000} {...field('rate')} />
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
         <div className="grid content-start gap-4">

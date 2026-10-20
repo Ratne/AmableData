@@ -150,6 +150,10 @@ export function createPlatformQuotaGuard(
       const { snapshot } = await loadQuotaSnapshot(env, now());
       return snapshot === null ? null : planRatePerMinute(snapshot);
     },
+    async dedicatedCapacity() {
+      const { snapshot } = await loadQuotaSnapshot(env, now());
+      return snapshot?.emailMetered === false;
+    },
   };
 }
 

@@ -63,6 +63,7 @@ describe('GET /api/v2/t/:slug/billing', () => {
         overage_per_1000: 1,
         currency: 'USD',
         caps: { hourly: null, daily: null },
+        dedicated: false,
       },
       // 1,000 unreported sends beyond the included 100 → 1 $ already owed.
       wallet: { balance: 11.5, balance_micros: 11_500_000, currency: 'USD' },

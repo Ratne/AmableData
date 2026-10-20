@@ -168,8 +168,10 @@ describe('send pipeline', () => {
     const world = createMailWorld();
     await configureSender(world);
     world.quota.current = { check: () => Promise.resolve({ action: 'allow' }), ratePerMinute: () => Promise.resolve(1) };
-    expect(await world.op('settings.get', {})).toMatchObject({ rate_per_minute: 1, rate_managed: true });
+    expect(await world.op('settings.get', {})).toMatchObject({ rate_per_minute: 1, rate_managed: true, rate_dedicated: false });
     await expect(world.op('settings.update', { rate_per_minute: 5000 })).rejects.toThrow(/^rate_managed/);
+    world.quota.current = { ...world.quota.current, dedicatedCapacity: () => Promise.resolve(true) };
+    expect(await world.op('settings.get', {})).toMatchObject({ rate_managed: true, rate_dedicated: true });
     const ids = [world.contact({ email: 'a@x.test' }), world.contact({ email: 'b@x.test' })];
     const outcomes = await world.op('send.process', {
       batch: ids.map((id, i) => ({ request: sendRequest(id, { id: `pr${String(i)}` }), queueAttempts: 1 })),

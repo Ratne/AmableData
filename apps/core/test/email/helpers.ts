@@ -120,6 +120,7 @@ export function createMailWorld(options: { verified?: boolean } = {}): MailWorld
     quota: {
       check: (input) => quota.current.check(input),
       ratePerMinute: () => quota.current.ratePerMinute?.() ?? Promise.resolve(null),
+      dedicatedCapacity: () => quota.current.dedicatedCapacity?.() ?? Promise.resolve(false),
     },
     sending: () => Promise.resolve(sending.current),
     tokenSecrets: [SECRET],

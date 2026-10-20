@@ -229,7 +229,7 @@ function EmailCard({ email, capacityUrl }: { email: BillingEmailQuota | null; ca
               }),
             ],
             [t('billing.email.overage'), t('billing.email.overagePrice', { price: overage })],
-            ...(email.caps.hourly !== null || email.caps.daily !== null
+            ...(email.dedicated && (email.caps.hourly !== null || email.caps.daily !== null)
               ? [
                   [
                     t('billing.email.caps'),

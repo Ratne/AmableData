@@ -286,6 +286,7 @@ export async function readSettings(deps: MailDeps): Promise<EmailSettings> {
     timezone: tenantTimeZone(deps),
     rate_per_minute: ratePerMinute(deps, planRate),
     rate_managed: planRate !== null,
+    rate_dedicated: planRate !== null && ((await deps.quota.dedicatedCapacity?.()) ?? false),
     sending: {
       state: sending.state,
       domains: sending.domains.map((d) => ({ hostname: d.hostname, kind: d.kind, status: d.status })),

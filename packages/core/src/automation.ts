@@ -116,6 +116,8 @@ export interface QuotaGuard {
   recordUsage?(usage: QuotaUsage): Promise<void>;
   /** Per-minute send rate set by the plan (managed offering); null or absent = the workspace setting applies. */
   ratePerMinute?(): Promise<number | null>;
+  /** The installation bought its own sending capacity (managed offering): the plan rate is its own to show. */
+  dedicatedCapacity?(): Promise<boolean>;
 }
 
 /** Default guard of an installation without a control plane: always allows. */

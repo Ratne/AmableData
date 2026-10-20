@@ -40,6 +40,8 @@ export const billingEmailQuotaSchema = z.object({
     hourly: z.number().int().nullable(),
     daily: z.number().int().nullable(),
   }),
+  /** Sends from capacity the customer bought (unmetered): the caps are theirs to show. */
+  dedicated: z.boolean(),
 });
 export type BillingEmailQuota = z.infer<typeof billingEmailQuotaSchema>;
 
