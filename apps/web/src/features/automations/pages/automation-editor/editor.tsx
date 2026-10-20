@@ -1,22 +1,13 @@
-import '@xyflow/react/dist/style.css';
-import type {
-  AutomationDetail,
-  AutomationGraph,
-  GraphNode,
-  NodeStats,
-  ValidationResult,
-} from '@amable/api-types';
-import { cn, DashboardConfirmDialog, toast, usePageChrome, useTheme } from '@amable/ui';
+import type { AutomationDetail, GraphNode, NodeStats, ValidationResult } from '@amable/api-types';
+import { DashboardConfirmDialog, toast, useTheme } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@amable/ui/ui/tooltip';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import {
   Background,
   Controls,
   MiniMap,
   ReactFlow,
-  ReactFlowProvider,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -26,9 +17,6 @@ import {
 import {
   ArrowLeft,
   BarChart3,
-  CheckCircle2,
-  CircleAlert,
-  CloudOff,
   History,
   Keyboard,
   LayoutGrid,
@@ -48,36 +36,28 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type DragEvent,
   type ReactNode,
 } from 'react';
-import { useI18n } from '../../../i18n';
-import { CrmApiError } from '../../crm/api/client';
-import { errorMessage } from '../../crm/api/hooks';
-import {
-  automationKeys,
-  isConflict,
-  useAutomationApi,
-  useAutomationPermissions,
-} from '../api/hooks';
-import { CanvasContext, statsKey, type CanvasContextValue } from '../components/canvas-context';
-import { NOTE_COLOR_NAMES, nodeTypes } from '../components/canvas-nodes';
-import { DecisionPanel } from '../components/decision-panel';
+import { useI18n } from '../../../../i18n';
+import { errorMessage } from '../../../crm/api/hooks';
+import { automationKeys, useAutomationApi, useAutomationPermissions } from '../../api/hooks';
+import { CanvasContext, statsKey, type CanvasContextValue } from '../../components/canvas-context';
+import { nodeTypes } from '../../components/canvas-nodes';
+import { DecisionPanel } from '../../components/decision-panel';
 import {
   ConflictDialog,
   EnrollDialog,
   SettingsDialog,
   ShortcutsDialog,
   VersionsDialog,
-} from '../components/dialogs';
-import { EnrollmentsPanel } from '../components/enrollments-panel';
-import { GoalPanel } from '../components/goal-panel';
-import { IssueList } from '../components/issue-list';
-import { Palette, PALETTE_MIME } from '../components/palette';
-import { SequencePanel } from '../components/sequence-panel';
-import { createNode, duplicateNode, type PaletteItem } from '../lib/defaults';
-import { DraftSync, type DraftStatus } from '../lib/draft-sync';
+} from '../../components/dialogs';
+import { EnrollmentsPanel } from '../../components/enrollments-panel';
+import { GoalPanel } from '../../components/goal-panel';
+import { IssueList } from '../../components/issue-list';
+import { Palette, PALETTE_MIME } from '../../components/palette';
+import { SequencePanel } from '../../components/sequence-panel';
+import { createNode, duplicateNode, type PaletteItem } from '../../lib/defaults';
 import {
   canConnect,
   connectionToEdge,
@@ -86,105 +66,15 @@ import {
   takenIds,
   type AutomationFlowEdge,
   type AutomationFlowNode,
-} from '../lib/flow-mapping';
-import { groupIssues, localIssues, serverIssues, type CanvasIssue } from '../lib/issues';
-import { tidyLayout } from '../lib/layout';
-
-const HISTORY_LIMIT = 50;
-
-function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.isContentEditable ||
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT' ||
-    target.closest('[role="dialog"]') !== null
-  );
-}
-
-function SaveIndicator({ status }: { status: DraftStatus }) {
-  const { t } = useI18n();
-  const map: Record<DraftStatus, { icon: ReactNode; text: string; tone: string }> = {
-    saved: {
-      icon: <CheckCircle2 className="size-3.5" />,
-      text: t('auto.save.saved'),
-      tone: 'text-muted-foreground',
-    },
-    dirty: {
-      icon: <Loader2 className="size-3.5" />,
-      text: t('auto.save.dirty'),
-      tone: 'text-muted-foreground',
-    },
-    saving: {
-      icon: <Loader2 className="size-3.5 animate-spin" />,
-      text: t('auto.save.saving'),
-      tone: 'text-muted-foreground',
-    },
-    invalid: {
-      icon: <CircleAlert className="size-3.5" />,
-      text: t('auto.save.invalid'),
-      tone: 'text-amber-600 dark:text-amber-400',
-    },
-    error: {
-      icon: <CloudOff className="size-3.5" />,
-      text: t('auto.save.error'),
-      tone: 'text-destructive',
-    },
-    conflict: {
-      icon: <CircleAlert className="size-3.5" />,
-      text: t('auto.save.conflict'),
-      tone: 'text-destructive',
-    },
-  };
-  const item = map[status];
-  return (
-    <span
-      className={cn('flex min-w-0 items-center gap-1 text-xs', item.tone)}
-      data-testid="save-status"
-      data-status={status}
-    >
-      {item.icon}
-      <span className="truncate">{item.text}</span>
-    </span>
-  );
-}
-
-function ToolButton({
-  label,
-  onClick,
-  children,
-  active,
-  disabled,
-  testId,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-  active?: boolean;
-  disabled?: boolean;
-  testId?: string;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant={active ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-8 gap-1.5 px-2"
-          aria-label={label}
-          aria-pressed={active}
-          disabled={disabled}
-          onClick={onClick}
-          data-testid={testId}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
+} from '../../lib/flow-mapping';
+import { groupIssues, localIssues, serverIssues, type CanvasIssue } from '../../lib/issues';
+import { tidyLayout } from '../../lib/layout';
+import { NoteColorPicker } from './note-color-picker';
+import { SaveIndicator, ToolButton } from './toolbar';
+import { useDraftAutosave, useFlushOnLeave } from './use-draft-autosave';
+import { useEditorShortcuts } from './use-editor-shortcuts';
+import { useGraphHistory } from './use-graph-history';
+import { usePublishActions } from './use-publish-actions';
 
 function nodeTitle(node: GraphNode | undefined, t: ReturnType<typeof useI18n>['t']): string {
   if (node === undefined) return '';
@@ -192,11 +82,10 @@ function nodeTitle(node: GraphNode | undefined, t: ReturnType<typeof useI18n>['t
   return node.label ?? t(`auto.node.${node.type}`);
 }
 
-function Editor({ detail }: { detail: AutomationDetail }) {
+export function Editor({ detail }: { detail: AutomationDetail }) {
   const { t } = useI18n();
   const { resolvedTheme } = useTheme();
   const { slug, api } = useAutomationApi();
-  const queryClient = useQueryClient();
   const perms = useAutomationPermissions();
   const readOnly = !perms.canWrite;
   const automationId = detail.id;
@@ -215,46 +104,11 @@ function Editor({ detail }: { detail: AutomationDetail }) {
     'settings' | 'versions' | 'enroll' | 'shortcuts' | 'unpublish' | null
   >(null);
   const [resolving, setResolving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
   const dragging = useRef(false);
-
-  // ------------------------------------------------------------ autosave
-  const syncRef = useRef<DraftSync | null>(null);
-  if (syncRef.current === null) {
-    syncRef.current = new DraftSync({
-      revision: detail.draft_revision,
-      graph: detail.draft_graph,
-      save: async (graph, revision) => {
-        const saved = await api.saveDraft(automationId, graph, revision);
-        return { revision: saved.draft_revision, graph: saved.draft_graph };
-      },
-      load: async () => {
-        const fresh = await api.get(automationId);
-        return { revision: fresh.draft_revision, graph: fresh.draft_graph };
-      },
-      check: localIssues,
-      isConflict,
-    });
-  }
-  const sync = syncRef.current;
-  useEffect(() => () => sync.dispose(), [sync]);
-  const snapshot = useSyncExternalStore(sync.subscribe, sync.getSnapshot);
 
   const graph = useMemo(() => flowToGraph(nodes, edges), [nodes, edges]);
   const graphJson = useMemo(() => JSON.stringify(graph), [graph]);
-  useEffect(() => {
-    if (!readOnly) sync.update(JSON.parse(graphJson) as AutomationGraph);
-  }, [graphJson, readOnly, sync]);
-
-  // Refresh list/detail metadata (unpublished changes badge) after saves.
-  useEffect(() => {
-    if (snapshot.status === 'saved' && snapshot.savedAt !== null) {
-      void queryClient.invalidateQueries({
-        queryKey: automationKeys.detail(slug, automationId),
-        exact: true,
-      });
-    }
-  }, [snapshot.savedAt, snapshot.status, queryClient, slug, automationId]);
+  const { sync, snapshot } = useDraftAutosave(detail, graphJson, readOnly);
 
   // Publish validation of every saved revision: inline issues on the nodes.
   const liveValidation = useQuery({
@@ -276,53 +130,12 @@ function Editor({ detail }: { detail: AutomationDetail }) {
   }, [graph, currentValidation, snapshot.status]);
   const issuesByNode = useMemo(() => groupIssues(issues), [issues]);
 
-  // ------------------------------------------------------------- history
-  const past = useRef<string[]>([]);
-  const future = useRef<string[]>([]);
-  const stable = useRef(graphJson);
-  const restoring = useRef(false);
-  const [, bumpHistory] = useState(0);
-  useEffect(() => {
-    if (restoring.current) {
-      restoring.current = false;
-      stable.current = graphJson;
-      return;
-    }
-    if (dragging.current || graphJson === stable.current) return;
-    const timer = setTimeout(() => {
-      past.current = [...past.current, stable.current].slice(-HISTORY_LIMIT);
-      future.current = [];
-      stable.current = graphJson;
-      bumpHistory((n) => n + 1);
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [graphJson]);
-
-  const applyGraph = useCallback(
-    (next: AutomationGraph, asHistory = true) => {
-      const mapped = graphToFlow(next);
-      if (asHistory) restoring.current = true;
-      setNodes(mapped.nodes);
-      setEdges(mapped.edges);
-    },
-    [setNodes, setEdges],
-  );
-  const undo = useCallback(() => {
-    const previous = past.current.pop();
-    if (previous === undefined) return;
-    future.current.push(stable.current);
-    stable.current = previous;
-    applyGraph(JSON.parse(previous) as AutomationGraph);
-    bumpHistory((n) => n + 1);
-  }, [applyGraph]);
-  const redo = useCallback(() => {
-    const next = future.current.pop();
-    if (next === undefined) return;
-    past.current.push(stable.current);
-    stable.current = next;
-    applyGraph(JSON.parse(next) as AutomationGraph);
-    bumpHistory((n) => n + 1);
-  }, [applyGraph]);
+  const { applyGraph, undo, redo, canUndo, canRedo } = useGraphHistory({
+    graphJson,
+    dragging,
+    setNodes,
+    setEdges,
+  });
 
   // ---------------------------------------------------------------- edits
   const updateNode = useCallback(
@@ -444,115 +257,35 @@ function Editor({ detail }: { detail: AutomationDetail }) {
     [readOnly, statsMap, issuesByNode, updateNode],
   );
 
-  // --------------------------------------------------------------- publish
-  const publish = async () => {
-    setPublishing(true);
-    try {
-      await sync.flush();
-      const state = sync.getSnapshot().status;
-      if (state !== 'saved') {
-        toast.error(state === 'invalid' ? t('auto.save.invalid') : t('auto.save.error'));
-        return;
-      }
-      const result = await api.validate(automationId);
-      setValidation(result);
-      const errors = result.issues.filter((i) => i.severity === 'error').length;
-      if (!result.valid) {
-        toast.error(t('auto.publish.invalid', { n: errors }));
-        return;
-      }
-      const published = await api.publish(automationId);
-      toast.success(t('auto.publish.done', { n: published.version.number }));
-      await queryClient.invalidateQueries({ queryKey: automationKeys.root(slug) });
-    } catch (error) {
-      toast.error(errorMessage(t, error));
-    } finally {
-      setPublishing(false);
-    }
-  };
-  const unpublish = async () => {
-    try {
-      await api.unpublish(automationId);
-      toast.success(t('auto.unpublish.done'));
-      await queryClient.invalidateQueries({ queryKey: automationKeys.root(slug) });
-    } catch (error) {
-      toast.error(errorMessage(t, error));
-    }
-  };
-  const check = async () => {
-    try {
-      await sync.flush();
-      const result = await api.validate(automationId);
-      setValidation(result);
-      const errors = result.issues.filter((i) => i.severity === 'error').length;
-      const warnings = result.issues.length - errors;
-      if (errors > 0) toast.error(t('auto.publish.invalid', { n: errors }));
-      else if (warnings > 0) toast.message(t('auto.publish.warnings', { n: warnings }));
-      else toast.success(t('auto.publish.valid'));
-    } catch (error) {
-      toast.error(errorMessage(t, error));
-    }
-  };
+  const { publishing, publish, unpublish, check } = usePublishActions(
+    automationId,
+    sync,
+    setValidation,
+  );
 
   // ------------------------------------------------------------- keyboard
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      const mod = event.metaKey || event.ctrlKey;
-      const key = event.key.toLowerCase();
-      if (mod && key === 's') {
-        event.preventDefault();
-        void sync.flush();
-        return;
-      }
-      if (isTyping(event.target)) return;
-      if (mod && key === 'z') {
-        event.preventDefault();
-        if (readOnly) return;
-        if (event.shiftKey) redo();
-        else undo();
-        return;
-      }
-      if (mod && key === 'y') {
-        event.preventDefault();
-        if (!readOnly) redo();
-        return;
-      }
-      if (mod && key === 'd') {
-        event.preventDefault();
-        duplicateSelected();
-        return;
-      }
-      if (mod || event.altKey) return;
-      if (key === 'escape') {
-        setSelectedId(null);
-        setDrillNode(null);
-        setNodes((current) => current.map((n) => (n.selected ? { ...n, selected: false } : n)));
-      } else if (key === 'r') setReporting((v) => !v);
-      else if (key === 'f') void flow.fitView({ padding: 0.2, duration: 300 });
-      else if (key === 'l') tidy();
-      else if (key === '?') setDialog('shortcuts');
-      else if (key === '1') addNode({ kind: 'sequence' });
-      else if (key === '2') addNode({ kind: 'decision' });
-      else if (key === '3') addNode({ kind: 'note' });
-      else if (key === '4') addNode({ kind: 'goal', trigger: 'tag_applied' });
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [addNode, duplicateSelected, flow, readOnly, redo, setNodes, sync, tidy, undo]);
-
-  // Flush pending edits when leaving the page.
-  useEffect(() => {
-    const onUnload = (event: BeforeUnloadEvent) => {
-      const status = sync.getSnapshot().status;
-      if (status === 'dirty' || status === 'saving' || status === 'invalid') event.preventDefault();
-    };
-    window.addEventListener('beforeunload', onUnload);
-    return () => {
-      window.removeEventListener('beforeunload', onUnload);
-      void sync.flush();
-    };
-  }, [sync]);
+  const clearSelection = useCallback(() => {
+    setSelectedId(null);
+    setDrillNode(null);
+    setNodes((current) => current.map((n) => (n.selected ? { ...n, selected: false } : n)));
+  }, [setNodes]);
+  const toggleReporting = useCallback(() => setReporting((v) => !v), []);
+  const fitView = useCallback(() => void flow.fitView({ padding: 0.2, duration: 300 }), [flow]);
+  const showShortcuts = useCallback(() => setDialog('shortcuts'), []);
+  useEditorShortcuts({
+    sync,
+    readOnly,
+    undo,
+    redo,
+    duplicateSelected,
+    clearSelection,
+    toggleReporting,
+    fitView,
+    tidy,
+    showShortcuts,
+    addNode,
+  });
+  useFlushOnLeave(sync);
 
   const selectedNode = graph.nodes.find((n) => n.id === selectedId);
   const nodeIssues = (id: string) => issuesByNode.get(id)?.messages ?? [];
@@ -621,34 +354,7 @@ function Editor({ detail }: { detail: AutomationDetail }) {
                   issues={nodeIssues(selectedNode.id)}
                 />
               ) : (
-                <div className="grid gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {t('auto.note.color')}
-                  </p>
-                  <div className="flex gap-1.5">
-                    {NOTE_COLOR_NAMES.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        disabled={readOnly}
-                        aria-label={color}
-                        onClick={() => updateNode({ ...selectedNode, color })}
-                        className={cn(
-                          'size-7 rounded-full border-2',
-                          {
-                            yellow: 'bg-yellow-200',
-                            blue: 'bg-sky-200',
-                            green: 'bg-emerald-200',
-                            pink: 'bg-pink-200',
-                          }[color],
-                          (selectedNode.color ?? 'yellow') === color
-                            ? 'border-primary'
-                            : 'border-transparent',
-                        )}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <NoteColorPicker node={selectedNode} disabled={readOnly} onChange={updateNode} />
               ),
           }
         : null;
@@ -686,18 +392,10 @@ function Editor({ detail }: { detail: AutomationDetail }) {
           ) : null}
           {!readOnly ? (
             <>
-              <ToolButton
-                label={t('auto.editor.undo')}
-                onClick={undo}
-                disabled={past.current.length === 0}
-              >
+              <ToolButton label={t('auto.editor.undo')} onClick={undo} disabled={!canUndo}>
                 <Undo2 className="size-4" aria-hidden />
               </ToolButton>
-              <ToolButton
-                label={t('auto.editor.redo')}
-                onClick={redo}
-                disabled={future.current.length === 0}
-              >
+              <ToolButton label={t('auto.editor.redo')} onClick={redo} disabled={!canRedo}>
                 <Redo2 className="size-4" aria-hidden />
               </ToolButton>
               <ToolButton label={t('auto.editor.tidy')} onClick={tidy} testId="tidy">
@@ -951,66 +649,4 @@ function Editor({ detail }: { detail: AutomationDetail }) {
       />
     </CanvasContext.Provider>
   );
-}
-
-/** `/t/$tenant/automations/$automationId` — the canvas editor. */
-export function AutomationEditorPage() {
-  const { t } = useI18n();
-  const params = useParams({ strict: false });
-  const automationId = (params as { automationId?: string }).automationId ?? '';
-  const { slug, api } = useAutomationApi();
-  const detail = useQuery({
-    queryKey: automationKeys.detail(slug, automationId),
-    queryFn: () => api.get(automationId),
-    retry: false,
-  });
-  // The canvas keeps its own state: only the first load seeds it.
-  const [seed, setSeed] = useState<AutomationDetail | null>(null);
-  useEffect(() => {
-    if (seed === null && detail.data !== undefined) setSeed(detail.data);
-  }, [detail.data, seed]);
-
-  const data = detail.data;
-  usePageChrome({
-    title: data?.name ?? t('auto.title'),
-    ...(data === undefined
-      ? {}
-      : {
-          status:
-            data.status === 'active' && data.has_unpublished_changes
-              ? `${t('auto.status.active')} · ${t('auto.status.unpublished')}`
-              : t(`auto.status.${data.status}`),
-          statusTone:
-            data.status === 'active'
-              ? 'success'
-              : data.status === 'inactive'
-                ? 'warning'
-                : 'neutral',
-        }),
-  });
-  if (detail.isError) {
-    const notFound = detail.error instanceof CrmApiError && detail.error.status === 404;
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        {notFound ? t('crm.error.notFound') : errorMessage(t, detail.error)}
-      </div>
-    );
-  }
-  if (seed === null || detail.data === undefined) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('auto.loading')}</div>;
-  }
-  return (
-    <ReactFlowProvider>
-      <EditorFrame seed={seed} current={detail.data} />
-    </ReactFlowProvider>
-  );
-}
-
-/** The editor gets the live metadata (status, versions) but the seed graph only once. */
-function EditorFrame({ seed, current }: { seed: AutomationDetail; current: AutomationDetail }) {
-  const merged = useMemo(
-    () => ({ ...current, draft_graph: seed.draft_graph, draft_revision: seed.draft_revision }),
-    [current, seed],
-  );
-  return <Editor detail={merged} />;
 }
