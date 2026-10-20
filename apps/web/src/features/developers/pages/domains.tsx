@@ -1,11 +1,12 @@
 import { PageBody, usePageChrome } from '@amable/ui';
+import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
 import { Button } from '@amable/ui/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@amable/ui/ui/card';
 import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amable/ui/ui/table';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Circle, Cloud, Globe, Link2, Mail, ShieldCheck, Trash2 } from 'lucide-react';
+import { CheckCircle2, Circle, Cloud, Globe, Link2, Mail, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { apiErrorCode, devKeys, useDevelopersApi, useDevMutation, useTenantAccess, type DomainKind, type TenantDomain } from '../api';
@@ -43,9 +44,11 @@ function DomainCard({ domain, automation }: { domain: TenantDomain; automation: 
   const Icon = KIND_ICON[domain.kind];
   const verified = domain.status === 'verified';
   const pathSite = domain.kind === 'app' && domain.paths.length > 0;
+  const dnsChanged = domain.dns_changed_at !== null;
+  const applyLabel = domain.dns_applied_at ? t('dev.domains.reapply') : t('dev.domains.apply');
 
   return (
-    <Card data-testid={`domain-${domain.kind}`}>
+    <Card data-testid={`domain-${domain.kind}`} className={dnsChanged ? 'border-amber-500 ring-1 ring-amber-500' : undefined}>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-2">
@@ -53,12 +56,13 @@ function DomainCard({ domain, automation }: { domain: TenantDomain; automation: 
             <span className="font-mono text-sm">{domain.hostname}</span>
             <Pill tone="neutral">{t(`dev.domains.kind.${domain.kind}`)}</Pill>
             <Pill tone={verified ? 'success' : domain.status === 'failed' ? 'danger' : 'warning'}>{t(`dev.domains.status.${domain.status}`)}</Pill>
+            {dnsChanged ? <Pill tone="warning">{t('dev.domains.dnsChanged.pill')}</Pill> : null}
           </span>
           <span className="flex flex-wrap gap-2">
             {automation !== 'manual' ? (
               <Button size="sm" variant="outline" disabled={apply.isPending} onClick={() => apply.mutate(undefined)}>
                 <Cloud className="size-4" />
-                {domain.dns_applied_at ? t('dev.domains.reapply') : t('dev.domains.apply')}
+                {applyLabel}
               </Button>
             ) : null}
             <Button size="sm" disabled={verify.isPending} onClick={() => verify.mutate(undefined)}>
@@ -78,6 +82,21 @@ function DomainCard({ domain, automation }: { domain: TenantDomain; automation: 
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
+        {dnsChanged ? (
+          <Alert data-testid="domain-dns-changed">
+            <TriangleAlert className="size-4" />
+            <AlertTitle>{t('dev.domains.dnsChanged.title')}</AlertTitle>
+            <AlertDescription className="grid gap-1">
+              <p>{t('dev.domains.dnsChanged.body', { at: formatDateTime(locale, domain.dns_changed_at) })}</p>
+              <p>
+                {automation === 'manual'
+                  ? t('dev.domains.dnsChanged.stepManual')
+                  : t('dev.domains.dnsChanged.stepAuto', { button: applyLabel })}
+              </p>
+              <p>{t('dev.domains.dnsChanged.stepVerify', { button: t('dev.domains.verify') })}</p>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="flex flex-wrap gap-4">
           <Step done label={t('dev.domains.step.added')} />
           <Step done={domain.dns_applied_at !== null || verified} label={automation === 'manual' ? t('dev.domains.step.dnsManual') : t('dev.domains.step.dns')} />

@@ -1,4 +1,5 @@
 import type { HeartbeatRequest, HeartbeatResponse } from '@amable/core/platform';
+import { applyDnsChanges } from '../domains/service';
 import type { Env } from '../env';
 import { controlPlaneClient } from './client';
 import {
@@ -36,6 +37,7 @@ export async function sendHeartbeat(env: Env, nowMs: number): Promise<HeartbeatR
   const response = await client.post<HeartbeatResponse>('/heartbeat', await buildHeartbeat(env, nowMs));
   const snapshot = parseQuotaSnapshot(response.quota);
   if (snapshot !== null) await storeQuotaSnapshot(env.DB, snapshot, nowMs);
+  if (Array.isArray(response.dnsChanges)) await applyDnsChanges(env.DB, response.dnsChanges, nowMs);
   if (typeof response.reporting === 'object' && response.reporting !== null) {
     await writeMeta(env.DB, META_REPORTING, {
       sampleRate: response.reporting.sampleRate,

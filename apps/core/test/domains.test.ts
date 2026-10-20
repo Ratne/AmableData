@@ -2,7 +2,7 @@ import { EmailProviderError, FakeEmailMarketingProvider } from '@amable/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { overrideAuthServices } from '../src/auth/services';
 import { overrideDomainDeps } from '../src/domains/runtime';
-import { DomainService, normalizeHostname, siteRoutes, type DomainDeps } from '../src/domains/service';
+import { applyDnsChanges, DomainService, normalizeHostname, siteRoutes, type DomainDeps, type TenantDomain } from '../src/domains/service';
 import { CloudflareZoneAutomation, FakeZoneAutomation, zoneCandidates } from '../src/domains/zone';
 import { addMember, createHarness, login, seedTenant, seedUser, stepUp, type Harness } from './helpers/harness';
 
@@ -179,5 +179,30 @@ describe('domain REST API', () => {
     expect(after.body).toMatchObject({ state: 'verified', can_send: true, verified_domains: ['mail.acme.test'] });
     const list = await o.get('/api/v2/t/acme/domains');
     expect(list.body).toMatchObject({ automation: 'fake' });
+  });
+
+  it('a DNS change reported by the control plane stays flagged until the domain verifies again', async () => {
+    overrideDomainDeps(() => deps());
+    const owner = await seedUser(h, { email: 'owner@acme.test' });
+    await addMember(h, owner.id, 't_acme', 'owner');
+    const o = await login(h, owner.email);
+    await stepUp(h, o);
+    const created = await o.post('/api/v2/t/acme/domains', { kind: 'sending', hostname: 'mail.acme.test' });
+    provider.domains.set('mail.acme.test', { domain: 'mail.acme.test', status: 'verified', records: [] });
+    await o.post(`/api/v2/t/acme/domains/${created.body.id as string}/verify`);
+
+    const records = [{ type: 'CNAME' as const, name: 'ps._domainkey.mail.acme.test', value: 'new.customers.postshiba.com' }];
+    expect(
+      await applyDnsChanges(h.env.DB, [{ providerTenantId: 'fake-tenant-acme', hostname: 'mail.acme.test', records, detectedAt: '2026-10-15T10:00:00.000Z' }], h.clock.now),
+    ).toBe(1);
+    const flagged = (await o.get('/api/v2/t/acme/domains')).body.data as TenantDomain[];
+    expect(flagged[0]).toMatchObject({ status: 'verified', records, dns_changed_at: '2026-10-15T10:00:00.000Z' });
+    expect((await o.get('/api/v2/t/acme/domains/sending-status')).body).toMatchObject({ can_send: true, dns_update_needed: ['mail.acme.test'] });
+
+    provider.domains.set('mail.acme.test', { domain: 'mail.acme.test', status: 'pending', records });
+    expect((await o.post(`/api/v2/t/acme/domains/${created.body.id as string}/verify`)).body).toMatchObject({ status: 'failed', dns_changed_at: '2026-10-15T10:00:00.000Z' });
+    provider.domains.set('mail.acme.test', { domain: 'mail.acme.test', status: 'verified', records });
+    expect((await o.post(`/api/v2/t/acme/domains/${created.body.id as string}/verify`)).body).toMatchObject({ status: 'verified', dns_changed_at: null });
+    expect((await o.get('/api/v2/t/acme/domains/sending-status')).body).toMatchObject({ dns_update_needed: [] });
   });
 });

@@ -122,6 +122,43 @@ describe('heartbeat', () => {
     expect(await readMeta(h.env.DB, 'platform:quota')).toMatchObject({ storedAt: START });
   });
 
+  it('stores the DNS changes of sending domains and clears the ones resolved at the control plane', async () => {
+    const { h, cp: fake } = await setup();
+    await seedTenant(h, 'acme');
+    await h.env.DB.batch([
+      h.env.DB.prepare(`INSERT INTO installation_meta (key, value) VALUES ('postshiba_tenant:t_acme', 'TnA')`),
+      h.env.DB.prepare(
+        `INSERT INTO domains (id, tenant_id, hostname, kind, status, records, created_at) VALUES
+          ('d1', 't_acme', 'mail.acme.com', 'sending', 'verified', '[]', 0),
+          ('d2', 't_acme', 'news.acme.com', 'sending', 'verified', '[]', 0)`,
+      ),
+    ]);
+    const records = [{ type: 'CNAME', name: 'ps._domainkey.mail.acme.com', value: 'new.customers.postshiba.com' }];
+    const heartbeat = (dnsChanges: unknown[]) => {
+      fake.routes['POST /v1/installation/heartbeat'] = () =>
+        new Response(
+          JSON.stringify({ ok: true, installationId: 'inst', serviceState: 'active', channel: 'stable', targetVersion: null, quota: fake.snapshot(), reporting: { sampleRate: 1, maxBatch: 10 }, dnsChanges }),
+          { headers: { 'content-type': 'application/json' } },
+        );
+    };
+    const rows = () =>
+      h.env.DB.prepare(`SELECT id, records, dns_changed_at FROM domains ORDER BY id`).all<{ id: string; records: string; dns_changed_at: number | null }>();
+
+    heartbeat([
+      { providerTenantId: 'TnA', hostname: 'mail.acme.com', records, detectedAt: '2026-10-15T11:00:00.000Z' },
+      { providerTenantId: 'Other', hostname: 'news.acme.com', records, detectedAt: '2026-10-15T11:00:00.000Z' },
+    ]);
+    await runPlatformCron(h.env, START);
+    expect((await rows()).results).toEqual([
+      { id: 'd1', records: JSON.stringify(records), dns_changed_at: Date.parse('2026-10-15T11:00:00.000Z') },
+      { id: 'd2', records: '[]', dns_changed_at: null },
+    ]);
+
+    heartbeat([]);
+    await runPlatformCron(h.env, START + HOUR);
+    expect((await rows()).results[0]).toMatchObject({ id: 'd1', dns_changed_at: null });
+  });
+
   it('defaults the version to dev', async () => {
     const { h } = await setup();
     expect((await buildHeartbeat(h.env, START)).version).toBe('dev');

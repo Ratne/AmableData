@@ -116,6 +116,15 @@ export const developersEn = {
   'dev.domains.empty': 'No domains connected yet.',
   'dev.domains.apply': 'Create on Cloudflare',
   'dev.domains.reapply': 'Apply again',
+  'dev.domains.dnsChanged.title': 'Update the DNS of this domain',
+  'dev.domains.dnsChanged.body':
+    'Your email sending moved to new infrastructure, so the DNS records of this domain changed (since {at}). Until you publish them, deliverability can suffer.',
+  'dev.domains.dnsChanged.stepAuto': '1. Click "{button}": the records below are written on your Cloudflare zone.',
+  'dev.domains.dnsChanged.stepManual': '1. At your DNS provider, replace the records of this domain with the ones below.',
+  'dev.domains.dnsChanged.stepVerify': '2. Click "{button}". DNS changes can take a few minutes: if it fails, try again later.',
+  'dev.domains.dnsChanged.pill': 'DNS to update',
+  'dev.domains.dnsChanged.bannerTitle': 'DNS update needed',
+  'dev.domains.dnsChanged.bannerBody': '{count} sending domain(s) need new DNS records after a change of the email infrastructure. Follow the steps on each highlighted domain.',
   'dev.domains.dnsApplied': 'DNS changes applied',
   'dev.domains.verify': 'Verify',
   'dev.domains.removed': 'Domain removed',
@@ -144,6 +153,7 @@ export const developersEn = {
   'dev.sending.overrideTitle': 'No verified sending domain (allowed in local development)',
   'dev.sending.overrideBody': 'In production, sending stays blocked until a sending domain is verified.',
   'dev.sending.connect': 'Set up a sending domain',
+  'dev.sending.updateDns': 'Update the domains DNS',
 } as const;
 
 export type DevelopersMessageKey = keyof typeof developersEn;

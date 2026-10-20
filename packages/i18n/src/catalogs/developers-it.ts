@@ -118,6 +118,15 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.domains.empty': 'Nessun dominio collegato.',
   'dev.domains.apply': 'Crea su Cloudflare',
   'dev.domains.reapply': 'Applica di nuovo',
+  'dev.domains.dnsChanged.title': 'Aggiorna i DNS di questo dominio',
+  'dev.domains.dnsChanged.body':
+    "L'invio delle tue email è passato a una nuova infrastruttura, quindi i record DNS di questo dominio sono cambiati (dal {at}). Finché non li pubblichi la consegna delle email può peggiorare.",
+  'dev.domains.dnsChanged.stepAuto': '1. Premi "{button}": i record qui sotto vengono scritti sulla tua zona Cloudflare.',
+  'dev.domains.dnsChanged.stepManual': '1. Dal pannello del tuo provider DNS sostituisci i record di questo dominio con quelli qui sotto.',
+  'dev.domains.dnsChanged.stepVerify': '2. Premi "{button}". Le modifiche DNS possono richiedere qualche minuto: se non riesce, riprova più tardi.',
+  'dev.domains.dnsChanged.pill': 'DNS da aggiornare',
+  'dev.domains.dnsChanged.bannerTitle': 'Aggiornamento DNS richiesto',
+  'dev.domains.dnsChanged.bannerBody': "Domini di invio da aggiornare: {count}. Servono nuovi record DNS dopo un cambio dell'infrastruttura email. Segui i passaggi su ogni dominio evidenziato.",
   'dev.domains.dnsApplied': 'Modifiche DNS applicate',
   'dev.domains.verify': 'Verifica',
   'dev.domains.removed': 'Dominio rimosso',
@@ -146,4 +155,5 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.sending.overrideTitle': 'Nessun dominio di invio verificato (consentito in sviluppo locale)',
   'dev.sending.overrideBody': "In produzione l'invio resta bloccato finché un dominio di invio non è verificato.",
   'dev.sending.connect': 'Configura un dominio di invio',
+  'dev.sending.updateDns': 'Aggiorna i DNS dei domini',
 };

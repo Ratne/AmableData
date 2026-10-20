@@ -34,6 +34,7 @@ interface DomainRow {
   verified_at: number | null;
   checked_at: number | null;
   last_error: string | null;
+  dns_changed_at: number | null;
   created_at: number;
 }
 
@@ -51,6 +52,8 @@ export interface TenantDomain {
   readonly verified_at: string | null;
   readonly checked_at: string | null;
   readonly last_error: string | null;
+  /** Sending: the provider changed the records (cluster move); publish them and verify again. */
+  readonly dns_changed_at: string | null;
   readonly created_at: string;
 }
 
@@ -127,6 +130,7 @@ export class DomainService {
       verified_at: iso(row.verified_at),
       checked_at: iso(row.checked_at),
       last_error: row.last_error,
+      dns_changed_at: iso(row.dns_changed_at),
       created_at: new Date(row.created_at).toISOString(),
     };
   }
@@ -276,9 +280,9 @@ export class DomainService {
     await this.deps.db
       .prepare(
         `UPDATE domains SET status = ?, checked_at = ?, last_error = ?, verified_at = CASE WHEN ? THEN COALESCE(verified_at, ?) ELSE verified_at END,
-           records = COALESCE(?, records) WHERE id = ? AND tenant_id = ?`,
+           records = COALESCE(?, records), dns_changed_at = CASE WHEN ? THEN NULL ELSE dns_changed_at END WHERE id = ? AND tenant_id = ?`,
       )
-      .bind(status, now, error, ok ? 1 : 0, now, records === null ? null : JSON.stringify(records), id, tenantId)
+      .bind(status, now, error, ok ? 1 : 0, now, records === null ? null : JSON.stringify(records), ok ? 1 : 0, id, tenantId)
       .run();
     return this.toDomain(await this.row(tenantId, id));
   }
@@ -295,4 +299,46 @@ export class DomainService {
     }
     await this.deps.db.prepare(`DELETE FROM domains WHERE id = ? AND tenant_id = ?`).bind(id, tenantId).run();
   }
+}
+
+const PROVIDER_TENANT_PREFIX = 'postshiba_tenant:';
+
+/**
+ * Sending domains with new DNS records reported by the control plane (managed
+ * email moved to another cluster): stores the records to publish and flags the
+ * domain; flags missing from the list were resolved there, so they are cleared.
+ */
+export async function applyDnsChanges(
+  db: D1Database,
+  changes: readonly { providerTenantId: string; hostname: string; records: readonly DnsRecord[]; detectedAt: string }[],
+  now: number,
+): Promise<number> {
+  const { results: tenants } = await db
+    .prepare(`SELECT key, value FROM installation_meta WHERE key LIKE '${PROVIDER_TENANT_PREFIX}%'`)
+    .all<{ key: string; value: string }>();
+  const tenantOf = new Map(tenants.map((r) => [r.value, r.key.slice(PROVIDER_TENANT_PREFIX.length)]));
+  const flagged = new Set<string>();
+  for (const change of changes) {
+    const tenantId = tenantOf.get(change.providerTenantId);
+    if (tenantId === undefined) continue;
+    const hostname = change.hostname.toLowerCase();
+    const detected = Date.parse(change.detectedAt);
+    await db
+      .prepare(
+        `UPDATE domains SET records = ?, dns_changed_at = COALESCE(dns_changed_at, ?)
+          WHERE tenant_id = ? AND hostname = ? AND kind = 'sending'`,
+      )
+      .bind(JSON.stringify(change.records), Number.isFinite(detected) ? detected : now, tenantId, hostname)
+      .run();
+    flagged.add(`${tenantId}\n${hostname}`);
+  }
+  const { results: open } = await db
+    .prepare(`SELECT id, tenant_id, hostname FROM domains WHERE dns_changed_at IS NOT NULL`)
+    .all<{ id: string; tenant_id: string; hostname: string }>();
+  for (const row of open) {
+    if (!flagged.has(`${row.tenant_id}\n${row.hostname}`)) {
+      await db.prepare(`UPDATE domains SET dns_changed_at = NULL WHERE id = ?`).bind(row.id).run();
+    }
+  }
+  return flagged.size;
 }

@@ -72,6 +72,7 @@ export interface TenantDomain {
   readonly verified_at: string | null;
   readonly checked_at: string | null;
   readonly last_error: string | null;
+  readonly dns_changed_at: string | null;
 }
 
 export interface DomainList {
@@ -84,6 +85,8 @@ export interface SendingStatus {
   readonly state: 'verified' | 'unverified' | 'dev_override';
   readonly can_send: boolean;
   readonly verified_domains: string[];
+  /** Absent on servers older than the field. */
+  readonly dns_update_needed?: string[];
 }
 
 export function developersApi(slug: string) {

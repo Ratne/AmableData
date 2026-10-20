@@ -69,6 +69,8 @@ export interface HeartbeatResponse {
   readonly quota: QuotaSnapshot;
   /** Error reporting knobs pushed by the control plane. */
   readonly reporting: { readonly sampleRate: number; readonly maxBatch: number };
+  /** Managed email: sending domains with DNS to update (absent on older control planes). */
+  readonly dnsChanges?: readonly EmailDnsChange[];
 }
 
 // ----------------------------------------------------------------- quota
@@ -204,6 +206,18 @@ export interface EmailDomainResponse {
   readonly domain: string;
   readonly status: 'pending' | 'verified' | 'failed';
   readonly records: readonly { readonly type: 'TXT' | 'CNAME' | 'MX'; readonly name: string; readonly value: string; readonly unlessPrefix?: string }[];
+}
+
+/**
+ * A sending domain whose DNS records changed at PostShiba (e.g. after a move to
+ * another cluster): the customer must publish `records`, then verify again.
+ * Listed by the heartbeat until the domain verifies with them.
+ */
+export interface EmailDnsChange {
+  readonly providerTenantId: string;
+  readonly hostname: string;
+  readonly records: EmailDomainResponse['records'];
+  readonly detectedAt: string;
 }
 
 /** `POST /v1/installation/email/tenants/suspend` / `…/resume` (sender health). */

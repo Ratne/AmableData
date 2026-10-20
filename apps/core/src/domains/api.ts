@@ -23,6 +23,10 @@ const domainSchema = z
     verified_at: z.string().nullable(),
     checked_at: z.string().nullable(),
     last_error: z.string().nullable(),
+    dns_changed_at: z
+      .string()
+      .nullable()
+      .describe('Sending only: the email provider changed the DNS records (infrastructure move); publish `records` and verify again'),
     created_at: z.string(),
   })
   .openapi('TenantDomain');
@@ -45,6 +49,7 @@ const sendingStatusSchema = z.object({
   state: z.enum(['verified', 'unverified', 'dev_override']),
   can_send: z.boolean(),
   verified_domains: z.array(z.string()),
+  dns_update_needed: z.array(z.string()).describe('Sending domains whose DNS records changed at the provider and must be published again'),
 });
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -60,7 +65,13 @@ export function registerDomainRoutes(app: OpenAPIHono<AppEnv>): void {
       responses: { 200: json(sendingStatusSchema, 'Sending status') },
     }),
     async (c) => {
-      const state = await sendingState(c.env, getTenant(c).tenant.id)();
+      const tenantId = getTenant(c).tenant.id;
+      const state = await sendingState(c.env, tenantId)();
+      const changed = await c.env.DB.prepare(
+        `SELECT hostname FROM domains WHERE tenant_id = ? AND kind = 'sending' AND dns_changed_at IS NOT NULL ORDER BY hostname`,
+      )
+        .bind(tenantId)
+        .all<{ hostname: string }>();
       return c.json(
         {
           state: state.state,
@@ -68,6 +79,7 @@ export function registerDomainRoutes(app: OpenAPIHono<AppEnv>): void {
           verified_domains: state.domains
             .filter((d) => d.kind === 'sending' && d.status === 'verified')
             .map((d) => d.hostname),
+          dns_update_needed: changed.results.map((r) => r.hostname),
         },
         200,
       );

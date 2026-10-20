@@ -77,6 +77,24 @@ export function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
 export function SendingDomainBanner({ slug, compact = false }: { slug: string; compact?: boolean }) {
   const { t } = useI18n();
   const status = useSendingStatus(slug);
+  const dnsUpdate = status.data?.dns_update_needed ?? [];
+  if (status.data !== undefined && status.data.state === 'verified' && dnsUpdate.length > 0) {
+    return (
+      <Alert variant="destructive" data-testid="sending-dns-update-banner">
+        <MailWarning className="size-4" />
+        <AlertTitle>{t('dev.domains.dnsChanged.bannerTitle')}</AlertTitle>
+        {compact ? null : (
+          <AlertDescription>
+            <p>{t('dev.domains.dnsChanged.bannerBody', { count: String(dnsUpdate.length) })}</p>
+            <p className="font-mono text-xs">{dnsUpdate.join(', ')}</p>
+            <Link to="/t/$tenant/settings/domains" params={{ tenant: slug }} className="font-medium underline underline-offset-2">
+              {t('dev.sending.updateDns')}
+            </Link>
+          </AlertDescription>
+        )}
+      </Alert>
+    );
+  }
   if (status.data === undefined || status.data.state === 'verified') return null;
   const override = status.data.state === 'dev_override';
   return (
