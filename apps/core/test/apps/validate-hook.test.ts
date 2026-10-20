@@ -70,6 +70,27 @@ describe('contact.validate hook', () => {
     expect(live.body.data).toEqual([expect.objectContaining({ app_id: 'emailable', valid: true, fields: ['email'], cached: false })]);
   });
 
+  it('re-validates the email when it changes, reading set_fields', async () => {
+    const { h, installed, hookCalls } = await setup();
+    h.routes.set(HOOK, (call) => {
+      const body = JSON.parse(call.body) as { values: { email: string } };
+      const bad = body.values.email.startsWith('bad');
+      return Response.json({ valid: !bad, set_fields: { email_status: bad ? 'undeliverable' : 'deliverable' } });
+    });
+    const created = await installed.owner.post('/api/v2/t/acme/contacts', { given_name: 'Ada', emails: [{ email: 'bad@example.com' }] });
+    const id = String(created.body.id);
+    expect((await contactOf(installed, id)).custom_fields['app_emailable_email_status']).toBe('undeliverable');
+
+    const renamed = await installed.owner.patch(`/api/v2/t/acme/contacts/${id}`, { given_name: 'Ada Lovelace' });
+    expect(renamed.status).toBe(200);
+    expect(hookCalls()).toBe(1);
+
+    const fixed = await installed.owner.patch(`/api/v2/t/acme/contacts/${id}`, { emails: [{ email: 'ada@example.com' }] });
+    expect(fixed.status).toBe(200);
+    expect(hookCalls()).toBe(2);
+    expect((await contactOf(installed, id)).custom_fields['app_emailable_email_status']).toBe('deliverable');
+  });
+
   it('fails open and opens the circuit breaker after repeated failures', async () => {
     const { h, installed, hookCalls } = await setup();
     h.routes.set(HOOK, () => new Response('down', { status: 500 }));

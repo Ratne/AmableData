@@ -17,7 +17,9 @@ import {
   pageOf,
   pageQuerySchema,
   updateContactSchema,
+  type Contact,
 } from '@amable/api-types';
+import type { Context } from 'hono';
 import { callEngine } from '../../automation/api/routes';
 import { callMail } from '../../email/http';
 import { validateAndApply } from '../../apps/validate-hook';
@@ -34,6 +36,15 @@ async function optional<T>(read: () => Promise<T>): Promise<T | null> {
     console.warn('contact tab count unavailable', error instanceof Error ? error.message : error);
     return null;
   }
+}
+
+/** Apps validate their own writes; everyone else's emails/phones go through contact.validate. */
+async function validateLater(c: Context<AppEnv>, contact: Contact): Promise<void> {
+  if (getAuth(c).kind === 'app') return;
+  const email = (contact.emails.find((e) => e.is_primary) ?? contact.emails[0])?.email ?? null;
+  const phone = contact.phones[0]?.number ?? null;
+  if (email === null && phone === null) return;
+  await defer(c, validateAndApply(c.env, getTenant(c).tenant.id, contact.id, { email, phone }, 'crm'));
 }
 
 export function registerContactRoutes(app: OpenAPIHono<AppEnv>): void {
@@ -62,14 +73,7 @@ export function registerContactRoutes(app: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       const contact = await callCrm(c, 'contacts.create', c.req.valid('json'));
-      // Apps validate their own writes; everyone else's new contacts go through contact.validate.
-      if (getAuth(c).kind !== 'app') {
-        const email = (contact.emails.find((e) => e.is_primary) ?? contact.emails[0])?.email ?? null;
-        const phone = contact.phones[0]?.number ?? null;
-        if (email !== null || phone !== null) {
-          await defer(c, validateAndApply(c.env, getTenant(c).tenant.id, contact.id, { email, phone }, 'crm'));
-        }
-      }
+      await validateLater(c, contact);
       return c.json(contact, 201);
     },
   );
@@ -107,14 +111,12 @@ export function registerContactRoutes(app: OpenAPIHono<AppEnv>): void {
       request: { params: idParamSchema, body: jsonBody(updateContactSchema) },
       responses: { 200: json(contactSchema, 'The updated contact') },
     }),
-    async (c) =>
-      c.json(
-        await callCrm(c, 'contacts.update', {
-          id: c.req.valid('param').id,
-          data: c.req.valid('json'),
-        }),
-        200,
-      ),
+    async (c) => {
+      const data = c.req.valid('json');
+      const contact = await callCrm(c, 'contacts.update', { id: c.req.valid('param').id, data });
+      if (data.emails !== undefined || data.phones !== undefined) await validateLater(c, contact);
+      return c.json(contact, 200);
+    },
   );
 
   app.openapi(

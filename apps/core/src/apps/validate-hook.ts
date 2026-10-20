@@ -60,14 +60,15 @@ function scalar(value: unknown): value is string | number | boolean | null {
   return value === null || ['string', 'number', 'boolean'].includes(typeof value);
 }
 
-/** Parses an app answer `{valid, reason?, fields?, tags?, entity_data?}`; anything else is "no answer". */
+/** Parses an app answer `{valid, reason?, set_fields?, tags?, entity_data?}` (`fields` is the older name of `set_fields`); anything else is "no answer". */
 function parseAnswer(install: AppInstall, checked: string[], body: unknown, cached: boolean): AppValidation | null {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return null;
   const answer = body as Record<string, unknown>;
   if (typeof answer['valid'] !== 'boolean') return null;
   const setFields: Record<string, string | number | boolean | null> = {};
-  if (typeof answer['fields'] === 'object' && answer['fields'] !== null) {
-    for (const [key, value] of Object.entries(answer['fields'] as Record<string, unknown>)) {
+  const requested = answer['set_fields'] ?? answer['fields'];
+  if (typeof requested === 'object' && requested !== null && !Array.isArray(requested)) {
+    for (const [key, value] of Object.entries(requested as Record<string, unknown>)) {
       if (scalar(value) && Object.keys(setFields).length < 20) setFields[key] = typeof value === 'string' ? value.slice(0, 1000) : value;
     }
   }
