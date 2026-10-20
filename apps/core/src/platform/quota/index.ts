@@ -21,6 +21,7 @@ export {
 export {
   dropQuotaMemoryCache,
   loadQuotaSnapshot,
+  storedQuotaSnapshot,
   storeQuotaSnapshot,
   type SnapshotSource,
 } from './snapshot';

@@ -10,6 +10,7 @@ import { HttpError, jsonError } from '../../middleware/errors';
 import { defer } from '../../middleware/request';
 import { appOrigin } from '../../middleware/security';
 import { parseJson } from '../../middleware/validate';
+import { isManagedOffering } from '../../platform/billing';
 import { updateNotice } from '../../platform/updates';
 import {
   describeChallenge,
@@ -147,6 +148,7 @@ const slugSchema = z
 /**
  * Creates a tenant with the caller as owner. Allowed for owners of an existing
  * tenant, or for anyone while the installation has no tenant yet (bootstrap).
+ * On the managed offering only the bootstrap is allowed: more workspaces are paid.
  */
 accountRoutes.post('/tenants', requireStepUp(), async (c) => {
   const body = await parseJson(
@@ -158,6 +160,9 @@ accountRoutes.post('/tenants', requireStepUp(), async (c) => {
   const anyTenant = await c.env.DB.prepare(`SELECT 1 AS x FROM tenants LIMIT 1`).first();
   if (anyTenant !== null && !memberships.some((m) => m.role === 'owner')) {
     return jsonError(c, 403, 'forbidden');
+  }
+  if (anyTenant !== null && (await isManagedOffering(c.env))) {
+    return jsonError(c, 403, 'managed_workspace_limit');
   }
   if ((await findTenantBySlug(c.env.DB, body.slug)) !== null) {
     return jsonError(c, 409, 'slug_taken');

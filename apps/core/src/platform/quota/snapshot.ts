@@ -45,6 +45,11 @@ async function readStored(db: D1Database): Promise<StoredSnapshot | null> {
   return { snapshot, storedAt: value.storedAt };
 }
 
+/** Last snapshot stored by the installation, whatever its age; never calls the control plane. */
+export async function storedQuotaSnapshot(db: D1Database): Promise<QuotaSnapshot | null> {
+  return memory.get(db)?.entry.snapshot ?? (await readStored(db))?.snapshot ?? null;
+}
+
 function ttlMs(snapshot: QuotaSnapshot): number {
   return (snapshot.ttlSeconds > 0 ? snapshot.ttlSeconds : DEFAULT_SNAPSHOT_TTL_SECONDS) * 1000;
 }

@@ -61,6 +61,7 @@ export interface MeResponse {
   };
   readonly memberships: readonly MeMembership[];
   readonly lastTenantSlug: string | null;
+  readonly canCreateTenant: boolean;
 }
 
 /** Signed-in user and memberships; `null` when signed out (or the API is down in local UI work). */

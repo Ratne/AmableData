@@ -153,7 +153,7 @@ export function TenantSwitcher({
   const navigate = useNavigate();
   const memberships = me?.memberships ?? [];
   const current = memberships.find((membership) => membership.slug === tenantSlug);
-  const canCreate = memberships.some((membership) => membership.role === 'owner');
+  const canCreate = me?.canCreateTenant ?? false;
   const [creating, setCreating] = useState(false);
 
   return (

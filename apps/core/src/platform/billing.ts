@@ -2,13 +2,25 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import { billingOverviewSchema, type BillingOverview } from '@amable/api-types';
 import type { Context } from 'hono';
 import { createCrmRouter, crmRoute, json } from '../crm/api/core';
+import type { Env } from '../env';
 import type { AppEnv } from '../middleware';
 import { DEFAULT_CONTROL_PLANE_URL, platformLink } from './license';
-import { loadQuotaSnapshot, localUsage, overageCost } from './quota';
+import { loadQuotaSnapshot, localUsage, overageCost, storedQuotaSnapshot } from './quota';
 
 export const MANAGED_PRICE_MONTHLY = 99;
 const CURRENCY = 'USD';
 const MICROS = 1_000_000;
+
+/**
+ * Managed offering (cloud): a license key and a service state other than `self_hosted`,
+ * from the stored snapshot (no control plane call: it runs on every `/api/me`).
+ * Without a snapshot yet a licensed installation counts as managed, like the billing page.
+ */
+export async function isManagedOffering(env: Env): Promise<boolean> {
+  if (platformLink(env).mode !== 'licensed') return false;
+  const snapshot = await storedQuotaSnapshot(env.DB);
+  return snapshot === null || snapshot.serviceState !== 'self_hosted';
+}
 
 function portalUrls(c: Context<AppEnv>): BillingOverview['portal'] {
   const link = platformLink(c.env);

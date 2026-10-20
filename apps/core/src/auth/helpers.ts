@@ -3,6 +3,7 @@ import { ROLE_PERMISSIONS } from '@amable/core';
 import type { Context } from 'hono';
 import type { AppEnv } from '../middleware/context';
 import { HttpError } from '../middleware/errors';
+import { isManagedOffering } from '../platform/billing';
 import type { AuthServices } from './services';
 import {
   countRecoveryCodes,
@@ -64,5 +65,9 @@ export async function meBody(c: Context<AppEnv>, user: UserRow) {
       permissions: ROLE_PERMISSIONS[m.role],
     })),
     lastTenantSlug: lastIsMember ? last.slug : (memberships[0]?.slug ?? null),
+    // Cloud workspaces are sold through the portal, never created from the switcher.
+    canCreateTenant:
+      memberships.some((m) => m.role === 'owner') &&
+      !(await isManagedOffering(c.env)),
   };
 }
