@@ -1,3 +1,4 @@
+import { httpsRedirect } from '@amable/app-edge/https';
 import { runScheduledAdsSync } from './analytics/ads-sync';
 import { runScheduledTrackingDomains } from './analytics/routes-tracking-domains';
 import { runScheduledAnalytics } from './analytics/runtime';
@@ -33,6 +34,8 @@ const handler = {
   fetch(request, env, ctx) {
     // Dev only: requests on the edge port (scripts/dev.mjs proxy) belong to the edge worker.
     if (isDevEdgeRequest(request, env)) return forwardToDevEdge(request, env);
+    const insecure = httpsRedirect(request, env.ENVIRONMENT);
+    if (insecure !== null) return insecure;
     const { pathname } = new URL(request.url);
     if (pathname === '/api' || pathname.startsWith('/api/')) return app.fetch(request, env, ctx);
     // Signed calls of the edge worker (hosted forms, booking pages, landing SSR).

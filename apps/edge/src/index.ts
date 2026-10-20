@@ -11,6 +11,7 @@ import { emailEdgeRoutes } from './email/routes';
 import { esignEdgeRoutes } from './esign/routes';
 import type { Env } from './env';
 import { reportEdgeError, withEdgeErrorReporting } from './errors';
+import { httpsRedirect } from './https';
 
 export type { Env } from './env';
 export { AnalyticsDO } from './analytics/do';
@@ -90,7 +91,7 @@ app.onError((error, c) => {
 });
 
 const handler = {
-  fetch: app.fetch,
+  fetch: (request, env, ctx) => httpsRedirect(request, env.ENVIRONMENT) ?? app.fetch(request, env, ctx),
 
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     // `amable-analytics` on installations made by the managed installer (shared accounts).
