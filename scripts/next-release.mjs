@@ -9,7 +9,7 @@
  * with `Before you update:` in a commit body goes to the "Before you update"
  * section. Prints nothing (no release) when the commit is already released, or
  * when the new commits are only chore, ci, docs, test, refactor, build or style,
- * or when one of them says `[skip release]`.
+ * or when the subject of one of them says `[skip release]`.
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -41,9 +41,7 @@ const commits = log
     return { subject, body };
   });
 
-if (commits.some(({ subject, body }) => [subject, ...body].some((line) => line.includes('[skip release]')))) {
-  process.exit(0);
-}
+if (commits.some(({ subject }) => subject.includes('[skip release]'))) process.exit(0);
 
 const CONVENTIONAL = /^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)$/;
 const QUIET = new Set(['chore', 'ci', 'docs', 'test', 'tests', 'refactor', 'build', 'style', 'revert']);
