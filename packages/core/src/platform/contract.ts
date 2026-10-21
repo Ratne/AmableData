@@ -325,12 +325,12 @@ export interface CrawlerFeed {
 
 /**
  * Central OAuth broker (`/v1/installation/oauth/*`): the control plane owns the
- * Google / Meta apps and stores tokens encrypted per installation + tenant; an
+ * Google / Meta / TikTok apps and stores tokens encrypted per installation + tenant; an
  * installation only ever receives short-lived access tokens of its own accounts.
  * Flow: `start` → browser to `authorizeUrl` → provider → control plane callback →
  * redirect to `returnUrl?state=…&code=…` (one-time code) → `finish`.
  */
-export type OAuthBrokerProvider = 'google' | 'meta';
+export type OAuthBrokerProvider = 'google' | 'meta' | 'tiktok';
 
 export interface OAuthStartRequest {
   readonly tenantId: string;
@@ -359,6 +359,11 @@ export interface OAuthFinishResponse {
   };
   readonly email: string | null;
   readonly scopes: readonly string[];
+  /**
+   * TikTok only: advertiser ids covered by the authorization. Listing them
+   * upstream needs the app secret, which never leaves the control plane.
+   */
+  readonly advertiserIds?: readonly string[];
 }
 
 export interface OAuthTokenRequest {

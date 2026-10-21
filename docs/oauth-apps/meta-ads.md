@@ -14,10 +14,10 @@ On the managed offering (`LICENSE_KEY` set) Meta is **brokered by the control pl
 the operator registers one central app on the control plane host and installations need
 no app, no secrets and no redirect URI of their own (see
 [Central app](#central-app-managed-cloud)). An own app (`META_APP_ID` +
-`META_APP_SECRET`), when configured, always takes precedence. Google Ads and TikTok stay
-own-app only: Google Ads needs a per-operator developer token on every API call and
-TikTok has no central upstream. Dev (`ENVIRONMENT=dev`) uses a fake client, no app
-needed.
+`META_APP_SECRET`), when configured, always takes precedence. TikTok is brokered the same
+way ([tiktok-ads.md](tiktok-ads.md)); Google Ads stays own-app only, since it needs a
+per-operator developer token on every API call. Dev (`ENVIRONMENT=dev`) uses a fake
+client, no app needed.
 
 ## Central app (managed cloud)
 

@@ -23,9 +23,9 @@ import { ControlPlaneError, controlPlaneClient, type ControlPlaneClient } from '
 
 /** Upstream of the central broker backing an ad platform, or null when the platform is never brokered. */
 export function brokerProviderOf(platform: AdPlatform): OAuthBrokerProvider | null {
-  // Google Ads needs a per-operator developer token on every API call and
-  // TikTok has no central upstream: both stay own-app only.
-  return platform === 'meta' ? 'meta' : null;
+  // Google Ads needs a per-operator developer token on every API call: own app only.
+  if (platform === 'meta' || platform === 'tiktok') return platform;
+  return null;
 }
 
 /** Ad platforms served by the central broker on this installation (licensed only). */
@@ -57,7 +57,12 @@ export interface AdsOAuthBroker {
     scopes: readonly string[];
     returnUrl: string;
   }): Promise<{ authorizeUrl: string; state: string }>;
-  finish(input: { tenantId: string; platform: AdPlatform; state: string; code: string }): Promise<{ accountId: string }>;
+  finish(input: {
+    tenantId: string;
+    platform: AdPlatform;
+    state: string;
+    code: string;
+  }): Promise<{ accountId: string; advertiserIds?: readonly string[] }>;
   /** Null when the account was revoked upstream or never connected (reconnect needed). */
   token(input: { tenantId: string; accountId: string }): Promise<AdsBrokerTokens | null>;
   /** Swallows "already gone"; any other failure throws `AdsBrokerError`. */
@@ -106,7 +111,10 @@ export function controlPlaneAdsBroker(client: ControlPlaneClient): AdsOAuthBroke
       if (res.account.provider !== provider || res.account.tenantId !== input.tenantId) {
         throw new AdsBrokerError('unavailable', 'ads broker: account mismatch');
       }
-      return { accountId: res.account.accountId };
+      return {
+        accountId: res.account.accountId,
+        ...(res.advertiserIds === undefined ? {} : { advertiserIds: res.advertiserIds }),
+      };
     },
 
     async token(input) {

@@ -112,6 +112,26 @@ describe('tiktok accounts and entities', () => {
     });
   });
 
+  it('uses the given advertiser ids instead of oauth2/advertiser/get', async () => {
+    const mock = queueFetch([EUR_INFO]);
+    const tiktok = createTikTokProvider(config(mock.fetch, { clientId: '', clientSecret: '' }));
+    expect(await tiktok.listAccounts('at-1', { accountIds: ['7001'] })).toEqual([
+      { account_id: '7001', name: 'Shop', currency: 'EUR', timezone: 'Europe/Rome' },
+    ]);
+    expect(mock.calls).toHaveLength(1);
+    expect(path(mock.calls[0]!.url)).toBe(`${API}/advertiser/info/`);
+  });
+
+  it('refuses to list advertisers without app secret nor ids', async () => {
+    const mock = queueFetch([]);
+    const tiktok = createTikTokProvider(config(mock.fetch, { clientId: '', clientSecret: '' }));
+    await expect(tiktok.listAccounts('at-1')).rejects.toMatchObject({
+      kind: 'permanent',
+      platformCode: 'missing_advertiser_ids',
+    });
+    expect(mock.calls).toHaveLength(0);
+  });
+
   it('paginates entities with page/page_size until total_page', async () => {
     const { tiktok, calls } = provider([
       EUR_INFO,

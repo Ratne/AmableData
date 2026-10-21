@@ -168,14 +168,24 @@ export function createTikTokProvider(config: ProviderConfig): AdsProvider {
       return result.refreshToken === undefined ? { ...result, refreshToken } : result;
     },
 
-    async listAccounts(token): Promise<AdAccountInfo[]> {
-      const data = await get(token, 'oauth2/advertiser/get/', {
-        app_id: config.clientId,
-        secret: config.clientSecret,
-      });
-      const ids = asArray(data.list)
-        .map((row) => asString(asRecord(row).advertiser_id))
-        .filter((id): id is string => id !== undefined);
+    async listAccounts(token, options): Promise<AdAccountInfo[]> {
+      let ids: string[];
+      if (options?.accountIds !== undefined) {
+        ids = [...options.accountIds];
+      } else {
+        if (config.clientSecret === '') {
+          throw new ProviderError('permanent', 'tiktok: advertiser ids required without app secret', {
+            platformCode: 'missing_advertiser_ids',
+          });
+        }
+        const data = await get(token, 'oauth2/advertiser/get/', {
+          app_id: config.clientId,
+          secret: config.clientSecret,
+        });
+        ids = asArray(data.list)
+          .map((row) => asString(asRecord(row).advertiser_id))
+          .filter((id): id is string => id !== undefined);
+      }
       const infos = await advertiserInfo(token, ids);
       return infos.map((info) => {
         const id = asString(info.advertiser_id) ?? '';

@@ -663,9 +663,10 @@ export async function backfillAdConnection(
 
 // --------------------------------------------------------------------- OAuth
 
-/** Scopes requested from the central broker, by platform. */
+/** Scopes requested from the central broker, by platform (TikTok scopes are set on the app). */
 const BROKER_SCOPES: Partial<Record<AdPlatform, readonly string[]>> = {
   meta: META_DEFAULT_SCOPES,
+  tiktok: [],
 };
 
 /** Maps a broker failure onto the sync error surface; rethrows anything else. */
@@ -775,6 +776,7 @@ export async function finishAdsConnect(
   const client = ports.clients.client(input.platform);
   if (client === null) throw new AdsSyncError('unavailable', 'integration_unavailable');
   let issued: Pick<AdGrant, 'accessToken' | 'refreshToken' | 'expiresAt' | 'broker'>;
+  let advertiserIds: readonly string[] | undefined;
   if (pending.broker === true) {
     const broker = ports.broker ?? null;
     if (broker === null) throw new AdsSyncError('unavailable', 'integration_unavailable');
@@ -787,6 +789,7 @@ export async function finishAdsConnect(
       });
       const tokens = await broker.token({ tenantId: input.tenantId, accountId: account.accountId });
       if (tokens === null) throw new AdsSyncError('invalid_state', 'invalid or expired authorization');
+      advertiserIds = account.advertiserIds;
       issued = {
         accessToken: tokens.accessToken,
         refreshToken: null,
@@ -805,7 +808,11 @@ export async function finishAdsConnect(
     };
   }
   const wanted = input.accountIds === undefined ? null : new Set(input.accountIds);
-  const accounts = (await client.listAccounts(issued.accessToken))
+  const listed = await client.listAccounts(
+    issued.accessToken,
+    advertiserIds === undefined ? undefined : { accountIds: advertiserIds },
+  );
+  const accounts = listed
     .filter((a) => wanted === null || wanted.has(a.account_id))
     .slice(0, MAX_ACCOUNTS_PER_CONNECT);
   if (accounts.length === 0) throw new AdsSyncError('no_accounts', 'no ad account available for this authorization');

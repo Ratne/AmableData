@@ -47,6 +47,15 @@ export interface AdAccountInfo {
   readonly timezone: string;
 }
 
+export interface ListAccountsOptions {
+  /**
+   * TikTok only: advertiser ids the authorization covers, as returned by the
+   * token exchange. Required without a client secret (brokered tokens), since
+   * `oauth2/advertiser/get/` needs the app secret.
+   */
+  readonly accountIds?: readonly string[];
+}
+
 export const SPEND_GRANULARITIES = ['day', 'hour'] as const;
 export type SpendGranularity = (typeof SPEND_GRANULARITIES)[number];
 
@@ -88,7 +97,7 @@ export interface AdsProvider {
   authorizeUrl(input: AuthorizeUrlInput): string;
   exchangeCode(input: ExchangeCodeInput): Promise<OAuthTokens>;
   refreshToken(refreshToken: string): Promise<OAuthTokens>;
-  listAccounts(accessToken: string): Promise<AdAccountInfo[]>;
+  listAccounts(accessToken: string, options?: ListAccountsOptions): Promise<AdAccountInfo[]>;
   listEntities(accessToken: string, accountId: string): Promise<AdEntity[]>;
   fetchSpend(accessToken: string, accountId: string, query: SpendQuery): Promise<AdSpendRow[]>;
   sendConversion(

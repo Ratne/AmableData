@@ -102,8 +102,8 @@
     // "TRACKING_CNAME_TARGET": "track.example.net",
     // Ad platform OAuth apps: secrets via `wrangler secret put <NAME>` (a platform
     // without them is unavailable outside dev, where a fake client is used; exception:
-    // on the managed offering Meta is brokered by the control plane with no secrets
-    // here — an own app always wins when configured, see docs/oauth-apps/meta-ads.md).
+    // on the managed offering Meta and TikTok are brokered by the control plane with no
+    // secrets here — an own app always wins when configured, see docs/oauth-apps/meta-ads.md).
     // META_APP_ID, META_APP_SECRET; GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET,
     // GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_LOGIN_CUSTOMER_ID (optional manager
     // account); TIKTOK_APP_ID, TIKTOK_APP_SECRET.

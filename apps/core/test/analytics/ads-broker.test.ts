@@ -26,12 +26,13 @@ function broker(env = licensedEnv()) {
 }
 
 describe('ads broker selection', () => {
-  it('only Meta is brokered, and only when licensed', () => {
+  it('Meta and TikTok are brokered, and only when licensed', () => {
     expect(brokerProviderOf('meta')).toBe('meta');
+    expect(brokerProviderOf('tiktok')).toBe('tiktok');
     expect(brokerProviderOf('google')).toBeNull();
-    expect(brokerProviderOf('tiktok')).toBeNull();
     const env = licensedEnv();
     expect(brokeredAdPlatform(env, 'meta')).toBe(true);
+    expect(brokeredAdPlatform(env, 'tiktok')).toBe(true);
     expect(brokeredAdPlatform(env, 'google')).toBe(false);
     expect(brokeredAdPlatform({ ENVIRONMENT: 'production' } as unknown as Env, 'meta')).toBe(false);
     expect(adsOAuthBrokerFor({ ENVIRONMENT: 'production' } as unknown as Env)).toBeNull();
@@ -103,6 +104,23 @@ describe('control plane ads broker client', () => {
     // A second revoke of a gone account is swallowed.
     cp.routes['POST /v1/installation/oauth/revoke'] = () => json({ error: 'not_connected' }, 404);
     await expect(b.revoke({ tenantId: 't_1', accountId: 'acc_1' })).resolves.toBeUndefined();
+  });
+
+  it('finish passes through the TikTok advertiser ids', async () => {
+    cp = fakeControlPlane(() => 0);
+    cp.routes = {
+      'POST /v1/installation/oauth/finish': () =>
+        json({
+          account: { tenantId: 't_1', provider: 'tiktok', accountId: 'acc_t' },
+          email: null,
+          scopes: [],
+          advertiserIds: ['7001'],
+        }),
+    };
+    expect(await broker().finish({ tenantId: 't_1', platform: 'tiktok', state: 's', code: 'c' })).toEqual({
+      accountId: 'acc_t',
+      advertiserIds: ['7001'],
+    });
   });
 
   it('maps broker failures: 503 → unavailable, 400 on finish → invalid_grant, mismatch → unavailable', async () => {

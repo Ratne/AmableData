@@ -229,7 +229,9 @@ describe('brokered ad connections (central OAuth of the control plane)', () => {
         }
         const accountId = `cpacc_${tenantId}`;
         brokerAccounts.set(accountId, { tenantId, revoked: false, serial: 0 });
-        return Promise.resolve({ accountId });
+        return Promise.resolve(
+          pending.platform === 'tiktok' ? { accountId, advertiserIds: ['7001', '7002'] } : { accountId },
+        );
       },
       token({ tenantId, accountId }) {
         brokerCalls.push('token');
@@ -256,8 +258,8 @@ describe('brokered ad connections (central OAuth of the control plane)', () => {
       ...ports,
       clients: {
         fake: false,
-        mode: (platform) => (platform === 'meta' ? 'broker' : 'unavailable'),
-        client: (platform) => (platform === 'meta' ? base.client('meta') : null),
+        mode: (platform) => (platform === 'google' ? 'unavailable' : 'broker'),
+        client: (platform) => (platform === 'google' ? null : base.client(platform)),
       },
       broker: fakeBroker(),
     };
@@ -303,6 +305,29 @@ describe('brokered ad connections (central OAuth of the control plane)', () => {
     });
     const sealed = [...kv.entries()].filter(([k]) => k.startsWith('ads_grant:'));
     expect(sealed[0]?.[1]).not.toContain('cp-token-1');
+  });
+
+  it('TikTok through the broker: no scopes requested, accounts listed from the broker advertiser ids', async () => {
+    const start = await startAdsConnect(ports, {
+      tenantId: SITE_A.tenantId,
+      tenantSlug: 'acme',
+      siteId: SITE_A.id,
+      platform: 'tiktok',
+      redirectUri: 'https://app.test/oauth/ads/callback',
+    });
+    expect(new URL(start.authorizeUrl).searchParams.get('scope')).toBe('');
+    calls = [];
+    const [connection] = await finishAdsConnect(ports, {
+      tenantId: SITE_A.tenantId,
+      siteId: SITE_A.id,
+      platform: 'tiktok',
+      state: start.state,
+      code: 'cp-code',
+    });
+    expect(connection).toMatchObject({ platform: 'tiktok', status: 'active' });
+    expect(calls.filter((c) => c.method === 'listAccounts').map((c) => c.args)).toEqual([
+      ['cp-token-1', { accountIds: ['7001', '7002'] }],
+    ]);
   });
 
   it('syncs with the cached token and refreshes it through the broker near expiry', async () => {
