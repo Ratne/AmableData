@@ -7,7 +7,8 @@ One Meta app lets workspace users connect their ad accounts to:
   the browser pixel through `event_id`.
 
 Requested scopes (`META_DEFAULT_SCOPES` in `packages/ads-providers/src/meta.ts`):
-`ads_read`, `ads_management`, `business_management`.
+`ads_read`, `ads_management`, `business_management`, plus `pages_show_list` and
+`pages_read_engagement`, which app review requires alongside `ads_management`.
 
 On the managed offering (`LICENSE_KEY` set) Meta is **brokered by the control plane**:
 the operator registers one central app on the control plane host and installations need

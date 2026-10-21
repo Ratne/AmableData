@@ -24,7 +24,7 @@ describe('meta oauth', () => {
       redirect_uri: 'https://app.test/cb',
       state: 's-1',
       response_type: 'code',
-      scope: 'ads_read,ads_management,business_management',
+      scope: 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement',
     });
     expect(
       query(meta.authorizeUrl({ redirectUri: 'https://x/cb', state: 's', scopes: ['ads_read'] }))

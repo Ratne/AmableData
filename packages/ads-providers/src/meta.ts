@@ -27,7 +27,14 @@ import type {
 } from './types';
 
 export const META_DEFAULT_API_VERSION = 'v23.0';
-export const META_DEFAULT_SCOPES = ['ads_read', 'ads_management', 'business_management'] as const;
+/** `pages_*` are prerequisites Meta's app review sets for `ads_management`. */
+export const META_DEFAULT_SCOPES = [
+  'ads_read',
+  'ads_management',
+  'business_management',
+  'pages_show_list',
+  'pages_read_engagement',
+] as const;
 const GRAPH_HOST = 'https://graph.facebook.com';
 const PAGE_LIMIT = '500';
 const MAX_PAGES = 200;
