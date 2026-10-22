@@ -1,5 +1,6 @@
 import { submissionMetaSchema, type FormField } from '@amable/forms';
 import { z } from 'zod';
+import { isCountryCode } from './countries';
 import type {
   BumpSkin,
   CheckoutContact,
@@ -125,7 +126,7 @@ export const buyerSchema = z.object({
         .string()
         .trim()
         .toUpperCase()
-        .regex(/^([A-Z]{2})?$/)
+        .refine((v) => v === '' || isCountryCode(v), 'unknown country code')
         .default(''),
     })
     .default({ line1: '', line2: '', city: '', postal_code: '', region: '', country: '' }),
@@ -182,6 +183,7 @@ export interface OfferView {
   readonly kind: 'upsell' | 'downsell';
   readonly title: string;
   readonly description: string;
+  readonly image_url: string;
   readonly name: string;
   readonly currency: string;
   readonly amount_minor: number;

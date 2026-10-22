@@ -114,6 +114,7 @@ export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) 
       <div class="ac-offer">
         {buttonsOnly ? null : (
           <>
+            {offer.image_url !== '' ? <img class="ac-offer-img" src={offer.image_url} alt="" loading="lazy" /> : null}
             <h2 class="ac-offer-title">{offer.title !== '' ? offer.title : offer.name}</h2>
             {offer.description !== '' ? <div class="ac-item-desc">{offer.description}</div> : null}
             <div class="ac-offer-price">

@@ -1,7 +1,7 @@
 import { CHECKOUT_STRINGS, type CheckoutDefinition, type CheckoutLocale, type Offer, type OfferState } from '@amable/checkout';
 import type { CrmContext } from '../crm/context';
 import { CrmError } from '../crm/errors';
-import { createOrderRow, deleteOrder, finalizeDraftRow } from '../commerce/orders';
+import { createOrderRow, deleteOrder, finalizeDraftRow, restoreDraft } from '../commerce/orders';
 import { recordPayment } from '../commerce/payments';
 import { getOrderRow } from '../commerce/rows';
 import { startCheckoutSubscription } from '../commerce/subscriptions';
@@ -71,6 +71,7 @@ export function offerState(ctx: CrmContext, input: { tokenHash: string }): Offer
       kind: offer.kind,
       title: offer.title,
       description: offer.description !== '' ? offer.description : entry.description,
+      image_url: offer.image_url !== '' ? offer.image_url : entry.imageUrl,
       name: entry.name,
       currency: entry.product.currency,
       amount_minor: amountOf(entry, localeOf(session)),
@@ -94,6 +95,12 @@ export interface OfferCharge {
   attempt: number;
   pendingIntentId: string | null;
   description: string;
+  receiptEmail: string | null;
+}
+
+function emailOf(ctx: CrmContext, contactId: string | null): string | null {
+  if (contactId === null) return null;
+  return ctx.db.all<{ email: string | null }>(`SELECT primary_email AS email FROM crm_contacts WHERE id = ?`, contactId)[0]?.email ?? null;
 }
 
 /**
@@ -112,6 +119,7 @@ export function prepareOfferCharge(ctx: CrmContext, input: { tokenHash: string; 
     attempt: session.offer_attempts,
     pendingIntentId: session.pending_intent_id,
     description: '',
+    receiptEmail: emailOf(ctx, session.contact_id),
   };
   if (!live(session, now) || session.current_offer !== input.offerKey) {
     return { ...base, action: 'none', orderId: null, amountMinor: 0 };
@@ -220,8 +228,14 @@ export function settleOfferCharge(
   const session = sessionById(ctx, input.sessionId);
   const { d, offer, entry } = context(ctx, session);
   if (offer === null || offer.key !== input.offerKey || session.status !== 'paid') {
-    // Paid after the buyer moved on (late webhook): the money is still recorded on its order.
-    if (input.status === 'succeeded' && input.orderId !== null) recordOfferPayment(ctx, input.orderId, input.intentId, input.amountReceived);
+    // Paid after the buyer moved on (late webhook): the money is still recorded
+    // on its order and a plan still starts its subscription, once.
+    if (input.status === 'succeeded' && input.orderId !== null) {
+      const recorded = recordOfferPayment(ctx, input.orderId, input.intentId, input.amountReceived);
+      const late = d.offers.find((o) => o.key === input.offerKey);
+      const lateEntry = recorded && late !== undefined ? resolveOffer(ctx, late) : null;
+      if (lateEntry !== null) startOfferSubscription(ctx, session, lateEntry, input.orderId);
+    }
     return { state: 'stale' };
   }
   const now = ctx.now();
@@ -246,30 +260,36 @@ export function settleOfferCharge(
     return { state: 'failed' };
   }
   if (input.orderId !== null) recordOfferPayment(ctx, input.orderId, input.intentId, input.amountReceived);
-  const plan = entry?.plan ?? null;
-  if (entry !== null && plan !== null && session.contact_id !== null) {
-    startCheckoutSubscription(ctx, {
-      contactId: session.contact_id,
-      planId: plan.id,
-      quantity: entry.quantity,
-      unitPriceMinor: entry.unitPriceMinor,
-      firstOrderId: input.orderId,
-      discount: null,
-      stripeCustomerId: session.stripe_customer_id,
-      stripePaymentMethodId: session.stripe_payment_method_id,
-      visitorId: session.visitor_id,
-    });
-  }
+  if (entry !== null) startOfferSubscription(ctx, session, entry, input.orderId);
   const history = offersOf(session);
   const outcome: OfferRecord = { key: offer.key, outcome: 'accepted', order_id: input.orderId, at: now };
   record(ctx, session, outcome, nextAfter(d, offer, true, [...history, outcome]));
   return { state: 'accepted' };
 }
 
-function recordOfferPayment(ctx: CrmContext, orderId: string, intentId: string | null, amount: number): void {
+function startOfferSubscription(ctx: CrmContext, session: SessionRow, entry: ResolvedEntry, orderId: string | null): void {
+  if (entry.plan === null || session.contact_id === null) return;
+  startCheckoutSubscription(ctx, {
+    contactId: session.contact_id,
+    planId: entry.plan.id,
+    quantity: entry.quantity,
+    unitPriceMinor: entry.unitPriceMinor,
+    firstOrderId: orderId,
+    discount: null,
+    stripeCustomerId: session.stripe_customer_id,
+    stripePaymentMethodId: session.stripe_payment_method_id,
+    visitorId: session.visitor_id,
+  });
+}
+
+/** True when this call recorded the payment (false: already recorded, or nothing received). */
+function recordOfferPayment(ctx: CrmContext, orderId: string, intentId: string | null, amount: number): boolean {
+  if (amount <= 0) return false;
+  // A draft discarded while its charge was pending (declined offer, failed retry) comes back: it was paid.
+  restoreDraft(ctx, orderId);
   const order = finalizeDraftRow(ctx, getOrderRow(ctx, orderId));
   const balance = order.total_minor - order.paid_minor;
-  if (balance <= 0 || amount <= 0) return;
+  if (balance <= 0) return false;
   recordPayment(ctx, {
     orderId: order.id,
     data: {
@@ -279,6 +299,7 @@ function recordOfferPayment(ctx: CrmContext, orderId: string, intentId: string |
       ...(intentId === null ? {} : { transaction_id: intentId }),
     },
   });
+  return true;
 }
 
 export function declineOffer(ctx: CrmContext, input: { tokenHash: string; offerKey: string }): { declined: boolean } {

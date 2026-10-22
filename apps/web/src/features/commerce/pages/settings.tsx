@@ -1,6 +1,6 @@
 import { isCurrencyCode } from '@amable/api-types';
 import type { CommerceSettings, StripeCheckResult, StripeSettings } from '@amable/api-types';
-import { DashboardButton, DashboardConfirmDialog, PageBody, PageToolbar, usePageChrome } from '@amable/ui';
+import { DashboardButton, DashboardConfirmDialog, PageBody, PageToolbar, toast, usePageChrome } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -197,10 +197,12 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
   const [webhookSecret, setWebhookSecret] = useState('');
   const [check, setCheck] = useState<StripeCheckResult | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [confirmSwitch, setConfirmSwitch] = useState(false);
   const publishableValid = STRIPE_PK.test(publishable.trim());
-  const secretValid = secret.trim() === '' ? initial.configured : STRIPE_SK.test(secret.trim());
-  const webhookValid = webhookSecret.trim() === '' || STRIPE_WHSEC.test(webhookSecret.trim());
   const keyMode = /_live_/.test(publishable) ? 'live' : 'test';
+  const switching = initial.configured && publishableValid && keyMode !== initial.mode;
+  const secretValid = secret.trim() === '' ? initial.configured && !switching : STRIPE_SK.test(secret.trim());
+  const webhookValid = webhookSecret.trim() === '' || STRIPE_WHSEC.test(webhookSecret.trim());
   const mixedModes = secret.trim() !== '' && STRIPE_SK.test(secret.trim()) && !secret.includes(`_${keyMode}_`);
   const adopt = (next: StripeSettings) => {
     queryClient.setQueryData(commerceKeys.stripe(slug), next);
@@ -213,7 +215,10 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
         ...(webhookSecret.trim() !== '' ? { webhook_secret: webhookSecret.trim() } : {}),
       }),
     success: t('commerce.stripe.saved'),
-    onSuccess: adopt,
+    onSuccess: (next: StripeSettings) => {
+      if (next.account_changed === true) toast.warning(t('commerce.stripe.accountChanged'));
+      adopt(next);
+    },
   });
   const verify = useCommerceMutation({
     mutationFn: () => api.stripe.check(),
@@ -226,8 +231,14 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (publishableValid && secretValid && webhookValid && !mixedModes) save.mutate(undefined);
+    if (!publishableValid || !secretValid || !webhookValid || mixedModes) return;
+    if (switching) setConfirmSwitch(true);
+    else save.mutate(undefined);
   };
+  const switchWarning =
+    initial.saved_payment_methods > 0
+      ? t('commerce.stripe.switchWarning', { count: initial.saved_payment_methods })
+      : t('commerce.stripe.switchWarningEmpty');
 
   return (
     <form onSubmit={submit} className="grid gap-3">
@@ -250,10 +261,25 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
           <Input id={id} className="font-mono" autoComplete="off" value={publishable} placeholder="pk_live_…" onChange={(e) => setPublishable(e.target.value)} />
         )}
       </FormField>
+      {switching ? (
+        <p role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          {switchWarning}
+        </p>
+      ) : null}
       <FormField
         label={t('commerce.stripe.secret')}
         hint={initial.secret_key_hint ? t('commerce.stripe.keepHint', { hint: initial.secret_key_hint }) : t('commerce.stripe.secretHint')}
-        error={secretValid || secret === '' ? (mixedModes ? t('commerce.stripe.mixedModes') : null) : t('commerce.stripe.secretInvalid')}
+        error={
+          secret.trim() === ''
+            ? switching
+              ? t('commerce.stripe.secretForSwitch')
+              : null
+            : !secretValid
+              ? t('commerce.stripe.secretInvalid')
+              : mixedModes
+                ? t('commerce.stripe.mixedModes')
+                : null
+        }
       >
         {(id) => (
           <Input id={id} type="password" className="font-mono" autoComplete="new-password" value={secret} placeholder="sk_live_… / rk_live_…" onChange={(e) => setSecret(e.target.value)} />
@@ -317,6 +343,19 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
         onConfirm={() => {
           disconnect.mutate(undefined);
           setConfirmDisconnect(false);
+        }}
+      />
+      <DashboardConfirmDialog
+        open={confirmSwitch}
+        onOpenChange={setConfirmSwitch}
+        title={t(keyMode === 'live' ? 'commerce.stripe.switchToLive' : 'commerce.stripe.switchToTest')}
+        description={switchWarning}
+        confirmLabel={t('common.save')}
+        cancelLabel={t('common.cancel')}
+        tone="danger"
+        onConfirm={() => {
+          save.mutate(undefined);
+          setConfirmSwitch(false);
         }}
       />
     </form>

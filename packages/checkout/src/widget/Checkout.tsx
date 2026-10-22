@@ -3,6 +3,7 @@ import { FieldRow } from '@amable/forms/widget/fields';
 import { WIDGET_STRINGS } from '@amable/forms/strings';
 import { EMAIL_RE, validateSubmission, visibleFieldKeys } from '@amable/forms/validate';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { countryOptions } from '../countries';
 import type { ContactFieldMode } from '../schema';
 import type { AddressSuggestion, PublicBump, PublicCheckoutConfig, PublicCheckoutItem, Quote, QuoteLine } from '../public';
 import { everyLabel, fill, formatMoney, type CheckoutLocale, type CheckoutStrings } from '../strings';
@@ -384,6 +385,8 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
     }
   };
 
+  const countries = useMemo(() => countryOptions(locale), [locale]);
+
   if (done !== null) {
     return (
       <div class="ac-root">
@@ -488,7 +491,29 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
                 </div>
                 <div class="ac-row">
                   {input('address_region', strings.region, 'optional', 'text', 'address-level1')}
-                  {input('address_country', strings.country, c.address, 'text', 'country')}
+                  <div
+                    class={`af-field${errors['address_country'] !== undefined ? ' af-invalid' : ''}`}
+                    data-af-invalid={errors['address_country'] === undefined ? undefined : ''}
+                  >
+                    <label class="af-label" for="ac-address_country">
+                      {modeLabel(c.address, strings.country)}
+                    </label>
+                    <select
+                      id="ac-address_country"
+                      class="af-select"
+                      autoComplete="country"
+                      value={buyer.address_country}
+                      onChange={(e) => setBuyerField('address_country', (e.target as HTMLSelectElement).value)}
+                    >
+                      {c.address === 'required' ? null : <option value="">—</option>}
+                      {countries.map((o) => (
+                        <option key={o.code} value={o.code}>
+                          {o.name}
+                        </option>
+                      ))}
+                    </select>
+                    {errors['address_country'] !== undefined ? <div class="af-error">{errors['address_country']}</div> : null}
+                  </div>
                 </div>
               </>
             ) : null}

@@ -56,6 +56,7 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
       const tenantId = getTenant(c).tenant.id;
       const runtime = await commerceRuntime(c.env);
       const publicMode = body.publishable_key.includes('_live_') ? 'live' : 'test';
+      let accountId: string | null = null;
       if (body.secret_key !== undefined) {
         const secretMode = body.secret_key.includes('_live_') ? 'live' : 'test';
         if (secretMode !== publicMode) {
@@ -64,7 +65,9 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
           ]);
         }
         try {
-          await new StripeClient(body.secret_key, runtime.fetch).verify();
+          const client = new StripeClient(body.secret_key, runtime.fetch);
+          await client.verify();
+          accountId = await client.accountId();
         } catch (error) {
           const message = error instanceof StripeApiError ? error.message : 'Stripe is unreachable';
           throw new CrmError('validation_failed', message, [{ path: 'secret_key', message }]);
@@ -74,6 +77,7 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
       const settings = await callCrm(c, 'stripe.saveAccount', {
         tenantId,
         publishableKey: body.publishable_key,
+        accountId,
         secret:
           body.secret_key === undefined
             ? null
@@ -86,7 +90,9 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
                 hint: secretHint(body.webhook_secret),
               },
       });
-      await audit(c, 'commerce.stripe_connected', { details: { mode: publicMode } });
+      await audit(c, 'commerce.stripe_connected', {
+        details: { mode: publicMode, account_changed: settings.account_changed === true },
+      });
       return c.json(withUrl(c, settings), 200);
     },
   );

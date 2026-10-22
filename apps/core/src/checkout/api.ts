@@ -110,15 +110,23 @@ export function registerCheckoutRoutes(app: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       const checkout = await callCrm(c, 'checkouts.get', { id: c.req.valid('param').id });
-      const slug = getTenant(c).tenant.slug;
+      const { id: tenantId, slug } = getTenant(c).tenant;
       const edge = (c.env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
       const script = `${edge}/checkout.js`;
+      // A site domain serving the whole hostname brands the hosted link (path-only sites do not route /c/).
+      const site = await c.env.DB.prepare(
+        `SELECT hostname FROM domains WHERE tenant_id = ? AND kind = 'app' AND status = 'verified'
+           AND (paths IS NULL OR paths = '[]') ORDER BY created_at LIMIT 1`,
+      )
+        .bind(tenantId)
+        .first<{ hostname: string }>();
+      const hosted = site === null ? `${edge}/c/${slug}` : `https://${site.hostname}/c/${slug}`;
       return c.json(
         {
           checkout_id: checkout.id,
           tenant: slug,
           script_url: script,
-          hosted_url: `${edge}/c/${slug}/${checkout.id}`,
+          hosted_url: `${hosted}/${checkout.id}`,
           snippet: `<div data-amable-checkout="${checkout.id}" data-amable-tenant="${slug}"></div>\n<script src="${script}" async></script>`,
           offer_snippet: `<div data-amable-offer data-amable-tenant="${slug}"></div>\n<script src="${script}" async></script>`,
         },

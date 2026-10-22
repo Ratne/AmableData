@@ -337,6 +337,15 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.stripe.checkFailed': 'Stripe ha rifiutato le chiavi: {message}',
   'commerce.stripe.disconnect': 'Scollega',
   'commerce.stripe.disconnectConfirm': 'Scollegare Stripe?',
+  'commerce.stripe.switchToLive': 'Passare Stripe in modalità live?',
+  'commerce.stripe.switchToTest': 'Passare Stripe in modalità test?',
+  'commerce.stripe.switchWarning':
+    'Clienti e carte salvati nella modalità attuale non esistono nell\'altra: {count} abbonamenti smettono di rinnovarsi in automatico (i rinnovi andranno pagati a mano) e gli acquisti in corso vengono chiusi.',
+  'commerce.stripe.switchWarningEmpty':
+    'Clienti e carte salvati nella modalità attuale non esistono nell\'altra: vengono scollegati e gli acquisti in corso vengono chiusi.',
+  'commerce.stripe.secretForSwitch': 'Inserisci la chiave segreta della nuova modalità.',
+  'commerce.stripe.accountChanged':
+    'Queste chiavi appartengono a un altro account Stripe: clienti e carte salvati sul precedente sono stati scollegati e i rinnovi automatici su di essi si sono fermati.',
   'commerce.stripe.disconnectBody': 'I checkout smettono di accettare pagamenti e i rinnovi non vengono più addebitati automaticamente. Gli ordini esistenti restano.',
   'commerce.stripe.disconnected': 'Stripe scollegato',
 

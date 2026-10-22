@@ -117,7 +117,7 @@ export function CheckoutsPage() {
             onValueChange={(value) => setFilter(value as StatusFilter)}
             options={(['all', 'draft', 'active', 'archived'] as const).map((value) => ({
               value,
-              label: value === 'all' ? t('commerce.common.allStatuses') : t(`checkout.status.${value}`),
+              label: value === 'all' ? t('checkout.status.notArchived') : t(`checkout.status.${value}`),
             }))}
           />
         }

@@ -71,6 +71,7 @@ export function buildCheckoutStyles(s: CheckoutStyle): string {
 :where(.ac-warn) { color: #b45309; font-size: .85em; }
 :where(.ac-payment) { min-height: 40px; }
 :where(.ac-offer) { display: flex; flex-direction: column; gap: 14px; text-align: center; align-items: center; padding: 8px; }
+:where(.ac-offer-img) { width: 100%; max-width: 420px; max-height: 320px; object-fit: contain; border-radius: ${s.radius}; }
 :where(.ac-offer-title) { font-size: 1.4em; font-weight: 800; margin: 0; }
 :where(.ac-offer-price) { font-size: 1.6em; font-weight: 800; color: ${s.primary_color}; }
 :where(.ac-offer .af-button) { width: 100%; max-width: 420px; font-size: 1.05em; padding: 16px; }

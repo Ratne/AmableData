@@ -33,7 +33,7 @@ export async function runRenewalCharges(env: Env, call: TenantCall): Promise<Ren
         orderId: charge.orderId,
         attempt: charge.attempt,
         intentId: null,
-        status: 'processing',
+        status: 'skipped',
         amountReceived: 0,
         failureMessage: null,
       });
@@ -54,6 +54,7 @@ export async function runRenewalCharges(env: Env, call: TenantCall): Promise<Ren
           customer: charge.customerId,
           paymentMethod: charge.paymentMethodId,
           offSession: true,
+          receiptEmail: charge.receiptEmail,
           description: `Renewal ${charge.number}`,
           metadata: { amable_kind: 'renewal', amable_order: charge.orderId, amable_attempt: String(charge.attempt) },
         },

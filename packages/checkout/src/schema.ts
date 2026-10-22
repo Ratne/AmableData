@@ -82,6 +82,7 @@ export const offerSchema = z.object({
   price_minor: priceOverride,
   title: z.string().trim().min(1).max(200),
   description: z.string().max(2000).default(''),
+  image_url: httpUrl,
   /** Landing page holding the offer block; empty: the hosted offer page. */
   page_url: httpUrl,
   on_accept: z.union([z.literal(''), z.string().regex(OFFER_KEY_RE)]).default(''),

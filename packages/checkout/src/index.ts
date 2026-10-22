@@ -8,5 +8,6 @@
 export * from './schema';
 export * from './public';
 export * from './strings';
+export * from './countries';
 export type { CheckoutGatewayOps } from './gateway';
 export { CHECKOUT_GATEWAY_OPS, SESSION_PARAM } from './gateway';

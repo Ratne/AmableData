@@ -22,6 +22,8 @@ export interface DueCharge {
   customerId: string;
   paymentMethodId: string;
   attempt: number;
+  /** Stripe sends its receipt here. */
+  receiptEmail: string | null;
 }
 
 /** Renewal orders to charge now on the saved payment method (leased while the worker charges them). */
@@ -38,10 +40,14 @@ export function chargesDue(ctx: CrmContext, input: { limit?: number } = {}): Due
     auto_charge_attempts: number;
     customer: string | null;
     method: string | null;
+    subscription_status: string | null;
+    email: string | null;
   }>(
     `SELECT o.id, o.number, o.contact_id, o.total_minor, o.paid_minor, o.currency, o.status, o.auto_charge_attempts,
-       s.stripe_customer_id AS customer, s.stripe_payment_method_id AS method
+       s.stripe_customer_id AS customer, s.stripe_payment_method_id AS method, s.status AS subscription_status,
+       c.primary_email AS email
      FROM crm_orders o LEFT JOIN crm_subscriptions s ON s.id = o.subscription_id
+       LEFT JOIN crm_contacts c ON c.id = o.contact_id
      WHERE o.next_charge_at IS NOT NULL AND o.next_charge_at <= ? AND o.deleted_at IS NULL
      ORDER BY o.next_charge_at LIMIT ?`,
     now,
@@ -53,6 +59,7 @@ export function chargesDue(ctx: CrmContext, input: { limit?: number } = {}): Due
     const chargeable =
       (row.status === 'unpaid' || row.status === 'partially_paid') &&
       balance > 0 &&
+      row.subscription_status !== 'paused' &&
       row.customer !== null &&
       row.method !== null &&
       row.auto_charge_attempts < MAX_CHARGE_ATTEMPTS;
@@ -70,6 +77,7 @@ export function chargesDue(ctx: CrmContext, input: { limit?: number } = {}): Due
       customerId: row.customer,
       paymentMethodId: row.method,
       attempt: row.auto_charge_attempts + 1,
+      receiptEmail: row.email,
     });
   }
   return out;
@@ -78,7 +86,8 @@ export function chargesDue(ctx: CrmContext, input: { limit?: number } = {}): Due
 /**
  * Outcome of an automatic charge. A failure is recorded as a failed payment
  * (the subscription becomes past_due) and retried later; idempotent by the
- * intent id.
+ * intent id. `skipped`: nothing was charged (Stripe not connected), so the
+ * attempt is not consumed and the charge is tried again the next day.
  */
 export function chargeResult(
   ctx: CrmContext,
@@ -86,7 +95,7 @@ export function chargeResult(
     orderId: string;
     attempt: number;
     intentId: string | null;
-    status: 'succeeded' | 'processing' | 'failed';
+    status: 'succeeded' | 'processing' | 'failed' | 'skipped';
     amountReceived: number;
     failureMessage: string | null;
   },
@@ -95,6 +104,10 @@ export function chargeResult(
   const now = ctx.now();
   if (order.status === 'paid' || order.status === 'cancelled' || order.status === 'refunded') {
     ctx.db.run(`UPDATE crm_orders SET next_charge_at = NULL WHERE id = ?`, order.id);
+    return { recorded: false };
+  }
+  if (input.status === 'skipped') {
+    ctx.db.run(`UPDATE crm_orders SET next_charge_at = ? WHERE id = ?`, now + PROCESSING_RECHECK_MS, order.id);
     return { recorded: false };
   }
   if (input.status === 'processing') {

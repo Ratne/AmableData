@@ -188,6 +188,7 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
               : await stripe.client.updatePaymentIntent(current.id, {
                   amount: prepared.amountMinor,
                   save: prepared.save,
+                  receiptEmail: prepared.email,
                   description: prepared.description,
                   metadata,
                 });
@@ -199,6 +200,7 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
           currency: prepared.currency,
           customer: customerId,
           save: prepared.save,
+          receiptEmail: prepared.email,
           description: prepared.description,
           metadata,
         },
@@ -381,6 +383,7 @@ async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<
           customer: charge.customerId,
           paymentMethod: charge.paymentMethodId,
           offSession: false,
+          receiptEmail: charge.receiptEmail,
           description: charge.description,
           metadata: {
             amable_kind: 'offer',

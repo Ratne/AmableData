@@ -7,6 +7,7 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.status.draft': 'Bozza',
   'checkout.status.active': 'Attivo',
   'checkout.status.archived': 'Archiviato',
+  'checkout.status.notArchived': 'Bozze e attivi',
 
   'checkout.list.new': 'Nuovo checkout',
   'checkout.list.create': 'Crea checkout',
@@ -124,7 +125,8 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.settings.termsUrl': 'URL dei termini',
   'checkout.settings.termsHint': "Se impostato, l'acquirente deve accettare i termini per pagare.",
   'checkout.settings.hosted': 'Pagina ospitata (un link che funziona senza landing page)',
-  'checkout.settings.tagsHint': 'Aggiunti al contatto dopo il pagamento.',
+  'checkout.settings.tagsHint':
+    'Aggiunti solo a pagamento riuscito (una carta rifiutata non ne aggiunge). Il contatto, il suo owner e la lead source vengono salvati appena l\'acquirente invia il modulo.',
   'checkout.settings.attribution':
     'Gli ordini conservano i parametri UTM e il referrer della pagina, e il contatto viene collegato al checkout come origine.',
 

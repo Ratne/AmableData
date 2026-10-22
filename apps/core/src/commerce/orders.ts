@@ -657,6 +657,14 @@ export function deleteOrder(ctx: CrmContext, input: { id: string }): { id: strin
   return { id: row.id, deleted: true };
 }
 
+/** Brings back a deleted draft (a checkout payment arrived after it was discarded). */
+export function restoreDraft(ctx: CrmContext, id: string): void {
+  const deleted = ctx.db.all(`SELECT 1 FROM crm_orders WHERE id = ? AND status = 'draft' AND deleted_at IS NOT NULL`, id);
+  if (deleted.length === 0) return;
+  ctx.db.run(`UPDATE crm_orders SET deleted_at = NULL WHERE id = ?`, id);
+  indexOrder(ctx, id);
+}
+
 /** Orders list on the query-builder compiler (same filters, FTS and cursor as `/search`). */
 export function listOrders(ctx: CrmContext, input: ListOrdersQuery): Page<Order> {
   const extra: FilterLeaf[] = [];

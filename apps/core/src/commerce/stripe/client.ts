@@ -127,6 +127,11 @@ function parseError(status: number, body: unknown): StripeApiError {
   });
 }
 
+/** Stripe emails its receipt to this address once the payment succeeds (live mode only). */
+function receipt(email: string | null): { receipt_email?: string } {
+  return email === null || email === '' ? {} : { receipt_email: email };
+}
+
 export class StripeClient {
   constructor(
     private readonly secretKey: string,
@@ -166,6 +171,17 @@ export class StripeClient {
     await this.request('GET', '/v1/balance');
   }
 
+  /** Id of the account the key belongs to; null when the key may not read it (restricted keys). */
+  async accountId(): Promise<string | null> {
+    try {
+      const account = await this.request<{ id?: unknown }>('GET', '/v1/account');
+      return typeof account.id === 'string' ? account.id : null;
+    } catch (error) {
+      if (error instanceof StripeApiError) return null;
+      throw error;
+    }
+  }
+
   createCustomer(
     params: { email: string | null; name: string | null; metadata: Record<string, string> },
     idempotencyKey: string,
@@ -184,6 +200,7 @@ export class StripeClient {
       currency: string;
       customer: string;
       save: boolean;
+      receiptEmail: string | null;
       description: string;
       metadata: Record<string, string>;
     },
@@ -200,6 +217,7 @@ export class StripeClient {
         metadata: params.metadata,
         automatic_payment_methods: { enabled: true },
         ...(params.save ? { setup_future_usage: 'off_session' } : {}),
+        ...receipt(params.receiptEmail),
       },
       idempotencyKey,
     );
@@ -207,7 +225,7 @@ export class StripeClient {
 
   updatePaymentIntent(
     id: string,
-    params: { amount: number; save: boolean; description: string; metadata: Record<string, string> },
+    params: { amount: number; save: boolean; receiptEmail: string | null; description: string; metadata: Record<string, string> },
   ): Promise<StripePaymentIntent> {
     return this.request('POST', `/v1/payment_intents/${encodeURIComponent(id)}`, {
       amount: params.amount,
@@ -215,6 +233,7 @@ export class StripeClient {
       metadata: params.metadata,
       // Empty string unsets it.
       setup_future_usage: params.save ? 'off_session' : '',
+      ...receipt(params.receiptEmail),
     });
   }
 
@@ -230,6 +249,7 @@ export class StripeClient {
       customer: string;
       paymentMethod: string;
       offSession: boolean;
+      receiptEmail: string | null;
       description: string;
       metadata: Record<string, string>;
     },
@@ -249,6 +269,7 @@ export class StripeClient {
         // Saved methods never redirect: 3-D Secure comes back as `requires_action`.
         automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
         ...(params.offSession ? { off_session: true } : {}),
+        ...receipt(params.receiptEmail),
       },
       idempotencyKey,
     );

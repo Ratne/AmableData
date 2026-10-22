@@ -50,6 +50,18 @@ export function stripeAccount(ctx: CrmContext, _input: Record<string, never> = {
   return readStripeAccount(ctx);
 }
 
+function modeOf(publishableKey: string): 'live' | 'test' {
+  return publishableKey.startsWith('pk_live_') ? 'live' : 'test';
+}
+
+function savedPaymentMethods(ctx: CrmContext): number {
+  return (
+    ctx.db.all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM crm_subscriptions WHERE stripe_payment_method_id IS NOT NULL AND status != 'cancelled'`,
+    )[0]?.n ?? 0
+  );
+}
+
 export function stripeSettings(ctx: CrmContext, _input: Record<string, never> = {}): Omit<StripeSettings, 'webhook_url'> {
   const account = readStripeAccount(ctx);
   if (account === null) {
@@ -60,16 +72,66 @@ export function stripeSettings(ctx: CrmContext, _input: Record<string, never> = 
       secret_key_hint: null,
       webhook_secret_hint: null,
       updated_at: null,
+      saved_payment_methods: savedPaymentMethods(ctx),
     };
   }
   return {
     configured: true,
-    mode: account.publishable_key.startsWith('pk_live_') ? 'live' : 'test',
+    mode: modeOf(account.publishable_key),
     publishable_key: account.publishable_key,
     secret_key_hint: account.secret_hint,
     webhook_secret_hint: account.webhook_hint,
     updated_at: toIso(account.updated_at),
+    saved_payment_methods: savedPaymentMethods(ctx),
   };
+}
+
+/**
+ * Account and mode the saved Stripe references (customers, cards, intents)
+ * belong to. Kept apart from the keys so it survives a disconnect.
+ */
+interface StripeIdentity {
+  mode: 'live' | 'test';
+  account_id: string | null;
+}
+
+const IDENTITY_KEY = 'commerce_stripe_identity';
+
+function readIdentity(ctx: CrmContext): StripeIdentity | null {
+  const row = ctx.db.all<{ value: string }>(`SELECT value FROM tenant_meta WHERE key = ?`, IDENTITY_KEY)[0];
+  return row === undefined ? null : parseJson<StripeIdentity | null>(row.value, null);
+}
+
+/**
+ * Customers and cards of another Stripe account or mode do not exist on the
+ * new one ("No such customer"): drop them, stop the automatic charges that
+ * relied on them and end the purchases still waiting on the old intents.
+ */
+function forgetStripeReferences(ctx: CrmContext): void {
+  const now = ctx.now();
+  ctx.db.run(`DELETE FROM crm_stripe_customers`);
+  ctx.db.run(
+    `UPDATE crm_orders SET next_charge_at = NULL
+     WHERE next_charge_at IS NOT NULL AND subscription_id IN
+       (SELECT id FROM crm_subscriptions WHERE stripe_payment_method_id IS NOT NULL)`,
+  );
+  ctx.db.run(
+    `UPDATE crm_subscriptions SET stripe_customer_id = NULL, stripe_payment_method_id = NULL, updated_at = ?
+     WHERE stripe_customer_id IS NOT NULL OR stripe_payment_method_id IS NOT NULL`,
+    now,
+  );
+  ctx.db.run(
+    `UPDATE crm_checkout_sessions SET status = 'completed', current_offer = NULL, pending_offer = NULL,
+       pending_intent_id = NULL, completed_at = ?, updated_at = ? WHERE status = 'paid'`,
+    now,
+    now,
+  );
+  ctx.db.run(
+    `UPDATE crm_checkout_sessions SET stripe_customer_id = NULL, intent_kind = NULL, intent_id = NULL,
+       expires_at = MIN(expires_at, ?), updated_at = ? WHERE status = 'open'`,
+    now,
+    now,
+  );
 }
 
 export function saveStripeAccount(
@@ -77,11 +139,32 @@ export function saveStripeAccount(
   input: {
     tenantId: string;
     publishableKey: string;
+    /** From the secret key just verified; null when the secret is kept or the key may not read it. */
+    accountId?: string | null;
     secret: { enc: string; hint: string } | null;
     webhook: { enc: string; hint: string } | null;
   },
 ): Omit<StripeSettings, 'webhook_url'> {
-  const current = readStripeAccount(ctx);
+  const stored = readStripeAccount(ctx);
+  const previous =
+    readIdentity(ctx) ?? (stored === null ? null : { mode: modeOf(stored.publishable_key), account_id: null });
+  const accountId = input.accountId ?? null;
+  const identity: StripeIdentity = {
+    mode: modeOf(input.publishableKey),
+    account_id: accountId ?? previous?.account_id ?? null,
+  };
+  const changed =
+    previous !== null &&
+    (previous.mode !== identity.mode ||
+      (previous.account_id !== null && accountId !== null && previous.account_id !== accountId));
+  if (changed && input.secret === null) throw invalid('secret_key', 'enter the secret key of the new mode');
+  if (changed) forgetStripeReferences(ctx);
+  ctx.db.run(
+    `INSERT INTO tenant_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    IDENTITY_KEY,
+    JSON.stringify(identity),
+  );
+  const current = stored;
   const secret = input.secret ?? (current === null ? null : { enc: current.secret_enc, hint: current.secret_hint });
   if (secret === null) throw invalid('secret_key', 'secret_key is required');
   const webhook =
@@ -103,7 +186,7 @@ export function saveStripeAccount(
     META_KEY,
     JSON.stringify(value),
   );
-  return stripeSettings(ctx);
+  return { ...stripeSettings(ctx), account_changed: changed };
 }
 
 export function clearStripeAccount(ctx: CrmContext, _input: Record<string, never> = {}): { deleted: true } {

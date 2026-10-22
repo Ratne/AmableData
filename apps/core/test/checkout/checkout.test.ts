@@ -336,6 +336,141 @@ describe('subscriptions bought through a checkout', () => {
   });
 });
 
+describe('automatic charges and the subscription lifecycle', () => {
+  function renewalDue() {
+    const w = commerceWorld();
+    connectStripe(w);
+    const c = checkout(w, { items: [{ id: 'i1', kind: 'plan', ref_id: w.monthly }] });
+    const prepared = prepare(w, c.id, 'h1');
+    attach(w, prepared, 'pi_1');
+    succeed(w, 'pi_1', prepared.amountMinor);
+    const sub = w.t.op('subscriptions.list', { limit: 10, contact_id: prepared.contactId }).data[0];
+    if (sub === undefined) throw new Error('no subscription');
+    w.t.clock.now += 32 * DAY;
+    w.t.op('billing.run', {});
+    return { w, sub };
+  }
+
+  it('does not charge the saved card after a pause or an immediate cancellation', () => {
+    const paused = renewalDue();
+    paused.w.t.op('subscriptions.pause', { id: paused.sub.id });
+    expect(paused.w.t.op('commerce.chargesDue', {})).toHaveLength(0);
+
+    const cancelled = renewalDue();
+    cancelled.w.t.op('subscriptions.cancel', { id: cancelled.sub.id, data: { at_period_end: false } });
+    expect(cancelled.w.t.op('commerce.chargesDue', {})).toHaveLength(0);
+  });
+
+  it('keeps the attempt when nothing was charged (Stripe disconnected)', () => {
+    const { w } = renewalDue();
+    const [charge] = w.t.op('commerce.chargesDue', {});
+    if (charge === undefined) throw new Error('no charge due');
+    w.t.op('commerce.chargeResult', {
+      orderId: charge.orderId,
+      attempt: charge.attempt,
+      intentId: null,
+      status: 'skipped',
+      amountReceived: 0,
+      failureMessage: null,
+    });
+    w.t.clock.now += DAY + 1;
+    expect(w.t.op('commerce.chargesDue', {})).toEqual([expect.objectContaining({ orderId: charge.orderId, attempt: 1 })]);
+  });
+
+  it('passes the buyer email for the Stripe receipt', () => {
+    const { w } = renewalDue();
+    expect(w.t.op('commerce.chargesDue', {})[0]?.receiptEmail).toBe(BUYER.email);
+  });
+});
+
+describe('buyer tags and abandoned sessions', () => {
+  it('tags the buyer only once the payment succeeds', () => {
+    const w = commerceWorld();
+    connectStripe(w);
+    const tag = w.t.op('tags.create', { name: 'Customer' });
+    const c = checkout(w, { items: [{ id: 'i1', kind: 'product', ref_id: w.course }], crm: { tag_ids: [tag.id] } });
+    const prepared = prepare(w, c.id, 'h1');
+    attach(w, prepared, 'pi_1');
+    expect(w.t.op('contacts.get', { id: prepared.contactId }).tag_ids).toEqual([]);
+    succeed(w, 'pi_1', prepared.amountMinor);
+    expect(w.t.op('contacts.get', { id: prepared.contactId }).tag_ids).toEqual([tag.id]);
+  });
+
+  it('expires unpaid sessions, drops their drafts, and still takes a late payment', () => {
+    const w = commerceWorld();
+    connectStripe(w);
+    const c = checkout(w, { items: [{ id: 'i1', kind: 'product', ref_id: w.course }] });
+    const prepared = prepare(w, c.id, 'h1');
+    attach(w, prepared, 'pi_1');
+    const orderId = prepared.orderId ?? '';
+    expect(w.t.op('checkout.expireSessions', {})).toEqual({ expired: 0, deleted: 0 });
+    w.t.clock.now += 2 * DAY;
+    expect(w.t.op('checkout.expireSessions', {})).toEqual({ expired: 1, deleted: 0 });
+    expect(failure(() => w.t.op('orders.get', { id: orderId })).code).toBe('not_found');
+
+    succeed(w, 'pi_1', prepared.amountMinor);
+    expect(w.t.op('orders.get', { id: orderId })).toMatchObject({ status: 'paid', paid_minor: prepared.amountMinor });
+  });
+
+  it('deletes expired sessions after the retention', () => {
+    const w = commerceWorld();
+    connectStripe(w);
+    const c = checkout(w, { items: [{ id: 'i1', kind: 'product', ref_id: w.course }] });
+    prepare(w, c.id, 'h1');
+    w.t.clock.now += 2 * DAY;
+    w.t.op('checkout.expireSessions', {});
+    w.t.clock.now += 31 * DAY;
+    expect(w.t.op('checkout.expireSessions', {})).toEqual({ expired: 0, deleted: 1 });
+  });
+});
+
+describe('switching Stripe account or mode', () => {
+  it('disconnects the saved customers and cards of the previous mode', () => {
+    const w = commerceWorld();
+    connectStripe(w);
+    const c = checkout(w, { items: [{ id: 'i1', kind: 'plan', ref_id: w.monthly }] });
+    const prepared = prepare(w, c.id, 'h1');
+    attach(w, prepared, 'pi_1');
+    succeed(w, 'pi_1', prepared.amountMinor);
+    expect(w.t.op('stripe.settings', {}).saved_payment_methods).toBe(1);
+
+    const same = w.t.op('stripe.saveAccount', {
+      tenantId: 'tenant_test',
+      publishableKey: 'pk_test_0123456789abcdef',
+      accountId: 'acct_1',
+      secret: { enc: 'enc:secret', hint: 'cdef' },
+      webhook: null,
+    });
+    expect(same).toMatchObject({ account_changed: false, saved_payment_methods: 1 });
+    expect(failure(() => w.t.op('stripe.saveAccount', {
+      tenantId: 'tenant_test',
+      publishableKey: 'pk_live_0123456789abcdef',
+      secret: null,
+      webhook: null,
+    })).code).toBe('validation_failed');
+
+    const live = w.t.op('stripe.saveAccount', {
+      tenantId: 'tenant_test',
+      publishableKey: 'pk_live_0123456789abcdef',
+      accountId: 'acct_1',
+      secret: { enc: 'enc:live', hint: 'live' },
+      webhook: null,
+    });
+    expect(live).toMatchObject({ account_changed: true, mode: 'live', saved_payment_methods: 0 });
+    const sub = w.t.op('subscriptions.list', { limit: 10, contact_id: prepared.contactId }).data[0];
+    expect(sub?.autopay).toBe(false);
+
+    const other = w.t.op('stripe.saveAccount', {
+      tenantId: 'tenant_test',
+      publishableKey: 'pk_live_0123456789abcdef',
+      accountId: 'acct_2',
+      secret: { enc: 'enc:other', hint: 'othr' },
+      webhook: null,
+    });
+    expect(other.account_changed).toBe(true);
+  });
+});
+
 describe('post-purchase offers', () => {
   function offerWorld() {
     const w = commerceWorld();
@@ -419,6 +554,57 @@ describe('post-purchase offers', () => {
     expect(failure(() => w.t.op('orders.get', { id: down.orderId ?? '' })).code).toBe('not_found');
     expect(w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'down' })).toEqual({ declined: true });
     expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({ status: 'done' });
+  });
+
+  it('starts the subscription of a plan offer paid after the window closed', () => {
+    const w = commerceWorld();
+    connectStripe(w);
+    const c = checkout(w, {
+      items: [{ id: 'i1', kind: 'product', ref_id: w.course }],
+      offers: [{ key: 'plan', kind: 'upsell', item_kind: 'plan', ref_id: w.monthly, title: 'Membership' }],
+      settings: { first_offer: 'plan' },
+    });
+    const prepared = prepare(w, c.id, 'h1');
+    attach(w, prepared, 'pi_1');
+    succeed(w, 'pi_1', prepared.amountMinor);
+    const charge = w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'plan' });
+    const settle = {
+      sessionId: charge.sessionId,
+      offerKey: 'plan',
+      orderId: charge.orderId,
+      intentId: 'pi_plan',
+      status: 'requires_action' as const,
+      amountReceived: 0,
+      message: null,
+    };
+    w.t.op('checkout.offerSettle', settle);
+    // The buyer leaves; the window closes; 3-D Secure completes later.
+    w.t.clock.now += 61 * 60_000;
+    w.t.op('checkout.offerState', { tokenHash: 'h1' });
+    const late = { ...settle, status: 'succeeded' as const, amountReceived: charge.amountMinor };
+    expect(w.t.op('checkout.offerSettle', late)).toEqual({ state: 'stale' });
+    expect(w.t.op('checkout.offerSettle', late)).toEqual({ state: 'stale' });
+    const subs = w.t.op('subscriptions.list', { limit: 10, contact_id: prepared.contactId }).data;
+    expect(subs).toHaveLength(1);
+    expect(subs[0]).toMatchObject({ status: 'active', autopay: true });
+    expect(w.t.op('orders.get', { id: charge.orderId ?? '' }).status).toBe('paid');
+  });
+
+  it('takes a payment that completes after the offer was declined', () => {
+    const { w } = offerWorld();
+    const up = w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' });
+    w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'up' });
+    expect(failure(() => w.t.op('orders.get', { id: up.orderId ?? '' })).code).toBe('not_found');
+    w.t.op('checkout.offerSettle', {
+      sessionId: up.sessionId,
+      offerKey: 'up',
+      orderId: up.orderId,
+      intentId: 'pi_up',
+      status: 'succeeded',
+      amountReceived: up.amountMinor,
+      message: null,
+    });
+    expect(w.t.op('orders.get', { id: up.orderId ?? '' })).toMatchObject({ status: 'paid', paid_minor: up.amountMinor });
   });
 
   it('expires the one-click window', () => {

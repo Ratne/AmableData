@@ -28,17 +28,22 @@ import type { CrmContext } from '../crm/context';
 import { CrmError, invalidMany } from '../crm/errors';
 import { parseJson } from '../crm/util';
 import { getSettings } from '../commerce/settings';
-import { createOrderRow, deleteOrder, finalizeDraftRow, replaceDraftLines } from '../commerce/orders';
+import { createOrderRow, deleteOrder, finalizeDraftRow, replaceDraftLines, restoreDraft } from '../commerce/orders';
 import { recordPayment } from '../commerce/payments';
 import { getOrderRow } from '../commerce/rows';
 import { startCheckoutSubscription } from '../commerce/subscriptions';
 import { readStripeAccount } from '../commerce/stripe/account';
+import { applyTagsToContact } from '../crm/tags';
 import { applyToContact } from '../forms/mapping';
 import { activeCheckoutRow, getCheckoutRow, storedCheckoutDefinition, type CheckoutRow } from './checkouts';
-import { buildCart, priceCart, recurringOf, resolveCatalog, type Cart, type PricedCart } from './pricing';
+import { assertSameCurrency, buildCart, priceCart, recurringOf, resolveCatalog, type Cart, type PricedCart } from './pricing';
 
 /** Unpaid sessions can be resumed for this long. */
 export const OPEN_SESSION_TTL_MS = 2 * 3_600_000;
+/** After this, an unpaid session is expired and its draft order removed. */
+export const SESSION_CLEANUP_MS = 86_400_000;
+/** Expired sessions are kept this long for a late payment, then deleted. */
+export const EXPIRED_SESSION_RETENTION_MS = 30 * 86_400_000;
 
 export type SessionStatus = 'open' | 'processing' | 'paid' | 'completed' | 'expired';
 
@@ -236,6 +241,8 @@ export function checkoutPublic(
 function cartOf(ctx: CrmContext, row: CheckoutRow, selection: Selection, locale: CheckoutLocale) {
   const d = storedCheckoutDefinition(row);
   const catalog = resolveCatalog(ctx, d, getSettings(ctx).default_currency);
+  // A product may have changed currency after the checkout was saved.
+  assertSameCurrency(catalog);
   return { d, catalog, cart: buildCart(d, catalog, selection, locale) };
 }
 
@@ -307,7 +314,8 @@ function upsertBuyer(
     fields,
     crm: {
       create_contacts: true,
-      tag_ids: d.crm.tag_ids,
+      // Tags wait for the payment (settleRow): a declined card leaves none.
+      tag_ids: [],
       lead_source_id: d.crm.lead_source_id,
       owner_id: d.crm.owner_id,
       update_policy: d.crm.update_policy,
@@ -601,6 +609,15 @@ export function nextStepOf(d: CheckoutDefinition, row: Pick<SessionRow, 'current
   return { kind: 'thank_you', url: d.settings.thank_you_url === '' ? null : d.settings.thank_you_url };
 }
 
+/** Tags of the checkout still in the workspace (deleted ones are skipped). */
+function tagBuyer(ctx: CrmContext, contactId: string, tagIds: readonly string[]): void {
+  if (tagIds.length === 0) return;
+  const live = ctx.db
+    .all<{ id: string }>(`SELECT id FROM crm_tags WHERE deleted_at IS NULL AND id IN (${tagIds.map(() => '?').join(', ')})`, ...tagIds)
+    .map((r) => r.id);
+  if (live.length > 0) applyTagsToContact(ctx, contactId, live);
+}
+
 function settleRow(ctx: CrmContext, session: SessionRow, facts: IntentFacts): void {
   const row = getCheckoutRow(ctx, session.checkout_id);
   const d = storedCheckoutDefinition(row);
@@ -621,6 +638,7 @@ function settleRow(ctx: CrmContext, session: SessionRow, facts: IntentFacts): vo
       });
     }
   }
+  if (session.contact_id !== null) tagBuyer(ctx, session.contact_id, d.crm.tag_ids);
   const paymentMethod = facts.paymentMethodId ?? session.stripe_payment_method_id;
   const customer = facts.customerId ?? session.stripe_customer_id;
   if (plan.subscription !== null && session.contact_id !== null) {
@@ -671,6 +689,12 @@ export function settleCheckoutIntent(ctx: CrmContext, input: IntentFacts): { ses
     input.intentId,
   )[0];
   if (session === undefined) return { sessionId: null };
+  if (session.status === 'expired' && input.status === 'succeeded') {
+    // Paid in a tab left open after the cleanup: the purchase still goes through.
+    if (session.order_id !== null) restoreDraft(ctx, session.order_id);
+    settleRow(ctx, session, input);
+    return { sessionId: session.id };
+  }
   if (session.status !== 'open' && session.status !== 'processing') return { sessionId: session.id };
   const now = ctx.now();
   if (input.status === 'succeeded') {
@@ -686,6 +710,51 @@ export function settleCheckoutIntent(ctx: CrmContext, input: IntentFacts): { ses
     );
   }
   return { sessionId: session.id };
+}
+
+/**
+ * Abandoned purchases (run by the TenantDb alarm): open sessions past their
+ * expiry are marked `expired` and their draft orders deleted; expired ones
+ * are deleted once the retention for late payments is over.
+ */
+export function expireCheckoutSessions(ctx: CrmContext, input: { limit?: number } = {}): { expired: number; deleted: number } {
+  const now = ctx.now();
+  const limit = input.limit ?? 200;
+  const stale = ctx.db.all<{ id: string; order_id: string | null }>(
+    `SELECT id, order_id FROM crm_checkout_sessions WHERE status = 'open' AND expires_at <= ? ORDER BY expires_at LIMIT ?`,
+    now - SESSION_CLEANUP_MS,
+    limit,
+  );
+  for (const s of stale) {
+    if (s.order_id !== null) {
+      const draft = ctx.db.all(`SELECT 1 FROM crm_orders WHERE id = ? AND status = 'draft' AND deleted_at IS NULL`, s.order_id);
+      if (draft.length > 0) deleteOrder(ctx, { id: s.order_id });
+    }
+    ctx.db.run(`UPDATE crm_checkout_sessions SET status = 'expired', updated_at = ? WHERE id = ?`, now, s.id);
+  }
+  const old = ctx.db.all<{ id: string }>(
+    `SELECT id FROM crm_checkout_sessions WHERE status = 'expired' AND expires_at <= ? LIMIT ?`,
+    now - EXPIRED_SESSION_RETENTION_MS,
+    limit,
+  );
+  for (const s of old) ctx.db.run(`DELETE FROM crm_checkout_sessions WHERE id = ?`, s.id);
+  return { expired: stale.length, deleted: old.length };
+}
+
+/** When the next abandoned session becomes due for `expireCheckoutSessions`. */
+export function nextSessionCleanup(db: CrmContext['db']): number | null {
+  const row = db.all<{ open: number | null; expired: number | null }>(
+    `SELECT MIN(CASE WHEN status = 'open' THEN expires_at END) AS open,
+       MIN(CASE WHEN status = 'expired' THEN expires_at END) AS expired
+     FROM crm_checkout_sessions WHERE status IN ('open', 'expired')`,
+  )[0];
+  const open = row?.open ?? null;
+  const expired = row?.expired ?? null;
+  const due = [
+    open === null ? null : open + SESSION_CLEANUP_MS,
+    expired === null ? null : expired + EXPIRED_SESSION_RETENTION_MS,
+  ].filter((t): t is number => t !== null);
+  return due.length === 0 ? null : Math.min(...due);
 }
 
 /** A purchase with nothing to pay and nothing to save (100% discount on one-time items). */

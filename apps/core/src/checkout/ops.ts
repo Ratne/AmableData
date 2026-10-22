@@ -25,6 +25,7 @@ export const checkoutOps = {
   'checkout.settleIntent': sessions.settleCheckoutIntent,
   'checkout.settleFree': sessions.settleFreeSession,
   'checkout.completion': sessions.checkoutCompletion,
+  'checkout.expireSessions': sessions.expireCheckoutSessions,
   'checkout.offerState': offers.offerState,
   'checkout.offerPrepare': offers.prepareOfferCharge,
   'checkout.offerSettle': offers.settleOfferCharge,

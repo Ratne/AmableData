@@ -207,7 +207,17 @@ function endSubscription(
     ctx.now(),
     sub.id,
   );
+  // Cancelled by hand: the saved card is not charged anymore. At the natural
+  // end the retries of the last billed period go on (that period was used).
+  if (reason === 'cancelled') stopAutomaticCharges(ctx, sub.id);
   emit(ctx, 'subscription.ended', { ...subscriptionFacts(sub), reason });
+}
+
+function stopAutomaticCharges(ctx: CrmContext, subscriptionId: string): void {
+  ctx.db.run(
+    `UPDATE crm_orders SET next_charge_at = NULL WHERE subscription_id = ? AND next_charge_at IS NOT NULL`,
+    subscriptionId,
+  );
 }
 
 interface RunTally {
@@ -498,6 +508,7 @@ export function pauseSubscription(ctx: CrmContext, input: { id: string }): Subsc
     now,
     sub.id,
   );
+  stopAutomaticCharges(ctx, sub.id);
   emit(ctx, 'subscription.paused', subscriptionFacts(sub));
   return getSubscription(ctx, { id: sub.id });
 }

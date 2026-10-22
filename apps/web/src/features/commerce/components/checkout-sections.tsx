@@ -430,6 +430,7 @@ export function OffersSection({ definition, edit, products, currency, disabled }
       price_minor: null,
       title,
       description: '',
+      image_url: '',
       page_url: '',
       on_accept: '',
       on_decline: '',
@@ -554,6 +555,9 @@ export function OffersSection({ definition, edit, products, currency, disabled }
                 />
                 <FormField label={t('checkout.offers.pageUrl')} hint={t('checkout.offers.pageUrlHint')} className="sm:col-span-2">
                   {(id) => <Input id={id} type="url" value={offer.page_url} disabled={disabled} onChange={(e) => patch(offer.key, { page_url: e.target.value.trim() })} />}
+                </FormField>
+                <FormField label={t('checkout.field.imageUrl')} className="sm:col-span-3">
+                  {(id) => <Input id={id} type="url" value={offer.image_url} disabled={disabled} onChange={(e) => patch(offer.key, { image_url: e.target.value.trim() })} />}
                 </FormField>
                 <FormField label={t('commerce.field.description')} className="sm:col-span-3">
                   {(id) => <Textarea id={id} rows={2} value={offer.description} maxLength={2000} disabled={disabled} onChange={(e) => patch(offer.key, { description: e.target.value })} />}

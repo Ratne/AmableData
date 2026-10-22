@@ -10,6 +10,7 @@ import {
 } from '../backup/sql-dump';
 import { affectsChargeSchedule } from '../checkout/ops';
 import { runRenewalCharges } from '../checkout/renewals';
+import { nextSessionCleanup } from '../checkout/sessions';
 import { affectsBillingSchedule } from '../commerce/ops';
 import { seedCommerce, type CommerceSeedSummary } from '../commerce/seed';
 import { nextBillingDue, nextChargeDue } from '../commerce/subscriptions';
@@ -99,6 +100,8 @@ export class TenantDb extends DurableObject<Env> {
           new AlarmStepError(`billing.run ${result.error.code}: ${result.error.message}`),
         );
       }
+      const cleanup = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, 'checkout.expireSessions', {});
+      if (!cleanup.ok) console.error('[checkout] session cleanup failed:', cleanup.error);
       try {
         await runRenewalCharges(this.env, (op, input) => {
           const out = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, op, input);
@@ -151,8 +154,9 @@ export class TenantDb extends DurableObject<Env> {
     const now = Date.now();
     const billing = nextBillingDue(this.crmDb);
     const charge = nextChargeDue(this.crmDb);
+    const sessions = nextSessionCleanup(this.crmDb);
     const esign = nextEsignDue(this.crmDb);
-    const candidates = [billing, charge, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
+    const candidates = [billing, charge, sessions, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
       (t): t is number => t !== null,
     );
     if (candidates.length === 0) void this.ctx.storage.deleteAlarm();

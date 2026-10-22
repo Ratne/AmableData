@@ -339,6 +339,15 @@ export const commerceEn = {
   'commerce.stripe.checkFailed': 'Stripe rejected the keys: {message}',
   'commerce.stripe.disconnect': 'Disconnect',
   'commerce.stripe.disconnectConfirm': 'Disconnect Stripe?',
+  'commerce.stripe.switchToLive': 'Switch Stripe to live mode?',
+  'commerce.stripe.switchToTest': 'Switch Stripe to test mode?',
+  'commerce.stripe.switchWarning':
+    'Customers and cards saved in the current mode do not exist in the other one: {count} subscriptions stop renewing automatically (their renewals will have to be paid by hand) and purchases still in progress are closed.',
+  'commerce.stripe.switchWarningEmpty':
+    'Customers and cards saved in the current mode do not exist in the other one: they are disconnected and purchases still in progress are closed.',
+  'commerce.stripe.secretForSwitch': 'Enter the secret key of the new mode.',
+  'commerce.stripe.accountChanged':
+    'These keys belong to another Stripe account: the customers and cards saved on the previous one were disconnected, and automatic renewals on them stopped.',
   'commerce.stripe.disconnectBody': 'Checkouts stop accepting payments and renewals are no longer charged automatically. Existing orders are kept.',
   'commerce.stripe.disconnected': 'Stripe disconnected',
 

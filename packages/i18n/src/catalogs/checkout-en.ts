@@ -10,6 +10,7 @@ export const checkoutEn = {
   'checkout.status.draft': 'Draft',
   'checkout.status.active': 'Active',
   'checkout.status.archived': 'Archived',
+  'checkout.status.notArchived': 'Draft and active',
 
   'checkout.list.new': 'New checkout',
   'checkout.list.create': 'Create checkout',
@@ -126,7 +127,8 @@ export const checkoutEn = {
   'checkout.settings.termsUrl': 'Terms URL',
   'checkout.settings.termsHint': 'When set, the buyer must accept the terms to pay.',
   'checkout.settings.hosted': 'Hosted page (a link that works without a landing page)',
-  'checkout.settings.tagsHint': 'Added to the contact after the payment.',
+  'checkout.settings.tagsHint':
+    'Added once the payment succeeds (a declined card adds none). The contact, its owner and lead source are saved as soon as the buyer submits.',
   'checkout.settings.attribution':
     'Orders keep the UTM parameters and the referrer of the page, and the contact is linked to the checkout as source.',
 

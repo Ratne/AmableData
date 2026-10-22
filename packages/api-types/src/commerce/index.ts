@@ -683,6 +683,13 @@ export const stripeSettingsSchema = z.object({
   /** Endpoint to register in the Stripe dashboard (events: payment_intent.*, setup_intent.succeeded, charge.refunded). */
   webhook_url: z.string().nullable(),
   updated_at: timestampSchema.nullable(),
+  /** Live subscriptions renewed automatically on a card saved in this Stripe account. */
+  saved_payment_methods: z.number().int(),
+  /**
+   * Only on save: the keys belong to another Stripe account or mode, so the
+   * saved customers and cards of the previous one were disconnected.
+   */
+  account_changed: z.boolean().optional(),
 });
 export type StripeSettings = z.infer<typeof stripeSettingsSchema>;
 
