@@ -177,7 +177,12 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
                 return Response.json({ configured: false });
               }
               const check = await checkApiKey(apiKey, outbound);
-              if (!check.ok) return Response.json({ error: 'invalid_api_key' }, { status: 422 });
+              if (check.status === 'rejected') {
+                return Response.json({ error: 'invalid_api_key' }, { status: 422 });
+              }
+              if (check.status === 'unavailable') {
+                return Response.json({ error: 'emailable_unavailable' }, { status: 502 });
+              }
               await ctx.api.data.set(API_KEY, apiKey, { secret: true });
               keyCache.set(ctx.install.id, { key: apiKey, until: Date.now() + KEY_TTL_MS });
               return Response.json({

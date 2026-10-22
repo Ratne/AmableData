@@ -399,6 +399,21 @@ describe('timely: automations', () => {
     expect(new Set(app.crm.events.map((e) => e['event_id'])).size).toBe(3);
   });
 
+  it('drains a fixed campaign expiring for many contacts in one run', async () => {
+    const app = await setup();
+    const c = await app.campaign({ mode: 'fixed', fixed_end_at: new Date(app.clock.now + HOUR).toISOString() });
+    await app.pub(`/i/${c.public_id}/c/ct_ada.gif`);
+    await app.worker.scheduled(app.env);
+    const copy = app.db.sqlite.prepare(
+      `INSERT INTO deadlines (id, install_id, campaign_id, subject, contact_id, started_at, deadline_at, source, started_fired, expired_fired, updated_at)
+       SELECT ?, install_id, campaign_id, ?, ?, started_at, deadline_at, source, 1, 0, updated_at FROM deadlines WHERE contact_id = 'ct_ada'`,
+    );
+    for (let i = 0; i < 449; i += 1) copy.run(`dl_${String(i)}`, `c:ct_${String(i)}`, `ct_${String(i)}`);
+    app.clock.now += 2 * HOUR;
+    expect(await app.worker.announce(app.env)).toEqual({ started: 0, expired: 450 });
+    expect(await app.worker.announce(app.env)).toEqual({ started: 0, expired: 0 });
+  });
+
   it('keeps events for the next run when the CRM is down', async () => {
     const app = await setup();
     const c = await app.campaign();

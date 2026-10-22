@@ -350,6 +350,21 @@ describe('emailable: app', () => {
     });
     expect(app.crm.data.has('emailable_api_key')).toBe(false);
 
+    // An outage is not a refused key.
+    app.emailable.use(
+      fx({
+        provider: 'emailable',
+        description: 'Emailable down',
+        request: { method: 'GET', url: 'https://api.emailable.com/v1/account' },
+        response: { status: 503, body: { message: 'Service unavailable' } },
+      }),
+    );
+    expect(await app.screen('POST', { api_key: API_KEY })).toEqual({
+      status: 502,
+      body: { error: 'emailable_unavailable' },
+    });
+    expect(app.crm.data.has('emailable_api_key')).toBe(false);
+
     app.emailable.use(fx(account));
     expect((await app.screen('POST', { api_key: API_KEY })).body).toEqual({
       configured: true,

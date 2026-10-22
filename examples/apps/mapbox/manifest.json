@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "mapbox",
   "name": "Mapbox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tagline": {
     "en": "Address autocomplete with your Mapbox account",
     "it": "Completamento indirizzi con il tuo account Mapbox"
@@ -45,7 +45,7 @@
   "extensions": {
     "address_lookup": {
       "endpoint": "/address/suggest",
-      "attribution": "© Mapbox © OpenStreetMap"
+      "attribution": "Powered by Mapbox · © Mapbox © OpenStreetMap"
     },
     "ui": [
       {

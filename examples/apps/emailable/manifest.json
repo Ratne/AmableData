@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "emailable",
   "name": "Emailable",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tagline": {
     "en": "Verify the email of every new contact",
     "it": "Verifica l'email di ogni nuovo contatto"

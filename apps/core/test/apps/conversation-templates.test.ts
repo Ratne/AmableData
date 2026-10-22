@@ -86,6 +86,11 @@ describe('channel templates and reply windows', () => {
 
     const templates = await installed.owner.get(`${BASE}/conversations/channels/emailable:whatsapp/templates`);
     expect(templates.body.data).toEqual([TEMPLATES[0]]);
+    expect(templates.body.notice).toBeNull();
+    h.routes.set(`${APP}/channels/templates`, () => Response.json({ templates: [], notice: 'WhatsApp non è ancora collegato.' }));
+    const empty = await installed.owner.get(`${BASE}/conversations/channels/emailable:whatsapp/templates`);
+    expect(empty.body).toEqual({ data: [], notice: 'WhatsApp non è ancora collegato.' });
+    h.routes.set(`${APP}/channels/templates`, () => Response.json({ templates: TEMPLATES }));
 
     const sent = await installed.owner.post(`${BASE}/conversations/${id}/messages`, {
       text: 'Ciao Ada, come possiamo aiutarti?',

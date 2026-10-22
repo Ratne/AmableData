@@ -71,7 +71,7 @@ export class CheckoutApi {
     return call(this.checkoutUrl(id, 'session'), payload);
   }
 
-  address(id: string, q: string, country: string, lang: string): Promise<ApiResult<{ data: AddressSuggestion[] }>> {
+  address(id: string, q: string, country: string, lang: string): Promise<ApiResult<{ data: AddressSuggestion[]; attribution?: string | null }>> {
     return call(this.checkoutUrl(id, 'address'), { q, country, lang });
   }
 

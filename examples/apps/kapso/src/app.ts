@@ -411,11 +411,12 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
         fetch: outbound,
         async onEvent(event, ctx) {
           if (event['type'] !== 'app.uninstalled') return;
-          const cached = configCache.get(ctx.install.id)?.config;
-          if (cached !== undefined && cached.apiKey !== null && cached.number?.webhook_id != null) {
-            await kapsoClient(cached.apiKey, outbound)
-              .deleteWebhook(cached.number.phone_number_id, cached.number.webhook_id)
-              .catch(() => undefined);
+          // Sent before the tokens are revoked: during the cleanup window the app still reads its own data.
+          const config = await configOf(ctx).catch(() => configCache.get(ctx.install.id)?.config ?? null);
+          if (config?.apiKey != null && config.number?.webhook_id != null) {
+            await kapsoClient(config.apiKey, outbound)
+              .deleteWebhook(config.number.phone_number_id, config.number.webhook_id)
+              .catch((error: unknown) => console.warn('[kapso] webhook not deleted', errorMessage(error)));
           }
           forget(ctx.install.id);
         },
@@ -457,14 +458,33 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
           },
           '/channels/templates': async (_body, ctx) => {
             const config = await configOf(ctx);
-            if (config.apiKey === null || config.number === null) return { templates: [] };
+            if (config.apiKey === null || config.number === null) {
+              return {
+                templates: [],
+                notice: 'WhatsApp is not connected: open the Kapso app settings to connect a number.',
+              };
+            }
+            if (config.number.kind === 'sandbox') {
+              return {
+                templates: [],
+                notice:
+                  'The Kapso sandbox number has no templates: connect a production number in the Kapso app settings.',
+              };
+            }
             try {
               const templates = await templatesOf(
                 ctx,
                 kapsoClient(config.apiKey, outbound),
                 config.number,
               );
-              return { templates: templates.filter(sendable).map(toCrmTemplate).slice(0, 500) };
+              const list = templates.filter(sendable).map(toCrmTemplate).slice(0, 500);
+              return list.length > 0
+                ? { templates: list }
+                : {
+                    templates: [],
+                    notice:
+                      'No approved WhatsApp templates yet: create one in the Kapso app and wait for Meta to approve it.',
+                  };
             } catch (error) {
               if (error instanceof KapsoError) return failure(502, error.message);
               throw error;
@@ -495,7 +515,8 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
                       .filter(Boolean)
                       .join(' · ')
                       .slice(0, 500),
-                  })),
+                  }))
+                  .slice(0, 500),
               };
             } catch (error) {
               if (error instanceof KapsoError) return failure(502, error.message);

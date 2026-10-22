@@ -1,7 +1,12 @@
 # Changelog
 
-Versions follow `version` in [manifest.json](manifest.json). Code changes go live for every
-installation when the apps host is deployed; manifest changes reach them through the catalog.
+Versions follow `version` in [manifest.json](manifest.json). Each version is a released bundle;
+installations get it, and the manifest changes, through the catalog.
+
+## 1.0.1 (2026-10-22)
+
+- Saving a key while Emailable is not answering says so, instead of "Emailable refused this key";
+  only a 401/403 counts as a refused key.
 
 ## 1.0.0 (2026-10-18)
 

@@ -14,6 +14,12 @@ in the manifest).
   first of the triggers the campaign allows: opening an email with the timer, clicking a Timely
   link, visiting a page with the timer (anonymous visitors too, by a random id in the browser),
   or the "Start Timely deadline" automation step. "Never later than" caps every deadline at a date.
+
+  > **Email opens start early.** Apple Mail (Mail Privacy Protection) and Gmail download images
+  > through their proxies, often as soon as the email arrives and before the contact reads it, so
+  > an "email open" can start the countdown hours early. For strict campaigns, start the countdown
+  > on a click, a page visit or the automation step instead.
+
 - **Fixed date**: the same deadline for everyone.
 - **Look**: five presets (classic, minimal, bold, neon, soft), colors, boxes, rounded corners,
   separators, units, size, weight, label language and text, expired message, and custom CSS for

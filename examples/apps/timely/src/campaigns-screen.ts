@@ -37,6 +37,8 @@ const TEXT = {
     email_click: 'clicks a Timely link',
     page_visit: 'visits a page with the timer (anonymous visitors too)',
     startHint: 'The "Start Timely deadline" automation step starts it too.',
+    openHint:
+      'Apple Mail and Gmail can download images as soon as the email arrives, before the contact reads it: an email open may start the countdown early. For strict campaigns, start it on a click, a page visit or an automation step.',
     expiry: 'When the time is up, pages…',
     zeros: 'show zeros',
     message: 'show the expired message',
@@ -137,6 +139,8 @@ const TEXT = {
     email_click: 'clicca un link Timely',
     page_visit: 'visita una pagina con il timer (anche visitatori anonimi)',
     startHint: 'Anche il passo di automazione "Avvia scadenza Timely" lo fa partire.',
+    openHint:
+      'Apple Mail e Gmail possono scaricare le immagini appena l’email arriva, prima che il contatto la legga: l’apertura può far partire il countdown in anticipo. Per campagne rigide, fallo partire da un clic, una visita o un passo di automazione.',
     expiry: 'Allo scadere, le pagine…',
     zeros: 'mostrano gli zeri',
     message: 'mostrano il messaggio di scadenza',
@@ -411,6 +415,7 @@ function setupTab(d: Draft): string {
       .map((k) => `<label class="check"><input type="checkbox" name="start_on" value="${k}"${checked(d.start_on.includes(k))} /> ${esc(t[k])}</label>`)
       .join('')}
     <p class="muted">${esc(t.startHint)}</p>
+    <p class="muted">${esc(t.openHint)}</p>
     <h3>${esc(t.expiry)}</h3>
     <label><select name="expiry">${(['zeros', 'message', 'hide', 'redirect'] as const).map((k) => option(k, t[k], d.expiry)).join('')}</select></label>
     <label><span>${esc(t.offerUrl)}</span><input name="offer_url" type="url" placeholder="https://" value="${esc(d.offer_url)}" /></label>

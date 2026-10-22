@@ -20,6 +20,7 @@ const TEXT = {
     saved: 'Key saved',
     removed: 'Key removed',
     invalid: 'Emailable refused this key',
+    unavailable: 'Emailable did not answer, try again',
     failed: 'Could not save',
   },
   it: {
@@ -41,6 +42,7 @@ const TEXT = {
     saved: 'Chiave salvata',
     removed: 'Chiave rimossa',
     invalid: 'Emailable ha rifiutato questa chiave',
+    unavailable: 'Emailable non ha risposto, riprova',
     failed: 'Salvataggio non riuscito',
   },
 };
@@ -96,6 +98,7 @@ async function save(apiKey: string): Promise<void> {
   try {
     const { status: code, settings } = await api('POST', { api_key: apiKey });
     if (code === 422) return bridge.toast(t.invalid, 'error');
+    if (code === 502) return bridge.toast(t.unavailable, 'error');
     if (code >= 400) return bridge.toast(t.failed, 'error');
     input.value = '';
     show(settings);

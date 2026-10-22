@@ -454,13 +454,12 @@ async function address(ctx: GatewayContext, input: unknown): Promise<Output<'che
   const { checkoutId, q, country, lang } = parse(addressSchema, input);
   await limit(ctx, ADDRESS_RATE);
   const { config: cfg } = await publicConfig(ctx, checkoutId);
-  if (cfg.contact.address === 'hidden' || !cfg.contact.address_autocomplete) return { data: [] };
-  const data = await suggestAddresses(ctx.env, ctx.tenant.id, {
+  if (cfg.contact.address === 'hidden' || !cfg.contact.address_autocomplete) return { data: [], attribution: null };
+  return suggestAddresses(ctx.env, ctx.tenant.id, {
     q,
     ...(country === '' ? {} : { country: country.toUpperCase() }),
     ...(lang === '' ? {} : { lang: lang.slice(0, 2).toLowerCase() }),
   });
-  return { data };
 }
 
 /**

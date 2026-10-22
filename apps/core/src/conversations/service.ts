@@ -51,22 +51,28 @@ const MAX_TEMPLATES = 500;
 /**
  * Templates the team can send on a channel, asked to the app each time (they
  * change when Meta approves or rejects one). Malformed entries are dropped;
- * `null` when the app does not answer.
+ * `notice` is the app's reason for an empty list; `null` when the app does not answer.
  */
-export async function channelTemplates(env: Env, found: FoundChannel): Promise<ChannelTemplate[] | null> {
-  if (found.def.templates_endpoint === undefined) return [];
+export async function channelTemplates(
+  env: Env,
+  found: FoundChannel,
+): Promise<{ templates: ChannelTemplate[]; notice: string | null } | null> {
+  if (found.def.templates_endpoint === undefined) return { templates: [], notice: null };
   const result = await callApp(env, found.install, found.def.templates_endpoint, { channel: found.def.key }, {
     kind: 'channel',
     timeoutMs: CHANNEL_TEMPLATES_TIMEOUT_MS,
     maxBytes: 1024 * 1024,
   });
   if (!result.ok) return null;
-  const list = (result.body as { templates?: unknown } | null)?.templates;
+  const body = result.body as { templates?: unknown; notice?: unknown } | null;
+  const list = body?.templates;
   if (!Array.isArray(list)) return null;
-  return list.slice(0, MAX_TEMPLATES).flatMap((item) => {
+  const templates = list.slice(0, MAX_TEMPLATES).flatMap((item) => {
     const parsed = channelTemplateSchema.safeParse(item);
     return parsed.success ? [parsed.data] : [];
   });
+  const notice = typeof body?.notice === 'string' && body.notice.trim() !== '' ? body.notice.trim().slice(0, 300) : null;
+  return { templates, notice };
 }
 
 /**

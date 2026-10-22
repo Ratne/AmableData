@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "timely",
   "name": "Timely",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tagline": {
     "en": "Real countdown timers for emails and pages",
     "it": "Countdown reali per email e pagine"

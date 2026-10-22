@@ -363,6 +363,8 @@ declare `templates_endpoint`:
   `{ "templates": [{ "id", "name", "language", "category", "text", "params": [{ "key", "example" }] }] }`:
   only templates that can be sent right now (approved, supported). `text` uses `{{key}}`
   placeholders for the preview; parameter keys are `A-Za-z0-9_`.
+- With an empty list, add `"notice"` (up to 300 characters, in the team's language) to tell the
+  team why: the composer shows it in place of "no templates" (e.g. the app is not connected yet).
 - A template reply reaches `send_endpoint` as
   `"message": { "id", "text": "[<template id>]", "template": { "id", "params": { "key": "value" } } }`.
   Build the provider request from your own copy of the template, refuse missing parameters with a

@@ -43,9 +43,10 @@ own copy of the app (`<subdomain>` is the Cloudflare account's `workers.dev` sub
 
 The embed becomes an iframe as tall as the quiz; the result page opens in the embedding page.
 The page's `email`, `c` and campaign parameters (`utm_*`, `gclid`, `fbclid`…) go along to the
-quiz, and `data-quizly-email` / `data-quizly-contact` set the contact from the page itself. A
-contact named by the link (`c`, or an `email` of a contact already in the CRM; Quizly never
-creates contacts) skips the opt-in steps.
+quiz, and `data-quizly-email` / `data-quizly-contact` set the contact from the page itself.
+Quizly never creates contacts. A contact named by `c` skips the opt-in steps. An `email` of a
+contact already in the CRM links the session to that contact, but the opt-in steps are still
+shown: anyone can type an address, and skipping them would tell whether it belongs to a contact.
 
 ## What reaches the CRM
 
@@ -65,7 +66,7 @@ When the quiz is finished, once per session:
 
 The score is always computed by the app from the stored answers, never by the browser, and only
 the answers on the path the respondent took count. The quiz page gets no points, tags or results.
-A result the CRM could not take for a moment is sent again the next time a quiz is used.
+A result the CRM could not take for a moment is sent again within 10 minutes (the app's cron).
 
 The opt-in form tells Quizly its `submission_id` (the forms widget emits the cancelable
 `amable-form:submitted` event on its element; Quizly cancels the form's own redirect), and the
@@ -110,6 +111,8 @@ The release script builds `dist/worker.mjs` (screens inlined), attaches it to th
 Quizly stores, per installation, its quizzes and, per session, the answers, the score, the result
 and the CRM id of the contact when known. It stores no email: contacts are looked up in the CRM
 and only their id is kept. It reads contacts to recognise the one named by a link and to show
-names in the Answers tab. Unfinished anonymous sessions are deleted after 90 days. A privacy
+names in the Answers tab. Unfinished anonymous sessions are deleted after 90 days. Finished
+anonymous sessions are kept, as the quiz statistics count them: they hold answers and a score,
+nothing that identifies the respondent. A privacy
 erasure request deletes the contact's sessions and answers; a data request returns them.
 Uninstalling the app deletes all quizzes and answers of the installation.

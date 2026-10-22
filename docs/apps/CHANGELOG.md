@@ -22,6 +22,7 @@ Additions:
 - Conversation channels: `reply_window_hours` and `templates_endpoint` (templates to reopen a
   conversation after the reply window), `message.template` in channel sends, `text` in the send
   answer, `POST /apps/messages/outbound` for messages the app sent outside the inbox.
+- `notice` in the `templates_endpoint` answer: why the list is empty, shown in the composer.
 - `options_endpoint` on string inputs of automation actions and form connectors.
 - `extensions.address_lookup` (extension point `contact.address_lookup`): address suggestions
   for the contact editor in place of the built-in OpenStreetMap search.

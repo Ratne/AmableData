@@ -74,6 +74,10 @@ export interface Env {
 const keysOf = appKeysLoader({ kid: 'timely-1' });
 const SETTINGS_KEY = 'timely_settings';
 const ACTION_TTL_MS = 3 * 24 * 3_600_000;
+const ANNOUNCE_BATCH = 200;
+/** One CRM call per event: stays under the 1000 subrequests of a cron run. */
+const ANNOUNCE_MAX_EVENTS = 900;
+const ANNOUNCE_BUDGET_MS = 40_000;
 const CONTACT_CACHE_MS = 10 * 60_000;
 const PUBLIC_ID = '[0-9a-z]{16}';
 const RATE_LIMIT = { requests: 120, windowMs: 60_000 };
@@ -511,10 +515,10 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
   async function announce(env: Env): Promise<{ started: number; expired: number }> {
     await ensureSchema(env.DB);
     const at = now();
-    const { started, expired } = await unannounced(env.DB, at, 200);
     const app = await handlerFor(env, baseOf(env));
     const contexts = new Map<string, Promise<AppContext | null>>();
     const sent = { started: 0, expired: 0 };
+    let deferred = 0;
     const fire = async (kind: 'started' | 'expired', event: PendingEvent) => {
       let ctx = contexts.get(event.installId);
       if (ctx === undefined) {
@@ -535,14 +539,29 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
           // Transient: try again at the next run. Refused (contact erased, app paused): drop it.
           if (!(error instanceof AmableApiError) || error.status >= 500 || error.status === 429) {
             console.warn('[timely] event deferred', kind, event.id, error instanceof Error ? error.message : error);
+            deferred += 1;
             return;
           }
         }
       }
       await markAnnounced(env.DB, kind, event);
     };
-    await mapLimited(started, 5, (event) => fire('started', event));
-    await mapLimited(expired, 5, (event) => fire('expired', event));
+    // Batch after batch until the backlog is empty (a fixed campaign expires for everyone at once),
+    // within the subrequests and the time of one cron run.
+    let budget = ANNOUNCE_MAX_EVENTS;
+    const until = Date.now() + ANNOUNCE_BUDGET_MS;
+    while (budget > 0 && Date.now() < until) {
+      const limit = Math.max(1, Math.min(ANNOUNCE_BATCH, Math.floor(budget / 2)));
+      const { started, expired } = await unannounced(env.DB, at, limit);
+      if (started.length + expired.length === 0) break;
+      const before = deferred;
+      await mapLimited(started, 5, (event) => fire('started', event));
+      await mapLimited(expired, 5, (event) => fire('expired', event));
+      budget -= started.length + expired.length;
+      // The CRM is refusing for now: the next run tries again.
+      if (deferred > before) break;
+      if (started.length < limit && expired.length < limit) break;
+    }
     await env.DB.prepare('DELETE FROM action_runs WHERE created_at < ?').bind(at - ACTION_TTL_MS).run();
     return sent;
   }

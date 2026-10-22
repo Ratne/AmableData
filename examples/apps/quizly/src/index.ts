@@ -4,4 +4,5 @@ const worker = createWorker();
 
 export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => worker.fetch(request, env, (task) => ctx.waitUntil(task)),
+  scheduled: (_controller: ScheduledController, env: Env, ctx: ExecutionContext) => ctx.waitUntil(worker.scheduled(env)),
 };

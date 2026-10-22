@@ -276,7 +276,7 @@ function loadScript(src: string): Promise<void> {
 async function optinStep(index: number, step: Extract<PublicStep, { kind: 'optin' }>): Promise<void> {
   await startSession().catch(() => undefined);
   if (known) {
-    // The contact is already known (link with `c` or `email`, or an earlier opt-in): no need to ask again.
+    // The contact is already known (link with `c`, or an earlier opt-in): no need to ask again.
     if (goingBack && history.length > 0) back();
     else go(index, step.next);
     return;

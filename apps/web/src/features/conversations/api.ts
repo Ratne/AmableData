@@ -54,7 +54,7 @@ export function conversationsApi(slug: string) {
     ofContact: (contactId: string) => apiFetch<Page<Conversation>>(`${base}?${new URLSearchParams({ contact_id: contactId, limit: '20' }).toString()}`),
     counts: () => apiFetch<InboxCounts>(`${base}/counts`),
     channels: () => apiFetch<{ data: ConversationChannel[] }>(`${base}/channels`),
-    templates: (channel: string) => apiFetch<{ data: ChannelTemplate[] }>(`${base}/channels/${encodeURIComponent(channel)}/templates`),
+    templates: (channel: string) => apiFetch<{ data: ChannelTemplate[]; notice?: string | null }>(`${base}/channels/${encodeURIComponent(channel)}/templates`),
     get: (id: string) => apiFetch<{ data: Conversation }>(`${base}/${encodeURIComponent(id)}`),
     messages: (id: string, cursor?: string) =>
       apiFetch<Page<ConversationMessage>>(
@@ -108,16 +108,25 @@ export function useChannels(enabled = true) {
   return useQuery({ queryKey: conversationKeys.channels(slug), queryFn: async () => (await api.channels()).data, staleTime: 60_000, enabled });
 }
 
-/** Approved templates of a channel, asked to its app; only for channels that have them. */
-export function useChannelTemplates(channel: ConversationChannel | undefined, enabled = true) {
+/** Approved templates of a channel and the app's reason when there are none; only for channels that have them. */
+export function useChannelTemplateList(channel: ConversationChannel | undefined, enabled = true) {
   const { slug, api } = useConversationsApi();
   return useQuery({
     queryKey: conversationKeys.templates(slug, channel?.id ?? ''),
-    queryFn: async () => (await api.templates(channel!.id)).data,
+    queryFn: async () => {
+      const response = await api.templates(channel!.id);
+      return { templates: response.data, notice: response.notice ?? null };
+    },
     enabled: enabled && channel?.templates === true,
     staleTime: 60_000,
     retry: false,
   });
+}
+
+/** Approved templates of a channel, asked to its app; only for channels that have them. */
+export function useChannelTemplates(channel: ConversationChannel | undefined, enabled = true) {
+  const query = useChannelTemplateList(channel, enabled);
+  return { ...query, data: query.data?.templates };
 }
 
 export function useConversation(id: string | undefined) {

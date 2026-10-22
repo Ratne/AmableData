@@ -72,7 +72,13 @@ export function registerConversationRoutes(app: OpenAPIHono<AppEnv>): void {
         'Asked to the channel app each time (approvals change). Needed to write first to a contact, or to reopen a conversation once the channel\'s reply window has closed.',
       request: { params: z.object({ channel: channelIdSchema }) },
       responses: {
-        200: json(z.object({ data: z.array(channelTemplateSchema) }), 'Templates'),
+        200: json(
+          z.object({
+            data: z.array(channelTemplateSchema),
+            notice: z.string().nullable().describe('Why the app has no templates to offer (e.g. not connected yet)'),
+          }),
+          'Templates',
+        ),
         503: json(z.object({ error: z.string(), message: z.string() }), 'The app did not answer'),
       },
     }),
@@ -80,9 +86,9 @@ export function registerConversationRoutes(app: OpenAPIHono<AppEnv>): void {
       const [appId = '', key = ''] = c.req.valid('param').channel.split(':');
       const channel = await findChannel(c.env, getTenant(c).tenant.id, appId, key);
       if (channel === null) throw new CrmHttpError({ code: 'not_found', status: 404, message: 'this channel is not installed' });
-      const templates = await channelTemplates(c.env, channel);
-      if (templates === null) return c.json({ error: 'app_unavailable', message: 'the channel app did not answer' }, 503);
-      return c.json({ data: templates }, 200);
+      const result = await channelTemplates(c.env, channel);
+      if (result === null) return c.json({ error: 'app_unavailable', message: 'the channel app did not answer' }, 503);
+      return c.json({ data: result.templates, notice: result.notice }, 200);
     },
   );
 

@@ -483,8 +483,27 @@ describe('kapso: channel and automation block', () => {
     const sandbox = await setup({ number: SANDBOX });
     expect((await sandbox.call('/channels/templates', { channel: 'whatsapp' })).body).toEqual({
       templates: [],
+      notice: expect.stringContaining('sandbox'),
     });
     expect(sandbox.kapso.calls).toEqual([]);
+
+    const unconnected = await setup({ number: null });
+    expect((await unconnected.call('/channels/templates', { channel: 'whatsapp' })).body).toEqual({
+      templates: [],
+      notice: expect.stringContaining('not connected'),
+    });
+  });
+
+  it('deletes its webhook at Kapso on uninstall, even from a cold isolate', async () => {
+    const app = await setup();
+    const uninstalled = await app.call('/webhooks', { type: 'app.uninstalled', data: {} });
+    expect(uninstalled.status).toBe(200);
+    expect(app.kapso.calls).toContainEqual(
+      expect.objectContaining({
+        method: 'DELETE',
+        url: 'https://api.kapso.ai/platform/v1/whatsapp/phone_numbers/1234567890/webhooks/wh_old',
+      }),
+    );
   });
 
   it('sends the template of an automation step once, and shows it in the thread', async () => {

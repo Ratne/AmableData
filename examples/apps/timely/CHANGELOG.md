@@ -1,7 +1,14 @@
 # Changelog
 
-Versions follow `version` in [manifest.json](manifest.json). Code changes go live for every
-installation when the apps host is deployed; manifest changes reach them through the catalog.
+Versions follow `version` in [manifest.json](manifest.json). Each version is a released bundle;
+installations get it, and the manifest changes, through the catalog.
+
+## 1.0.1 (2026-10-22)
+
+- Deadlines are announced to automations in batches until the backlog is empty (up to 900 events
+  a minute, was 200): fixed-date campaigns expiring for many contacts close on time.
+- Note in the editor and the README: Apple Mail and Gmail may download the timer image before the
+  email is read, so "email open" can start the countdown early.
 
 ## 1.0.0 (2026-10-22)
 

@@ -45,6 +45,7 @@ export function buildCheckoutStyles(s: CheckoutStyle): string {
 }
 :where(.ac-suggest-list button) { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: .92em; }
 :where(.ac-suggest-list button:hover, .ac-suggest-list button:focus) { background: ${mix(10)}; }
+:where(.ac-suggest-attribution) { padding: 4px 10px 2px; font-size: .75em; color: #6b7280; text-align: right; }
 :where(.ac-bump) { display: flex; gap: 12px; padding: 14px; border-radius: ${s.radius}; cursor: pointer; align-items: flex-start; }
 :where(.ac-bump input) { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--ac-bump, ${s.primary_color}); flex: 0 0 auto; }
 :where(.ac-bump-title) { font-weight: 700; }

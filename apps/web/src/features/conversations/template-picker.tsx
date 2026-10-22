@@ -2,7 +2,7 @@ import { renderTemplateText } from '@amable/api-types';
 import { Input } from '@amable/ui/ui/input';
 import { useI18n } from '../../i18n';
 import { ChoiceSelect } from '../crm/components/inputs';
-import { useChannelTemplates, type ConversationChannel, type MessageTemplateRef } from './api';
+import { useChannelTemplateList, type ConversationChannel, type MessageTemplateRef } from './api';
 
 export interface TemplateDraft {
   readonly id: string;
@@ -34,13 +34,15 @@ export function TemplatePicker({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const templates = useChannelTemplates(channel);
-  const list = templates.data ?? [];
+  const templates = useChannelTemplateList(channel);
+  const list = templates.data?.templates ?? [];
   const selected = list.find((tpl) => tpl.id === draft.id);
 
   if (templates.isPending) return <p className="text-xs text-muted-foreground">{t('common.loading')}</p>;
   if (templates.isError) return <p className="text-xs text-destructive">{t('conversations.templates.unavailable')}</p>;
-  if (list.length === 0) return <p className="text-xs text-muted-foreground">{t('conversations.templates.none')}</p>;
+  if (list.length === 0) {
+    return <p className="text-xs text-muted-foreground">{templates.data?.notice ?? t('conversations.templates.none')}</p>;
+  }
   return (
     <div className="grid gap-2">
       <ChoiceSelect

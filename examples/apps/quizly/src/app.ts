@@ -462,9 +462,9 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
   }
 
   /** Old anonymous sessions out, and another try for results the CRM refused for a moment. */
-  async function housekeeping(env: Env): Promise<void> {
+  async function housekeeping(env: Env, force = false): Promise<void> {
     const at = now();
-    if (at - lastHousekeeping < HOUSEKEEPING_MS) return;
+    if (!force && at - lastHousekeeping < HOUSEKEEPING_MS) return;
     lastHousekeeping = at;
     await cleanup(env.DB, at);
     for (const session of await unsyncedSessions(env.DB, at)) {
@@ -504,13 +504,16 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
     const preview = body['preview'] === true;
     const at = now();
     const resumed = await getSession(env.DB, typeof body['resume'] === 'string' ? body['resume'] : '');
+    // `known` skips the opt-in. An address alone never sets it: anyone can type one, and the answer
+    // would tell whether that person is a contact. The session is still bound to them.
     if (resumed !== null && resumed.quizId === quiz.id && resumed.finishedAt === null && resumed.preview === preview) {
-      return json({ session: resumed.id, known: resumed.contactId !== null, resumed: true });
+      const known = resumed.submissionId !== null || (resumed.contactId !== null && body['c'] === resumed.contactId);
+      return json({ session: resumed.id, known, resumed: true });
     }
     const contactId = preview ? null : await knownContact(env, quiz, body['c'], body['email']);
     const session = await createSession(env.DB, quiz, contactId, preview, at);
     await background(defer, () => housekeeping(env));
-    return json({ session: session.id, known: contactId !== null, resumed: false }, 201);
+    return json({ session: session.id, known: contactId !== null && body['c'] === contactId, resumed: false }, 201);
   }
 
   async function answer(env: Env, quiz: Quiz, body: Record<string, unknown>, defer: Defer | undefined): Promise<Response> {
@@ -592,6 +595,11 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
   }
 
   return {
+    /** Cron (every 10 minutes): the same housekeeping, also when no one is answering. */
+    async scheduled(env: Env): Promise<void> {
+      await ensureSchema(env.DB);
+      await housekeeping(env, true);
+    },
     async fetch(request: Request, env: Env, defer?: Defer): Promise<Response> {
       const url = new URL(request.url);
       const baseUrl = baseOf(env, request);

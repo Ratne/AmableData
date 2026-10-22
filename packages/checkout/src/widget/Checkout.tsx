@@ -743,6 +743,7 @@ function AddressLine({
   onPick: (s: AddressSuggestion) => void;
 }) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [attribution, setAttribution] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const typed = useRef(false);
   const enabled = config.contact.address_autocomplete && !preview;
@@ -756,6 +757,7 @@ function AddressLine({
       void api.address(config.id, value.trim(), country, locale).then((result) => {
         if (result.ok) {
           setSuggestions(result.value.data.slice(0, 5));
+          setAttribution(result.value.attribution ?? null);
           setOpen(true);
         }
       });
@@ -798,6 +800,7 @@ function AddressLine({
               </button>
             </li>
           ))}
+          {attribution !== null ? <li class="ac-suggest-attribution">{attribution}</li> : null}
         </ul>
       ) : null}
       {error !== undefined ? <div class="af-error">{error}</div> : null}

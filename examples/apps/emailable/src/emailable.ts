@@ -89,24 +89,28 @@ export async function verifyEmail(
   return result.kind === 'done' ? result.verification : null;
 }
 
-/** Checks an API key before saving it. */
+/**
+ * Checks an API key before saving it: `rejected` only when Emailable refuses
+ * the key (401/403), `unavailable` when it could not answer.
+ */
 export async function checkApiKey(
   apiKey: string,
   fetcher: Fetch = fetch,
-): Promise<{ ok: boolean; credits: number | null }> {
+): Promise<{ status: 'ok' | 'rejected' | 'unavailable'; credits: number | null }> {
   try {
     const response = await fetcher(ACCOUNT_URL, {
       headers: auth(apiKey),
       signal: AbortSignal.timeout(5_000),
     });
-    if (!response.ok) return { ok: false, credits: null };
+    if (response.status === 401 || response.status === 403) return { status: 'rejected', credits: null };
+    if (!response.ok) return { status: 'unavailable', credits: null };
     const body = (await response.json()) as Record<string, unknown>;
     return {
-      ok: true,
+      status: 'ok',
       credits: typeof body['available_credits'] === 'number' ? body['available_credits'] : null,
     };
   } catch {
-    return { ok: false, credits: null };
+    return { status: 'unavailable', credits: null };
   }
 }
 

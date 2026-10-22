@@ -60,21 +60,26 @@ async function askApp(env: Env, install: AppInstall, query: AddressLookupQuery):
 
 /**
  * Same sources as the contact editor, for public forms (checkout buyer
- * address): the installed app, then the geocoder. Empty when neither answers.
+ * address): the installed app, then the geocoder, with the credit their terms
+ * require. Empty when neither answers.
  */
-export async function suggestAddresses(env: Env, tenantId: string, query: AddressLookupQuery): Promise<AddressSuggestion[]> {
+export async function suggestAddresses(
+  env: Env,
+  tenantId: string,
+  query: AddressLookupQuery,
+): Promise<{ data: AddressSuggestion[]; attribution: string | null }> {
   const install = await addressAppOf(env, tenantId);
   if (install !== null) {
     const data = await askApp(env, install, query);
-    if (data !== null) return data;
+    if (data !== null) return { data, attribution: install.manifest.extensions.address_lookup?.attribution ?? install.manifest.name };
   }
   const base = addressLookupUrl(env.ADDRESS_LOOKUP_URL);
-  if (base === null) return [];
+  if (base === null) return { data: [], attribution: null };
   try {
-    return await lookupAddresses(base, query);
+    return { data: await lookupAddresses(base, query), attribution: '© OpenStreetMap' };
   } catch (error) {
     if (!(error instanceof AddressLookupUnavailable)) throw error;
-    return [];
+    return { data: [], attribution: null };
   }
 }
 

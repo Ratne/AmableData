@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "quizly",
   "name": "Quizly",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tagline": {
     "en": "Quiz funnels with scores, tags and branching",
     "it": "Quiz funnel con punteggi, tag e percorsi"
@@ -96,6 +96,7 @@
   "deployment": {
     "kind": "cloudflare_worker",
     "compatibility_date": "2026-10-01",
-    "d1": [{ "binding": "DB" }]
+    "d1": [{ "binding": "DB" }],
+    "cron": ["*/10 * * * *"]
   }
 }

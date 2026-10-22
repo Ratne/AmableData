@@ -165,7 +165,7 @@ describe('quizly: manifest', () => {
   it('is a valid manifest deployed in the workspace account, with its page in the Marketing menu', () => {
     const parsed = parseAppManifest(manifest);
     expect(parsed.ok).toBe(true);
-    expect(manifest.deployment).toEqual({ kind: 'cloudflare_worker', compatibility_date: '2026-10-01', d1: [{ binding: 'DB' }] });
+    expect(manifest.deployment).toEqual({ kind: 'cloudflare_worker', compatibility_date: '2026-10-01', d1: [{ binding: 'DB' }], cron: ['*/10 * * * *'] });
     expect(manifest.base_url).toBe('https://deployed-app.invalid');
     const page = manifest.extensions.ui.find((u) => u.slot === 'app.page');
     expect(page).toMatchObject({ nav_group: 'marketing', path: '/ui/quizzes' });
@@ -311,11 +311,12 @@ describe('quizly: answering', () => {
     expect((await player.answer('notes', { text: 'late' })).status).toBe(409);
   });
 
-  it('follows the branch of an answer and recognises a contact by email, never creating one', async () => {
+  it('follows the branch of an answer and links a contact by email without telling, never creating one', async () => {
     const app = await setup();
     const q = await app.quiz();
     const player = await app.play(q.public_id, { email: 'BOB@example.com' });
-    expect(player.known).toBe(true);
+    // Not an oracle of who is a contact: the opt-in is still shown, the session is bound anyway.
+    expect(player.known).toBe(false);
     await player.answer('q1', { answer_id: 'solo' });
     // "Just me" jumps to the opt-in: q2 is not needed.
     expect((await player.finish()).body).toMatchObject({ score: 1, label: 'Starter', message: 'Start small.', redirect_url: 'https://site.example.com/starter' });
@@ -377,7 +378,7 @@ describe('quizly: answering', () => {
     expect(app.crm.events).toMatchObject([{ contact_id: 'ct_bob', event_id: `done:${late.session}` }]);
   });
 
-  it('retries a result the CRM could not take, the next time quizzes are used', async () => {
+  it('retries a result the CRM could not take, from the cron and when quizzes are used', async () => {
     const app = await setup();
     const q = await app.quiz();
     let down = true;
@@ -392,8 +393,17 @@ describe('quizly: answering', () => {
     expect(app.crm.events).toHaveLength(0);
     down = false;
     vi.setSystemTime(Date.now() + 11 * 60_000);
-    await app.play(q.public_id);
+    await app.worker.scheduled(app.env);
     expect(app.crm.events).toMatchObject([{ event_id: `done:${player.session}` }]);
+
+    down = true;
+    const other = await app.play(q.public_id, { c: 'ct_ada' });
+    await other.answer('q1', { answer_id: 'solo' });
+    await other.finish();
+    down = false;
+    vi.setSystemTime(Date.now() + 11 * 60_000);
+    await app.play(q.public_id);
+    expect(app.crm.events.map((e) => e['event_id'])).toContain(`done:${other.session}`);
   });
 
   it('keeps previews out of the CRM and of the statistics', async () => {

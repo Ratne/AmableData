@@ -62,7 +62,8 @@ export type CheckoutGatewayOps = {
   /** Address suggestions for the buyer fields. */
   'checkout.address': {
     input: { checkoutId: string; q: string; country: string; lang: string };
-    output: { data: AddressSuggestion[] };
+    /** `attribution`: the credit the address provider's terms require, shown under the list. */
+    output: { data: AddressSuggestion[]; attribution: string | null };
   };
   /** Stripe webhook (raw body + `Stripe-Signature`). */
   'checkout.stripeWebhook': {
