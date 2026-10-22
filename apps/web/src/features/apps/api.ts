@@ -15,6 +15,8 @@ export interface AppUiExtension {
   readonly path: string;
   readonly title: LocalizedText;
   readonly height?: number;
+  /** `app.page` only: sidebar group (`NAV_GROUPS` id) the page joins instead of "Apps". */
+  readonly nav_group?: 'crm' | 'marketing' | 'ecommerce' | 'analytics' | 'reports';
 }
 
 export interface FrameSession {
@@ -150,6 +152,41 @@ export interface AppEventRecord {
   readonly created_at: string;
 }
 
+/** `base_url` of catalog apps that run in this installation's own Cloudflare account. */
+export const DEPLOYED_APP_ORIGIN = 'https://deployed-app.invalid';
+
+export const isDeployedApp = (manifest: Pick<AppManifestView, 'base_url'>): boolean => manifest.base_url === DEPLOYED_APP_ORIGIN;
+
+export interface CloudflareCredentialsView {
+  readonly account_id: string;
+  readonly account_name: string | null;
+  readonly token_hint: string;
+  readonly status: 'active' | 'invalid';
+  readonly verified_at: string;
+}
+
+/** `direct`: self-hosted, the owner connects a token; `control_plane`: AmableData Cloud, the portal token is used. */
+export interface CloudflareStatus {
+  readonly provider: 'direct' | 'control_plane';
+  readonly credentials: CloudflareCredentialsView | null;
+}
+
+export interface AppDeploymentView {
+  readonly status: 'ready' | 'failed';
+  readonly provider: 'direct' | 'control_plane';
+  readonly origin: string | null;
+  readonly account_id: string | null;
+  readonly bundle_sha256: string | null;
+  readonly error: string | null;
+  readonly reachable: boolean;
+  readonly updated_at: string;
+}
+
+export interface AppDeploymentState {
+  readonly deployment: AppDeploymentView | null;
+  readonly current: boolean;
+}
+
 export interface AuthorizeInput {
   readonly app_id?: string;
   readonly manifest_url?: string;
@@ -170,6 +207,13 @@ export function appsApi(slug: string) {
     preview: (manifestUrl: string) =>
       post<{ manifest: AppManifestView; verified: false }>('/private/preview', { manifest_url: manifestUrl }),
     authorize: (input: AuthorizeInput) => post<{ redirect_url: string; install: AppInstallView }>('/authorize', input),
+    cloudflare: () => apiFetch<CloudflareStatus>(`${base}/cloudflare`),
+    cloudflareAccounts: (token: string) => post<{ data: Array<{ id: string; name: string }> }>('/cloudflare/accounts', { token }),
+    connectCloudflare: (token: string, accountId: string) =>
+      post<{ credentials: CloudflareCredentialsView }>('/cloudflare', { token, account_id: accountId }),
+    disconnectCloudflare: () => apiFetch<{ ok: true }>(`${base}/cloudflare`, { method: 'DELETE' }),
+    deployment: (appId: string) => apiFetch<AppDeploymentState>(`${base}/deployments/${encodeURIComponent(appId)}`),
+    deploy: (appId: string) => post<AppDeploymentState>(`/deployments/${encodeURIComponent(appId)}`),
     installs: () => apiFetch<{ data: AppInstallView[] }>(`${base}/installs`),
     extensions: () => apiFetch<{ data: InstalledExtensions[] }>(`${base}/extensions`),
     options: (source: AppInputSource, property: string) =>
@@ -194,6 +238,8 @@ export const appKeys = {
   catalog: (slug: string) => ['apps', slug, 'catalog'] as const,
   app: (slug: string, appId: string) => ['apps', slug, 'catalog', appId] as const,
   installs: (slug: string) => ['apps', slug, 'installs'] as const,
+  cloudflare: (slug: string) => ['apps', slug, 'cloudflare'] as const,
+  deployment: (slug: string, appId: string) => ['apps', slug, 'deployments', appId] as const,
   extensions: (slug: string) => ['apps', slug, 'extensions'] as const,
   frame: (slug: string, appId: string, key: string, contactId: string | null) => ['apps', slug, 'frame', appId, key, contactId] as const,
   install: (slug: string, id: string) => ['apps', slug, 'installs', id] as const,

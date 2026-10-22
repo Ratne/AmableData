@@ -1,13 +1,17 @@
 import {
   AmableApiError,
+  appBaseUrl,
+  appKeysLoader,
   appPath,
   createAppHandler,
-  kvInstallStore,
+  d1InstallStore,
+  d1KeyValue,
   type AppContext,
-  type KeyValue,
-  type PrivateJwk,
+  type ExpiringKeyValue,
+  type SqlDatabase,
 } from '@amable/app-sdk';
 import manifest from '../manifest.json';
+import { assets } from './assets';
 import {
   kapsoClient,
   KapsoError,
@@ -40,20 +44,24 @@ import { contactNameOf, eventsOf, messageOf, sentAt, verifyKapsoSignature } from
  * the installation; this Worker keeps only short-lived setup and idempotency
  * records and, for each contact it talked to, the contact's WhatsApp number
  * (exported and erased with the contact).
+ *
+ * It runs in the workspace's own Cloudflare account, deployed by the CRM: its
+ * D1 database keeps the installs, those records and the signing keys.
  */
 
-/** Workers KV; `expirationTtl` is ignored by test doubles. */
-export interface Store extends KeyValue {
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
-}
+export type Store = ExpiringKeyValue;
 
 export interface Env {
-  APP_KEYS: string;
-  INSTALLS: Store;
+  DB: SqlDatabase;
+  /** URL of this Worker, set by the CRM when it deploys the app. */
+  APP_BASE_URL?: string;
+  /** Signing keys, only for a copy hosted elsewhere; normally created in DB. */
+  APP_KEYS?: string;
 }
 
+const keysOf = appKeysLoader({ kid: 'kapso-1' });
+
 const CHANNEL = 'whatsapp';
-const BASE_URL = manifest.base_url;
 const API_KEY = 'kapso_api_key';
 const WEBHOOK_SECRET = 'kapso_webhook_secret';
 const NUMBER = 'kapso_number';
@@ -177,6 +185,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
     ctx: AppContext,
     client: KapsoClient,
     number: PhoneNumber,
+    baseUrl: string,
   ): Promise<ConnectedNumber> {
     const previous = (await configOf(ctx)).number;
     if (previous?.webhook_id != null)
@@ -186,7 +195,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
     const secret = randomHex(32);
     const webhookId = await client.createWebhook(
       number.phone_number_id,
-      `${BASE_URL}/inbound/${ctx.install.id}`,
+      `${baseUrl}/inbound/${ctx.install.id}`,
       secret,
     );
     const connected: ConnectedNumber = { ...number, webhook_id: webhookId };
@@ -268,7 +277,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
 
   async function handleWebhook(
     request: Request,
-    env: Env,
+    store: Store,
     installId: string,
     contextFor: (id: string) => Promise<AppContext | null>,
   ): Promise<Response> {
@@ -296,7 +305,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
       )
         continue;
       try {
-        await handleEvent(ctx, env.INSTALLS, event, payload);
+        await handleEvent(ctx, store, event, payload);
       } catch (error) {
         if (retryable(error)) {
           console.error('[kapso] webhook', event, error);
@@ -390,12 +399,15 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
 
   return {
     async fetch(request: Request, env: Env): Promise<Response> {
+      const baseUrl = appBaseUrl(manifest.base_url, env.APP_BASE_URL, request);
+      const store = d1KeyValue(env.DB);
       const app = createAppHandler({
         appId: manifest.id,
-        baseUrl: BASE_URL,
-        keys: JSON.parse(env.APP_KEYS) as PrivateJwk[],
-        store: kvInstallStore(env.INSTALLS),
+        baseUrl,
+        keys: await keysOf(env),
+        store: d1InstallStore(env.DB),
         manifest,
+        assets,
         fetch: outbound,
         async onEvent(event, ctx) {
           if (event['type'] !== 'app.uninstalled') return;
@@ -503,7 +515,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
               typeof body['idempotency_key'] === 'string'
                 ? `act:${ctx.install.id}:${body['idempotency_key']}`
                 : null;
-            const done = idempotency === null ? null : await env.INSTALLS.get(idempotency);
+            const done = idempotency === null ? null : await store.get(idempotency);
             if (done !== null) return { output: JSON.parse(done) as Record<string, unknown> };
             const params = parseParams(input.params);
             let sent: Awaited<ReturnType<typeof sendTemplate>>;
@@ -521,7 +533,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
               language: sent.template.language,
             };
             if (idempotency !== null)
-              await env.INSTALLS.put(idempotency, JSON.stringify(output), {
+              await store.put(idempotency, JSON.stringify(output), {
                 expirationTtl: IDEMPOTENCY_TTL_S,
               });
             const recorded = await ctx.api.messages
@@ -536,7 +548,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
                 console.warn('[kapso] sent but not recorded in the thread', errorMessage(error));
                 return null;
               });
-            await remember(env.INSTALLS, ctx.install.id, recorded?.contact_id ?? contactId, to);
+            await remember(store, ctx.install.id, recorded?.contact_id ?? contactId, to);
             return { output };
           },
           '/privacy/erasure': async (body, ctx) => {
@@ -546,13 +558,13 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
             const digits =
               contactId === ''
                 ? null
-                : await env.INSTALLS.get(contactKey(ctx.install.id, contactId));
+                : await store.get(contactKey(ctx.install.id, contactId));
             if (digits === null) return { ok: true };
             const config = await configOf(ctx).catch(() => null);
             if (config?.apiKey != null)
               await kapsoClient(config.apiKey, outbound).eraseContact(`+${digits}`);
-            await env.INSTALLS.delete(contactKey(ctx.install.id, contactId));
-            await env.INSTALLS.delete(phoneKey(ctx.install.id, digits));
+            await store.delete(contactKey(ctx.install.id, contactId));
+            await store.delete(phoneKey(ctx.install.id, digits));
             return { ok: true };
           },
           '/privacy/data': async (body, ctx) => {
@@ -562,13 +574,13 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
             const digits =
               contactId === ''
                 ? null
-                : await env.INSTALLS.get(contactKey(ctx.install.id, contactId));
+                : await store.get(contactKey(ctx.install.id, contactId));
             return { data: digits === null ? null : { whatsapp_number: `+${digits}` } };
           },
         },
         screens: {
-          '/ui/settings': () => settingsPage(BASE_URL),
-          '/ui/templates': () => templatesPage(BASE_URL),
+          '/ui/settings': () => settingsPage(baseUrl),
+          '/ui/templates': () => templatesPage(baseUrl),
         },
         screenApi: {
           '/api/settings': async (req, _session, ctx) => {
@@ -609,7 +621,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
             try {
               const number = await client.phoneNumber(input.phone_number_id);
               if (number === null) return failure(404, 'this number is not in the Kapso project');
-              await connectNumber(ctx, client, number);
+              await connectNumber(ctx, client, number, baseUrl);
             } catch (error) {
               return failure(
                 error instanceof KapsoError && !error.transient ? 422 : 502,
@@ -630,10 +642,10 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
                 `AmableData ${ctx.install.tenant.slug}`,
               );
               const link = await client.createSetupLink(customerId, {
-                success: `${BASE_URL}/setup/connected/${nonce}`,
-                failure: `${BASE_URL}/setup/failed/${nonce}`,
+                success: `${baseUrl}/setup/connected/${nonce}`,
+                failure: `${baseUrl}/setup/failed/${nonce}`,
               });
-              await env.INSTALLS.put(`setup:${nonce}`, ctx.install.id, {
+              await store.put(`setup:${nonce}`, ctx.install.id, {
                 expirationTtl: SETUP_TTL_S,
               });
               return json({ url: link.url });
@@ -701,14 +713,14 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
       });
 
       const url = new URL(request.url);
-      const path = appPath(url, BASE_URL) ?? '';
+      const path = appPath(url, baseUrl) ?? '';
       const webhook = path.match(/^\/inbound\/([A-Za-z0-9_-]{1,64})$/);
       if (webhook !== null && request.method === 'POST')
-        return handleWebhook(request, env, webhook[1]!, (id) => app.contextFor(id));
+        return handleWebhook(request, store, webhook[1]!, (id) => app.contextFor(id));
       const setup = path.match(/^\/setup\/(connected|failed)\/([0-9a-f]{32})$/);
       if (setup !== null && request.method === 'GET') {
         const [, outcome, nonce] = setup;
-        const installId = await env.INSTALLS.get(`setup:${nonce!}`);
+        const installId = await store.get(`setup:${nonce!}`);
         if (installId === null) return resultPage('expired');
         if (outcome === 'failed') return resultPage('failed', url.searchParams.get('error_code'));
         const ctx = await app.contextFor(installId);
@@ -720,8 +732,8 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
         try {
           const number = await client.phoneNumber(phoneNumberId);
           if (number === null) return resultPage('failed', 'unknown_number');
-          const connected = await connectNumber(ctx, client, number);
-          await env.INSTALLS.delete(`setup:${nonce!}`);
+          const connected = await connectNumber(ctx, client, number, baseUrl);
+          await store.delete(`setup:${nonce!}`);
           return resultPage(
             'connected',
             connected.display_phone_number ?? url.searchParams.get('display_phone_number'),

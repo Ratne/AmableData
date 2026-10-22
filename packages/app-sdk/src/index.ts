@@ -16,3 +16,4 @@ export * from './keys';
 export * from './oauth';
 export * from './session';
 export * from './signature';
+export * from './storage';

@@ -1,4 +1,4 @@
-import { APP_SENSITIVE_SCOPES, manifestHash, type AppManifest } from '@amable/core/apps';
+import { APP_SENSITIVE_SCOPES, DEPLOYED_APP_ORIGIN, manifestHash, type AppManifest } from '@amable/core/apps';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -17,6 +17,20 @@ import {
   runCatalogSync,
 } from './catalog-sync';
 import { callApp } from './call';
+import {
+  cloudflareCredentials,
+  deleteCloudflareCredentials,
+  deployedManifest,
+  deploymentReachable,
+  deployProvider,
+  ensureAppDeployed,
+  getDeployment,
+  isCurrent,
+  saveCloudflareCredentials,
+  tokenAccounts,
+  type AppDeploymentRecord,
+  type CloudflareCredentials,
+} from './deployer';
 import { AppError } from './errors';
 import { replayAppEvents, rotateWebhookSecret, sendAppEvent } from './events';
 import {
@@ -134,6 +148,111 @@ appsAdminRoutes.post('/private/preview', requirePermission('apps:install'), asyn
   return c.json({ manifest: manifestView(manifest), verified: false });
 });
 
+// ------------------------------------------- deployment into the user's Cloudflare
+
+function deploymentView(record: AppDeploymentRecord | null, reachable: boolean) {
+  if (record === null) return null;
+  return {
+    status: record.status,
+    provider: record.provider,
+    origin: record.origin,
+    account_id: record.accountId,
+    bundle_sha256: record.bundleSha256,
+    error: record.error,
+    reachable,
+    updated_at: new Date(record.updatedAt).toISOString(),
+  };
+}
+
+function credentialsView(credentials: CloudflareCredentials | null) {
+  if (credentials === null) return null;
+  return {
+    account_id: credentials.accountId,
+    account_name: credentials.accountName,
+    token_hint: credentials.tokenHint,
+    status: credentials.status,
+    verified_at: new Date(credentials.verifiedAt).toISOString(),
+  };
+}
+
+async function deployableCatalogApp(c: Context<AppEnv>): Promise<AppManifest> {
+  const app = catalogConfig(c.env).enabled ? await getCatalogApp(c.env.DB, c.req.param('appId') ?? '') : null;
+  if (app === null || app.revoked) throw new AppError(404, 'not_found', 'app not found in the marketplace');
+  if (app.manifest.base_url !== DEPLOYED_APP_ORIGIN) throw new AppError(409, 'not_deployable', 'this app is hosted by its developer');
+  return app.manifest;
+}
+
+/** The installation's Cloudflare account is shared by every workspace: only owners change it (self-hosted). */
+function requireOwner(c: Context<AppEnv>): void {
+  if (getTenant(c).role !== 'owner') throw new AppError(403, 'forbidden', 'only an owner can connect the Cloudflare account');
+}
+
+async function requireDirectProvider(c: Context<AppEnv>): Promise<void> {
+  if ((await deployProvider(c.env)) !== 'direct') {
+    throw new AppError(409, 'managed_by_portal', 'on AmableData Cloud the Cloudflare token is managed from the portal');
+  }
+}
+
+/** Where the apps are deployed: provider, and (self-hosted) the connected account. */
+appsAdminRoutes.get('/cloudflare', requirePermission('apps:install'), async (c) => {
+  const provider = await deployProvider(c.env);
+  return c.json({
+    provider,
+    credentials: provider === 'direct' ? credentialsView(await cloudflareCredentials(c.env.DB)) : null,
+  });
+});
+
+const tokenSchema = z.string().trim().min(20).max(200).regex(/^[A-Za-z0-9_-]+$/, 'not a Cloudflare API token');
+
+/** Self-hosted: the accounts a pasted token can deploy to (nothing is saved). */
+appsAdminRoutes.post('/cloudflare/accounts', requireSession(), requirePermission('apps:install'), async (c) => {
+  requireOwner(c);
+  await requireDirectProvider(c);
+  const body = z.strictObject({ token: tokenSchema }).safeParse(await c.req.json().catch(() => null));
+  if (!body.success) throw new AppError(422, 'validation_failed', body.error.issues[0]?.message ?? 'token is required');
+  return c.json({ data: await tokenAccounts(body.data.token) });
+});
+
+appsAdminRoutes.post('/cloudflare', requireSession(), requirePermission('apps:install'), requireStepUp(), async (c) => {
+  requireOwner(c);
+  await requireDirectProvider(c);
+  const body = z
+    .strictObject({ token: tokenSchema, account_id: z.string().regex(/^[0-9a-f]{32}$/, 'not a Cloudflare account id') })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!body.success) throw new AppError(422, 'validation_failed', body.error.issues[0]?.message ?? 'token and account_id are required');
+  const saved = await saveCloudflareCredentials(c.env, {
+    token: body.data.token,
+    accountId: body.data.account_id,
+    userId: getAuth(c).user.id,
+    nowMs: now(c),
+  });
+  await audit(c, 'apps.cloudflare_connected', { target: saved.accountId });
+  return c.json({ credentials: credentialsView(saved) });
+});
+
+appsAdminRoutes.delete('/cloudflare', requireSession(), requirePermission('apps:install'), requireStepUp(), async (c) => {
+  requireOwner(c);
+  await requireDirectProvider(c);
+  await deleteCloudflareCredentials(c.env.DB);
+  await audit(c, 'apps.cloudflare_disconnected', {});
+  return c.json({ ok: true });
+});
+
+appsAdminRoutes.get('/deployments/:appId', requirePermission('apps:install'), async (c) => {
+  const manifest = await deployableCatalogApp(c);
+  const record = await getDeployment(c.env.DB, manifest.id);
+  const reachable = record !== null && isCurrent(record, manifest) && (await deploymentReachable(c.env, record));
+  return c.json({ deployment: deploymentView(record, reachable), current: isCurrent(record, manifest) });
+});
+
+/** Deploys the app into the installation's Cloudflare account (before the consent). */
+appsAdminRoutes.post('/deployments/:appId', requireSession(), requirePermission('apps:install'), requireStepUp(), async (c) => {
+  const manifest = await deployableCatalogApp(c);
+  const record = await ensureAppDeployed(c.env, manifest, now(c));
+  await audit(c, 'app.deployed', { target: manifest.id, details: { provider: record.provider, origin: record.origin ?? '' } });
+  return c.json({ deployment: deploymentView(record, await deploymentReachable(c.env, record)), current: true });
+});
+
 // ---------------------------------------------------------------- consent
 
 const authorizeSchema = z
@@ -166,6 +285,12 @@ appsAdminRoutes.post('/authorize', requireSession(), requirePermission('apps:ins
     if (app === null || app.revoked) throw new AppError(404, 'not_found', 'app not found in the marketplace');
     manifest = app.manifest;
     hash = app.manifestHash;
+    if (manifest.base_url === DEPLOYED_APP_ORIGIN) {
+      // The app runs in this installation's Cloudflare account: deployed first, then consented to.
+      const deployment = await getDeployment(c.env.DB, manifest.id);
+      if (!isCurrent(deployment, manifest)) throw new AppError(409, 'deployment_required', 'the app must be deployed before installing it');
+      manifest = deployedManifest(manifest, deployment);
+    }
   } else {
     ({ manifest, hash } = await fetchPrivateManifest(c.env, input.manifest_url!));
     const listed = await getCatalogApp(c.env.DB, manifest.id);

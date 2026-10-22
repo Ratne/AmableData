@@ -57,6 +57,20 @@ describe('app screens', () => {
     expect((await installed.owner.post('/api/t/acme/apps/frames', { app_id: 'emailable', key: 'settings' })).status).toBe(409);
   });
 
+  it('tells the sidebar in which menu group an app page goes', async () => {
+    const h = await createAppsHarness();
+    const installed = await installApp(h, {
+      extensions: {
+        ui: [{ slot: 'app.page' as const, key: 'campaigns', path: '/ui/campaigns', title: { en: 'Timers' }, nav_group: 'marketing' as const }],
+      },
+    });
+    const listed = await installed.owner.get('/api/t/acme/apps/extensions');
+    expect(listed.status).toBe(200);
+    expect((listed.body.data as Array<{ extensions: { ui: unknown[] } }>)[0]!.extensions.ui).toEqual([
+      expect.objectContaining({ slot: 'app.page', key: 'campaigns', nav_group: 'marketing' }),
+    ]);
+  });
+
   it('allows framing only the hosts of the apps with screens in the user workspaces', async () => {
     const h = await createAppsHarness();
     await installApp(h, screens);

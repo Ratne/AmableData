@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "id": "timely",
+  "name": "Timely",
+  "version": "1.0.0",
+  "tagline": {
+    "en": "Real countdown timers for emails and pages",
+    "it": "Countdown reali per email e pagine"
+  },
+  "description": {
+    "en": "Personal deadlines for every contact: the countdown starts when the contact opens the email, clicks, visits the page or enters an automation, and is the same everywhere. Animated timers for emails, embeddable timers for landing pages and any website, presets and custom CSS. When the deadline passes, pages redirect to the expired offer and automations get the event. Deadlines can be reset or changed per contact.",
+    "it": "Scadenze personali per ogni contatto: il countdown parte quando il contatto apre l'email, clicca, visita la pagina o entra in un'automazione, ed è lo stesso ovunque. Timer animati per le email, timer embeddabili per landing page e qualsiasi sito, preset grafici e CSS custom. Alla scadenza le pagine reindirizzano all'offerta scaduta e le automazioni ricevono l'evento. Le scadenze si possono resettare o modificare per contatto."
+  },
+  "developer": {
+    "name": "AmableData",
+    "url": "https://github.com/Ratne/AmableData",
+    "email": "apps@amabledata.com"
+  },
+  "categories": ["marketing"],
+  "icon_url": "https://raw.githubusercontent.com/Ratne/amable-apps/main/apps/timely/icon.png",
+  "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/timely",
+  "support_url": "https://github.com/Ratne/AmableData/issues",
+  "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/timely#privacy",
+  "base_url": "https://deployed-app.invalid",
+  "jwks_url": "https://deployed-app.invalid/.well-known/jwks.json",
+  "redirect_uris": ["https://deployed-app.invalid/install"],
+  "api_version": "2026-10",
+  "scopes": ["contacts:read", "automations:trigger"],
+  "webhooks": {
+    "endpoint": "/webhooks",
+    "events": []
+  },
+  "privacy": {
+    "handles_personal_data": true,
+    "erasure_endpoint": "/privacy/erasure",
+    "data_request_endpoint": "/privacy/data"
+  },
+  "pricing": {
+    "model": "free"
+  },
+  "extensions": {
+    "automation_actions": [
+      {
+        "key": "start_deadline",
+        "name": {
+          "en": "Start Timely deadline",
+          "it": "Avvia scadenza Timely"
+        },
+        "description": {
+          "en": "Starts the contact's countdown of a campaign (nothing changes if it is already running, unless you restart it).",
+          "it": "Avvia il countdown del contatto per una campagna (se è già in corso non cambia nulla, a meno che tu non lo riavvii)."
+        },
+        "endpoint": "/actions/start-deadline",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "campaign": {
+              "type": "string",
+              "title": {
+                "en": "Campaign",
+                "it": "Campagna"
+              },
+              "options_endpoint": "/options/campaigns"
+            },
+            "restart": {
+              "type": "boolean",
+              "title": {
+                "en": "Restart if already running",
+                "it": "Riavvia se già in corso"
+              },
+              "default": false
+            },
+            "duration_hours": {
+              "type": "integer",
+              "title": {
+                "en": "Duration in hours (empty: the campaign's)",
+                "it": "Durata in ore (vuoto: quella della campagna)"
+              },
+              "minimum": 1,
+              "maximum": 8760
+            }
+          },
+          "required": ["campaign"]
+        },
+        "output_keys": ["deadline_at", "campaign_name", "timer_url", "link_url"]
+      }
+    ],
+    "automation_triggers": [
+      {
+        "key": "deadline_started",
+        "name": {
+          "en": "Timely deadline started",
+          "it": "Scadenza Timely avviata"
+        },
+        "description": {
+          "en": "The contact's countdown started (data: campaign_id, campaign_name, deadline_at).",
+          "it": "Il countdown del contatto è partito (dati: campaign_id, campaign_name, deadline_at)."
+        }
+      },
+      {
+        "key": "deadline_expired",
+        "name": {
+          "en": "Timely deadline expired",
+          "it": "Scadenza Timely scaduta"
+        },
+        "description": {
+          "en": "The contact's countdown reached zero (data: campaign_id, campaign_name, deadline_at).",
+          "it": "Il countdown del contatto è arrivato a zero (dati: campaign_id, campaign_name, deadline_at)."
+        }
+      }
+    ],
+    "ui": [
+      {
+        "slot": "app.page",
+        "key": "campaigns",
+        "path": "/ui/campaigns",
+        "nav_group": "marketing",
+        "title": {
+          "en": "Timely",
+          "it": "Timely"
+        },
+        "height": 1000
+      },
+      {
+        "slot": "app.settings",
+        "key": "settings",
+        "path": "/ui/settings",
+        "title": {
+          "en": "Settings",
+          "it": "Impostazioni"
+        },
+        "height": 420
+      }
+    ]
+  },
+  "deployment": {
+    "kind": "cloudflare_worker",
+    "compatibility_date": "2026-10-01",
+    "d1": [{ "binding": "DB" }],
+    "cron": ["* * * * *"]
+  }
+}

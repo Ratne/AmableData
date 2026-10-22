@@ -17,13 +17,13 @@
     "email": "apps@amabledata.com"
   },
   "categories": ["messaging", "support"],
-  "icon_url": "https://apps.amabledata.com/kapso/icon.png",
+  "icon_url": "https://raw.githubusercontent.com/Ratne/amable-apps/main/apps/kapso/icon.png",
   "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/kapso",
   "support_url": "https://github.com/Ratne/AmableData/issues",
   "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/kapso#privacy",
-  "base_url": "https://apps.amabledata.com/kapso",
-  "jwks_url": "https://apps.amabledata.com/kapso/.well-known/jwks.json",
-  "redirect_uris": ["https://apps.amabledata.com/kapso/install"],
+  "base_url": "https://deployed-app.invalid",
+  "jwks_url": "https://deployed-app.invalid/.well-known/jwks.json",
+  "redirect_uris": ["https://deployed-app.invalid/install"],
   "api_version": "2026-10",
   "scopes": ["contacts:read", "contacts:write", "conversations:write", "automations:trigger"],
   "webhooks": {
@@ -161,5 +161,10 @@
         "height": 900
       }
     ]
+  },
+  "deployment": {
+    "kind": "cloudflare_worker",
+    "compatibility_date": "2026-10-01",
+    "d1": [{ "binding": "DB" }]
   }
 }

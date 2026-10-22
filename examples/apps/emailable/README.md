@@ -45,22 +45,25 @@ Emailable's API reference, linked in `docs_url`.
 
 ## Hosting
 
-The official copy runs at `https://apps.amabledata.com/emailable` inside the
-[apps host](../host), one Worker for every official app.
+The app never runs on AmableData's Cloudflare account. When a workspace installs it from the
+Marketplace, the CRM deploys its bundle into the installation's **own** Cloudflare account: the
+Worker `amable-app-emailable` on its `workers.dev` address and the D1 database `amable-app-emailable-db`.
+On AmableData Cloud the token saved in the portal during setup is used; on a self-hosted
+installation an owner connects a token (Workers Scripts and D1, Edit) the first time. Uninstalling
+deletes the Worker and the database.
 
-To run your own copy on its own Worker:
+There is nothing to configure: on the first request the app creates its tables and its Ed25519
+signing key in its database (`amable_app_keys`, one row written with `INSERT OR IGNORE`, so
+isolates starting together end up with the same key).
 
 ```sh
-pnpm --filter @amable/example-app-emailable dev   # from the repo root
-npx amable-app keys generate                             # in this folder; writes .amable/keys.json
-npx amable-app keys secret | npx wrangler secret put APP_KEYS
-npx wrangler kv namespace create INSTALLS                # put the id in wrangler.jsonc
-pnpm --filter @amable/example-app-emailable run deploy
+pnpm --filter @amable/example-app-emailable dev                  # local Worker with a local D1 (wrangler.jsonc)
+node scripts/release-app.mjs emailable --publish   # maintainers, from the repo root, after bumping "version"
 ```
 
-Change `base_url`, `jwks_url`, `redirect_uris` and `icon_url` to your Worker's URL (a path such as
-`https://example.com/emailable` works too), then install it from **Settings → Apps → Install from
-URL** with `<base_url>/manifest.json`.
+The release script builds `dist/worker.mjs` (screens inlined), attaches it to the GitHub release
+`app-emailable-v<version>` and writes the catalog manifest with its SHA-256 into the
+[amable-apps](https://github.com/Ratne/amable-apps) checkout next to this repository.
 
 ## Privacy
 

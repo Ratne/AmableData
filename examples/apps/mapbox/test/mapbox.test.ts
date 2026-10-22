@@ -1,13 +1,13 @@
-import { generateAppKey, kvInstallStore } from '@amable/app-sdk';
+import { d1InstallStore } from '@amable/app-sdk';
 import {
   fakeCrm,
   fixtureFetch,
-  memoryKv,
   routeFetch,
   signedCaller,
   testInstall,
   type Fixture,
 } from '@amable/app-sdk/testing';
+import { memoryD1 } from '@amable/app-sdk/testing/d1';
 import { describe, expect, it } from 'vitest';
 import { passed, runConformance } from '../../../../packages/app-cli/src/conformance';
 import manifest from '../manifest.json';
@@ -31,17 +31,17 @@ const saltLake = {
 };
 
 async function setup(options: { token?: string | null; permanent?: boolean } = {}) {
-  const kv = memoryKv();
+  const db = memoryD1();
   // One install per test: the settings cache is per install id.
   const install = testInstall({ scopes: manifest.scopes });
-  await kvInstallStore(kv).put(install);
+  await d1InstallStore(db).put(install);
   const crm = fakeCrm();
   if (options.token !== null)
     crm.data.set('mapbox_token', { value: options.token ?? TOKEN, secret: true });
   if (options.permanent === true) crm.data.set('mapbox_permanent', { value: true, secret: false });
   const mapbox = fixtureFetch([fx(forward)]);
   const worker = createWorker({ fetch: routeFetch(crm.fetch, mapbox.fetch) });
-  const env = { APP_KEYS: JSON.stringify([await generateAppKey()]), INSTALLS: kv };
+  const env = { DB: db };
   const fetch = (input: string, init?: RequestInit) => worker.fetch(new Request(input, init), env);
   const call = signedCaller({
     fetch: (request) => worker.fetch(request, env),

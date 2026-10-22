@@ -67,9 +67,45 @@ export interface AppContext {
   readonly api: AmableClient;
 }
 
+/**
+ * `base_url` of the catalog manifest of an app the CRM deploys into the
+ * workspace's Cloudflare account; each copy runs at its own Worker URL.
+ */
+export const DEPLOYED_APP_ORIGIN = 'https://deployed-app.invalid';
+
+const onDeployedOrigin = (value: string) => value === DEPLOYED_APP_ORIGIN || value.startsWith(`${DEPLOYED_APP_ORIGIN}/`);
+
+/**
+ * Where this copy of the app runs: `APP_BASE_URL` (set by the CRM when it
+ * deploys the Worker, or in `wrangler.jsonc` vars for development) when the
+ * manifest uses the deployed-app origin, the manifest `base_url` otherwise.
+ * Without `APP_BASE_URL`, the origin of `request` (when given).
+ */
+export function appBaseUrl(manifestBaseUrl: string, configured?: string | null, request?: Request): string {
+  const base = manifestBaseUrl.replace(/\/+$/, '');
+  if (!onDeployedOrigin(base)) return base;
+  const value = configured?.trim() ?? '';
+  if (value !== '') return value.replace(/\/+$/, '');
+  return request === undefined ? base : new URL(request.url).origin;
+}
+
+/** The manifest with its deployed-app URLs moved to `baseUrl` (served at `/manifest.json`). */
+export function resolveAppManifest<T extends Record<string, unknown>>(manifest: T, baseUrl: string): T {
+  const target = baseUrl.replace(/\/+$/, '');
+  const move = (value: unknown) =>
+    typeof value === 'string' && onDeployedOrigin(value) ? `${target}${value.slice(DEPLOYED_APP_ORIGIN.length)}` : value;
+  const out: Record<string, unknown> = { ...manifest };
+  for (const key of ['base_url', 'jwks_url', 'icon_url'] as const) if (key in out) out[key] = move(out[key]);
+  if (Array.isArray(out['redirect_uris'])) out['redirect_uris'] = (out['redirect_uris'] as unknown[]).map(move);
+  delete out['deployment'];
+  return out as T;
+}
+
+export type AppAssets = Readonly<Record<string, { readonly type: string; readonly body: string }>>;
+
 export interface AppHandlerOptions {
   readonly appId: string;
-  /** Manifest `base_url`. */
+  /** Manifest `base_url` (see `appBaseUrl` for apps deployed by the CRM). */
   readonly baseUrl: string;
   /** Private JWKs (or their JSON); the first one signs, all are published. */
   readonly keys: ReadonlyArray<PrivateJwk | string>;
@@ -90,6 +126,8 @@ export interface AppHandlerOptions {
   readonly screens?: Readonly<Record<string, (request: Request) => Response | Promise<Response>>>;
   /** Screen backend: POST/GET with `Authorization: Bearer <session token>`. */
   readonly screenApi?: Readonly<Record<string, (request: Request, session: SessionClaims, ctx: AppContext) => Promise<Response>>>;
+  /** Static files by path (the screens' scripts), inlined in the single-module bundle the CRM deploys. */
+  readonly assets?: AppAssets;
   readonly fetch?: Fetch;
   /** Clock override (tests). */
   readonly now?: () => number;
@@ -116,7 +154,9 @@ export function createAppHandler(options: AppHandlerOptions) {
   if (keys.length === 0) throw new Error('createAppHandler: at least one key is required');
   const now = options.now ?? Date.now;
   const credentials: AppCredentials = { appId: options.appId, key: keys[0]!, now };
-  const baseUrl = options.baseUrl.replace(/\/+$/, '');
+  const configuredBase = options.baseUrl.replace(/\/+$/, '');
+  // Deployed without APP_BASE_URL: the Worker answers on its own origin.
+  const baseOf = (url: URL) => (onDeployedOrigin(configuredBase) ? url.origin : configuredBase);
   const installPath = options.installPath ?? '/install';
   const webhookPath = options.webhookPath ?? '/webhooks';
 
@@ -147,7 +187,7 @@ export function createAppHandler(options: AppHandlerOptions) {
     return { install, api: createAmableClient({ apiBase: install.apiBase, accessToken, fetch: fetcher }) };
   }
 
-  async function install(url: URL): Promise<Response> {
+  async function install(url: URL, baseUrl: string): Promise<Response> {
     const code = url.searchParams.get('code');
     const iss = url.searchParams.get('iss');
     if (code === null || iss === null) return new Response('missing code or iss', { status: 400 });
@@ -171,7 +211,11 @@ export function createAppHandler(options: AppHandlerOptions) {
     return json(answer ?? { ok: true });
   }
 
-  async function screenCall(request: Request, handle: NonNullable<AppHandlerOptions['screenApi']>[string]): Promise<Response> {
+  async function screenCall(
+    request: Request,
+    baseUrl: string,
+    handle: NonNullable<AppHandlerOptions['screenApi']>[string],
+  ): Promise<Response> {
     const token = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
     let session: SessionClaims;
     try {
@@ -199,6 +243,7 @@ export function createAppHandler(options: AppHandlerOptions) {
     },
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
+      const baseUrl = baseOf(url);
       const path = appPath(url, baseUrl);
       if (path === null) return json({ error: 'not_found' }, 404);
       try {
@@ -207,8 +252,10 @@ export function createAppHandler(options: AppHandlerOptions) {
             headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=300' },
           });
         }
-        if (request.method === 'GET' && path === '/manifest.json' && options.manifest !== undefined) return json(options.manifest);
-        if (request.method === 'GET' && path === installPath) return await install(url);
+        if (request.method === 'GET' && path === '/manifest.json' && options.manifest !== undefined) {
+          return json(resolveAppManifest(options.manifest, baseUrl));
+        }
+        if (request.method === 'GET' && path === installPath) return await install(url, baseUrl);
         if (request.method === 'POST' && path === webhookPath) {
           return await signed(request, async (body, ctx) => {
             const type = String(body['type'] ?? body['event'] ?? '');
@@ -225,9 +272,13 @@ export function createAppHandler(options: AppHandlerOptions) {
         const call = request.method === 'POST' ? options.calls?.[path] : undefined;
         if (call !== undefined) return await signed(request, call);
         const api = options.screenApi?.[path];
-        if (api !== undefined) return await screenCall(request, api);
+        if (api !== undefined) return await screenCall(request, baseUrl, api);
         const screen = request.method === 'GET' ? options.screens?.[path] : undefined;
         if (screen !== undefined) return await screen(request);
+        const asset = request.method === 'GET' ? options.assets?.[path] : undefined;
+        if (asset !== undefined) {
+          return new Response(asset.body, { headers: { 'content-type': asset.type, 'cache-control': 'public, max-age=300' } });
+        }
         return json({ error: 'not_found' }, 404);
       } catch (error) {
         console.error('[app]', error);

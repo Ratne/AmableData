@@ -123,8 +123,10 @@ Rules worth knowing:
 - **`base_url`** may include a path (`https://apps.example.com/my-app`): several apps can share
   one domain or one Worker. `createAppHandler` strips the path before routing (`appPath()` does
   the same for your own routes), and screens should load their files and call their API with
-  relative URLs under `<base href="<base_url>/">`. The official apps run this way in the
-  [apps host](../../examples/apps/host).
+  relative URLs under `<base href="<base_url>/">`.
+- **Official apps** (the ones in `examples/apps`) are not hosted anywhere: their catalog manifest
+  has `base_url` `https://deployed-app.invalid` and a `deployment` block, and each CRM deploys
+  them into its own Cloudflare account (see [Official apps](#official-apps-run-in-each-installations-cloudflare)).
 
 - **Scopes** are the tenant permissions (`contacts:read`, `orders:write`, …) minus the ones that
   administer people, keys, apps and the workspace. `contacts:read_sensitive`,
@@ -378,6 +380,10 @@ declare `templates_endpoint`:
 | `contact.sidebar` | A card on the contact page |
 | `contact.actions` | A button in the contact header that opens your screen |
 | `dashboard.widget` | A widget on the home dashboard |
+
+An `app.page` is listed under **Apps** in the sidebar. Set `nav_group` (`crm`, `marketing`,
+`ecommerce`, `analytics`, `reports`) to list it in that group next to the built-in modules
+instead, e.g. `{ "slot": "app.page", "key": "campaigns", "nav_group": "marketing", … }`.
 
 The CRM loads `base_url + path` with `session_token`, `host`, `locale` and `theme` in the query.
 The session token is a 5-minute JWT signed by the installation (`aud` = your `base_url`) with
@@ -654,5 +660,41 @@ once. A revoked app is paused everywhere at the next sync.
   Marketplace and existing installs keep the previous manifest. Check `extension_points` in
   `/.well-known/amable-apps.json`, and set `min_version` when the app cannot work on older
   releases.
-- **Official apps share one Worker** ([apps host](../../examples/apps/host)): a deploy ships every
-  app on `main`, so `main` must always be releasable.
+- **Official apps are released, not deployed**: a new bundle reaches an installation only through
+  the catalog (see below), so `main` can move freely.
+
+## Official apps run in each installation's Cloudflare
+
+The official apps never run on AmableData's Cloudflare account: no Worker, database, secret or
+deploy step of theirs may ever point at it. Each installation runs its own copy, in its own
+Cloudflare account, and pays nothing to us for it:
+
+1. The catalog manifest declares the resources (`deployment`: one module Worker, its D1
+   databases, cron triggers) and the released bundle (`bundle_url`, a GitHub release asset of
+   this repository, and `bundle_sha256`). `base_url`, `jwks_url` and `redirect_uris` use the
+   placeholder origin `https://deployed-app.invalid`.
+2. On **Install**, the CRM downloads the bundle, checks its SHA-256 against the signed catalog and
+   deploys it as `amable-app-<id>` with the D1 database `amable-app-<id>-db` and the
+   `APP_BASE_URL` variable set to its `workers.dev` address. The installed manifest is the catalog
+   one with the placeholder replaced by that address; then the usual consent and OAuth follow.
+   - **AmableData Cloud**: the control plane deploys with the Cloudflare token saved during the
+     portal setup (`POST /v1/installation/apps/deploy`). If the customer deleted the token, the
+     install answers `cloudflare_token_inactive` and the portal asks for a new one.
+   - **Self-hosted**: the first time, an owner creates a token with Workers Scripts and D1
+     (Edit) from the prefilled link, picks the account, and the CRM keeps it encrypted
+     (**Settings → Apps → Installed → Cloudflare account for the apps**).
+3. The app creates its tables and its signing key in its own D1 on the first request
+   (`appKeysLoader`, `d1InstallStore`, `d1KeyValue` of `@amable/app-sdk`): nothing to configure.
+4. A catalog update with a new `bundle_sha256` redeploys the copy before the manifest is applied;
+   when the deploy fails, the previous version keeps running and the admins are notified.
+5. When no workspace of the installation uses the app any more, the Worker and its database are
+   deleted from the account by the periodic cleanup, at least one hour after the last uninstall.
+
+Releasing an official app: bump `version` in its manifest, run its tests, then
+`node scripts/release-app.mjs <id> --publish`. The script builds `dist/worker.mjs`
+(`scripts/bundle-app.mjs`, screens inlined), attaches it to the release `app-<id>-v<version>` and
+writes the catalog manifest (with the SHA-256) and the icon into the amable-apps checkout, for the
+catalog pull request. A published version is immutable.
+
+Apps of other developers keep the hosted model of the sections above: they run on the developer's
+infrastructure, at the developer's cost.

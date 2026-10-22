@@ -4,12 +4,13 @@
     "module": "ES2022",
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["@cloudflare/workers-types"],
+    "types": ["@cloudflare/workers-types", "node"],
     "resolveJsonModule": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  "exclude": ["src/*-screen.ts", "src/widget*.ts"]
 }

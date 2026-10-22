@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEPLOYED_APP_ORIGIN,
   appCustomFieldKey,
+  appDatabaseName,
+  appWorkerName,
+  isDeployableManifest,
   parseAppManifest,
+  resolveDeployedManifest,
   signCatalogIndex,
   validateAppInput,
   verifySignedCatalog,
@@ -117,6 +122,14 @@ describe('app manifest', () => {
     expect(noWrite.some((i) => i.startsWith('custom_fields'))).toBe(true);
   });
 
+  it('places app pages in a sidebar group', () => {
+    const ui = (entry: Record<string, unknown>) =>
+      manifest({ extensions: { ui: [{ key: 'main', path: '/ui', title: { en: 'Main' }, ...entry }] } } as Partial<AppManifestInput>);
+    expect(issuesOf(ui({ slot: 'app.page', nav_group: 'marketing' }))).toEqual([]);
+    expect(issuesOf(ui({ slot: 'app.page', nav_group: 'settings' })).join()).toMatch(/nav_group/);
+    expect(issuesOf(ui({ slot: 'app.settings', nav_group: 'marketing' })).join()).toMatch(/only for app.page/);
+  });
+
   it('namespaces owned custom fields', () => {
     expect(appCustomFieldKey('my-app', 'status')).toBe('app_my_app_status');
   });
@@ -148,6 +161,58 @@ describe('action input', () => {
     expect(validateAppInput(schema, { template: 'welcome', body: 'far too long text' })).toEqual([
       { key: 'body', code: 'too_long' },
     ]);
+  });
+});
+
+describe('deployed apps', () => {
+  const origin = DEPLOYED_APP_ORIGIN;
+  const deployment = {
+    kind: 'cloudflare_worker' as const,
+    bundle_url: 'https://github.com/Ratne/AmableData/releases/download/app-timely-1.0.0/worker.mjs',
+    bundle_sha256: 'a'.repeat(64),
+    compatibility_date: '2026-10-01',
+    d1: [{ binding: 'DB' }],
+    cron: ['* * * * *'],
+  };
+  const template = (overrides: Partial<AppManifestInput> = {}) =>
+    manifest({
+      base_url: origin,
+      jwks_url: `${origin}/.well-known/jwks.json`,
+      redirect_uris: [`${origin}/install`],
+      deployment,
+      ...overrides,
+    });
+
+  it('accepts a catalog template and resolves it on the Worker origin', () => {
+    const result = parseAppManifest(template());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(isDeployableManifest(result.manifest)).toBe(true);
+    const resolved = resolveDeployedManifest(result.manifest, 'https://amable-app-emailable.acme.workers.dev/ignored');
+    expect(resolved.base_url).toBe('https://amable-app-emailable.acme.workers.dev');
+    expect(resolved.jwks_url).toBe('https://amable-app-emailable.acme.workers.dev/.well-known/jwks.json');
+    expect(resolved.redirect_uris).toEqual(['https://amable-app-emailable.acme.workers.dev/install']);
+    expect(resolved.scopes).toEqual(result.manifest.scopes);
+    expect(parseAppManifest(resolved).ok).toBe(true);
+  });
+
+  it('keeps the placeholder origin for deployed apps only, and the icon off it', () => {
+    expect(issuesOf(template({ deployment: undefined })).join()).toMatch(/only for apps with a deployment/);
+    expect(issuesOf(template({ jwks_url: 'https://apps.example.com/jwks.json' })).join()).toMatch(/jwks_url: must be under/);
+    expect(issuesOf(manifest({ redirect_uris: [`${origin}/install`] })).join()).toMatch(/only for deployed apps/);
+    expect(issuesOf(template({ icon_url: `${origin}/icon.png` })).join()).toMatch(/icon/);
+    expect(issuesOf(template({ deployment: { ...deployment, bundle_sha256: 'XYZ' } })).join()).toMatch(/SHA-256/);
+  });
+
+  it('deploys only released bundles', () => {
+    const source = parseAppManifest(template({ deployment: { kind: 'cloudflare_worker', compatibility_date: '2026-10-01' } }));
+    expect(source.ok).toBe(true);
+    if (source.ok) expect(isDeployableManifest(source.manifest)).toBe(false);
+  });
+
+  it('names the resources after the app', () => {
+    expect(appWorkerName('timely')).toBe('amable-app-timely');
+    expect(appDatabaseName('timely', 'DB')).toBe('amable-app-timely-db');
   });
 });
 

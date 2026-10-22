@@ -11,9 +11,10 @@ import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { isStepUpRequired } from '../../../lib/step-up';
 import { apiErrorCode, useTenantAccess } from '../../developers/api';
-import { appKeys, authorizeParams, text, useAppsApi, type AppInstallView, type AppManifestView } from '../api';
+import { appKeys, authorizeParams, isDeployedApp, text, useAppsApi, type AppInstallView, type AppManifestView } from '../api';
 import type { AppDetailSearch } from '../search';
 import { AppIcon, ExtensionList, ScopeList, StatusPill, useAppLabels, VerifiedBadge } from '../components';
+import { CloudflareConnect, useDeployBlocker, useDeployThen } from '../deployment';
 
 /** App page and consent screen (catalog app, or private app from `?manifest_url=`). */
 export function AppDetailPage() {
@@ -52,6 +53,9 @@ export function AppDetailPage() {
       if (!isStepUpRequired(error)) toast.error(t('apps.install.failed', { code: apiErrorCode(error) }));
     },
   });
+  const deployed = privateUrl === undefined && manifest !== undefined && isDeployedApp(manifest);
+  const blocker = useDeployBlocker();
+  const deploy = useDeployThen(appId, () => authorize.mutate());
 
   const error = privateUrl === undefined ? listed.error : preview.error;
   if (error !== null) {
@@ -126,9 +130,32 @@ export function AppDetailPage() {
                     <Checkbox checked={accepted} onCheckedChange={(v) => setAccepted(v === true)} />
                     <span>{t('apps.install.consent', { name: manifest.name })}</span>
                   </label>
-                  <Button disabled={!accepted || authorize.isPending} onClick={() => authorize.mutate()}>
-                    {install?.status === 'pending' ? t('apps.install.retry') : t('apps.install.action')}
+                  {deployed ? (
+                    <p className="text-xs text-(--obsidian-dashboard-shell-text-subtle)">{t('apps.deploy.where')}</p>
+                  ) : null}
+                  {deployed && blocker !== null ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>{blocker.message}</AlertDescription>
+                    </Alert>
+                  ) : null}
+                  {deployed && blocker?.connect === true ? <CloudflareConnect /> : null}
+                  <Button
+                    disabled={!accepted || authorize.isPending || deploy.busy || (deployed && blocker !== null)}
+                    onClick={() => (deployed ? deploy.run() : authorize.mutate())}
+                  >
+                    {deploy.phase === 'deploying'
+                      ? t('apps.deploy.deploying')
+                      : deploy.phase === 'waiting'
+                        ? t('apps.deploy.waiting')
+                        : install?.status === 'pending'
+                          ? t('apps.install.retry')
+                          : t('apps.install.action')}
                   </Button>
+                  {deploy.error !== null ? (
+                    <p role="alert" className="text-xs text-destructive">
+                      {deploy.error === 'unreachable' ? t('apps.deploy.unreachable') : deploy.error}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-(--obsidian-dashboard-shell-text-subtle)">{t('apps.install.redirect')}</p>
                 </>
               ) : running ? (

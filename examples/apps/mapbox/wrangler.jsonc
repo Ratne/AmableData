@@ -1,10 +1,11 @@
 {
+  // Local development only (`pnpm run dev`). In production the CRM deploys this
+  // app into the workspace's own Cloudflare account (see docs/apps/README.md).
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "amable-app-mapbox",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
   "assets": { "directory": "./public", "binding": "ASSETS" },
-  "kv_namespaces": [{ "binding": "INSTALLS", "id": "replace-with-your-namespace-id" }],
-  // Secret: APP_KEYS (amable-app keys secret | wrangler secret put APP_KEYS)
+  "d1_databases": [{ "binding": "DB", "database_name": "amable-app-mapbox-db" }],
 }

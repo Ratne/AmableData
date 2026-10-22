@@ -1,13 +1,13 @@
-import { generateAppKey, kvInstallStore } from '@amable/app-sdk';
+import { d1InstallStore } from '@amable/app-sdk';
 import {
   fakeCrm,
   fixtureFetch,
-  memoryKv,
   routeFetch,
   signedCaller,
   testInstall,
   type Fixture,
 } from '@amable/app-sdk/testing';
+import { memoryD1 } from '@amable/app-sdk/testing/d1';
 import { describe, expect, it } from 'vitest';
 import { passed, runConformance } from '../../../../packages/app-cli/src/conformance';
 import manifest from '../manifest.json';
@@ -35,16 +35,17 @@ const API_KEY = 'live_test_key_1234';
 const VERIFIED = [deliverable, undeliverable, disposable, roleRisky, typo].map(fx);
 
 async function setup(options: { apiKey?: string | null } = {}) {
-  const kv = memoryKv();
+  const db = memoryD1();
   // One install per test: the API key cache is per install id.
   const install = testInstall({ scopes: manifest.scopes });
-  await kvInstallStore(kv).put(install);
+  await d1InstallStore(db).put(install);
   const crm = fakeCrm();
   if (options.apiKey !== null)
     crm.data.set('emailable_api_key', { value: options.apiKey ?? API_KEY, secret: true });
   const emailable = fixtureFetch([...VERIFIED, fx(account)]);
   const worker = createWorker({ fetch: routeFetch(crm.fetch, emailable.fetch) });
-  const env = { APP_KEYS: JSON.stringify([await generateAppKey()]), INSTALLS: kv };
+  // As deployed by the CRM: only the database, the keys are created in it.
+  const env = { DB: db };
   const fetch = (input: string, init?: RequestInit) => worker.fetch(new Request(input, init), env);
   const call = signedCaller({
     fetch: (request) => worker.fetch(request, env),

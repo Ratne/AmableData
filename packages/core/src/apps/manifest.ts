@@ -41,6 +41,10 @@ export const APP_UI_SLOTS = [
 ] as const;
 export type AppUiSlot = (typeof APP_UI_SLOTS)[number];
 
+/** Sidebar groups an `app.page` can join; without one it is listed under "Apps". */
+export const APP_NAV_GROUPS = ['crm', 'marketing', 'ecommerce', 'analytics', 'reports'] as const;
+export type AppNavGroup = (typeof APP_NAV_GROUPS)[number];
+
 /** Extension points an installation advertises in `/.well-known/amable-apps.json`. */
 export const APP_EXTENSION_POINTS = [
   'contact.validate',
@@ -191,6 +195,8 @@ const uiExtensionSchema = z.strictObject({
   title: shortText,
   /** Initial iframe height in px (the app can resize through the bridge). */
   height: z.number().int().min(40).max(2000).optional(),
+  /** `app.page` only: the sidebar group the page is listed in. */
+  nav_group: z.enum(APP_NAV_GROUPS).optional(),
 });
 
 const formConnectorSchema = z.strictObject({
@@ -216,6 +222,35 @@ const channelSchema = z.strictObject({
   /** Signed POST answering `{ templates: [...] }`: the approved templates the team can send. */
   templates_endpoint: relativePath.optional(),
 });
+
+/**
+ * Origin of an app that runs in the workspace's own Cloudflare account: the
+ * catalog manifest uses it in `base_url`, `jwks_url` and `redirect_uris`, and
+ * every installation replaces it with the URL of the Worker it deployed
+ * (`resolveDeployedManifest`). `.invalid` never resolves (RFC 2606).
+ */
+export const DEPLOYED_APP_ORIGIN = 'https://deployed-app.invalid';
+
+/**
+ * How the CRM deploys the app into the workspace's Cloudflare account: one
+ * module Worker (`bundle_url`, checked against `bundle_sha256`), its D1
+ * databases and cron triggers. Nothing runs in the catalog maintainer's account.
+ * The app's source manifest declares the resources; the release adds the
+ * bundle (`bundle_url`, `bundle_sha256`) to the catalog copy.
+ */
+export const appDeploymentSchema = z.strictObject({
+  kind: z.literal('cloudflare_worker'),
+  bundle_url: httpsUrl.optional(),
+  bundle_sha256: z.string().regex(/^[0-9a-f]{64}$/, 'lowercase hex SHA-256').optional(),
+  compatibility_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  compatibility_flags: z.array(z.string().regex(/^[a-z0-9_]{1,60}$/)).max(10).default([]),
+  d1: z
+    .array(z.strictObject({ binding: z.string().regex(/^[A-Z][A-Z0-9_]{0,39}$/) }))
+    .max(3)
+    .default([]),
+  cron: z.array(z.string().min(9).max(60)).max(3).default([]),
+});
+export type AppDeployment = z.infer<typeof appDeploymentSchema>;
 
 const customFieldSchema = z.strictObject({
   key: z.string().regex(KEY_RE),
@@ -286,6 +321,7 @@ export const appManifestSchema = z
         channels: z.array(channelSchema).max(5).optional(),
       })
       .default({}),
+    deployment: appDeploymentSchema.optional(),
   })
   .superRefine((manifest, ctx) => {
     const issue = (path: (string | number)[], message: string) =>
@@ -347,6 +383,24 @@ export const appManifestSchema = z
     if ((ext.ui ?? []).filter((u) => u.slot === 'app.settings').length > 1) {
       issue(['extensions', 'ui'], 'at most one app.settings screen');
     }
+    (ext.ui ?? []).forEach((u, i) => {
+      if (u.nav_group !== undefined && u.slot !== 'app.page') issue(['extensions', 'ui', i, 'nav_group'], 'only for app.page');
+    });
+
+    const onDeployed = (value: string) => value === DEPLOYED_APP_ORIGIN || value.startsWith(`${DEPLOYED_APP_ORIGIN}/`);
+    const deployedTemplate = manifest.base_url === DEPLOYED_APP_ORIGIN;
+    if (deployedTemplate && manifest.deployment === undefined) {
+      issue(['base_url'], `${DEPLOYED_APP_ORIGIN} is only for apps with a deployment`);
+    }
+    if (onDeployed(manifest.icon_url)) issue(['icon_url'], 'the icon is shown before the app is deployed: host it elsewhere');
+    for (const [path, value] of [
+      [['jwks_url'], manifest.jwks_url],
+      ...manifest.redirect_uris.map((uri, i) => [['redirect_uris', i], uri] as const),
+    ] as Array<readonly [(string | number)[], string]>) {
+      if (onDeployed(value) !== deployedTemplate) {
+        issue(path, deployedTemplate ? `must be under ${DEPLOYED_APP_ORIGIN}` : `${DEPLOYED_APP_ORIGIN} is only for deployed apps`);
+      }
+    }
 
     // Development URLs (http://localhost) are fine for private apps only.
     const base = new URL(manifest.base_url);
@@ -386,6 +440,44 @@ export function parseAppManifest(input: unknown): ManifestCheck {
 /** True when the manifest uses development URLs (allowed only for private apps). */
 export function isDevelopmentManifest(manifest: AppManifest): boolean {
   return !manifest.base_url.startsWith('https://');
+}
+
+export type ReleasedDeployment = AppDeployment & { bundle_url: string; bundle_sha256: string };
+
+/** Catalog manifest of an app the CRM deploys into the workspace's Cloudflare account. */
+export function isDeployableManifest(manifest: AppManifest): manifest is AppManifest & { deployment: ReleasedDeployment } {
+  return (
+    manifest.deployment?.bundle_url !== undefined &&
+    manifest.deployment.bundle_sha256 !== undefined &&
+    manifest.base_url === DEPLOYED_APP_ORIGIN
+  );
+}
+
+/**
+ * The manifest of one deployed copy: every `DEPLOYED_APP_ORIGIN` URL moved to
+ * the Worker's origin. Everything else (scopes, endpoints, privacy) is the
+ * catalog's, so a deployed app can never claim more than was reviewed.
+ */
+export function resolveDeployedManifest(manifest: AppManifest, origin: string): AppManifest {
+  if (!isDeployableManifest(manifest)) throw new Error(`${manifest.id} is not a deployable app`);
+  const target = new URL(origin).origin;
+  const move = (value: string) => `${target}${value.slice(DEPLOYED_APP_ORIGIN.length)}`;
+  return {
+    ...manifest,
+    base_url: target,
+    jwks_url: move(manifest.jwks_url),
+    redirect_uris: manifest.redirect_uris.map(move),
+  };
+}
+
+/** Worker script of a deployed app in the workspace's account. */
+export function appWorkerName(appId: string): string {
+  return `amable-app-${appId}`;
+}
+
+/** D1 database of a deployed app (`DB` → `amable-app-timely-db`). */
+export function appDatabaseName(appId: string, binding: string): string {
+  return `${appWorkerName(appId)}-${binding.toLowerCase().replace(/_/g, '-')}`;
 }
 
 export function appEndpointUrl(manifest: Pick<AppManifest, 'base_url'>, path: string): string {

@@ -27,5 +27,7 @@ Additions:
   for the contact editor in place of the built-in OpenStreetMap search.
 - Manifest `version` (semver), shown to admins. Apps installed from a URL get manifest updates
   like catalog ones: `manifest_url` is fetched again every 6 hours.
+- `nav_group` on `app.page` screens: the sidebar group (`crm`, `marketing`, `ecommerce`,
+  `analytics`, `reports`) the page is listed in instead of "Apps".
 - `@amable/app-sdk/testing`: fixtures of recorded provider answers, an in-memory CRM, signed calls
   and screen session tokens for offline tests.

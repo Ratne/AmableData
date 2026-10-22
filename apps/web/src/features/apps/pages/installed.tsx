@@ -15,6 +15,7 @@ import { apiErrorCode, useTenantAccess } from '../../developers/api';
 import { formatDateTime } from '../../developers/components';
 import { appKeys, text, useAppsApi, type AppInstallView } from '../api';
 import { AppIcon, ScopeList, StatusPill, useAppLabels, VerifiedBadge } from '../components';
+import { CloudflareAppsCard } from '../deployment';
 
 function useInstallAction<T>(fn: (id: string) => Promise<T>, success: string) {
   const { slug } = useAppsApi();
@@ -228,6 +229,7 @@ export function InstalledAppsPage() {
         {rows.map((install) => (
           <InstallCard key={install.id} install={install} onUninstall={() => setTarget(install)} />
         ))}
+        <CloudflareAppsCard />
       </PageBody>
       <Dialog open={target !== null} onOpenChange={(open) => (open ? undefined : setTarget(null))}>
         <DialogContent className="max-w-lg">

@@ -1,11 +1,13 @@
 import {
+  appBaseUrl,
+  appKeysLoader,
   createAppHandler,
-  kvInstallStore,
+  d1InstallStore,
   type AppContext,
-  type KeyValue,
-  type PrivateJwk,
+  type SqlDatabase,
 } from '@amable/app-sdk';
 import manifest from '../manifest.json';
+import { assets } from './assets';
 import {
   checkApiKey,
   hookAnswer,
@@ -22,12 +24,20 @@ import { settingsPage } from './page';
  * the "Verify email" automation block returns the outcome to the flow.
  * The workspace's own Emailable API key is stored encrypted in the app data
  * of the installation; this Worker keeps nothing about contacts.
+ *
+ * It runs in the workspace's own Cloudflare account, deployed by the CRM: its
+ * D1 database keeps the installs and the signing keys created on first use.
  */
 
 export interface Env {
-  APP_KEYS: string;
-  INSTALLS: KeyValue;
+  DB: SqlDatabase;
+  /** URL of this Worker, set by the CRM when it deploys the app. */
+  APP_BASE_URL?: string;
+  /** Signing keys, only for a copy hosted elsewhere; normally created in DB. */
+  APP_KEYS?: string;
 }
+
+const keysOf = appKeysLoader({ kid: 'emailable-1' });
 
 const API_KEY = 'emailable_api_key';
 const KEY_TTL_MS = 5 * 60_000;
@@ -61,12 +71,14 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
   const outbound = deps.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init));
   return {
     async fetch(request: Request, env: Env): Promise<Response> {
+      const baseUrl = appBaseUrl(manifest.base_url, env.APP_BASE_URL, request);
       const app = createAppHandler({
         appId: manifest.id,
-        baseUrl: manifest.base_url,
-        keys: JSON.parse(env.APP_KEYS) as PrivateJwk[],
-        store: kvInstallStore(env.INSTALLS),
+        baseUrl,
+        keys: await keysOf(env),
+        store: d1InstallStore(env.DB),
         manifest,
+        assets,
         fetch: outbound,
         async onEvent(event, ctx) {
           if (event['type'] === 'app.uninstalled') keyCache.delete(ctx.install.id);
@@ -152,7 +164,7 @@ export function createWorker(deps: { fetch?: Fetch } = {}) {
           '/privacy/data': async () => ({ data: null }),
         },
         screens: {
-          '/ui/settings': () => settingsPage(manifest.base_url),
+          '/ui/settings': () => settingsPage(baseUrl),
         },
         screenApi: {
           '/api/settings': async (req, _session, ctx) => {

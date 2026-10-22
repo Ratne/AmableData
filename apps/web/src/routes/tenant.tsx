@@ -75,26 +75,28 @@ function TenantLayout() {
     href: `/t/${tenant}/${module.path}`,
   });
 
+  const toAppItem = ({ app, ui }: (typeof appPages)[number]) => ({
+    id: `app:${app.app_id}:${ui.key}`,
+    label: localized(ui.title, locale),
+    icon: AppWindow,
+    href: `/t/${tenant}/apps/${app.app_id}/${ui.key}`,
+  });
+  const groupIds = new Set(NAV_GROUPS.map((group) => group.id));
+  const groupedApps = appPages.filter(({ ui }) => ui.nav_group !== undefined && groupIds.has(ui.nav_group));
+  const ungroupedApps = appPages.filter((page) => !groupedApps.includes(page));
+
   const navigation: DashboardShellNavSection[] = [
     ...NAV_GROUPS.map((group) => ({
       id: group.id,
       title: t(group.titleKey),
-      items: group.modules.filter(allowed).map(toItem),
+      items: [
+        ...group.modules.filter(allowed).map(toItem),
+        ...groupedApps.filter(({ ui }) => ui.nav_group === group.id).map(toAppItem),
+      ],
     })).filter((section) => section.items.length > 0),
-    ...(appPages.length === 0
+    ...(ungroupedApps.length === 0
       ? []
-      : [
-          {
-            id: 'apps',
-            title: t('nav.group.apps'),
-            items: appPages.map(({ app, ui }) => ({
-              id: `app:${app.app_id}:${ui.key}`,
-              label: localized(ui.title, locale),
-              icon: AppWindow,
-              href: `/t/${tenant}/apps/${app.app_id}/${ui.key}`,
-            })),
-          },
-        ]),
+      : [{ id: 'apps', title: t('nav.group.apps'), items: ungroupedApps.map(toAppItem) }]),
     ...(import.meta.env.DEV ? [{ id: 'dev', title: 'Dev', items: DEV_MODULES.map(toItem) }] : []),
   ];
 

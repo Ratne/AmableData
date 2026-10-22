@@ -7,7 +7,7 @@
   "scripts": {
     "build:screens": "esbuild src/screen.ts --bundle --format=esm --target=es2022 --outfile=public/screen.js",
     "dev": "pnpm run build:screens && wrangler dev",
-    "deploy": "pnpm run build:screens && wrangler deploy",
+    "bundle": "pnpm run build:screens && node ../../../scripts/bundle-app.mjs .",
     "test": "vitest run --root ../../.. examples/apps/emailable",
     "typecheck": "tsc -p . && tsc -p tsconfig.scripts.json",
     "record-fixtures": "esbuild scripts/record-fixtures.ts --bundle --platform=node --format=esm --outfile=.wrangler/record-fixtures.mjs --log-level=warning && node .wrangler/record-fixtures.mjs"

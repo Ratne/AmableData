@@ -9,7 +9,7 @@ import { appOriginOf } from '../providers/select';
  * lifecycle change that triggered it.
  */
 
-export type AppNotice = 'paused' | 'revoked' | 'scopes_pending';
+export type AppNotice = 'paused' | 'revoked' | 'scopes_pending' | 'update_failed';
 
 const COPY: Record<AppNotice, Record<'en' | 'it', { subject: string; body: string }>> = {
   paused: {
@@ -40,6 +40,16 @@ const COPY: Record<AppNotice, Record<'en' | 'it', { subject: string; body: strin
     it: {
       subject: 'L\'app "{app}" chiede nuovi permessi',
       body: 'Un aggiornamento di "{app}" in {tenant} richiede nuovi permessi: {scopes}. Continua a funzionare con quelli attuali finché un admin non approva.',
+    },
+  },
+  update_failed: {
+    en: {
+      subject: 'Update of "{app}" not installed',
+      body: 'The new version of "{app}" could not be deployed to your Cloudflare account: {reason}. {tenant} keeps using the current version; the update is retried automatically.',
+    },
+    it: {
+      subject: 'Aggiornamento di "{app}" non installato',
+      body: 'La nuova versione di "{app}" non è stata deployata nel tuo account Cloudflare: {reason}. {tenant} continua a usare la versione attuale; l\'aggiornamento viene ritentato in automatico.',
     },
   },
 };

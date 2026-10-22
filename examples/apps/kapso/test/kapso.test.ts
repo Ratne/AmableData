@@ -1,13 +1,13 @@
-import { generateAppKey, kvInstallStore } from '@amable/app-sdk';
+import { d1InstallStore } from '@amable/app-sdk';
 import {
   fakeCrm,
   fixtureFetch,
-  memoryKv,
   routeFetch,
   signedCaller,
   testInstall,
   type Fixture,
 } from '@amable/app-sdk/testing';
+import { memoryD1 } from '@amable/app-sdk/testing/d1';
 import { describe, expect, it } from 'vitest';
 import { passed, runConformance } from '../../../../packages/app-cli/src/conformance';
 import manifest from '../manifest.json';
@@ -39,6 +39,8 @@ import businessAppEcho from './fixtures/kapso/webhooks/message-sent-business-app
 import receivedBatch from './fixtures/kapso/webhooks/received-batch.json';
 
 const fx = (value: unknown) => value as Fixture;
+/** Where the CRM deployed this copy (`APP_BASE_URL`). */
+const BASE = 'https://amable-app-kapso.acme.workers.dev';
 const API_KEY = 'kapso_test_key_0123456789';
 const HOOK_SECRET = 'kapso_hook_secret_0123456789';
 const PRODUCTION = {
@@ -62,9 +64,9 @@ const TEMPLATES = templatesList.response.body.data;
 async function setup(
   options: { number?: typeof PRODUCTION | typeof SANDBOX | null; apiKey?: string | null } = {},
 ) {
-  const kv = memoryKv();
+  const db = memoryD1();
   const install = testInstall({ scopes: manifest.scopes });
-  await kvInstallStore(kv).put(install);
+  await d1InstallStore(db).put(install);
   const crm = fakeCrm();
   if (options.apiKey !== null)
     crm.data.set('kapso_api_key', { value: options.apiKey ?? API_KEY, secret: true });
@@ -89,17 +91,17 @@ async function setup(
     ].map(fx),
   );
   const worker = createWorker({ fetch: routeFetch(crm.fetch, kapso.fetch) });
-  const env = { APP_KEYS: JSON.stringify([await generateAppKey()]), INSTALLS: kv };
+  const env = { DB: db, APP_BASE_URL: BASE };
   const fetch = (request: Request) => worker.fetch(request, env);
-  const call = signedCaller({ fetch, baseUrl: manifest.base_url, install });
+  const call = signedCaller({ fetch, baseUrl: BASE, install });
   const screen = async (path: string, init: { method?: string; body?: unknown } = {}) => {
     const token = await crm.sessionToken({
       appId: manifest.id,
-      audience: manifest.base_url,
+      audience: BASE,
       install,
     });
     const response = await fetch(
-      new Request(`${manifest.base_url}${path}`, {
+      new Request(`${BASE}${path}`, {
         method: init.method ?? 'GET',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
@@ -110,7 +112,7 @@ async function setup(
   const webhook = async (event: { event: string; body: unknown }, secret = HOOK_SECRET) => {
     const raw = JSON.stringify(event.body);
     const response = await fetch(
-      new Request(`${manifest.base_url}/inbound/${install.id}`, {
+      new Request(`${BASE}/inbound/${install.id}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -122,7 +124,7 @@ async function setup(
     );
     return response.status;
   };
-  return { kv, install, crm, kapso, fetch, call, screen, webhook, env };
+  return { db, install, crm, kapso, fetch, call, screen, webhook, env };
 }
 
 describe('kapso: templates', () => {
@@ -613,7 +615,7 @@ describe('kapso: settings, onboarding and templates page', () => {
     const hook = (
       created.body as { whatsapp_webhook: { url: string; secret_key: string; events: string[] } }
     ).whatsapp_webhook;
-    expect(hook.url).toBe(`https://apps.amabledata.com/kapso/inbound/${app.install.id}`);
+    expect(hook.url).toBe(`${BASE}/inbound/${app.install.id}`);
     expect(hook.events).toContain('whatsapp.contact.marketing_preference_changed');
     expect(app.crm.data.get('kapso_webhook_secret')).toEqual({
       value: hook.secret_key,
@@ -641,7 +643,7 @@ describe('kapso: settings, onboarding and templates page', () => {
       setup_link: { success_redirect_url: string };
     };
     const success = request.setup_link.success_redirect_url;
-    expect(success).toMatch(/^https:\/\/apps\.amabledata\.com\/kapso\/setup\/connected\/[0-9a-f]{32}$/);
+    expect(success).toMatch(/^https:\/\/amable-app-kapso\.acme\.workers\.dev\/setup\/connected\/[0-9a-f]{32}$/);
 
     // Kapso sends the admin back with the new number.
     const back = await app.fetch(
@@ -764,7 +766,7 @@ describe('kapso: privacy and conformance', () => {
         })
       ).body,
     ).toEqual({ data: null });
-    expect([...app.kv.map.keys()].filter((k) => k.startsWith('wa:'))).toEqual([]);
+    expect(app.db.sqlite.prepare(`SELECT key FROM amable_kv WHERE key LIKE 'wa:%'`).all()).toEqual([]);
   });
 
   it('passes the conformance suite', async () => {

@@ -6,7 +6,8 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./testing/d1": "./src/testing-d1.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

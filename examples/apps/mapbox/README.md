@@ -37,9 +37,25 @@ geocoding response and the 401, 403 and 429 errors.
 
 ## Hosting
 
-The official copy runs at `https://apps.amabledata.com/mapbox` inside the [apps host](../host),
-one Worker for every official app. To run your own copy, follow the steps in the
-[Emailable README](../emailable#hosting) with `@amable/example-app-mapbox`.
+The app never runs on AmableData's Cloudflare account. When a workspace installs it from the
+Marketplace, the CRM deploys its bundle into the installation's **own** Cloudflare account: the
+Worker `amable-app-mapbox` on its `workers.dev` address and the D1 database `amable-app-mapbox-db`.
+On AmableData Cloud the token saved in the portal during setup is used; on a self-hosted
+installation an owner connects a token (Workers Scripts and D1, Edit) the first time. Uninstalling
+deletes the Worker and the database.
+
+There is nothing to configure: on the first request the app creates its tables and its Ed25519
+signing key in its database (`amable_app_keys`, one row written with `INSERT OR IGNORE`, so
+isolates starting together end up with the same key).
+
+```sh
+pnpm --filter @amable/example-app-mapbox dev                  # local Worker with a local D1 (wrangler.jsonc)
+node scripts/release-app.mjs mapbox --publish   # maintainers, from the repo root, after bumping "version"
+```
+
+The release script builds `dist/worker.mjs` (screens inlined), attaches it to the GitHub release
+`app-mapbox-v<version>` and writes the catalog manifest with its SHA-256 into the
+[amable-apps](https://github.com/Ratne/amable-apps) checkout next to this repository.
 
 ## Privacy
 

@@ -17,13 +17,13 @@
     "email": "apps@amabledata.com"
   },
   "categories": ["data_quality"],
-  "icon_url": "https://apps.amabledata.com/emailable/icon.png",
+  "icon_url": "https://raw.githubusercontent.com/Ratne/amable-apps/main/apps/emailable/icon.png",
   "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/emailable",
   "support_url": "https://github.com/Ratne/AmableData/issues",
   "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/emailable#privacy",
-  "base_url": "https://apps.amabledata.com/emailable",
-  "jwks_url": "https://apps.amabledata.com/emailable/.well-known/jwks.json",
-  "redirect_uris": ["https://apps.amabledata.com/emailable/install"],
+  "base_url": "https://deployed-app.invalid",
+  "jwks_url": "https://deployed-app.invalid/.well-known/jwks.json",
+  "redirect_uris": ["https://deployed-app.invalid/install"],
   "api_version": "2026-10",
   "scopes": ["contacts:read", "contacts:write"],
   "webhooks": {
@@ -104,5 +104,10 @@
         "height": 260
       }
     ]
+  },
+  "deployment": {
+    "kind": "cloudflare_worker",
+    "compatibility_date": "2026-10-01",
+    "d1": [{ "binding": "DB" }]
   }
 }

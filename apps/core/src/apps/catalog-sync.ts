@@ -1,15 +1,18 @@
 import {
   CATALOG_PUBLIC_KEYS,
   DEFAULT_CATALOG_URL,
+  DEPLOYED_APP_ORIGIN,
   manifestHash,
   parseAppManifest,
   verifySignedCatalog,
   type AppManifest,
 } from '@amable/core/apps';
 import type { Env } from '../env';
+import { deployedManifest, ensureAppDeployed, isCurrent, listDeployments } from './deployer';
 import { AppError } from './errors';
 import { appFetch, type AppHttpResponse } from './http';
 import { applyManifestUpdate, revokeApp } from './lifecycle';
+import { notifyAppAdmins } from './notify';
 import { installsOfApp, toInstall, type AppInstall, type InstallRow } from './store';
 
 /**
@@ -127,6 +130,7 @@ export async function runCatalogSync(
       r.manifest_hash,
     ]),
   );
+  const deployments = new Map((await listDeployments(env.DB)).map((d) => [d.appId, d]));
   const seen = new Set<string>();
   const updates: Array<{ manifest: AppManifest; hash: string }> = [];
   const revocations: Array<{ id: string; reason: string }> = [];
@@ -154,7 +158,10 @@ export async function runCatalogSync(
       ),
     );
     if (entry.revoked) revocations.push({ id, reason: entry.revoked_reason ?? 'revoked by the marketplace' });
-    else if (existing.get(id) !== hash) updates.push({ manifest: entry.manifest, hash });
+    else if (existing.get(id) !== hash || (deployments.has(id) && !isCurrent(deployments.get(id)!, entry.manifest))) {
+      // Also a bundle whose redeploy failed at a previous sync.
+      updates.push({ manifest: entry.manifest, hash });
+    }
   }
   // Apps that left the index stay installed where they are; only the listing goes.
   for (const id of existing.keys()) {
@@ -164,9 +171,24 @@ export async function runCatalogSync(
 
   for (const revocation of revocations) await revokeApp(env, revocation.id, revocation.reason, nowMs);
   for (const update of updates) {
-    for (const install of await installsOfApp(env.DB, update.manifest.id)) {
-      if (install.source !== 'catalog') continue;
-      await applyManifestUpdate(env, install, update.manifest, update.hash, nowMs).catch((error: unknown) => {
+    const installs = (await installsOfApp(env.DB, update.manifest.id)).filter((install) => install.source === 'catalog');
+    if (installs.length === 0) continue;
+    let manifest = update.manifest;
+    if (manifest.base_url === DEPLOYED_APP_ORIGIN) {
+      // New bundle first: the installs move to the new manifest only once it runs.
+      try {
+        manifest = deployedManifest(manifest, await ensureAppDeployed(env, manifest, nowMs));
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'deploy failed';
+        console.error(`[apps] redeploy of ${manifest.id} failed:`, reason);
+        for (const tenantId of new Set(installs.map((i) => i.tenantId))) {
+          await notifyAppAdmins(env, tenantId, 'update_failed', { app: manifest.name, reason });
+        }
+        continue;
+      }
+    }
+    for (const install of installs) {
+      await applyManifestUpdate(env, install, manifest, update.hash, nowMs).catch((error: unknown) => {
         console.error(`[apps] update ${install.id} failed:`, error instanceof Error ? error.message : error);
       });
     }
@@ -251,6 +273,9 @@ export async function fetchPrivateManifest(
   }
   const check = parseAppManifest(raw);
   if (!check.ok) throw new AppError(422, 'invalid_manifest', 'the manifest is not valid', check.issues);
+  if (check.manifest.base_url === DEPLOYED_APP_ORIGIN) {
+    throw new AppError(422, 'invalid_manifest', 'apps deployed into your Cloudflare account install only from the marketplace');
+  }
   if (check.manifest.base_url.startsWith('http://') && env.ENVIRONMENT !== 'dev') {
     throw new AppError(422, 'invalid_manifest', 'development manifests (http://localhost) need ENVIRONMENT=dev');
   }

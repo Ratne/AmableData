@@ -1,5 +1,6 @@
 import type { Env } from '../env';
 import { refreshPrivateInstalls, runCatalogSync } from './catalog-sync';
+import { releaseUnusedDeployments } from './deployer';
 import { finalizeUninstalls } from './lifecycle';
 import { pruneAppMetrics } from './metrics';
 
@@ -11,6 +12,7 @@ export async function runAppsCron(env: Env, nowMs: number): Promise<void> {
     ['catalog sync', () => runCatalogSync(env, nowMs)],
     ['private manifests refresh', () => refreshPrivateInstalls(env, nowMs)],
     ['uninstall cleanup', () => finalizeUninstalls(env, nowMs)],
+    ['unused app deployments', () => releaseUnusedDeployments(env, nowMs)],
     ['metrics retention', () => pruneAppMetrics(env.DB, nowMs)],
     [
       'oauth cleanup',
