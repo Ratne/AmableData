@@ -90,6 +90,25 @@ export interface StripeChargeSummary {
   amount_refunded: number;
 }
 
+export interface StripeWebhookEndpoint {
+  id: string;
+  object: 'webhook_endpoint';
+  url: string;
+  /** Only in the response that creates the endpoint. */
+  secret?: string;
+}
+
+/** What the checkout webhook handles (gateway.ts `stripeWebhook`). */
+export const STRIPE_WEBHOOK_EVENTS = [
+  'payment_intent.succeeded',
+  'payment_intent.processing',
+  'payment_intent.payment_failed',
+  'payment_intent.canceled',
+  'setup_intent.succeeded',
+  'setup_intent.setup_failed',
+  'charge.refunded',
+] as const;
+
 type Param = string | number | boolean | null | undefined | Param[] | { [key: string]: Param };
 
 /** `a[b][c]=…` bracket encoding of nested params (Stripe's form convention). */
@@ -139,7 +158,7 @@ export class StripeClient {
   ) {}
 
   async request<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     path: string,
     params: Record<string, Param> = {},
     idempotencyKey?: string,
@@ -169,6 +188,25 @@ export class StripeClient {
   /** Cheap authenticated call to validate a secret key. */
   async verify(): Promise<void> {
     await this.request('GET', '/v1/balance');
+  }
+
+  /** Our endpoints are found by URL: the signing secret is only returned when an endpoint is created. */
+  async webhookEndpoints(): Promise<StripeWebhookEndpoint[]> {
+    const page = await this.request<{ data: StripeWebhookEndpoint[] }>('GET', '/v1/webhook_endpoints', { limit: 100 });
+    return page.data;
+  }
+
+  createWebhookEndpoint(params: { url: string; events: readonly string[]; description: string }): Promise<StripeWebhookEndpoint> {
+    return this.request('POST', '/v1/webhook_endpoints', {
+      url: params.url,
+      enabled_events: [...params.events],
+      api_version: STRIPE_API_VERSION,
+      description: params.description,
+    });
+  }
+
+  deleteWebhookEndpoint(id: string): Promise<{ id: string; deleted: boolean }> {
+    return this.request('DELETE', `/v1/webhook_endpoints/${encodeURIComponent(id)}`);
   }
 
   /** Id of the account the key belongs to; null when the key may not read it (restricted keys). */

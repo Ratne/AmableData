@@ -217,6 +217,8 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
     success: t('commerce.stripe.saved'),
     onSuccess: (next: StripeSettings) => {
       if (next.account_changed === true) toast.warning(t('commerce.stripe.accountChanged'));
+      if (next.webhook_setup_error) toast.warning(t('commerce.stripe.webhookAutoFailed', { message: next.webhook_setup_error }));
+      setWebhookSecret('');
       adopt(next);
     },
   });
@@ -250,6 +252,8 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
           </Pill>
           {initial.webhook_secret_hint === null ? (
             <span className="text-amber-700 dark:text-amber-300">{t('commerce.stripe.webhookMissing')}</span>
+          ) : initial.webhook_managed ? (
+            <span className="text-muted-foreground">{t('commerce.stripe.webhookManaged')}</span>
           ) : null}
         </p>
       ) : null}
@@ -285,27 +289,31 @@ function StripeForm({ initial }: { initial: StripeSettings }) {
           <Input id={id} type="password" className="font-mono" autoComplete="new-password" value={secret} placeholder="sk_live_… / rk_live_…" onChange={(e) => setSecret(e.target.value)} />
         )}
       </FormField>
-      <FormField
-        label={t('commerce.stripe.webhookSecret')}
-        hint={initial.webhook_secret_hint ? t('commerce.stripe.keepHint', { hint: initial.webhook_secret_hint }) : t('commerce.stripe.webhookSecretHint')}
-        error={webhookValid ? null : t('commerce.stripe.webhookSecretInvalid')}
-      >
-        {(id) => (
-          <Input id={id} type="password" className="font-mono" autoComplete="new-password" value={webhookSecret} placeholder="whsec_…" onChange={(e) => setWebhookSecret(e.target.value)} />
-        )}
-      </FormField>
-      {initial.webhook_url ? (
-        <div className="grid gap-1 text-sm">
-          <span className="font-medium">{t('commerce.stripe.webhookUrl')}</span>
-          <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs">{initial.webhook_url}</code>
-            <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(initial.webhook_url ?? '')}>
-              <Copy aria-hidden /> {t('common.copy')}
-            </Button>
+      <details className="grid gap-3 text-sm" open={initial.configured && !initial.webhook_managed}>
+        <summary className="cursor-pointer font-medium">{t('commerce.stripe.webhookManual')}</summary>
+        <p className="mt-2 text-muted-foreground">{t('commerce.stripe.webhookManualHint')}</p>
+        <FormField
+          label={t('commerce.stripe.webhookSecret')}
+          hint={initial.webhook_secret_hint ? t('commerce.stripe.keepHint', { hint: initial.webhook_secret_hint }) : t('commerce.stripe.webhookSecretHint')}
+          error={webhookValid ? null : t('commerce.stripe.webhookSecretInvalid')}
+        >
+          {(id) => (
+            <Input id={id} type="password" className="font-mono" autoComplete="new-password" value={webhookSecret} placeholder="whsec_…" onChange={(e) => setWebhookSecret(e.target.value)} />
+          )}
+        </FormField>
+        {initial.webhook_url ? (
+          <div className="grid gap-1">
+            <span className="font-medium">{t('commerce.stripe.webhookUrl')}</span>
+            <div className="flex items-center gap-2">
+              <code className="min-w-0 flex-1 overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs">{initial.webhook_url}</code>
+              <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(initial.webhook_url ?? '')}>
+                <Copy aria-hidden /> {t('common.copy')}
+              </Button>
+            </div>
+            <span className="text-xs text-muted-foreground">{t('commerce.stripe.webhookEvents')}</span>
           </div>
-          <span className="text-xs text-muted-foreground">{t('commerce.stripe.webhookEvents')}</span>
-        </div>
-      ) : null}
+        ) : null}
+      </details>
       {check ? (
         <p role="status" className={check.ok ? 'text-sm text-emerald-700 dark:text-emerald-400' : 'text-sm text-destructive'}>
           {check.ok ? t('commerce.stripe.checkOk') : t('commerce.stripe.checkFailed', { message: check.message ?? '' })}

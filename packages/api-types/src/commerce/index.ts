@@ -680,7 +680,9 @@ export const stripeSettingsSchema = z.object({
   publishable_key: z.string().nullable(),
   secret_key_hint: z.string().nullable(),
   webhook_secret_hint: z.string().nullable(),
-  /** Endpoint to register in the Stripe dashboard (events: payment_intent.*, setup_intent.succeeded, charge.refunded). */
+  /** The CRM created the webhook endpoint in the Stripe account itself (with the secret key). */
+  webhook_managed: z.boolean(),
+  /** Endpoint receiving the Stripe events (payment_intent.*, setup_intent.*, charge.refunded). */
   webhook_url: z.string().nullable(),
   updated_at: timestampSchema.nullable(),
   /** Live subscriptions renewed automatically on a card saved in this Stripe account. */
@@ -690,6 +692,12 @@ export const stripeSettingsSchema = z.object({
    * saved customers and cards of the previous one were disconnected.
    */
   account_changed: z.boolean().optional(),
+  /**
+   * Only on save: why the webhook could not be created automatically (key
+   * without permission on webhook endpoints, URL Stripe cannot reach). The
+   * signing secret can still be entered by hand.
+   */
+  webhook_setup_error: z.string().nullable().optional(),
 });
 export type StripeSettings = z.infer<typeof stripeSettingsSchema>;
 

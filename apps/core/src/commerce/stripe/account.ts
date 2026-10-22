@@ -15,6 +15,8 @@ export interface StoredStripeAccount {
   secret_hint: string;
   webhook_enc: string | null;
   webhook_hint: string | null;
+  /** Endpoint the CRM created in the Stripe account (null: secret entered by hand). */
+  webhook_endpoint_id: string | null;
   updated_at: number;
 }
 
@@ -42,6 +44,7 @@ export function readStripeAccount(ctx: CrmContext): StoredStripeAccount | null {
     secret_hint: parsed.secret_hint ?? '',
     webhook_enc: parsed.webhook_enc ?? null,
     webhook_hint: parsed.webhook_hint ?? null,
+    webhook_endpoint_id: parsed.webhook_endpoint_id ?? null,
     updated_at: parsed.updated_at ?? 0,
   };
 }
@@ -71,6 +74,7 @@ export function stripeSettings(ctx: CrmContext, _input: Record<string, never> = 
       publishable_key: null,
       secret_key_hint: null,
       webhook_secret_hint: null,
+      webhook_managed: false,
       updated_at: null,
       saved_payment_methods: savedPaymentMethods(ctx),
     };
@@ -81,6 +85,7 @@ export function stripeSettings(ctx: CrmContext, _input: Record<string, never> = 
     publishable_key: account.publishable_key,
     secret_key_hint: account.secret_hint,
     webhook_secret_hint: account.webhook_hint,
+    webhook_managed: account.webhook_endpoint_id !== null,
     updated_at: toIso(account.updated_at),
     saved_payment_methods: savedPaymentMethods(ctx),
   };
@@ -142,7 +147,8 @@ export function saveStripeAccount(
     /** From the secret key just verified; null when the secret is kept or the key may not read it. */
     accountId?: string | null;
     secret: { enc: string; hint: string } | null;
-    webhook: { enc: string; hint: string } | null;
+    /** `endpointId`: the endpoint the worker created in Stripe for this secret (absent: entered by hand). */
+    webhook: { enc: string; hint: string; endpointId?: string | null } | null;
   },
 ): Omit<StripeSettings, 'webhook_url'> {
   const stored = readStripeAccount(ctx);
@@ -167,11 +173,12 @@ export function saveStripeAccount(
   const current = stored;
   const secret = input.secret ?? (current === null ? null : { enc: current.secret_enc, hint: current.secret_hint });
   if (secret === null) throw invalid('secret_key', 'secret_key is required');
+  // The signing secret of another account or mode would reject every event: it is not kept.
   const webhook =
     input.webhook ??
-    (current?.webhook_enc === null || current === null
+    (changed || current === null || current.webhook_enc === null
       ? null
-      : { enc: current.webhook_enc, hint: current.webhook_hint ?? '' });
+      : { enc: current.webhook_enc, hint: current.webhook_hint ?? '', endpointId: current.webhook_endpoint_id });
   const value: StoredStripeAccount = {
     tenant_id: input.tenantId,
     publishable_key: input.publishableKey,
@@ -179,6 +186,7 @@ export function saveStripeAccount(
     secret_hint: secret.hint,
     webhook_enc: webhook?.enc ?? null,
     webhook_hint: webhook?.hint ?? null,
+    webhook_endpoint_id: webhook?.endpointId ?? null,
     updated_at: ctx.now(),
   };
   ctx.db.run(
