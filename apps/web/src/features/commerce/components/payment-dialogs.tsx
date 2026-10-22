@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@amable/ui/ui/dialog';
 import { Input } from '@amable/ui/ui/input';
+import { Switch } from '@amable/ui/ui/switch';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
@@ -16,6 +17,11 @@ import { useCommerce, useCommerceMutation, useDates, useMoney } from '../api/hoo
 import { ChoiceSelect, FormField, MoneyInput } from './common';
 
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+/** Settled by a Stripe PaymentIntent of the workspace account (checkouts, offers, renewals). */
+export function isStripePayment(payment: Pick<Payment, 'status' | 'transaction_id'>): boolean {
+  return payment.status === 'succeeded' && (payment.transaction_id?.startsWith('pi_') ?? false);
+}
 
 /** Amount still refundable on an order (gross paid minus refunds). */
 export function refundableMinor(order: Pick<Order, 'paid_minor' | 'refunded_minor'>): number {
@@ -164,28 +170,40 @@ export function RefundDialog({
   const money = useMoney();
   const { date: dateLabel } = useDates();
   const refundable = refundableMinor(order);
-  const [paymentId, setPaymentId] = useState('');
-  const [amount, setAmount] = useState<number | null>(refundable);
-  const [reason, setReason] = useState('');
-  const [transactionId, setTransactionId] = useState('');
-
   const eligible = payments.filter(
     (p) => p.status === 'succeeded' && p.amount_minor - p.refunded_minor > 0,
   );
-  const selected = eligible.find((p) => p.id === paymentId);
-  const limit = selected ? selected.amount_minor - selected.refunded_minor : refundable;
+  const onStripe = eligible.filter(isStripePayment);
+  const stripeLimit = Math.min(
+    refundable,
+    onStripe.reduce((sum, p) => sum + p.amount_minor - p.refunded_minor, 0),
+  );
+  const [viaStripe, setViaStripe] = useState(onStripe.length > 0);
+  const [paymentId, setPaymentId] = useState('');
+  const [amount, setAmount] = useState<number | null>(viaStripe ? stripeLimit : refundable);
+  const [reason, setReason] = useState('');
+  const [transactionId, setTransactionId] = useState('');
+
+  const choices = viaStripe ? onStripe : eligible;
+  const selected = choices.find((p) => p.id === paymentId);
+  const whole = viaStripe ? stripeLimit : refundable;
+  const limit = selected ? selected.amount_minor - selected.refunded_minor : whole;
 
   const refund = useCommerceMutation({
     mutationFn: () =>
       api.orders.refund(order.id, {
-        ...(amount !== null && (selected !== undefined || amount !== refundable)
+        ...(amount !== null && (selected !== undefined || amount !== whole)
           ? { amount_minor: amount }
           : {}),
         ...(selected ? { payment_id: selected.id } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
-        ...(transactionId.trim() ? { transaction_id: transactionId.trim() } : {}),
+        ...(viaStripe
+          ? { stripe: true }
+          : transactionId.trim()
+            ? { transaction_id: transactionId.trim() }
+            : {}),
       }),
-    success: t('commerce.refund.recorded'),
+    success: viaStripe ? t('commerce.refund.stripeDone') : t('commerce.refund.recorded'),
     onSuccess: () => onOpenChange(false),
   });
 
@@ -206,6 +224,26 @@ export function RefundDialog({
               {t('commerce.refund.refundable', { amount: money(refundable, order.currency) })}
             </DialogDescription>
           </DialogHeader>
+          {onStripe.length > 0 ? (
+            <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+              <Switch
+                checked={viaStripe}
+                onCheckedChange={(next) => {
+                  setViaStripe(next);
+                  setPaymentId('');
+                  setAmount(next ? stripeLimit : refundable);
+                }}
+              />
+              <span className="grid gap-0.5">
+                <span className="font-medium">{t('commerce.refund.viaStripe')}</span>
+                <span className="text-xs text-muted-foreground">
+                  {viaStripe
+                    ? t('commerce.refund.viaStripeHint', { amount: money(stripeLimit, order.currency) })
+                    : t('commerce.refund.recordOnlyHint')}
+                </span>
+              </span>
+            </label>
+          ) : null}
           <FormField label={t('commerce.refund.payment')}>
             {(id) => (
               <ChoiceSelect
@@ -213,11 +251,11 @@ export function RefundDialog({
                 value={paymentId}
                 onChange={(value) => {
                   setPaymentId(value);
-                  const payment = eligible.find((p) => p.id === value);
-                  setAmount(payment ? payment.amount_minor - payment.refunded_minor : refundable);
+                  const payment = choices.find((p) => p.id === value);
+                  setAmount(payment ? payment.amount_minor - payment.refunded_minor : whole);
                 }}
                 emptyLabel={t('commerce.refund.anyPayment')}
-                choices={eligible.map((p) => ({
+                choices={choices.map((p) => ({
                   value: p.id,
                   label: `${dateLabel(p.paid_at)} · ${t(`commerce.method.${p.method}`)} · ${money(
                     p.amount_minor - p.refunded_minor,
@@ -256,21 +294,23 @@ export function RefundDialog({
               />
             )}
           </FormField>
-          <FormField label={t('commerce.field.transactionId')}>
-            {(id) => (
-              <Input
-                id={id}
-                value={transactionId}
-                onChange={(e) => setTransactionId(e.target.value)}
-              />
-            )}
-          </FormField>
+          {viaStripe ? null : (
+            <FormField label={t('commerce.field.transactionId')}>
+              {(id) => (
+                <Input
+                  id={id}
+                  value={transactionId}
+                  onChange={(e) => setTransactionId(e.target.value)}
+                />
+              )}
+            </FormField>
+          )}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
             <Button type="submit" variant="destructive" disabled={!valid || refund.isPending}>
-              {t('commerce.refund.submit')}
+              {viaStripe ? t('commerce.refund.submitStripe') : t('commerce.refund.submit')}
             </Button>
           </DialogFooter>
         </form>

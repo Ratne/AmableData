@@ -175,6 +175,25 @@ export function SubscriptionDetailPage() {
                       `${String(s.quantity)} × ${money(s.unit_price_minor, s.currency)}`,
                     ],
                     [t('commerce.field.taxRate'), formatBps(s.tax_rate_bps, locale)],
+                    ...(s.discount
+                      ? [
+                          [
+                            t('commerce.sub.discount'),
+                            [
+                              s.discount.promo_code ?? '',
+                              s.discount.kind === 'percent'
+                                ? `−${formatBps(s.discount.percent_bps ?? 0, locale)}`
+                                : `−${money(s.discount.amount_minor ?? 0, s.currency)}`,
+                              s.discount.periods_left === null
+                                ? t('commerce.sub.discountForever')
+                                : t('commerce.sub.discountPeriodsLeft', { count: s.discount.periods_left }),
+                            ]
+                              .filter(Boolean)
+                              .join(' · '),
+                          ] as const,
+                        ]
+                      : []),
+                    [t('commerce.sub.autopay'), s.autopay ? t('commerce.sub.autopayOn') : t('commerce.sub.autopayOff')],
                     [t('commerce.sub.started'), date(s.started_at)],
                     ...(s.trial_ends_at
                       ? [[t('commerce.sub.trialEnds'), date(s.trial_ends_at)] as const]

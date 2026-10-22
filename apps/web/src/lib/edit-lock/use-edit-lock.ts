@@ -13,7 +13,7 @@ import { apiFetch, ApiError } from '../api';
  */
 export type EditLockStatus = 'disabled' | 'connecting' | 'holder' | 'waiting' | 'unavailable' | 'offline';
 
-export type EditLockCollection = 'pages' | 'automations' | 'broadcasts' | 'emailTemplates' | 'forms';
+export type EditLockCollection = 'pages' | 'automations' | 'broadcasts' | 'emailTemplates' | 'forms' | 'checkouts';
 
 const HEARTBEAT_MS = 10_000;
 const MAX_BACKOFF_MS = 15_000;

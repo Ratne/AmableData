@@ -22,6 +22,7 @@
     "@amable/booking": "workspace:*",
     "@amable/esign": "workspace:*",
     "@amable/builder": "workspace:*",
+    "@amable/checkout": "workspace:*",
     "@amable/db": "workspace:*",
     "@amable/forms": "workspace:*",
     "@amable/tracker": "workspace:*",

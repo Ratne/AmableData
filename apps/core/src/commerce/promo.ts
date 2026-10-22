@@ -25,6 +25,8 @@ interface PromoRow {
   starts_at: number | null;
   ends_at: number | null;
   active: number;
+  duration: PromoCode['duration'];
+  duration_periods: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -46,6 +48,8 @@ function toApi(row: PromoRow): PromoCode {
     starts_at: toIso(row.starts_at),
     ends_at: toIso(row.ends_at),
     active: row.active === 1,
+    duration: row.duration,
+    duration_periods: row.duration_periods,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
@@ -79,6 +83,9 @@ function validateShape(
   }
   if (row.starts_at !== null && row.ends_at !== null && row.ends_at <= row.starts_at) {
     throw invalid('ends_at', 'ends_at must be after starts_at');
+  }
+  if (row.duration === 'repeating' && row.duration_periods === null) {
+    throw invalid('duration_periods', 'repeating promo codes need duration_periods');
   }
 }
 
@@ -137,6 +144,8 @@ export function createPromoCode(ctx: CrmContext, input: CreatePromoCodeInput): P
     starts_at: optMs(input.starts_at, 'starts_at'),
     ends_at: optMs(input.ends_at, 'ends_at'),
     active: input.active === false ? 0 : 1,
+    duration: input.duration ?? 'once',
+    duration_periods: input.duration === 'repeating' ? (input.duration_periods ?? null) : null,
   };
   validateShape(values);
   const id = ctx.newId();
@@ -144,8 +153,8 @@ export function createPromoCode(ctx: CrmContext, input: CreatePromoCodeInput): P
   ctx.db.run(
     `INSERT INTO crm_promo_codes (id, code, description, kind, percent_bps, amount_minor, currency,
        min_subtotal_minor, product_ids, max_redemptions, max_per_contact, starts_at, ends_at, active,
-       created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       duration, duration_periods, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     values.code,
     values.description,
@@ -160,6 +169,8 @@ export function createPromoCode(ctx: CrmContext, input: CreatePromoCodeInput): P
     values.starts_at,
     values.ends_at,
     values.active,
+    values.duration,
+    values.duration_periods,
     now,
     now,
   );
@@ -192,12 +203,17 @@ export function updatePromoCode(
     starts_at: d.starts_at === undefined ? row.starts_at : optMs(d.starts_at, 'starts_at'),
     ends_at: d.ends_at === undefined ? row.ends_at : optMs(d.ends_at, 'ends_at'),
     active: d.active === undefined ? row.active : d.active ? 1 : 0,
+    duration: d.duration ?? row.duration,
+    duration_periods:
+      (d.duration ?? row.duration) === 'repeating'
+        ? keep(d.duration_periods, row.duration_periods)
+        : null,
   };
   validateShape(values);
   ctx.db.run(
     `UPDATE crm_promo_codes SET description = ?, percent_bps = ?, amount_minor = ?, currency = ?,
        min_subtotal_minor = ?, product_ids = ?, max_redemptions = ?, max_per_contact = ?, starts_at = ?,
-       ends_at = ?, active = ?, updated_at = ? WHERE id = ?`,
+       ends_at = ?, active = ?, duration = ?, duration_periods = ?, updated_at = ? WHERE id = ?`,
     values.description,
     values.percent_bps,
     values.amount_minor,
@@ -209,6 +225,8 @@ export function updatePromoCode(
     values.starts_at,
     values.ends_at,
     values.active,
+    values.duration,
+    values.duration_periods,
     ctx.now(),
     row.id,
   );
@@ -230,6 +248,8 @@ export interface AppliedPromo {
   id: string;
   code: string;
   rule: DiscountRule;
+  /** Recurring billing: how many periods the discount covers (null = forever). */
+  periods: number | null;
   /** Which lines the discount applies to (null product = custom line). */
   appliesTo: (productId: string | null) => boolean;
 }
@@ -304,6 +324,8 @@ export function evaluatePromo(
     id: row.id,
     code: row.code,
     rule: { kind: row.kind, percentBps: row.percent_bps, amountMinor: row.amount_minor },
+    periods:
+      row.duration === 'forever' ? null : row.duration === 'repeating' ? (row.duration_periods ?? 1) : 1,
     appliesTo,
   };
 }

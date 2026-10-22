@@ -92,6 +92,7 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.sourceType.import': 'Import',
   'crm.sourceType.form': 'Form',
   'crm.sourceType.booking': 'Prenotazione',
+  'crm.sourceType.checkout': 'Checkout',
   'crm.sourceType.other': 'Altro',
   'crm.marketable.unknown': 'Sconosciuto',
   'crm.marketable.single_opt_in': 'Opt-in singolo',

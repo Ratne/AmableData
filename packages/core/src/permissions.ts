@@ -68,6 +68,9 @@ export const PERMISSIONS = [
   'products:write',
   'subscriptions:read',
   'subscriptions:write',
+  /** Checkout pages (items, bumps, post-purchase offers). */
+  'checkouts:read',
+  'checkouts:write',
   // Analytics
   'analytics:read',
   'analytics:configure',
@@ -122,6 +125,7 @@ const READ_ALL: readonly Permission[] = [
   'orders:read',
   'products:read',
   'subscriptions:read',
+  'checkouts:read',
   'analytics:read',
   'analytics:journey_read',
   'reports:read',
@@ -193,6 +197,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'orders:read',
     'products:read',
     'subscriptions:read',
+    'checkouts:read',
+    'checkouts:write',
   ],
   sales: [
     'contacts:read',
@@ -215,6 +221,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'products:read',
     'subscriptions:read',
     'subscriptions:write',
+    'checkouts:read',
     'emails:send_single',
     'conversations:read',
     'conversations:write',

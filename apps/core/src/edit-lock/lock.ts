@@ -1,7 +1,7 @@
 import type { EditLockState } from '@amable/api-types';
 
 /** Resources edited by one person at a time; also the prefix of the takeover audit action. */
-export type EditLockKind = 'pages' | 'automations' | 'broadcasts' | 'templates' | 'forms';
+export type EditLockKind = 'pages' | 'automations' | 'broadcasts' | 'templates' | 'forms' | 'checkouts';
 
 /** Identity forwarded by the core route after authentication; never read from the client. */
 export const EDIT_SESSION_HEADERS = {

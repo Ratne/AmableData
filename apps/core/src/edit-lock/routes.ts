@@ -22,6 +22,7 @@ const LOCKED_MESSAGES: Record<EditLockKind, string> = {
   broadcasts: 'another user is editing this broadcast',
   templates: 'another user is editing this template',
   forms: 'another user is editing this form',
+  checkouts: 'another user is editing this checkout',
 };
 
 /** Pages keep their original instance names so locks held across a deploy survive. */

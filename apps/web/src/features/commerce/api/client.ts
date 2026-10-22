@@ -3,8 +3,12 @@ import type {
   CancelOrderInput,
   CancelSubscriptionInput,
   ChangePlanInput,
+  Checkout,
+  CheckoutEmbed,
+  CheckoutSummary,
   CommerceSettings,
   Contact,
+  CreateCheckoutInput,
   CreateOrderInput,
   CreatePaymentInput,
   CreatePlanInput,
@@ -25,14 +29,18 @@ import type {
   Refund,
   SearchQueryInput,
   SearchResult,
+  StripeCheckResult,
+  StripeSettings,
   Subscription,
   SubscriptionStatus,
+  UpdateCheckoutInput,
   UpdateCommerceSettingsInput,
   UpdateOrderInput,
   UpdatePlanInput,
   UpdateProductCategoryInput,
   UpdateProductInput,
   UpdatePromoCodeInput,
+  UpdateStripeSettingsInput,
 } from '@amable/api-types';
 import { tenantRest } from '../../../lib/tenant-api';
 
@@ -50,7 +58,7 @@ export type ListParams = {
 };
 
 export function commerceClient(slug: string) {
-  const { get, post, patch, del, me } = tenantRest(slug);
+  const { get, post, patch, put, del, me } = tenantRest(slug);
   const id = (value: string) => encodeURIComponent(value);
 
   return {
@@ -60,6 +68,23 @@ export function commerceClient(slug: string) {
       get: () => get<CommerceSettings>('/commerce/settings'),
       update: (input: UpdateCommerceSettingsInput) =>
         patch<CommerceSettings>('/commerce/settings', input),
+    },
+    stripe: {
+      get: () => get<StripeSettings>('/commerce/stripe'),
+      update: (input: UpdateStripeSettingsInput) => put<StripeSettings>('/commerce/stripe', input),
+      check: () => post<StripeCheckResult>('/commerce/stripe/check'),
+      disconnect: () => del<StripeSettings>('/commerce/stripe'),
+    },
+    checkouts: {
+      list: (params: ListParams & { status?: 'draft' | 'active' | 'archived'; q?: string } = {}) =>
+        get<Page<CheckoutSummary>>('/checkouts', params),
+      get: (checkoutId: string) => get<Checkout>(`/checkouts/${id(checkoutId)}`),
+      create: (input: CreateCheckoutInput) => post<Checkout>('/checkouts', input),
+      update: (checkoutId: string, input: UpdateCheckoutInput) =>
+        patch<Checkout>(`/checkouts/${id(checkoutId)}`, input),
+      remove: (checkoutId: string) => del(`/checkouts/${id(checkoutId)}`),
+      duplicate: (checkoutId: string) => post<Checkout>(`/checkouts/${id(checkoutId)}/duplicate`),
+      embed: (checkoutId: string) => get<CheckoutEmbed>(`/checkouts/${id(checkoutId)}/embed`),
     },
     categories: {
       list: () => get<{ data: ProductCategory[] }>('/productCategories'),

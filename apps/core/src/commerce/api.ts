@@ -43,8 +43,9 @@ import {
   updateProductSchema,
   updatePromoCodeSchema,
 } from '@amable/api-types';
-import type { AppEnv } from '../middleware';
+import { audit, type AppEnv } from '../middleware';
 import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
+import { refundOnStripe } from './stripe/refunds';
 
 const activeQuery = z.object({ active: z.enum(['true', 'false']).optional() });
 
@@ -564,18 +565,20 @@ export function registerCommerceRoutes(app: OpenAPIHono<AppEnv>): void {
       method: 'post',
       path: '/orders/{id}/refunds',
       tags: money,
-      summary: 'Record a full or partial refund (idempotent by transaction_id)',
+      summary: 'Record a full or partial refund (idempotent by transaction_id); `stripe: true` also refunds the card',
       request: { params: idParamSchema, body: jsonBody(createRefundSchema) },
       responses: { 201: json(refundSchema, 'The refund') },
     }),
-    async (c) =>
-      c.json(
-        await callCrm(c, 'refunds.record', {
-          orderId: c.req.valid('param').id,
-          data: c.req.valid('json'),
-        }),
-        201,
-      ),
+    async (c) => {
+      const orderId = c.req.valid('param').id;
+      const { stripe, ...data } = c.req.valid('json');
+      if (stripe === true) {
+        const refund = await refundOnStripe(c, orderId, data);
+        await audit(c, 'commerce.stripe_refunded', { target: orderId, details: { amount_minor: refund.amount_minor } });
+        return c.json(refund, 201);
+      }
+      return c.json(await callCrm(c, 'refunds.record', { orderId, data }), 201);
+    },
   );
   app.openapi(
     crmRoute('orders:read', {

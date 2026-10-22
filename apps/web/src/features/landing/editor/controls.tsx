@@ -41,7 +41,7 @@ import { ColorField } from './color-field';
 import { FontPicker } from './font-picker';
 import { RichTextField } from './rich-text';
 import { ShapeDividerControl } from './shape-divider-control';
-import { EventTypePicker, FormPicker } from './widget-pickers';
+import { CheckoutPicker, EventTypePicker, FormPicker } from './widget-pickers';
 
 interface FieldProps {
   def: ControlDef;
@@ -539,6 +539,7 @@ export function ControlField(props: FieldProps) {
   const body = (() => {
     if (widgetType === 'form' && def.key === 'formId') return <FormPicker value={str} disabled={disabled} onChange={onChange} />;
     if (widgetType === 'booking' && def.key === 'eventSlug') return <EventTypePicker value={str} disabled={disabled} onChange={onChange} />;
+    if (widgetType === 'checkout' && def.key === 'checkoutId') return <CheckoutPicker value={str} disabled={disabled} onChange={onChange} />;
     switch (def.type) {
       case 'text':
       case 'number':

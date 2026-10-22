@@ -76,6 +76,16 @@ export function useFormOptions() {
   });
 }
 
+export function useCheckoutOptions() {
+  const { slug, api } = useLanding();
+  return useQuery({
+    queryKey: landingKeys.lookup(slug, 'checkouts'),
+    queryFn: () => api.lookups.checkouts(),
+    staleTime: REFERENCE_STALE_MS,
+    retry: false,
+  });
+}
+
 export function useEventTypeOptions() {
   const { slug, api } = useLanding();
   return useQuery({

@@ -63,6 +63,8 @@ export const createPlanSchema = z.strictObject({
   trial_days: z.number().int().min(0).max(730).optional(),
   /** Price of one billing period; currency is the product's. */
   price_minor: moneySchema,
+  /** One-off fee charged with the first order of the subscription (activation). */
+  setup_fee_minor: moneySchema.optional(),
   active: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
 });
@@ -78,6 +80,7 @@ export const planSchema = z.object({
   interval_count: z.number().int(),
   trial_days: z.number().int(),
   price_minor: z.number().int(),
+  setup_fee_minor: z.number().int(),
   currency: z.string(),
   active: z.boolean(),
   position: z.number().int(),
@@ -147,6 +150,12 @@ export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>;
 // ------------------------------------------------------------ promo codes
 
 export const PROMO_KINDS = ['percent', 'fixed'] as const;
+/**
+ * How long the discount lasts on a subscription: the first billed period only,
+ * the first `duration_periods` periods, or every renewal.
+ */
+export const PROMO_DURATIONS = ['once', 'repeating', 'forever'] as const;
+export type PromoDuration = (typeof PROMO_DURATIONS)[number];
 
 export const createPromoCodeSchema = z.strictObject({
   /** Case-insensitive; stored upper-case. */
@@ -171,6 +180,10 @@ export const createPromoCodeSchema = z.strictObject({
   starts_at: dateTimeSchema.nullable().optional(),
   ends_at: dateTimeSchema.nullable().optional(),
   active: z.boolean().optional(),
+  /** Subscriptions only; default `once`. */
+  duration: z.enum(PROMO_DURATIONS).optional(),
+  /** `repeating`: number of billed periods the discount covers. */
+  duration_periods: z.number().int().min(1).max(120).nullable().optional(),
 });
 export const updatePromoCodeSchema = createPromoCodeSchema
   .omit({ code: true, kind: true })
@@ -194,6 +207,8 @@ export const promoCodeSchema = z.object({
   starts_at: timestampSchema.nullable(),
   ends_at: timestampSchema.nullable(),
   active: z.boolean(),
+  duration: z.enum(PROMO_DURATIONS),
+  duration_periods: z.number().int().nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 });
@@ -211,7 +226,7 @@ export const ORDER_STATUSES = [
 ] as const;
 export const orderStatusSchema = z.enum(ORDER_STATUSES);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
-export const ORDER_SOURCES = ['manual', 'api', 'subscription'] as const;
+export const ORDER_SOURCES = ['manual', 'api', 'subscription', 'checkout'] as const;
 
 export const orderItemInputSchema = z.strictObject({
   /** Catalog product: name, SKU, price and tax rate default from it. */
@@ -306,6 +321,11 @@ export const orderSchema = z.object({
   billing_period_start: timestampSchema.nullable(),
   billing_period_end: timestampSchema.nullable(),
   analytics_visitor_id: z.string().nullable(),
+  /** Checkout the order was bought through (with `parent_order_id` for post-purchase offers). */
+  checkout_id: idSchema.nullable(),
+  parent_order_id: idSchema.nullable(),
+  /** utm_* and click ids of the purchase (checkout orders). */
+  attribution: z.record(z.string(), z.string()).nullable(),
   items: z.array(orderItemSchema),
   invoice: z.object({ id: idSchema, number: z.string() }).nullable(),
   custom_fields: customFieldValuesSchema,
@@ -398,6 +418,11 @@ export const createRefundSchema = z.strictObject({
   /** External reference; recording the same id twice returns the first refund. */
   transaction_id: z.string().trim().min(1).max(255).nullable().optional(),
   refunded_at: dateTimeSchema.optional(),
+  /**
+   * Also sends the money back through Stripe (payments settled by the
+   * workspace Stripe account only). Stripe sets the transaction id and date.
+   */
+  stripe: z.boolean().optional(),
 });
 export type CreateRefundInput = z.infer<typeof createRefundSchema>;
 
@@ -488,6 +513,18 @@ export const subscriptionSchema = z.object({
   paused_at: timestampSchema.nullable(),
   ended_at: timestampSchema.nullable(),
   analytics_visitor_id: z.string().nullable(),
+  /** Promo discount still applied to renewals; `periods_left: null` = forever. */
+  discount: z
+    .object({
+      promo_code: z.string().nullable(),
+      kind: z.enum(PROMO_KINDS),
+      percent_bps: z.number().int().nullable(),
+      amount_minor: z.number().int().nullable(),
+      periods_left: z.number().int().nullable(),
+    })
+    .nullable(),
+  /** Renewals are charged automatically on the saved Stripe payment method. */
+  autopay: z.boolean(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 });
@@ -566,6 +603,115 @@ export const updateCommerceSettingsSchema = z.strictObject({
   default_tax_rate_bps: taxRateBpsSchema.optional(),
 });
 export type UpdateCommerceSettingsInput = z.infer<typeof updateCommerceSettingsSchema>;
+
+// --------------------------------------------------------------- checkouts
+
+export const CHECKOUT_STATUSES = ['draft', 'active', 'archived'] as const;
+
+/**
+ * Checkout page. `definition` is the document of `@amable/checkout`
+ * (`checkoutDefinitionSchema`: items, custom fields, bumps, offer chain,
+ * design), validated by the server on write.
+ */
+export const checkoutSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  status: z.enum(CHECKOUT_STATUSES),
+  definition: z.record(z.string(), z.unknown()),
+  revision: z.number().int(),
+  stats: z.object({
+    sessions: z.number().int(),
+    paid: z.number().int(),
+    revenue_minor: z.number().int(),
+    offers_accepted: z.number().int(),
+  }),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+export type Checkout = z.infer<typeof checkoutSchema>;
+
+export const checkoutSummarySchema = checkoutSchema.omit({ definition: true }).extend({
+  item_count: z.number().int(),
+  bump_count: z.number().int(),
+  offer_count: z.number().int(),
+});
+export type CheckoutSummary = z.infer<typeof checkoutSummarySchema>;
+
+export const createCheckoutSchema = z.strictObject({
+  name: z.string().trim().min(1).max(200),
+  status: z.enum(CHECKOUT_STATUSES).optional(),
+  definition: z.record(z.string(), z.unknown()).optional(),
+});
+export type CreateCheckoutInput = z.infer<typeof createCheckoutSchema>;
+
+export const updateCheckoutSchema = createCheckoutSchema.partial().extend({
+  /** Optimistic concurrency: the revision the edit started from. */
+  revision: z.number().int().optional(),
+});
+export type UpdateCheckoutInput = z.infer<typeof updateCheckoutSchema>;
+
+export const listCheckoutsQuerySchema = z.object({
+  ...listQuery,
+  status: z.enum(CHECKOUT_STATUSES).optional(),
+  q: z.string().max(200).optional(),
+});
+export type ListCheckoutsQuery = z.infer<typeof listCheckoutsQuerySchema>;
+
+export const checkoutEmbedSchema = z.object({
+  checkout_id: idSchema,
+  tenant: z.string(),
+  script_url: z.string(),
+  hosted_url: z.string(),
+  snippet: z.string(),
+  offer_snippet: z.string(),
+});
+export type CheckoutEmbed = z.infer<typeof checkoutEmbedSchema>;
+
+// ----------------------------------------------------------------- stripe
+
+/**
+ * Stripe account of the workspace (its own API keys). Secrets never come
+ * back: only their last characters, to recognize them.
+ */
+export const stripeSettingsSchema = z.object({
+  configured: z.boolean(),
+  /** From the key prefix (`pk_test_` / `pk_live_`). */
+  mode: z.enum(['test', 'live']).nullable(),
+  publishable_key: z.string().nullable(),
+  secret_key_hint: z.string().nullable(),
+  webhook_secret_hint: z.string().nullable(),
+  /** Endpoint to register in the Stripe dashboard (events: payment_intent.*, setup_intent.succeeded, charge.refunded). */
+  webhook_url: z.string().nullable(),
+  updated_at: timestampSchema.nullable(),
+});
+export type StripeSettings = z.infer<typeof stripeSettingsSchema>;
+
+export const updateStripeSettingsSchema = z.strictObject({
+  publishable_key: z
+    .string()
+    .trim()
+    .regex(/^pk_(test|live)_[A-Za-z0-9]{10,250}$/, 'expected a publishable key (pk_test_… / pk_live_…)'),
+  /** Secret or restricted key; omitted keeps the stored one. */
+  secret_key: z
+    .string()
+    .trim()
+    .regex(/^(sk|rk)_(test|live)_[A-Za-z0-9]{10,250}$/, 'expected a secret key (sk_… / rk_…)')
+    .optional(),
+  /** Signing secret of the webhook endpoint (`whsec_…`); omitted keeps the stored one. */
+  webhook_secret: z
+    .string()
+    .trim()
+    .regex(/^whsec_[A-Za-z0-9+/=]{10,250}$/, 'expected a webhook signing secret (whsec_…)')
+    .optional(),
+});
+export type UpdateStripeSettingsInput = z.infer<typeof updateStripeSettingsSchema>;
+
+export const stripeCheckResultSchema = z.object({
+  ok: z.boolean(),
+  /** Stripe error message when the key is rejected. */
+  message: z.string().nullable(),
+});
+export type StripeCheckResult = z.infer<typeof stripeCheckResultSchema>;
 
 export const billingRunResultSchema = z.object({
   processed: z.number().int(),

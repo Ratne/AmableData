@@ -139,5 +139,27 @@ describe('builder render', () => {
     const raw = renderBuilderPage(doc([node('h', 'html', { html: '<b>x</b>' })]), {});
     expect(raw.hasRawHtml).toBe(true);
     expect(builderPageCsp(raw, [])).toContain("'unsafe-inline' https:");
+    expect(builderPageCsp(strict, [])).not.toContain('stripe');
+  });
+
+  it('embeds checkouts and offer blocks with one script and the Stripe CSP', () => {
+    const sales = doc([
+      node('co', 'checkout', { checkoutId: '01CO' }),
+      node('of', 'checkout-offer', { display: 'buttons', buttonColor: '#16a34a' }),
+    ]);
+    const out = renderBuilderPage(sales, { tenantSlug: 'acme', pageId: '01PAGE' });
+    expect(out.html).toContain('<div data-amable-checkout="01CO" data-amable-tenant="acme" data-amable-page="01PAGE"></div>');
+    expect(out.html).toContain('data-amable-offer');
+    expect(out.html).toContain('data-amable-buttons-only');
+    expect(out.html.match(/src="\/checkout\.js"/g)).toHaveLength(1);
+    expect(out.embeds).toEqual(['checkout']);
+    const csp = builderPageCsp(out, []);
+    expect(csp).toContain('https://js.stripe.com');
+    expect(csp).toContain('frame-src https://www.youtube.com');
+    expect(csp).toContain('https://hooks.stripe.com');
+    expect(csp).toContain("connect-src 'self' https://api.stripe.com");
+    const editor = renderBuilderPage(sales, { mode: 'editor', tenantSlug: 'acme' });
+    expect(editor.html).toContain('data-b-embed-ph="checkout"');
+    expect(editor.embeds).toEqual([]);
   });
 });

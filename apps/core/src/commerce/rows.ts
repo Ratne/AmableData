@@ -28,6 +28,12 @@ export interface OrderRow {
   analytics_visitor_id: string | null;
   order_date: number;
   due_at: number | null;
+  checkout_id: string | null;
+  checkout_session_id: string | null;
+  parent_order_id: string | null;
+  attribution: string | null;
+  auto_charge_attempts: number;
+  next_charge_at: number | null;
   finalized_at: number | null;
   paid_at: number | null;
   cancelled_at: number | null;
@@ -81,6 +87,14 @@ export interface SubscriptionRow {
   paused_at: number | null;
   ended_at: number | null;
   analytics_visitor_id: string | null;
+  promo_code_id: string | null;
+  promo_code: string | null;
+  discount_kind: 'percent' | 'fixed' | null;
+  discount_percent_bps: number | null;
+  discount_amount_minor: number | null;
+  discount_periods_left: number | null;
+  stripe_customer_id: string | null;
+  stripe_payment_method_id: string | null;
   created_at: number;
   updated_at: number;
 }

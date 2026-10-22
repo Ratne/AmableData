@@ -8,6 +8,8 @@ import { registerSalesRoutes } from './sales';
 import { registerSearchRoutes } from './search';
 import { registerAutomationRoutes } from '../../automation/api/routes';
 import { registerCommerceRoutes } from '../../commerce/api';
+import { registerStripeRoutes } from '../../commerce/stripe/api';
+import { registerCheckoutRoutes } from '../../checkout/api';
 import { registerWorkspaceRoutes } from '../../workspace/api';
 import { registerConversationRoutes } from '../../conversations/api';
 
@@ -21,6 +23,8 @@ registerSalesRoutes(crmApi);
 registerSearchRoutes(crmApi);
 registerAutomationRoutes(crmApi);
 registerCommerceRoutes(crmApi);
+registerStripeRoutes(crmApi);
+registerCheckoutRoutes(crmApi);
 registerWorkspaceRoutes(crmApi);
 registerConversationRoutes(crmApi);
 

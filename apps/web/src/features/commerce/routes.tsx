@@ -87,6 +87,18 @@ export const paymentsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/payments'), 'PaymentsPage'),
 });
 
+export const checkoutsRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'checkouts',
+  component: lazyRouteComponent(() => import('./pages/checkouts'), 'CheckoutsPage'),
+});
+
+export const checkoutEditorRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'checkouts/$checkoutId',
+  component: lazyRouteComponent(() => import('./pages/checkout-editor'), 'CheckoutEditorPage'),
+});
+
 export const commerceSettingsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'settings/commerce',
@@ -106,5 +118,7 @@ export const commerceRoutes = [
   invoicesRoute,
   invoiceDetailRoute,
   paymentsRoute,
+  checkoutsRoute,
+  checkoutEditorRoute,
   commerceSettingsRoute,
 ] as const;

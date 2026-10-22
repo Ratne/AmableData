@@ -35,7 +35,7 @@ import {
   useMoney,
   usePermissions,
 } from '../api/hooks';
-import { ErrorNotice, FormField, MoneyInput, PercentInput, Pill } from '../components/common';
+import { ChoiceSelect, ErrorNotice, FormField, MoneyInput, PercentInput, Pill } from '../components/common';
 import { formatBps } from '../lib/money';
 
 /** `YYYY-MM-DD` (local) of an ISO timestamp, for date inputs. */
@@ -213,6 +213,8 @@ function PromoDialog({ promo, onClose }: { promo: PromoCode | null; onClose: () 
   const [endsAt, setEndsAt] = useState(toDateInput(promo?.ends_at ?? null));
   const [productIds, setProductIds] = useState<string[]>(promo?.product_ids ?? []);
   const [active, setActive] = useState(promo?.active ?? true);
+  const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>(promo?.duration ?? 'once');
+  const [durationPeriods, setDurationPeriods] = useState(promo?.duration_periods?.toString() ?? '3');
 
   const limit = (text: string) => {
     const n = Math.trunc(Number(text));
@@ -222,7 +224,8 @@ function PromoDialog({ promo, onClose }: { promo: PromoCode | null; onClose: () 
   const valueValid =
     kind === 'percent' ? percent !== null && percent >= 1 : amount !== null && amount > 0;
   const windowValid = !startsAt || !endsAt || startsAt <= endsAt;
-  const valid = codeValid && valueValid && windowValid && isCurrencyCode(currency);
+  const periodsValid = duration !== 'repeating' || (limit(durationPeriods) ?? 121) <= 120;
+  const valid = codeValid && valueValid && windowValid && periodsValid && isCurrencyCode(currency);
 
   const save = useCommerceMutation({
     mutationFn: () => {
@@ -237,6 +240,8 @@ function PromoDialog({ promo, onClose }: { promo: PromoCode | null; onClose: () 
         max_per_contact: limit(maxPerContact),
         starts_at: fromDateInput(startsAt, false),
         ends_at: fromDateInput(endsAt, true),
+        duration,
+        duration_periods: duration === 'repeating' ? limit(durationPeriods) : null,
         active,
       };
       if (promo) return api.promoCodes.update(promo.id, shared);
@@ -388,6 +393,38 @@ function PromoDialog({ promo, onClose }: { promo: PromoCode | null; onClose: () 
                 />
               )}
             </FormField>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label={t('commerce.promo.duration')} hint={t(`commerce.promo.duration.${duration}.hint`)}>
+              {(id) => (
+                <ChoiceSelect
+                  id={id}
+                  value={duration}
+                  onChange={(value) => setDuration(value === 'repeating' || value === 'forever' ? value : 'once')}
+                  choices={(['once', 'repeating', 'forever'] as const).map((value) => ({
+                    value,
+                    label: t(`commerce.promo.duration.${value}`),
+                  }))}
+                />
+              )}
+            </FormField>
+            {duration === 'repeating' ? (
+              <FormField
+                label={t('commerce.promo.durationPeriods')}
+                error={periodsValid ? null : t('commerce.promo.durationPeriodsInvalid')}
+              >
+                {(id) => (
+                  <Input
+                    id={id}
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={durationPeriods}
+                    onChange={(e) => setDurationPeriods(e.target.value)}
+                  />
+                )}
+              </FormField>
+            ) : null}
           </div>
           <FormField label={t('commerce.promo.products')} hint={t('commerce.promo.productsHint')}>
             {() => (

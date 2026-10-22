@@ -9,6 +9,7 @@ import {
 import type { Context } from 'hono';
 import { callApp } from '../../apps/call';
 import { tenantInstalls, type AppInstall } from '../../apps/store';
+import type { Env } from '../../env';
 import { getTenant, type AppEnv } from '../../middleware';
 import {
   AddressLookupUnavailable,
@@ -28,7 +29,11 @@ const unavailable = (message: string) => ({ error: 'address_lookup_unavailable',
 
 /** The first installed app with `extensions.address_lookup` (oldest install wins). */
 async function addressApp(c: Context<AppEnv>): Promise<AppInstall | null> {
-  const installs = await tenantInstalls(c.env.DB, getTenant(c).tenant.id);
+  return addressAppOf(c.env, getTenant(c).tenant.id);
+}
+
+async function addressAppOf(env: Env, tenantId: string): Promise<AppInstall | null> {
+  const installs = await tenantInstalls(env.DB, tenantId);
   return (
     installs.find(
       (i) => (i.status === 'active' || i.status === 'paused') && i.manifest.extensions.address_lookup !== undefined,
@@ -36,11 +41,11 @@ async function addressApp(c: Context<AppEnv>): Promise<AppInstall | null> {
   );
 }
 
-async function askApp(c: Context<AppEnv>, install: AppInstall, query: AddressLookupQuery): Promise<AddressSuggestion[] | null> {
+async function askApp(env: Env, install: AppInstall, query: AddressLookupQuery): Promise<AddressSuggestion[] | null> {
   const def = install.manifest.extensions.address_lookup;
   if (def === undefined || install.status !== 'active') return null;
   const result = await callApp(
-    c.env,
+    env,
     install,
     def.endpoint,
     { q: query.q, lang: query.lang ?? null, country: query.country ?? null },
@@ -51,6 +56,26 @@ async function askApp(c: Context<AppEnv>, install: AppInstall, query: AddressLoo
     return null;
   }
   return appSuggestions(result.body, query.country);
+}
+
+/**
+ * Same sources as the contact editor, for public forms (checkout buyer
+ * address): the installed app, then the geocoder. Empty when neither answers.
+ */
+export async function suggestAddresses(env: Env, tenantId: string, query: AddressLookupQuery): Promise<AddressSuggestion[]> {
+  const install = await addressAppOf(env, tenantId);
+  if (install !== null) {
+    const data = await askApp(env, install, query);
+    if (data !== null) return data;
+  }
+  const base = addressLookupUrl(env.ADDRESS_LOOKUP_URL);
+  if (base === null) return [];
+  try {
+    return await lookupAddresses(base, query);
+  } catch (error) {
+    if (!(error instanceof AddressLookupUnavailable)) throw error;
+    return [];
+  }
 }
 
 export function registerAddressLookupRoutes(app: OpenAPIHono<AppEnv>): void {
@@ -73,7 +98,7 @@ export function registerAddressLookupRoutes(app: OpenAPIHono<AppEnv>): void {
       const base = addressLookupUrl(c.env.ADDRESS_LOOKUP_URL);
       const install = await addressApp(c);
       if (install !== null) {
-        const data = await askApp(c, install, query);
+        const data = await askApp(c.env, install, query);
         if (data !== null) {
           const attribution = install.manifest.extensions.address_lookup?.attribution ?? install.manifest.name;
           return c.json({ enabled: true, provider: 'app' as const, attribution, data }, 200);

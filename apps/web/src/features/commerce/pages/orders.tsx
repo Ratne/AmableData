@@ -1,4 +1,4 @@
-import { ORDER_STATUSES, type FilterLeaf, type OrderStatus } from '@amable/api-types';
+import { ORDER_SOURCES, ORDER_STATUSES, type FilterLeaf, type OrderStatus } from '@amable/api-types';
 import {
   DashboardButton,
   ListTable,
@@ -42,7 +42,7 @@ interface OrderRow {
   readonly paidMinor: number;
   readonly refundedMinor: number;
   readonly orderDate: string;
-  readonly source: string;
+  readonly source: (typeof ORDER_SOURCES)[number];
   readonly itemCount: number;
 }
 
@@ -77,7 +77,7 @@ function toRow(row: Record<string, unknown>): OrderRow {
     paidMinor: num(row['paid_minor']),
     refundedMinor: num(row['refunded_minor']),
     orderDate: str(row['order_date']),
-    source: str(row['source']),
+    source: ORDER_SOURCES.find((s) => s === row['source']) ?? 'manual',
     itemCount: num(row['item_count']),
   };
 }
@@ -191,7 +191,7 @@ export function OrdersPage() {
     {
       id: 'source',
       header: t('commerce.field.source'),
-      cell: (row) => t(`commerce.source.${row.source as 'manual' | 'api' | 'subscription'}`),
+      cell: (row) => t(`commerce.source.${row.source}`),
       hideBelow: '2xl',
     },
     {

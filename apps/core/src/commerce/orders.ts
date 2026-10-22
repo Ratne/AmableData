@@ -19,7 +19,7 @@ import { executeSearch } from '../crm/search/query-builder';
 import { parseIsoMs } from '../crm/util';
 import { getProductRow } from './catalog';
 import { issueInvoice, syncInvoice } from './invoices';
-import { computeTotals, type OrderTotals } from './money';
+import { computeTotals, type DiscountRule, type OrderTotals } from './money';
 import { evaluatePromo, redeemPromo, releasePromo, type AppliedPromo } from './promo';
 import { getOrderRow, itemsOf, orderFacts, type OrderRow } from './rows';
 import { ordersToApi } from './serialize';
@@ -48,6 +48,18 @@ export interface CreateOrderOptions {
   /** Pre-resolved lines (subscription renewals bill a plan snapshot, not the catalog price). */
   lines?: LineDraft[];
   dueAt?: number;
+  /**
+   * Discount carried by a subscription (its promo code, already redeemed at
+   * purchase): applied to every line without re-checking the code limits.
+   */
+  discount?: { rule: DiscountRule; code: string | null };
+  /** Checkout purchase: the checkout, its session and, for post-purchase offers, the main order. */
+  checkout?: {
+    checkoutId: string;
+    sessionId: string;
+    parentOrderId: string | null;
+    attribution: Record<string, string>;
+  };
 }
 
 // ------------------------------------------------------------------ pricing
@@ -119,8 +131,22 @@ function priceLines(
     shippingMinor: number;
     orderId: string | null;
     at: number;
+    discount?: DiscountRule | undefined;
   },
 ): { totals: OrderTotals; promo: AppliedPromo | null } {
+  if (input.discount !== undefined) {
+    const totals = computeTotals(
+      input.lines.map((l) => ({
+        quantity: l.quantity,
+        unitPriceMinor: l.unitPriceMinor,
+        taxRateBps: l.taxRateBps,
+        discountable: true,
+      })),
+      input.discount,
+      input.shippingMinor,
+    );
+    return { totals, promo: null };
+  }
   const promo =
     input.promoCode === null
       ? null
@@ -282,7 +308,7 @@ export function createOrderRow(
   assertRef(ctx, 'contact', input.contact_id, 'contact_id');
   assertRef(ctx, 'company', input.company_id, 'company_id');
   const custom = prepareValues(ctx, 'order', input.custom_fields, {
-    requireAll: options.source !== 'subscription',
+    requireAll: options.source !== 'subscription' && options.source !== 'checkout',
   });
   const resolved =
     options.lines === undefined
@@ -300,6 +326,7 @@ export function createOrderRow(
     shippingMinor,
     orderId: null,
     at: orderDate,
+    discount: options.discount?.rule,
   });
   const settings = getSettings(ctx);
   const id = ctx.newId();
@@ -309,8 +336,8 @@ export function createOrderRow(
     `INSERT INTO crm_orders (id, number, contact_id, company_id, owner_id, status, source, currency,
        subtotal_minor, discount_minor, tax_minor, shipping_minor, total_minor, promo_code_id, promo_code,
        notes, subscription_id, billing_period_start, billing_period_end, analytics_visitor_id, order_date,
-       due_at, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       due_at, checkout_id, checkout_session_id, parent_order_id, attribution, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     number,
     input.contact_id,
@@ -324,7 +351,7 @@ export function createOrderRow(
     totals.shippingMinor,
     totals.totalMinor,
     promo?.id ?? null,
-    promo?.code ?? null,
+    promo?.code ?? options.discount?.code ?? null,
     input.notes ?? null,
     options.subscriptionId ?? null,
     options.billingPeriod?.start ?? null,
@@ -334,6 +361,12 @@ export function createOrderRow(
     input.due_at === undefined || input.due_at === null
       ? (options.dueAt ?? null)
       : parseIsoMs(input.due_at, 'due_at'),
+    options.checkout?.checkoutId ?? null,
+    options.checkout?.sessionId ?? null,
+    options.checkout?.parentOrderId ?? null,
+    options.checkout === undefined || Object.keys(options.checkout.attribution).length === 0
+      ? null
+      : JSON.stringify(options.checkout.attribution),
     ctx.actor.id,
     now,
     now,
@@ -393,6 +426,12 @@ export function getOrder(ctx: CrmContext, input: { id: string }): Order {
 
 export function createOrder(ctx: CrmContext, input: CreateOrderInput): Order {
   return getOrder(ctx, { id: createOrderRow(ctx, input).id });
+}
+
+/** Finalizes a draft created internally (checkout orders, once paid). */
+export function finalizeDraftRow(ctx: CrmContext, row: OrderRow): OrderRow {
+  if (row.status !== 'draft') return row;
+  return finalizeRow(ctx, row);
 }
 
 export function finalizeOrder(ctx: CrmContext, input: { id: string }): Order {
@@ -520,6 +559,50 @@ function repriceDraft(ctx: CrmContext, row: OrderRow, lines: LineDraft[]): Order
   writeItems(ctx, row.id, lines, totals);
   indexOrder(ctx, row.id);
   return getOrder(ctx, { id: row.id });
+}
+
+/** Replaces the lines (and promo code) of an internal draft — a checkout re-submitted with another selection. */
+export function replaceDraftLines(
+  ctx: CrmContext,
+  row: OrderRow,
+  input: { lines: LineDraft[]; promoCode: string | null; contactId: string },
+): OrderRow {
+  if (row.status !== 'draft') throw new CrmError('conflict', `order ${row.number} is finalized`);
+  const now = ctx.now();
+  const { totals, promo } = priceLines(ctx, {
+    lines: input.lines,
+    currency: row.currency,
+    contactId: input.contactId,
+    promoCode: input.promoCode,
+    shippingMinor: row.shipping_minor,
+    orderId: row.id,
+    at: now,
+  });
+  ctx.db.run(
+    `UPDATE crm_orders SET contact_id = ?, subtotal_minor = ?, discount_minor = ?, tax_minor = ?, total_minor = ?,
+       promo_code_id = ?, promo_code = ?, order_date = ?, updated_at = ? WHERE id = ?`,
+    input.contactId,
+    totals.subtotalMinor,
+    totals.discountMinor,
+    totals.taxMinor,
+    totals.totalMinor,
+    promo?.id ?? null,
+    promo?.code ?? null,
+    now,
+    now,
+    row.id,
+  );
+  writeItems(ctx, row.id, input.lines, totals);
+  indexOrder(ctx, row.id);
+  return getOrderRow(ctx, row.id);
+}
+
+/** Totals of lines without writing anything (checkout quotes). */
+export function quoteLines(
+  ctx: CrmContext,
+  input: { lines: LineDraft[]; currency: string; contactId: string; promoCode: string | null; at: number },
+): { totals: OrderTotals; promo: AppliedPromo | null } {
+  return priceLines(ctx, { ...input, shippingMinor: 0, orderId: null });
 }
 
 export function listOrderItems(ctx: CrmContext, input: { id: string }): { data: OrderItem[] } {

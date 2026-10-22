@@ -8,9 +8,11 @@ import {
   type DumpCursor,
   type DumpPage,
 } from '../backup/sql-dump';
+import { affectsChargeSchedule } from '../checkout/ops';
+import { runRenewalCharges } from '../checkout/renewals';
 import { affectsBillingSchedule } from '../commerce/ops';
 import { seedCommerce, type CommerceSeedSummary } from '../commerce/seed';
-import { nextBillingDue } from '../commerce/subscriptions';
+import { nextBillingDue, nextChargeDue } from '../commerce/subscriptions';
 import { SYSTEM_ACTOR, type CrmActor, type SearchMode } from '../crm/context';
 import { createDoSqlDb } from '../crm/db/do-sql';
 import type { SqlDb } from '../crm/db/sql';
@@ -68,7 +70,9 @@ export class TenantDb extends DurableObject<Env> {
    */
   crm(op: string, actor: CrmActor, input: unknown): CrmResult<unknown> {
     const result = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, actor, op, input);
-    if (result.ok && (affectsBillingSchedule(op) || affectsEsignSchedule(op))) this.armAlarm();
+    if (result.ok && (affectsBillingSchedule(op) || affectsEsignSchedule(op) || affectsChargeSchedule(op))) {
+      this.armAlarm();
+    }
     return result;
   }
 
@@ -93,6 +97,21 @@ export class TenantDb extends DurableObject<Env> {
           'billing',
           this.ctx,
           new AlarmStepError(`billing.run ${result.error.code}: ${result.error.message}`),
+        );
+      }
+      try {
+        await runRenewalCharges(this.env, (op, input) => {
+          const out = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, op, input);
+          if (!out.ok) throw new AlarmStepError(`${op} ${out.error.code}: ${out.error.message}`);
+          return out.value as never;
+        });
+      } catch (error) {
+        console.error('[renewals] charge run failed:', error);
+        await reportAlarmFailure(
+          this.env,
+          'renewals',
+          this.ctx,
+          error instanceof Error ? error : new AlarmStepError(String(error)),
         );
       }
       let esignFailed = false;
@@ -131,8 +150,9 @@ export class TenantDb extends DurableObject<Env> {
   private armAlarm(esignDelay = 0): void {
     const now = Date.now();
     const billing = nextBillingDue(this.crmDb);
+    const charge = nextChargeDue(this.crmDb);
     const esign = nextEsignDue(this.crmDb);
-    const candidates = [billing, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
+    const candidates = [billing, charge, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
       (t): t is number => t !== null,
     );
     if (candidates.length === 0) void this.ctx.storage.deleteAlarm();

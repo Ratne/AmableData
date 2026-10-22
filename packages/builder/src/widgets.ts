@@ -6,7 +6,7 @@ import { icon, socialIcon } from "./icons";
 type S = Record<string, unknown>;
 
 /** Native amable embeds a page needs the script of (added once per page). */
-export type EmbedKind = "forms" | "booking";
+export type EmbedKind = "forms" | "booking" | "checkout";
 
 /** Per-render state shared by the widget renderers. */
 export interface WidgetContext {
@@ -451,6 +451,25 @@ const render: Record<string, (s: S, ctx: WidgetContext) => string> = {
     if (ctx.editable) return `<div class="b-form-ph" data-b-embed-ph="booking">Booking: ${esc(slug)}</div>`;
     ctx.embeds.add("booking");
     return `<div data-amable-booking="${esc(slug)}" data-amable-tenant="${esc(ctx.tenantSlug)}"${pageAttr(ctx)}></div>`;
+  },
+
+  checkout(s, ctx) {
+    const id = str(s.checkoutId).trim();
+    if (!id) return `<div class="b-form-ph">Select a checkout</div>`;
+    if (ctx.editable) return `<div class="b-form-ph" data-b-embed-ph="checkout">Checkout: ${esc(id)}</div>`;
+    ctx.embeds.add("checkout");
+    return `<div data-amable-checkout="${esc(id)}" data-amable-tenant="${esc(ctx.tenantSlug)}"${pageAttr(ctx)}></div>`;
+  },
+
+  "checkout-offer"(s, ctx) {
+    const buttonsOnly = str(s.display) === "buttons";
+    if (ctx.editable) {
+      return `<div class="b-form-ph" data-b-embed-ph="checkout-offer">${buttonsOnly ? "Offer buttons" : "Post-purchase offer"}</div>`;
+    }
+    ctx.embeds.add("checkout");
+    const color = str(s.buttonColor).trim();
+    const colorAttr = /^#[0-9a-fA-F]{3,8}$/.test(color) ? ` data-amable-color="${esc(color)}"` : "";
+    return `<div data-amable-offer data-amable-tenant="${esc(ctx.tenantSlug)}"${buttonsOnly ? " data-amable-buttons-only" : ""}${colorAttr}></div>`;
   },
 };
 

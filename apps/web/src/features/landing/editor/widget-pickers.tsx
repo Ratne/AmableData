@@ -1,7 +1,7 @@
 import { Input } from '@amable/ui/ui/input';
 import { Spinner } from '@amable/ui/ui/spinner';
 import { useI18n } from '../../../i18n';
-import { useEventTypeOptions, useFormOptions } from '../api/hooks';
+import { useCheckoutOptions, useEventTypeOptions, useFormOptions } from '../api/hooks';
 import { Choice } from '../components/common';
 
 /** `form` widget: pick one of the tenant's forms (GET /forms). */
@@ -25,6 +25,34 @@ export function FormPicker({ value, onChange, disabled }: { value: string; onCha
       className="h-8 text-xs"
       value={value || null}
       noneLabel={t('landing.editor.chooseForm')}
+      options={options}
+      disabled={disabled}
+      onChange={(next) => onChange(next ?? '')}
+    />
+  );
+}
+
+/** `checkout` widget: pick one of the tenant's checkouts (GET /checkouts, archived ones hidden). */
+export function CheckoutPicker({ value, onChange, disabled }: { value: string; onChange: (id: string) => void; disabled?: boolean }) {
+  const { t } = useI18n();
+  const checkouts = useCheckoutOptions();
+  if (checkouts.isPending) return <Spinner />;
+  if (checkouts.isError) {
+    return (
+      <div className="grid gap-1">
+        <Input className="h-8 text-xs" value={value} disabled={disabled} placeholder={t('landing.editor.checkoutIdPlaceholder')} onChange={(e) => onChange(e.target.value.trim())} />
+        <p className="text-[11px] text-muted-foreground">{t('landing.editor.checkoutsUnavailable')}</p>
+      </div>
+    );
+  }
+  const options = checkouts.data.map((c) => ({ value: c.id, label: c.name }));
+  if (value && !options.some((o) => o.value === value)) options.unshift({ value, label: t('landing.editor.missingCheckout', { id: value }) });
+  if (options.length === 0) return <p className="text-xs text-muted-foreground">{t('landing.editor.noCheckouts')}</p>;
+  return (
+    <Choice
+      className="h-8 text-xs"
+      value={value || null}
+      noneLabel={t('landing.editor.chooseCheckout')}
       options={options}
       disabled={disabled}
       onChange={(next) => onChange(next ?? '')}

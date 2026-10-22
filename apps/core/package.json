@@ -16,6 +16,7 @@
     "@amable/auth": "workspace:*",
     "@amable/booking": "workspace:*",
     "@amable/builder": "workspace:*",
+    "@amable/checkout": "workspace:*",
     "@amable/core": "workspace:*",
     "@amable/db": "workspace:*",
     "@amable/email-render": "workspace:*",

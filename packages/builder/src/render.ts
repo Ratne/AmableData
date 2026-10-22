@@ -971,7 +971,7 @@ export interface RenderedPage {
   hasTracker: boolean;
 }
 
-const EMBED_SCRIPTS: Record<EmbedKind, string> = { forms: "/forms.js", booking: "/booking.js" };
+const EMBED_SCRIPTS: Record<EmbedKind, string> = { forms: "/forms.js", booking: "/booking.js", checkout: "/checkout.js" };
 
 function trackerStub(): string {
   return "window.amable=window.amable||function(){(window.amable.q=window.amable.q||[]).push(arguments)};";
@@ -1072,12 +1072,14 @@ export function renderBuilderDocumentHtml(doc: BuilderDocument, opts: RenderOpti
 export function builderPageCsp(page: RenderedPage, scriptHashes: readonly string[]): string {
   // The forms widget renders a Turnstile challenge when the form enables it.
   const turnstile = page.embeds.includes("forms") ? " https://challenges.cloudflare.com" : "";
+  // The checkout widget loads Stripe.js, which frames the card fields and 3-D Secure.
+  const stripe = page.embeds.includes("checkout");
   const script = page.hasRawHtml
     ? "script-src 'self' 'unsafe-inline' https:"
-    : `script-src 'self' ${scriptHashes.map((h) => `'sha256-${h}'`).join(" ")}${turnstile}`;
+    : `script-src 'self' ${scriptHashes.map((h) => `'sha256-${h}'`).join(" ")}${turnstile}${stripe ? " https://js.stripe.com" : ""}`;
   const frames = page.hasRawHtml
     ? "frame-src https:"
-    : `frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com${turnstile}`;
+    : `frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com${turnstile}${stripe ? " https://js.stripe.com https://hooks.stripe.com" : ""}`;
   return [
     "default-src 'self'",
     script,
@@ -1086,7 +1088,7 @@ export function builderPageCsp(page: RenderedPage, scriptHashes: readonly string
     "img-src 'self' https: data:",
     "media-src 'self' https:",
     frames,
-    `connect-src 'self'${page.hasRawHtml ? " https:" : ""}`,
+    `connect-src 'self'${page.hasRawHtml ? " https:" : stripe ? " https://api.stripe.com" : ""}`,
     "form-action 'self'",
     "base-uri 'self'",
     "object-src 'none'",

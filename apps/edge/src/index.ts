@@ -4,6 +4,7 @@ import { consumeAnalyticsBatch } from './analytics/pipeline';
 import { directLinkViews, linkRoutes } from './analytics/link-routes';
 import { analyticsRoutes } from './analytics/routes';
 import { bookingEdgeRoutes } from './booking/routes';
+import { checkoutEdgeRoutes } from './checkout/routes';
 import { formsEdgeRoutes } from './forms/routes';
 import { pagesCatchAll, pagesEdgeRoutes } from './pages/routes';
 import type { AnalyticsMessage } from './analytics/types';
@@ -60,6 +61,9 @@ app.route('/', linkRoutes);
 app.route('/', formsEdgeRoutes);
 app.route('/', bookingEdgeRoutes);
 app.route('/', pagesEdgeRoutes);
+
+/** Checkout widget `/checkout.js`, hosted checkout and offer pages `/c/…`, Stripe webhooks. */
+app.route('/', checkoutEdgeRoutes);
 
 /** Document signing pages `/sign/:slug/:token` and the signing app `/sign.js`. */
 app.route('/', esignEdgeRoutes);

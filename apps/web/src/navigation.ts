@@ -10,6 +10,7 @@ import {
   CalendarCheck,
   CalendarDays,
   Code2,
+  CreditCard,
   Coins,
   DatabaseBackup,
   Eye,
@@ -206,6 +207,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         labelKey: 'nav.products',
         icon: Package,
         permission: 'products:read',
+      },
+      {
+        id: 'checkouts',
+        path: 'checkouts',
+        labelKey: 'nav.checkouts',
+        icon: CreditCard,
+        permission: 'checkouts:read',
       },
       {
         id: 'subscriptions',

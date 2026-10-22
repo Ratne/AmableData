@@ -1313,6 +1313,42 @@ const booking: WidgetDef = {
   ],
 };
 
+// --- Checkout (native amable embeds) ----------------------------------------
+
+const checkout: WidgetDef = {
+  type: "checkout",
+  title: "Checkout",
+  icon: "shopping-cart",
+  category: "form",
+  defaults: { settings: {} },
+  sections: [
+    content("checkout_content", "Checkout", [
+      text("checkoutId", "Checkout ID", {
+        description: "Pick one of the checkouts created in the E-commerce section.",
+      }),
+    ]),
+  ],
+};
+
+const checkoutOffer: WidgetDef = {
+  type: "checkout-offer",
+  title: "Post-purchase offer",
+  icon: "gift",
+  category: "form",
+  defaults: { settings: { display: "full" } },
+  sections: [
+    content("offer_content", "Offer", [
+      select("display", "Display", [
+        { value: "full", label: "Offer and buttons" },
+        { value: "buttons", label: "Buttons only" },
+      ]),
+      text("buttonColor", "Button color", {
+        placeholder: "#4f46e5",
+        description: "Shows the upsell or downsell the buyer reached after paying (one-click accept or decline).",
+      }),
+    ]),
+  ],
+};
 
 export const WIDGET_LIST: WidgetDef[] = [
   container,
@@ -1344,6 +1380,8 @@ export const WIDGET_LIST: WidgetDef[] = [
   googleMaps,
   form,
   booking,
+  checkout,
+  checkoutOffer,
 ];
 
 export const WIDGETS: Record<string, WidgetDef> = Object.fromEntries(

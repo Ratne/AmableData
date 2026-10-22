@@ -283,6 +283,9 @@ function PlansSection({ product, editable }: { product: Product; editable: boole
                   {plan.trial_days > 0
                     ? ` · ${t('commerce.plan.trial', { days: plan.trial_days })}`
                     : ''}
+                  {plan.setup_fee_minor > 0
+                    ? ` · ${t('commerce.plan.setupFeeShort', { amount: money(plan.setup_fee_minor, plan.currency) })}`
+                    : ''}
                 </span>
               </span>
               {plan.active ? null : <Pill tone="neutral">{t('commerce.common.inactive')}</Pill>}
@@ -342,6 +345,7 @@ function PlanDialog({
   const [count, setCount] = useState(plan?.interval_count ?? 1);
   const [trial, setTrial] = useState(plan?.trial_days ?? 0);
   const [price, setPrice] = useState<number | null>(plan?.price_minor ?? product.price_minor);
+  const [setupFee, setSetupFee] = useState<number | null>(plan?.setup_fee_minor ?? 0);
   const [active, setActive] = useState(plan?.active ?? true);
   const save = useCommerceMutation({
     mutationFn: () => {
@@ -351,6 +355,7 @@ function PlanDialog({
         interval_count: count,
         trial_days: trial,
         price_minor: price ?? 0,
+        setup_fee_minor: setupFee ?? 0,
         active,
       };
       return plan ? api.plans.update(plan.id, input) : api.plans.create(product.id, input);
@@ -414,6 +419,11 @@ function PlanDialog({
                   value={trial}
                   onChange={(e) => setTrial(Math.max(0, Math.trunc(Number(e.target.value)) || 0))}
                 />
+              )}
+            </FormField>
+            <FormField label={t('commerce.plan.setupFee')} hint={t('commerce.plan.setupFeeHint')} className="sm:col-span-2">
+              {(id) => (
+                <MoneyInput id={id} value={setupFee} onChange={setSetupFee} currency={product.currency} />
               )}
             </FormField>
           </div>

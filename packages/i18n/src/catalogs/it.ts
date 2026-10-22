@@ -6,6 +6,7 @@ import { esignIt } from './esign-it';
 import { formsIt } from './forms-it';
 import { landingIt } from './landing-it';
 import { commerceIt } from './commerce-it';
+import { checkoutIt } from './checkout-it';
 import { analyticsIt } from './analytics-it';
 import { reportsIt } from './reports-it';
 import { supportIt } from './support-it';
@@ -29,6 +30,7 @@ export const it: Readonly<Record<MessageKey, string>> = {
   ...esignIt,
   ...landingIt,
   ...commerceIt,
+  ...checkoutIt,
   ...analyticsIt,
   ...reportsIt,
   ...supportIt,

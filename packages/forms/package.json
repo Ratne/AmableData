@@ -7,7 +7,13 @@
   "exports": {
     ".": "./src/index.ts",
     "./bundle": "./generated/bundle.ts",
-    "./widget/turnstile": "./src/widget/turnstile.ts"
+    "./widget/turnstile": "./src/widget/turnstile.ts",
+    "./widget/capture": "./src/widget/capture.ts",
+    "./widget/fields": "./src/widget/fields.tsx",
+    "./widget/styles": "./src/widget/styles.ts",
+    "./validate": "./src/validate.ts",
+    "./strings": "./src/strings.ts",
+    "./constants": "./src/constants.ts"
   },
   "scripts": {
     "build": "node scripts/build.mjs",

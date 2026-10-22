@@ -89,6 +89,7 @@ export const crmEn = {
   'crm.sourceType.import': 'Import',
   'crm.sourceType.form': 'Form',
   'crm.sourceType.booking': 'Booking',
+  'crm.sourceType.checkout': 'Checkout',
   'crm.sourceType.other': 'Other',
   'crm.marketable.unknown': 'Unknown',
   'crm.marketable.single_opt_in': 'Single opt-in',

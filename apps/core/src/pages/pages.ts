@@ -26,7 +26,7 @@ export const MAX_DOCUMENT_BYTES = 2_000_000;
  * Paths the edge serves itself on every host (other edge routes win over the
  * page catch-all), so pages cannot claim them.
  */
-const RESERVED_PREFIXES = ['/_edge', '/f', '/b', '/p', '/m', '/e', '/s.js', '/forms.js', '/booking.js', '/sitemap.xml', '/robots.txt'];
+const RESERVED_PREFIXES = ['/_edge', '/f', '/b', '/p', '/m', '/e', '/s.js', '/forms.js', '/booking.js', '/c', '/checkout.js', '/sitemap.xml', '/robots.txt'];
 
 export interface PageRow {
   id: string;

@@ -18,6 +18,7 @@ import { handleAdsTokenOp } from '../analytics/ads-sync';
 import { findTrackingHost, TRACKING_HOST_GATEWAY_OP } from '../analytics/routes-tracking-domains';
 import { findTenantBySlug } from '../auth/store';
 import { bookingGatewayHandlers, bookingGatewayRawHandlers } from '../booking/gateway';
+import { checkoutGatewayHandlers } from '../checkout/gateway';
 import { esignGatewayHandlers, esignGatewayRawHandlers } from '../esign/gateway';
 import type { Env } from '../env';
 import { formsGatewayHandlers, formsGatewayRawHandlers } from '../forms/gateway';
@@ -51,6 +52,7 @@ const handlers: GatewayHandlers = {
   ...bookingGatewayHandlers,
   ...pagesGatewayHandlers,
   ...esignGatewayHandlers,
+  ...checkoutGatewayHandlers,
 };
 const rawHandlers: GatewayRawHandlers = {
   ...formsGatewayRawHandlers,

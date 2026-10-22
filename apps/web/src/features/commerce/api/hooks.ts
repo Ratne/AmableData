@@ -33,6 +33,10 @@ export const commerceKeys = {
   invoices: (slug: string) => ['commerce', slug, 'invoices'] as const,
   invoice: (slug: string, id: string) => ['commerce', slug, 'invoices', id] as const,
   contacts: (slug: string) => ['commerce', slug, 'contacts'] as const,
+  stripe: (slug: string) => ['commerce', slug, 'stripe'] as const,
+  checkouts: (slug: string) => ['commerce', slug, 'checkouts'] as const,
+  checkout: (slug: string, id: string) => ['commerce', slug, 'checkouts', id] as const,
+  checkoutEmbed: (slug: string, id: string) => ['commerce', slug, 'checkouts', id, 'embed'] as const,
 };
 
 export function useTenantSlug(): string {

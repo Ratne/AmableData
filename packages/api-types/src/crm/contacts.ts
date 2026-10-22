@@ -14,7 +14,7 @@ export const MARKETABLE_STATUSES = [
 export const marketableStatusSchema = z.enum(MARKETABLE_STATUSES);
 export type MarketableStatus = z.infer<typeof marketableStatusSchema>;
 
-export const SOURCE_TYPES = ['manual', 'api', 'import', 'form', 'booking', 'other'] as const;
+export const SOURCE_TYPES = ['manual', 'api', 'import', 'form', 'booking', 'checkout', 'other'] as const;
 export const sourceTypeSchema = z.enum(SOURCE_TYPES);
 export type SourceType = z.infer<typeof sourceTypeSchema>;
 

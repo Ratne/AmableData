@@ -7,6 +7,7 @@ import {
 } from '@amable/builder';
 import { Hono, type Context, type Handler } from 'hono';
 import { siteStub, tenantSitesStub } from '../analytics/rpc';
+import { CHECKOUT_PERMISSIONS } from '../checkout/routes';
 import type { Env } from '../env';
 import { callCore, callCoreRaw, clientInfo, GatewayCallError, tenantRef } from '../gateway';
 
@@ -149,6 +150,7 @@ async function servePage(c: Ctx, options: ServeOptions): Promise<Response> {
       'content-security-policy': builderPageCsp(rendered, hashes),
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'strict-origin-when-cross-origin',
+      ...(rendered.embeds.includes('checkout') ? { 'permissions-policy': CHECKOUT_PERMISSIONS } : {}),
       ...(seo.noindex ? { 'x-robots-tag': 'noindex' } : {}),
     },
   });

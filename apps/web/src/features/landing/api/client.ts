@@ -133,6 +133,18 @@ export function landingClient(slug: string) {
         }
         return out;
       },
+      checkouts: async (): Promise<FormOption[]> => {
+        const payload = await get<unknown>('/checkouts', { limit: 100 });
+        const out: FormOption[] = [];
+        for (const item of listOf(payload)) {
+          const row = asRecord(item);
+          const checkoutId = row?.['id'];
+          const name = row?.['name'];
+          if (typeof checkoutId === 'string' && row?.['status'] !== 'archived')
+            out.push({ id: checkoutId, name: typeof name === 'string' ? name : checkoutId });
+        }
+        return out;
+      },
       /** `null` when the booking module is not deployed (404). */
       eventTypes: async (): Promise<EventTypeOption[] | null> => {
         try {

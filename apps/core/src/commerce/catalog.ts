@@ -139,6 +139,7 @@ export interface PlanRow {
   interval_count: number;
   trial_days: number;
   price_minor: number;
+  setup_fee_minor: number;
   currency: string;
   active: number;
   position: number;
@@ -155,6 +156,7 @@ function planToApi(row: PlanRow): Plan {
     interval_count: row.interval_count,
     trial_days: row.trial_days,
     price_minor: row.price_minor,
+    setup_fee_minor: row.setup_fee_minor,
     currency: row.currency,
     active: row.active === 1,
     position: row.position,
@@ -195,8 +197,8 @@ function insertPlan(
   const now = ctx.now();
   ctx.db.run(
     `INSERT INTO crm_subscription_plans (id, product_id, name, interval, interval_count, trial_days,
-       price_minor, currency, active, position, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       price_minor, setup_fee_minor, currency, active, position, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     product.id,
     plan.name,
@@ -204,6 +206,7 @@ function insertPlan(
     plan.interval_count ?? 1,
     plan.trial_days ?? 0,
     plan.price_minor,
+    plan.setup_fee_minor ?? 0,
     product.currency,
     plan.active === false ? 0 : 1,
     plan.position ?? position,
@@ -262,12 +265,13 @@ export function updatePlan(ctx: CrmContext, input: { id: string; data: UpdatePla
   const d = input.data;
   ctx.db.run(
     `UPDATE crm_subscription_plans SET name = ?, interval = ?, interval_count = ?, trial_days = ?,
-       price_minor = ?, active = ?, position = ?, updated_at = ? WHERE id = ?`,
+       price_minor = ?, setup_fee_minor = ?, active = ?, position = ?, updated_at = ? WHERE id = ?`,
     d.name ?? row.name,
     d.interval ?? row.interval,
     d.interval_count ?? row.interval_count,
     d.trial_days ?? row.trial_days,
     d.price_minor ?? row.price_minor,
+    d.setup_fee_minor ?? row.setup_fee_minor,
     d.active === undefined ? row.active : d.active ? 1 : 0,
     d.position ?? row.position,
     ctx.now(),

@@ -6,6 +6,7 @@ import { esignEn } from './esign-en';
 import { formsEn } from './forms-en';
 import { landingEn } from './landing-en';
 import { commerceEn } from './commerce-en';
+import { checkoutEn } from './checkout-en';
 import { analyticsEn } from './analytics-en';
 import { reportsEn } from './reports-en';
 import { supportEn } from './support-en';
@@ -28,6 +29,7 @@ export const en = {
   ...esignEn,
   ...landingEn,
   ...commerceEn,
+  ...checkoutEn,
   ...analyticsEn,
   ...reportsEn,
   ...supportEn,

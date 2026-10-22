@@ -33,6 +33,7 @@ import * as savedSearches from './saved-searches';
 import { globalSearch, type SearchEntityKind } from './search/index-store';
 import { describeFields, executeSearch } from './search/query-builder';
 import * as tags from './tags';
+import { checkoutOps } from '../checkout/ops';
 import { commerceOps } from '../commerce/ops';
 import { bookingOps } from '../booking/ops';
 import { formsOps } from '../forms/ops';
@@ -218,8 +219,9 @@ export const crmOps = {
   'idempotency.abort': idempotency.idempotencyAbort,
   'workspace.settings.get': getWorkspace,
   'workspace.settings.update': updateWorkspace,
-  // e-commerce (apps/core/src/commerce)
+  // e-commerce (apps/core/src/commerce) and checkouts (apps/core/src/checkout)
   ...commerceOps,
+  ...checkoutOps,
   // web analytics sync, read-only (apps/core/src/analytics)
   ...analyticsCrmOps,
   // forms, calendars & bookings, landing pages (apps/core/src/{forms,booking,pages})

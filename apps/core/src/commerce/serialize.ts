@@ -2,7 +2,7 @@ import type { Order, OrderItem } from '@amable/api-types';
 import type { CrmContext } from '../crm/context';
 import { placeholders } from '../crm/db/sql';
 import { readValues } from '../crm/custom-fields/repo';
-import { toIso } from '../crm/util';
+import { parseJson, toIso } from '../crm/util';
 import type { OrderItemRow, OrderRow } from './rows';
 
 export function itemToApi(row: OrderItemRow): OrderItem {
@@ -69,6 +69,9 @@ export function ordersToApi(ctx: CrmContext, rows: OrderRow[]): Order[] {
     billing_period_start: toIso(row.billing_period_start),
     billing_period_end: toIso(row.billing_period_end),
     analytics_visitor_id: row.analytics_visitor_id,
+    checkout_id: row.checkout_id,
+    parent_order_id: row.parent_order_id,
+    attribution: row.attribution === null ? null : parseJson<Record<string, string>>(row.attribution, {}),
     items: items.get(row.id) ?? [],
     invoice: invoices.get(row.id) ?? null,
     custom_fields: custom.get(row.id) ?? {},

@@ -14,7 +14,7 @@ import { emit } from '../crm/events';
 import { assertRef } from '../crm/refs';
 import { decodeCursor, encodeCursor, parseIsoMs, toIso } from '../crm/util';
 import { getPlanRow, getProductRow } from './catalog';
-import { addInterval, periodDays } from './money';
+import { addInterval, periodDays, type DiscountRule } from './money';
 import { createOrderRow } from './orders';
 import { getSubscriptionRow, subscriptionFacts, type OrderRow, type SubscriptionRow } from './rows';
 
@@ -50,8 +50,33 @@ function toApi(row: SubscriptionRow): Subscription {
     paused_at: toIso(row.paused_at),
     ended_at: toIso(row.ended_at),
     analytics_visitor_id: row.analytics_visitor_id,
+    discount:
+      row.discount_kind === null
+        ? null
+        : {
+            promo_code: row.promo_code,
+            kind: row.discount_kind,
+            percent_bps: row.discount_percent_bps,
+            amount_minor: row.discount_amount_minor,
+            periods_left: row.discount_periods_left,
+          },
+    autopay: row.stripe_payment_method_id !== null,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
+  };
+}
+
+/** Promo discount the next renewal still gets. */
+function renewalDiscount(sub: SubscriptionRow): { rule: DiscountRule; code: string | null } | undefined {
+  if (sub.discount_kind === null) return undefined;
+  if (sub.discount_periods_left !== null && sub.discount_periods_left <= 0) return undefined;
+  return {
+    rule: {
+      kind: sub.discount_kind,
+      percentBps: sub.discount_percent_bps,
+      amountMinor: sub.discount_amount_minor,
+    },
+    code: sub.promo_code,
   };
 }
 
@@ -111,6 +136,7 @@ function billNextPeriod(ctx: CrmContext, sub: SubscriptionRow): OrderRow {
   const period = nextPeriod(sub);
   const product = getProductRow(ctx, sub.product_id);
   const plan = getPlanRow(ctx, sub.plan_id);
+  const discount = renewalDiscount(sub);
   const order = createOrderRow(
     ctx,
     {
@@ -125,6 +151,7 @@ function billNextPeriod(ctx: CrmContext, sub: SubscriptionRow): OrderRow {
       subscriptionId: sub.id,
       billingPeriod: period,
       dueAt: period.start,
+      ...(discount === undefined ? {} : { discount }),
       lines: [
         {
           productId: product.id,
@@ -149,6 +176,20 @@ function billNextPeriod(ctx: CrmContext, sub: SubscriptionRow): OrderRow {
     ctx.now(),
     sub.id,
   );
+  if (discount !== undefined && sub.discount_periods_left !== null) {
+    const left = sub.discount_periods_left - 1;
+    ctx.db.run(
+      `UPDATE crm_subscriptions SET discount_periods_left = ?, discount_kind = CASE WHEN ? <= 0 THEN NULL ELSE discount_kind END
+       WHERE id = ?`,
+      left,
+      left,
+      sub.id,
+    );
+  }
+  if (sub.stripe_payment_method_id !== null && order.total_minor > 0) {
+    // Charged on the saved card by the TenantDb alarm.
+    ctx.db.run(`UPDATE crm_orders SET next_charge_at = ? WHERE id = ?`, Math.max(period.start, ctx.now()), order.id);
+  }
   return order;
 }
 
@@ -302,6 +343,109 @@ export function createSubscription(ctx: CrmContext, input: CreateSubscriptionInp
   // A back-dated start catches up on every period already elapsed.
   processDue(ctx, id, now, { processed: 0, renewals: 0, ended: 0, trials_ended: 0 });
   return getSubscription(ctx, { id });
+}
+
+export interface CheckoutSubscriptionInput {
+  contactId: string;
+  planId: string;
+  quantity: number;
+  unitPriceMinor: number;
+  /** Paid checkout order holding the first period (null with a trial: nothing billed yet). */
+  firstOrderId: string | null;
+  discount: {
+    promoId: string;
+    code: string;
+    rule: DiscountRule;
+    /** Renewals still discounted (null = all). */
+    periodsLeft: number | null;
+  } | null;
+  stripeCustomerId: string | null;
+  stripePaymentMethodId: string | null;
+  visitorId: string | null;
+}
+
+/**
+ * Subscription bought on a checkout. Without a trial the first period was
+ * paid with the checkout order (linked to the subscription as its period 1);
+ * with a trial nothing is billed until it ends. Renewals are charged on the
+ * saved payment method.
+ */
+export function startCheckoutSubscription(ctx: CrmContext, input: CheckoutSubscriptionInput): SubscriptionRow {
+  const plan = getPlanRow(ctx, input.planId);
+  const product = getProductRow(ctx, plan.product_id);
+  const now = ctx.now();
+  const trialEnds = plan.trial_days > 0 ? now + plan.trial_days * DAY_MS : null;
+  const firstEnd = addInterval(now, plan.interval, plan.interval_count);
+  const billed = trialEnds === null && input.firstOrderId !== null;
+  const id = ctx.newId();
+  ctx.db.run(
+    `INSERT INTO crm_subscriptions (id, contact_id, product_id, plan_id, status, quantity, unit_price_minor,
+       currency, interval, interval_count, tax_rate_bps, started_at, trial_ends_at, current_period_start,
+       current_period_end, next_bill_at, billing_anchor, periods_billed, analytics_visitor_id, promo_code_id,
+       promo_code, discount_kind, discount_percent_bps, discount_amount_minor, discount_periods_left,
+       stripe_customer_id, stripe_payment_method_id, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    input.contactId,
+    product.id,
+    plan.id,
+    trialEnds === null ? 'active' : 'trialing',
+    input.quantity,
+    input.unitPriceMinor,
+    plan.currency,
+    plan.interval,
+    plan.interval_count,
+    product.tax_rate_bps,
+    now,
+    trialEnds,
+    billed ? now : trialEnds === null ? null : now,
+    billed ? firstEnd : trialEnds,
+    billed ? firstEnd : (trialEnds ?? now),
+    trialEnds ?? now,
+    billed ? 1 : 0,
+    input.visitorId,
+    input.discount?.promoId ?? null,
+    input.discount?.code ?? null,
+    input.discount?.rule.kind ?? null,
+    input.discount?.rule.percentBps ?? null,
+    input.discount?.rule.amountMinor ?? null,
+    input.discount?.periodsLeft ?? null,
+    input.stripeCustomerId,
+    input.stripePaymentMethodId,
+    ctx.actor.id,
+    now,
+    now,
+  );
+  if (billed && input.firstOrderId !== null) {
+    ctx.db.run(
+      `UPDATE crm_orders SET subscription_id = ?, billing_period_start = ?, billing_period_end = ?, updated_at = ?
+       WHERE id = ?`,
+      id,
+      now,
+      firstEnd,
+      now,
+      input.firstOrderId,
+    );
+  }
+  const sub = getSubscriptionRow(ctx, id);
+  emit(ctx, 'subscription.started', {
+    ...subscriptionFacts(sub),
+    trial: trialEnds !== null,
+    orderId: billed ? input.firstOrderId : null,
+  });
+  if (trialEnds !== null) {
+    emit(ctx, 'subscription.trial_started', { ...subscriptionFacts(sub), trialEndsAt: toIso(trialEnds) });
+  }
+  return sub;
+}
+
+/** Earliest automatic charge of a renewal order on a saved payment method. */
+export function nextChargeDue(db: SqlDb): number | null {
+  return (
+    db.all<{ due: number | null }>(
+      `SELECT MIN(next_charge_at) AS due FROM crm_orders WHERE next_charge_at IS NOT NULL AND deleted_at IS NULL`,
+    )[0]?.due ?? null
+  );
 }
 
 /**

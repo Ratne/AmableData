@@ -143,7 +143,7 @@ interface OrderFacts extends CommerceMoney {
   /** Distinct product ids on the order lines. */
   productIds: string[];
   subscriptionId: string | null;
-  source: 'manual' | 'api' | 'subscription';
+  source: 'manual' | 'api' | 'subscription' | 'checkout';
 }
 
 interface SubscriptionFacts extends CommerceMoney {
