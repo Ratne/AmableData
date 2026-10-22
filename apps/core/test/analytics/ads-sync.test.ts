@@ -7,7 +7,10 @@ import { FakeAnalyticsNamespace, siteInit, T0 } from '../../../edge/test/helpers
 import {
   aggregateSpend,
   adsStub,
+  authorizeAdsConnect,
   backfillAdConnection,
+  cancelAdsConnect,
+  connectAdAccounts,
   disconnectAdConnection,
   finishAdsConnect,
   kvAdGrantStore,
@@ -125,6 +128,7 @@ async function connect(site: SiteRef, platform: AdPlatform = 'meta'): Promise<Ad
   });
   if (conn === undefined) throw new Error('no connection');
   calls = [];
+  grantReads = 0;
   return conn;
 }
 
@@ -705,3 +709,85 @@ function must<T>(r: { ok: true; value: T } | { ok: false; error: unknown }): T {
   if (!r.ok) throw new Error(JSON.stringify(r.error));
   return r.value;
 }
+
+describe('picking the ad accounts of an authorization', () => {
+  const ACCOUNTS = ['act_1', 'act_2', 'act_3'].map((id) => ({
+    account_id: id,
+    name: `Account ${id}`,
+    currency: 'EUR',
+    timezone: 'Europe/Rome',
+  }));
+
+  beforeEach(() => {
+    overrides.meta = () => ({ listAccounts: () => Promise.resolve(ACCOUNTS) });
+  });
+
+  async function authorize(site: SiteRef = SITE_A) {
+    const start = await startAdsConnect(ports, {
+      tenantId: site.tenantId,
+      tenantSlug: 'acme',
+      siteId: site.id,
+      platform: 'meta',
+      redirectUri: 'https://app.test/oauth/ads/callback',
+    });
+    const code = new URL(start.authorizeUrl).searchParams.get('code') ?? '';
+    return authorizeAdsConnect(ports, { tenantId: site.tenantId, siteId: site.id, platform: 'meta', state: start.state, code });
+  }
+  const pick = (grantId: string, accountIds: string[], site: SiteRef = SITE_A) =>
+    connectAdAccounts(ports, { tenantId: site.tenantId, siteId: site.id, platform: 'meta', grantId, accountIds });
+  const connectedIds = async () =>
+    (await adsStub(edge, SITE_A.id).listAdConnections('meta'))
+      .filter((c) => c.status !== 'disconnected')
+      .map((c) => c.account_id)
+      .sort();
+
+  it('authorizing connects nothing; only the picked accounts become connections', async () => {
+    const auth = await authorize();
+    expect(auth.accounts.map((a) => [a.account_id, a.connected])).toEqual([
+      ['act_1', false],
+      ['act_2', false],
+      ['act_3', false],
+    ]);
+    expect(await connectedIds()).toEqual([]);
+    const created = await pick(auth.grantId, ['act_1', 'act_3', 'act_unknown']);
+    expect(created.map((c) => c.account_id)).toEqual(['act_1', 'act_3']);
+    expect(await connectedIds()).toEqual(['act_1', 'act_3']);
+    // The choice is one-time: the grant is no longer pending.
+    await expect(pick(auth.grantId, ['act_2'])).rejects.toMatchObject({ code: 'invalid_state' });
+  });
+
+  it('marks already connected accounts and moves the picked ones to the new grant', async () => {
+    const first = await authorize();
+    await pick(first.grantId, ['act_1', 'act_2']);
+    const second = await authorize();
+    expect(second.accounts.filter((a) => a.connected).map((a) => a.account_id)).toEqual(['act_1', 'act_2']);
+    await pick(second.grantId, ['act_2']);
+    const grants = new Map(
+      (await adsStub(edge, SITE_A.id).listAdConnections('meta')).map((c) => [c.account_id, c.metadata['grant_id']]),
+    );
+    expect(grants.get('act_1')).toBe(first.grantId);
+    expect(grants.get('act_2')).toBe(second.grantId);
+  });
+
+  it('rejects an empty pick, another site, an expired choice; cancel drops the grant', async () => {
+    const auth = await authorize();
+    await expect(pick(auth.grantId, ['act_unknown'])).rejects.toMatchObject({ code: 'no_accounts' });
+    await expect(pick(auth.grantId, ['act_1'], SITE_C)).rejects.toMatchObject({ code: 'invalid_state' });
+    clock.now += 31 * MIN;
+    await expect(pick(auth.grantId, ['act_1'])).rejects.toMatchObject({ code: 'invalid_state' });
+
+    const other = await authorize();
+    await cancelAdsConnect(ports, { tenantId: SITE_A.tenantId, siteId: SITE_A.id, platform: 'meta', grantId: other.grantId });
+    expect([...kv.keys()].some((k) => k === `ads_grant:${other.grantId}`)).toBe(false);
+    expect(await connectedIds()).toEqual([]);
+  });
+
+  it('caps a pick at 25 accounts', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ ...ACCOUNTS[0]!, account_id: `act_${String(i)}` }));
+    overrides.meta = () => ({ listAccounts: () => Promise.resolve(many) });
+    const auth = await authorize();
+    expect(auth.accounts).toHaveLength(30);
+    await expect(pick(auth.grantId, many.map((a) => a.account_id))).rejects.toMatchObject({ code: 'too_many_accounts' });
+    expect(await pick(auth.grantId, many.slice(0, 25).map((a) => a.account_id))).toHaveLength(25);
+  });
+});

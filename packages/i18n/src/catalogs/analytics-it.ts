@@ -1199,4 +1199,13 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.ads.oauth.expired':
     'Questa autorizzazione è stata avviata in un’altra scheda o è scaduta: riavvia la connessione.',
   'analytics.ads.oauth.back': 'Torna agli account ads',
+  'analytics.ads.pick.title': 'Scegli gli account pubblicitari da connettere',
+  'analytics.ads.pick.hint':
+    'Questa autorizzazione copre {count} account pubblicitari. Scegli quelli la cui spesa e le cui conversioni riguardano questo sito (al massimo {max}).',
+  'analytics.ads.pick.search': 'Cerca per nome o ID',
+  'analytics.ads.pick.selected': '{count} di {max} selezionati',
+  'analytics.ads.pick.connected': 'Connesso',
+  'analytics.ads.pick.none': 'Nessun account corrisponde alla ricerca.',
+  'analytics.ads.pick.connect': 'Connetti selezionati',
+  'analytics.ads.pick.connecting': 'Connessione e importazione della prima spesa…',
 };

@@ -5,14 +5,23 @@ import { LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { analyticsErrorMessage } from '../api';
-import { funnelKeys, funnelsApi, slugFromAdsState, takeAdsOAuth } from '../api-funnels';
+import {
+  funnelKeys,
+  funnelsApi,
+  slugFromAdsState,
+  takeAdsOAuth,
+  type AdAccountSelection,
+  type PendingAdsOAuth,
+} from '../api-funnels';
 import { analyticsAdsOAuthRoute } from '../routes';
+import { AdAccountPicker } from '../settings/ad-account-picker';
 
 /**
  * `/oauth/ads/callback` — fixed redirect URI of the ad platforms (and return
  * URL of the central broker). Site, platform and workspace were stored when
  * the flow started; own-app states also carry the slug as prefix. Completes
- * the connection, then returns to the `ads` settings tab.
+ * the authorization, lets the user pick the ad accounts when it covers several,
+ * then returns to the `ads` settings tab.
  */
 export function AdsOAuthCallbackPage() {
   const { t } = useI18n();
@@ -22,6 +31,20 @@ export function AdsOAuthCallbackPage() {
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [slug, setSlug] = useState<string | null>(search.state ? slugFromAdsState(search.state) : null);
+  const [choice, setChoice] = useState<{
+    workspace: string;
+    pending: PendingAdsOAuth;
+    selection: AdAccountSelection;
+  } | null>(null);
+
+  const backToSettings = async (workspace: string, siteId: string) => {
+    await navigate({
+      to: '/t/$tenant/analytics/settings',
+      params: { tenant: workspace },
+      search: { site: siteId, tab: 'ads' },
+      replace: true,
+    });
+  };
 
   useEffect(() => {
     if (started.current) return;
@@ -44,18 +67,35 @@ export function AdsOAuthCallbackPage() {
     }
     funnelsApi(workspace)
       .ads.callback(pending.site_id, pending.platform, { state, code })
-      .then(async () => {
+      .then(async (result) => {
+        if (result.selection) {
+          setChoice({ workspace, pending, selection: result.selection });
+          return;
+        }
         toast.success(t('analytics.ads.connections.connected'));
         await queryClient.invalidateQueries({ queryKey: funnelKeys.ads(workspace, pending.site_id) });
-        await navigate({
-          to: '/t/$tenant/analytics/settings',
-          params: { tenant: workspace },
-          search: { site: pending.site_id, tab: 'ads' },
-          replace: true,
-        });
+        await backToSettings(workspace, pending.site_id);
       })
       .catch((reason: unknown) => setError(analyticsErrorMessage(t, reason)));
   }, [search, navigate, queryClient, t]);
+
+  if (choice && !error) {
+    const back = () => void backToSettings(choice.workspace, choice.pending.site_id);
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background p-6 text-foreground">
+        <div className="w-full max-w-lg">
+          <AdAccountPicker
+            tenant={choice.workspace}
+            siteId={choice.pending.site_id}
+            platform={choice.pending.platform}
+            selection={choice.selection}
+            onConnected={back}
+            onCancelled={back}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background p-6 text-foreground">

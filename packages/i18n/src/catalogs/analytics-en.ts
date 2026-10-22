@@ -1199,6 +1199,15 @@ export const analyticsEn = {
   'analytics.ads.oauth.expired':
     'This authorization was started in another tab or expired: start the connection again.',
   'analytics.ads.oauth.back': 'Back to ad accounts',
+  'analytics.ads.pick.title': 'Choose the ad accounts to connect',
+  'analytics.ads.pick.hint':
+    'This authorization covers {count} ad accounts. Pick the ones whose spend and conversions belong to this site (at most {max}).',
+  'analytics.ads.pick.search': 'Search by name or ID',
+  'analytics.ads.pick.selected': '{count} of {max} selected',
+  'analytics.ads.pick.connected': 'Connected',
+  'analytics.ads.pick.none': 'No ad account matches the search.',
+  'analytics.ads.pick.connect': 'Connect selected',
+  'analytics.ads.pick.connecting': 'Connecting and importing the first spend…',
 } as const;
 
 export type AnalyticsMessageKey = keyof typeof analyticsEn;

@@ -2,6 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { idParam, siteQuery } from './params';
 import { isProviderError } from '@amable/ads-providers';
 import { AD_PLATFORMS, adConnectionSchema, adConnectionSettingsSchema } from '@amable/api-types';
+import type { AdConnectionRecord } from '@amable/app-edge/analytics';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { crmRoute, json, jsonBody } from '../crm/api/core';
@@ -12,10 +13,14 @@ import {
   adsStub,
   adsSyncPorts,
   AdsSyncError,
+  authorizeAdsConnect,
   backfillAdConnection,
   BACKFILL_MAX_DAYS,
+  cancelAdsConnect,
+  connectAdAccounts,
   disconnectAdConnection,
   finishAdsConnect,
+  MAX_ACCOUNTS_PER_CONNECT,
   startAdsConnect,
   syncAdConnection,
   toAdConnection,
@@ -38,12 +43,35 @@ const connectionsSchema = z.object({
   data: z.array(adConnectionSchema),
 });
 const connectStartSchema = z.object({ authorize_url: z.string(), state: z.string() });
+const accountIdsSchema = z.array(z.string().min(1).max(128)).min(1).max(MAX_ACCOUNTS_PER_CONNECT);
+const grantIdSchema = z.string().regex(/^ag_[A-Za-z0-9_-]{1,64}$/);
 const callbackSchema = z.strictObject({
   state: z.string().min(1).max(512),
   code: z.string().min(1).max(4096),
-  /** Ad accounts to connect (default: every account of the authorization). */
-  account_ids: z.array(z.string().min(1).max(128)).min(1).max(25).optional(),
+  /** Ad accounts to connect right away; without them the accounts are returned for selection. */
+  account_ids: accountIdsSchema.optional(),
 });
+const selectionSchema = z.object({
+  grant_id: z.string(),
+  /** Pick at most `max` with `POST …/{platform}/accounts`, or drop the authorization with `…/cancel`. */
+  max: z.number().int(),
+  accounts: z.array(
+    z.object({
+      account_id: z.string(),
+      name: z.string(),
+      currency: z.string(),
+      timezone: z.string(),
+      connected: z.boolean(),
+    }),
+  ),
+});
+const callbackResultSchema = z.object({
+  /** Connections created; empty while `selection` waits for the user. */
+  data: z.array(adConnectionSchema),
+  selection: selectionSchema.optional(),
+});
+const pickSchema = z.strictObject({ grant_id: grantIdSchema, account_ids: accountIdsSchema });
+const cancelSchema = z.strictObject({ grant_id: grantIdSchema });
 const backfillSchema = z.strictObject({ from: day, to: day });
 const backfillResultSchema = z.object({
   connection_id: z.string(),
@@ -83,6 +111,19 @@ function providerFailure(error: unknown): never {
     throw new HttpError(502, 'ads_provider_error', { message: error.message.slice(0, 200) });
   }
   throw error;
+}
+
+/** Audits the new connections and runs their first sync. */
+async function connected(c: Ctx, site: SiteRef, ports: AdsSyncPorts, platform: string, created: AdConnectionRecord[]) {
+  await audit(c, 'analytics.ads_connected', {
+    target: platform,
+    details: { site: site.id, accounts: created.length },
+  });
+  const stub = adsStub(ports.ns, site.id);
+  return mapLimited(created, FIRST_SYNC_CONCURRENCY, async (conn) => {
+    await syncAdConnection(ports, site, conn, { force: true });
+    return toAdConnection((await stub.getAdConnection(conn.id)) ?? conn);
+  });
 }
 
 /** Ad platform connections of a site: OAuth, listing, disconnection and manual backfill. */
@@ -148,38 +189,102 @@ export function registerAdsRoutes(api: OpenAPIHono<AppEnv>): void {
       method: 'post',
       path: '/ads/connections/{platform}/callback',
       tags,
-      summary: 'Complete the OAuth connection: one connection per ad account, then a first sync',
+      summary:
+        'Complete the OAuth authorization: a single ad account (or the given account_ids) is connected and synced, several are returned for selection',
       request: { params: platformParam, query: siteQuery, body: jsonBody(callbackSchema) },
+      responses: { 200: json(callbackResultSchema, 'Connections, or the accounts to pick from') },
+    }),
+    async (c) => {
+      const { site, ports } = await siteOf(c);
+      const { platform } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const input = { tenantId: site.tenantId, siteId: site.id, platform, state: body.state, code: body.code };
+      let created: AdConnectionRecord[];
+      try {
+        if (body.account_ids !== undefined) {
+          created = await finishAdsConnect(ports, { ...input, accountIds: body.account_ids });
+        } else {
+          const authorization = await authorizeAdsConnect(ports, input);
+          const [only, ...others] = authorization.accounts;
+          if (only === undefined || others.length > 0) {
+            return c.json(
+              {
+                data: [],
+                selection: {
+                  grant_id: authorization.grantId,
+                  max: MAX_ACCOUNTS_PER_CONNECT,
+                  accounts: authorization.accounts.map((a) => ({ ...a })),
+                },
+              },
+              200,
+            );
+          }
+          created = await connectAdAccounts(ports, {
+            ...input,
+            grantId: authorization.grantId,
+            accountIds: [only.account_id],
+          });
+        }
+      } catch (error) {
+        if (isProviderError(error)) throw new CrmError('validation_failed', 'invalid or expired authorization');
+        return providerFailure(error);
+      }
+      return c.json({ data: await connected(c, site, ports, platform, created) }, 200);
+    },
+  );
+
+  api.openapi(
+    crmRoute('analytics:configure', {
+      method: 'post',
+      path: '/ads/connections/{platform}/accounts',
+      tags,
+      summary: 'Connect the ad accounts picked from a pending authorization, then run their first sync',
+      request: { params: platformParam, query: siteQuery, body: jsonBody(pickSchema) },
       responses: { 200: json(z.object({ data: z.array(adConnectionSchema) }), 'Connections') },
     }),
     async (c) => {
       const { site, ports } = await siteOf(c);
       const { platform } = c.req.valid('param');
       const body = c.req.valid('json');
-      let created;
+      let created: AdConnectionRecord[];
       try {
-        created = await finishAdsConnect(ports, {
+        created = await connectAdAccounts(ports, {
           tenantId: site.tenantId,
           siteId: site.id,
           platform,
-          state: body.state,
-          code: body.code,
+          grantId: body.grant_id,
           accountIds: body.account_ids,
         });
       } catch (error) {
-        if (isProviderError(error)) throw new CrmError('validation_failed', 'invalid or expired authorization');
         return providerFailure(error);
       }
-      await audit(c, 'analytics.ads_connected', {
-        target: platform,
-        details: { site: site.id, accounts: created.length },
-      });
-      const stub = adsStub(ports.ns, site.id);
-      const out = await mapLimited(created, FIRST_SYNC_CONCURRENCY, async (conn) => {
-        await syncAdConnection(ports, site, conn, { force: true });
-        return toAdConnection((await stub.getAdConnection(conn.id)) ?? conn);
-      });
-      return c.json({ data: out }, 200);
+      return c.json({ data: await connected(c, site, ports, platform, created) }, 200);
+    },
+  );
+
+  api.openapi(
+    crmRoute('analytics:configure', {
+      method: 'post',
+      path: '/ads/connections/{platform}/cancel',
+      tags,
+      summary: 'Drop a pending authorization without connecting any ad account',
+      request: { params: platformParam, query: siteQuery, body: jsonBody(cancelSchema) },
+      responses: { 200: json(z.object({ ok: z.literal(true) }), 'Dropped') },
+    }),
+    async (c) => {
+      const { site, ports } = await siteOf(c);
+      const { platform } = c.req.valid('param');
+      try {
+        await cancelAdsConnect(ports, {
+          tenantId: site.tenantId,
+          siteId: site.id,
+          platform,
+          grantId: c.req.valid('json').grant_id,
+        });
+      } catch (error) {
+        return providerFailure(error);
+      }
+      return c.json({ ok: true as const }, 200);
     },
   );
 

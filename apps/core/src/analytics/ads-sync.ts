@@ -1,4 +1,10 @@
-import { isProviderError, META_DEFAULT_SCOPES, ProviderError, type AdsProvider as AdPlatformClient } from '@amable/ads-providers';
+import {
+  isProviderError,
+  META_DEFAULT_SCOPES,
+  ProviderError,
+  type AdAccountInfo,
+  type AdsProvider as AdPlatformClient,
+} from '@amable/ads-providers';
 import {
   ADS_TOKEN_AUTH_EXPIRED,
   adsTokenInputSchema,
@@ -72,7 +78,11 @@ export const BACKFILL_MAX_DAYS = 90;
 /** Access tokens closer than this to their expiry are refreshed first (sync runs hourly). */
 export const TOKEN_REFRESH_MARGIN_MS = 2 * HOUR;
 const STATE_TTL_MS = 10 * MIN;
-const MAX_ACCOUNTS_PER_CONNECT = 25;
+export const MAX_ACCOUNTS_PER_CONNECT = 25;
+/** How long the ad account choice of a fresh authorization stays open. */
+const SELECTION_TTL_MS = 30 * MIN;
+/** Accounts of one authorization offered for selection (agencies can reach hundreds). */
+const MAX_ACCOUNTS_LISTED = 500;
 /**
  * Spend is pulled at every level (one provider call per level and range); the
  * performance report reads a single level per platform, so the levels never
@@ -107,6 +117,8 @@ export interface AdGrant {
   expiresAt: number | null;
   /** Set when the authorization lives on the central broker: refresh and revocation go through it. */
   broker?: { accountId: string };
+  /** Fresh authorization waiting for the user to pick its ad accounts (`connectAdAccounts`). */
+  pending?: { accounts: AdAccountInfo[]; expiresAt: number };
 }
 
 export interface AdOAuthState {
@@ -618,6 +630,7 @@ export class AdsSyncError extends Error {
       | 'invalid_settings'
       | 'invalid_state'
       | 'no_accounts'
+      | 'too_many_accounts'
       | 'unavailable'
       | 'not_connected',
     message: string,
@@ -749,21 +762,25 @@ async function releaseGrantIfUnused(
   await ports.grants.deleteGrant(grantId);
 }
 
+export interface AdAccountChoice extends AdAccountInfo {
+  /** Already connected on this site (re-authorizing moves it to the new grant when picked). */
+  readonly connected: boolean;
+}
+
+export interface AdsAuthorization {
+  readonly grantId: string;
+  readonly accounts: readonly AdAccountChoice[];
+}
+
 /**
- * Exchanges the code, stores the grant and creates (or re-activates) one
- * connection per ad account of the grant (`accountIds` narrows the set).
+ * Exchanges the code and stores the grant with the ad accounts it covers, still
+ * unpicked: nothing is connected until `connectAdAccounts` (an authorization
+ * may cover dozens of accounts, the user chooses which ones to sync).
  */
-export async function finishAdsConnect(
+export async function authorizeAdsConnect(
   ports: AdsSyncPorts,
-  input: {
-    tenantId: string;
-    siteId: string;
-    platform: AdPlatform;
-    state: string;
-    code: string;
-    accountIds?: readonly string[] | undefined;
-  },
-): Promise<AdConnectionRecord[]> {
+  input: { tenantId: string; siteId: string; platform: AdPlatform; state: string; code: string },
+): Promise<AdsAuthorization> {
   const pending = await ports.grants.takeState(input.state);
   if (
     pending === null ||
@@ -807,14 +824,11 @@ export async function finishAdsConnect(
       expiresAt: tokens.expiresAt ?? null,
     };
   }
-  const wanted = input.accountIds === undefined ? null : new Set(input.accountIds);
   const listed = await client.listAccounts(
     issued.accessToken,
     advertiserIds === undefined ? undefined : { accountIds: advertiserIds },
   );
-  const accounts = listed
-    .filter((a) => wanted === null || wanted.has(a.account_id))
-    .slice(0, MAX_ACCOUNTS_PER_CONNECT);
+  const accounts = listed.slice(0, MAX_ACCOUNTS_LISTED);
   if (accounts.length === 0) throw new AdsSyncError('no_accounts', 'no ad account available for this authorization');
 
   const grantId = `ag_${randomId()}`;
@@ -825,8 +839,48 @@ export async function finishAdsConnect(
       siteId: input.siteId,
       platform: input.platform,
       ...issued,
+      pending: { accounts, expiresAt: ports.now() + SELECTION_TTL_MS },
     },
   );
+  const connected = new Set(
+    (await adsStub(ports.ns, input.siteId).listAdConnections(input.platform))
+      .filter((c) => c.status !== 'disconnected')
+      .map((c) => c.account_id),
+  );
+  return { grantId, accounts: accounts.map((a) => ({ ...a, connected: connected.has(a.account_id) })) };
+}
+
+/** Pending grant `grantId` of the site and platform, or `invalid_state` when unknown, used or expired. */
+async function pendingGrant(
+  ports: AdsSyncPorts,
+  input: { tenantId: string; siteId: string; platform: AdPlatform; grantId: string },
+): Promise<AdGrant & { pending: NonNullable<AdGrant['pending']> }> {
+  const grant = await ports.grants.getGrant(input);
+  if (grant?.pending === undefined || grant.platform !== input.platform || grant.pending.expiresAt <= ports.now()) {
+    throw new AdsSyncError('invalid_state', 'invalid or expired authorization');
+  }
+  return grant as AdGrant & { pending: NonNullable<AdGrant['pending']> };
+}
+
+/**
+ * Creates (or re-activates) one connection per picked ad account of a pending
+ * grant, at most `MAX_ACCOUNTS_PER_CONNECT`. Accounts moved from an older
+ * grant release it once nothing uses it anymore.
+ */
+export async function connectAdAccounts(
+  ports: AdsSyncPorts,
+  input: { tenantId: string; siteId: string; platform: AdPlatform; grantId: string; accountIds: readonly string[] },
+): Promise<AdConnectionRecord[]> {
+  const grant = await pendingGrant(ports, input);
+  const wanted = new Set(input.accountIds);
+  const accounts = grant.pending.accounts.filter((a) => wanted.has(a.account_id));
+  if (accounts.length === 0) throw new AdsSyncError('no_accounts', 'no ad account picked from this authorization');
+  if (accounts.length > MAX_ACCOUNTS_PER_CONNECT) {
+    throw new AdsSyncError('too_many_accounts', `at most ${String(MAX_ACCOUNTS_PER_CONNECT)} ad accounts at once`);
+  }
+  const { pending: _pending, ...kept } = grant;
+  const grantId = input.grantId;
+  await ports.grants.putGrant({ tenantId: input.tenantId, siteId: input.siteId, grantId }, kept);
   const stub = adsStub(ports.ns, input.siteId);
   const created: AdConnectionRecord[] = [];
   const previousGrants = new Set<string>();
@@ -851,9 +905,43 @@ export async function finishAdsConnect(
     );
   }
   for (const previous of previousGrants) {
+    if (previous === grantId) continue;
     await releaseGrantIfUnused(ports, { tenantId: input.tenantId, id: input.siteId }, previous);
   }
   return created;
+}
+
+/** Drops a pending authorization the user closed without picking accounts (revoked on the broker too). */
+export async function cancelAdsConnect(
+  ports: AdsSyncPorts,
+  input: { tenantId: string; siteId: string; platform: AdPlatform; grantId: string },
+): Promise<void> {
+  await pendingGrant(ports, input);
+  await releaseGrantIfUnused(ports, { tenantId: input.tenantId, id: input.siteId }, input.grantId);
+}
+
+/**
+ * Authorizes and connects in one go: the accounts in `accountIds`, or every
+ * account of the authorization (at most `MAX_ACCOUNTS_PER_CONNECT`).
+ */
+export async function finishAdsConnect(
+  ports: AdsSyncPorts,
+  input: {
+    tenantId: string;
+    siteId: string;
+    platform: AdPlatform;
+    state: string;
+    code: string;
+    accountIds?: readonly string[] | undefined;
+  },
+): Promise<AdConnectionRecord[]> {
+  const { grantId, accounts } = await authorizeAdsConnect(ports, input);
+  const wanted = input.accountIds === undefined ? null : new Set(input.accountIds);
+  const picked = accounts
+    .filter((a) => wanted === null || wanted.has(a.account_id))
+    .slice(0, MAX_ACCOUNTS_PER_CONNECT)
+    .map((a) => a.account_id);
+  return connectAdAccounts(ports, { ...input, grantId, accountIds: picked });
 }
 
 /** Stops syncing (data already synced is kept) and drops the grant once no connection uses it. */

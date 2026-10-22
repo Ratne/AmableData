@@ -191,9 +191,23 @@ export function funnelsApi(tenant: string) {
           send('POST'),
         ),
       callback: (siteId: string, platform: AdPlatform, input: { state: string; code: string }) =>
-        request<{ data: AdConnection[] }>(
+        request<{ data: AdConnection[]; selection?: AdAccountSelection }>(
           sited(siteId, `ads/connections/${platform}/callback`),
           send('POST', input),
+        ),
+      pickAccounts: (
+        siteId: string,
+        platform: AdPlatform,
+        input: { grant_id: string; account_ids: string[] },
+      ) =>
+        request<{ data: AdConnection[] }>(
+          sited(siteId, `ads/connections/${platform}/accounts`),
+          send('POST', input),
+        ),
+      cancelAuthorization: (siteId: string, platform: AdPlatform, grantId: string) =>
+        request<{ ok: true }>(
+          sited(siteId, `ads/connections/${platform}/cancel`),
+          send('POST', { grant_id: grantId }),
         ),
       disconnect: (siteId: string, id: string) =>
         request<{ id: string; deleted: true }>(sited(siteId, `ads/connections/${enc(id)}`), {
@@ -230,6 +244,21 @@ export function funnelsApi(tenant: string) {
 export type FunnelsApi = ReturnType<typeof funnelsApi>;
 
 // ---------------------------------------------------------------- ads OAuth
+
+/** Ad accounts of a fresh authorization, waiting for the user to pick the ones to connect. */
+export interface AdAccountSelection {
+  readonly grant_id: string;
+  /** Most accounts connectable at once. */
+  readonly max: number;
+  readonly accounts: readonly {
+    readonly account_id: string;
+    readonly name: string;
+    readonly currency: string;
+    readonly timezone: string;
+    /** Already connected on this site. */
+    readonly connected: boolean;
+  }[];
+}
 
 /** Site + platform of an ad OAuth flow, kept across the redirect (the provider only returns `state`). */
 export interface PendingAdsOAuth {

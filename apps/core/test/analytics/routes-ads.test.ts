@@ -107,6 +107,20 @@ describe('ad connections API', () => {
     expect(JSON.stringify(list.body)).not.toContain('fake-access');
   });
 
+  it('pick and cancel reject unknown or malformed authorizations', async () => {
+    const pick = (body: unknown) => owner.post(`${BASE}/ads/connections/meta/accounts?site_id=${siteId}`, body);
+    expect((await viewer.post(`${BASE}/ads/connections/meta/accounts?site_id=${siteId}`, {
+      grant_id: 'ag_x',
+      account_ids: ['a'],
+    })).status).toBe(403);
+    expect((await pick({ grant_id: 'ag_missing', account_ids: ['fake-meta-dev'] })).status).toBe(422);
+    expect((await pick({ grant_id: 'not-a-grant', account_ids: ['a'] })).status).toBe(422);
+    expect((await pick({ grant_id: 'ag_x', account_ids: [] })).status).toBe(422);
+    expect(
+      (await owner.post(`${BASE}/ads/connections/meta/cancel?site_id=${siteId}`, { grant_id: 'ag_missing' })).status,
+    ).toBe(422);
+  });
+
   it('backfills a range of at most 90 days', async () => {
     const res = await owner.post(`${BASE}/ads/connections/${connectionId}/backfill?site_id=${siteId}`, {
       from: '2026-09-16',

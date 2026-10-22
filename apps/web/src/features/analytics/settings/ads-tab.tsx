@@ -36,7 +36,9 @@ import {
   rememberAdsOAuth,
   useAdConnections,
   useOutbound,
+  type AdAccountSelection,
 } from '../api-funnels';
+import { AdAccountPicker } from './ad-account-picker';
 import { EmptyNote, ErrorState, ListSkeleton, Panel, StatusPill } from '../components/ui';
 import { useFormatters, useNow } from '../lib/format';
 import { analyticsSettingsRoute, type SettingsSearch } from '../routes';
@@ -78,12 +80,16 @@ function adsErrorToast(t: (key: MessageKey) => string, error: unknown): boolean 
 }
 
 /** Finishes the dev fake OAuth round-trip that lands on `?tab=ads&platform=…&state=…&code=…`. */
-function useFakeCallback(tenant: string, site: Site) {
+function useFakeCallback(
+  tenant: string,
+  site: Site,
+): { platform: AdPlatform; selection: AdAccountSelection; close: () => void } | null {
   const { t } = useI18n();
   const search = useSearch({ from: analyticsSettingsRoute.id });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const handled = useRef<string | null>(null);
+  const [choice, setChoice] = useState<{ platform: AdPlatform; selection: AdAccountSelection } | null>(null);
   useEffect(() => {
     const { platform, state, code } = search;
     if (!platform || !state || !code || handled.current === state) return;
@@ -107,7 +113,11 @@ function useFakeCallback(tenant: string, site: Site) {
     }
     funnelsApi(tenant)
       .ads.callback(site.id, platform, { state, code })
-      .then(() => {
+      .then((result) => {
+        if (result.selection) {
+          setChoice({ platform, selection: result.selection });
+          return;
+        }
         toast.success(t('analytics.ads.connections.connected'));
         return queryClient.invalidateQueries({ queryKey: funnelKeys.ads(tenant, site.id) });
       })
@@ -116,6 +126,7 @@ function useFakeCallback(tenant: string, site: Site) {
       })
       .finally(clean);
   }, [search, site.id, tenant, navigate, queryClient, t]);
+  return choice === null ? null : { ...choice, close: () => setChoice(null) };
 }
 
 function BackfillDialog({
@@ -726,11 +737,36 @@ export function AdsTab({
   site: Site;
   canConfigure: boolean;
 }) {
-  useFakeCallback(tenant, site);
+  const { t } = useI18n();
+  const choice = useFakeCallback(tenant, site);
+  const dismiss = () => {
+    if (!choice) return;
+    void funnelsApi(tenant)
+      .ads.cancelAuthorization(site.id, choice.platform, choice.selection.grant_id)
+      .catch(() => undefined);
+    choice.close();
+  };
   return (
     <>
       <ConnectionsPanel tenant={tenant} site={site} canConfigure={canConfigure} />
       <OutboundPanel tenant={tenant} site={site} canConfigure={canConfigure} />
+      {choice ? (
+        <Dialog open onOpenChange={(open) => !open && dismiss()}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader className="sr-only">
+              <DialogTitle>{t('analytics.ads.pick.title')}</DialogTitle>
+            </DialogHeader>
+            <AdAccountPicker
+              tenant={tenant}
+              siteId={site.id}
+              platform={choice.platform}
+              selection={choice.selection}
+              onConnected={choice.close}
+              onCancelled={choice.close}
+            />
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </>
   );
 }
