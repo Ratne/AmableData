@@ -10,6 +10,7 @@ import {
   type TestClient,
 } from '../helpers/harness';
 import { fakeTenantDbNamespace } from '../crm/helpers';
+import { fakeEditSessions } from '../helpers/edit-lock';
 import { configureSender, fakeMailDbNamespace, sampleDoc, type MailWorld } from './helpers';
 
 const BASE = '/api/v2/t/acme';
@@ -21,15 +22,21 @@ let sales: TestClient;
 let viewer: TestClient;
 let world: MailWorld;
 let contactId: string;
+const sessions = fakeEditSessions();
+let tenantId = '';
+const userIds: Record<string, string> = {};
 
 beforeAll(async () => {
   h = await createHarness();
   h.env.TENANT_DB = fakeTenantDbNamespace();
   const mail = fakeMailDbNamespace();
   h.env.MAIL_DB = mail.namespace;
+  h.env.EDIT_SESSION = sessions.namespace;
   const acme = await seedTenant(h, 'acme');
+  tenantId = acme.id;
   for (const role of ['owner', 'marketer', 'sales', 'viewer'] as const) {
     const user = await seedUser(h, { email: `${role}@acme.test` });
+    userIds[role] = user.id;
     await addMember(h, user.id, acme.id, role);
   }
   owner = await login(h, 'owner@acme.test');
@@ -104,6 +111,35 @@ describe('email REST v2', () => {
     const again = await owner.post(`${BASE}/broadcasts/${id}/schedule`, { mode: 'now' });
     expect(again.status).toBe(409);
     expect(again.body['error']).toBe('conflict');
+  });
+
+  it('keeps templates and draft broadcasts read-only for everyone but the edit lock holder', async () => {
+    const tpl = await marketer.post(`${BASE}/emailTemplates`, { name: 'Shared', subject: 'Hi', body: sampleDoc() });
+    const tplId = String(tpl.body['id']);
+    sessions.hold(`${tenantId}:templates:${tplId}`, userIds['owner'] ?? '', 'Owner');
+    expect(await marketer.patch(`${BASE}/emailTemplates/${tplId}`, { name: 'X' })).toMatchObject({ status: 423, body: { error: 'locked' } });
+    expect((await marketer.delete(`${BASE}/emailTemplates/${tplId}`)).status).toBe(423);
+    expect((await marketer.get(`${BASE}/emailTemplates/${tplId}`)).status).toBe(200);
+    expect((await owner.patch(`${BASE}/emailTemplates/${tplId}`, { name: 'Owner edit' })).status).toBe(200);
+    expect((await viewer.get(`${BASE}/emailTemplates/${tplId}/lock/status`)).body).toMatchObject({ role: 'waiting', holder: { user_name: 'Owner' } });
+
+    const tagId = world.crm.op('tags.list', { limit: 10 }).data.find((t) => t.name === 'News')?.id;
+    const created = await marketer.post(`${BASE}/broadcasts`, {
+      name: 'Shared',
+      subject: 'Shared',
+      body: sampleDoc(),
+      segment: { type: 'tags', match: 'any', tag_ids: [tagId] },
+    });
+    const id = String(created.body['id']);
+    sessions.hold(`${tenantId}:broadcasts:${id}`, userIds['owner'] ?? '', 'Owner');
+    expect((await marketer.patch(`${BASE}/broadcasts/${id}`, { name: 'Y' })).status).toBe(423);
+    expect((await marketer.post(`${BASE}/broadcasts/${id}/schedule`, { mode: 'now' })).status).toBe(423);
+    expect((await marketer.delete(`${BASE}/broadcasts/${id}`)).status).toBe(423);
+    expect((await marketer.get(`${BASE}/broadcasts/${id}/estimate`)).status).toBe(200);
+    expect((await owner.post(`${BASE}/broadcasts/${id}/schedule`, { mode: 'at', at: '2099-01-01T09:00:00.000Z' })).status).toBe(200);
+    // Operational actions on a scheduled broadcast never wait for the editor.
+    expect((await marketer.post(`${BASE}/broadcasts/${id}/pause`)).status).toBe(200);
+    expect((await marketer.post(`${BASE}/broadcasts/${id}/cancel`)).status).toBe(200);
   });
 
   it('only lets settings managers change sender settings', async () => {

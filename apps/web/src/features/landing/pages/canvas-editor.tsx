@@ -26,7 +26,6 @@ import {
   Layers,
   LayoutGrid,
   Library,
-  Lock,
   Maximize2,
   Minimize2,
   Redo2,
@@ -38,6 +37,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
+import { EditLockBanner } from '../../../lib/edit-lock/edit-lock-banner';
+import { editLockPath, useEditLock, type EditLockStatus } from '../../../lib/edit-lock/use-edit-lock';
 import { errorMessage, landingKeys, useLanding, usePage, usePermissions } from '../api/hooks';
 import type { LandingPage, LandingPageWithDraft } from '../api/types';
 import { Choice, PageState, Pill } from '../components/common';
@@ -54,7 +55,6 @@ import { TokensPanel } from '../editor/tokens-panel';
 import { readBlockClip, readStyleClip, useBlockClipboard } from '../hooks/use-block-clipboard';
 import { useBuilderDocument, type SaveState } from '../hooks/use-builder-document';
 import { useCanvasDnd } from '../hooks/use-canvas-dnd';
-import { useEditLock, type EditLockStatus } from '../hooks/use-edit-lock';
 import { useBuilderLabel } from '../lib/builder-i18n';
 import { breakpointForWidth, DEVICES, ZOOMS, type CanvasZoom, type DeviceKey } from '../lib/devices';
 
@@ -114,47 +114,6 @@ function SaveIndicator({ state, dirty, editable }: { state: SaveState; dirty: bo
   );
 }
 
-function LockBanner({
-  status,
-  holderName,
-  waiting,
-  canTakeover,
-  onTakeover,
-}: {
-  status: EditLockStatus;
-  holderName: string | null;
-  waiting: number;
-  canTakeover: boolean;
-  onTakeover: () => void;
-}) {
-  const { t } = useI18n();
-  if (status === 'holder') return null;
-  if (status === 'unavailable') {
-    return <div className="border-b bg-muted px-4 py-1.5 text-xs text-muted-foreground">{t('landing.lock.unavailable')}</div>;
-  }
-  if (status === 'connecting' || status === 'offline') {
-    return (
-      <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-xs text-muted-foreground" role="status">
-        <Spinner className="size-3" /> {status === 'connecting' ? t('landing.lock.connecting') : t('landing.lock.offline')}
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-800 dark:text-amber-200" role="alert">
-      <Lock aria-hidden className="size-4" />
-      <span className="font-medium">
-        {holderName ? t('landing.lock.heldBy', { name: holderName }) : t('landing.lock.heldBySomeone')}
-      </span>
-      <span className="text-xs">{waiting > 1 ? t('landing.lock.waitingMany', { count: waiting }) : t('landing.lock.waiting')}</span>
-      {canTakeover ? (
-        <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={onTakeover}>
-          {t('landing.lock.takeover')}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
 interface ContextMenuState {
   id: string;
   x: number;
@@ -168,7 +127,10 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
   const { can } = usePermissions();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const lock = useEditLock(api, initial.id);
+  const lock = useEditLock(can('pages:write') ? editLockPath(slug, 'pages', initial.id) : null, {
+    onLost: (holder) =>
+      toast.warning(holder ? t('common.lock.takenOver', { name: holder.user_name }) : t('common.lock.takenOverSomeone')),
+  });
   const editable = lock.canEdit && can('pages:write');
 
   const reloadRef = useRef<() => Promise<void>>(async () => undefined);
@@ -180,7 +142,7 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
       toast.warning(t('landing.editor.staleReloaded'));
       void reloadRef.current();
     },
-    onLocked: () => toast.warning(t('landing.lock.lost')),
+    onLocked: () => toast.warning(t('common.lock.lost')),
   });
   const reload = useCallback(async () => {
     try {
@@ -597,13 +559,7 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
         </div>
       </div>
 
-      <LockBanner
-        status={lock.status}
-        holderName={lock.holder?.user_name ?? null}
-        waiting={lock.waiting}
-        canTakeover={canPublish}
-        onTakeover={lock.takeover}
-      />
+      <EditLockBanner lock={lock} canTakeover={canPublish} />
 
       <div className={cn('grid min-h-0 flex-1 gap-0', fullView ? 'grid-cols-1' : 'grid-cols-[260px_minmax(0,1fr)_320px]')}>
         <aside className={cn('flex min-h-0 flex-col overflow-hidden border-r', fullView && 'hidden')}>

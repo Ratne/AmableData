@@ -27,6 +27,7 @@ import {
   updateSnippetSchema,
 } from '@amable/api-types';
 import { crmRoute, json, jsonBody } from '../crm/api/core';
+import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../edit-lock/routes';
 import { audit, getAuth, type AppEnv } from '../middleware';
 import { callMail } from './http';
 import { emailPreviewContext } from './liquid-api';
@@ -79,13 +80,13 @@ export function registerEmailRoutes(app: OpenAPIHono<AppEnv>): void {
       tags: templates,
       summary: 'Update an email template',
       request: { params: idParamSchema, body: jsonBody(updateEmailTemplateSchema) },
-      responses: { 200: json(emailTemplateSchema, 'The template') },
+      responses: { 200: json(emailTemplateSchema, 'The template'), ...LOCKED_RESPONSE },
     }),
-    async (c) =>
-      c.json(
-        await callMail(c, 'templates.update', { id: c.req.valid('param').id, data: c.req.valid('json') }),
-        200,
-      ),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      await assertEditable(c, 'templates', id);
+      return c.json(await callMail(c, 'templates.update', { id, data: c.req.valid('json') }), 200);
+    },
   );
   app.openapi(
     crmRoute('templates:write', {
@@ -94,10 +95,22 @@ export function registerEmailRoutes(app: OpenAPIHono<AppEnv>): void {
       tags: templates,
       summary: 'Delete an email template',
       request: { params: idParamSchema },
-      responses: { 200: json(deletedResponseSchema, 'Deleted') },
+      responses: { 200: json(deletedResponseSchema, 'Deleted'), ...LOCKED_RESPONSE },
     }),
-    async (c) => c.json(await callMail(c, 'templates.delete', c.req.valid('param')), 200),
+    async (c) => {
+      await assertEditable(c, 'templates', c.req.valid('param').id);
+      return c.json(await callMail(c, 'templates.delete', c.req.valid('param')), 200);
+    },
   );
+  registerEditLockRoutes(app, {
+    kind: 'templates',
+    basePath: '/emailTemplates',
+    tag: 'Email template edit lock',
+    write: 'templates:write',
+    read: 'broadcasts:read',
+    takeover: 'templates:write',
+    exists: (c, id) => callMail(c, 'templates.get', { id }),
+  });
   app.openapi(
     crmRoute('templates:write', {
       method: 'post',

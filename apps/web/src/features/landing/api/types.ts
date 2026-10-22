@@ -1,6 +1,4 @@
 import type {
-  EditLockHolder,
-  EditLockState,
   LandingPage as ApiLandingPage,
   LandingPageDetail,
   SavedSection as ApiSavedSection,
@@ -25,8 +23,6 @@ export type LandingPageWithDraft = Omit<LandingPageDetail, 'draft'> & { readonly
 /** Saved section with its node typed as a builder element. */
 export type SavedSection = Omit<ApiSavedSection, 'node'> & { readonly node: ElementNode };
 
-export type LockHolder = EditLockHolder;
-export type LockState = EditLockState;
 
 export interface CursorPage<T> {
   readonly data: T[];

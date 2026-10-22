@@ -16,7 +16,7 @@ import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { RadioGroup, RadioGroupItem } from '@amable/ui/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@amable/ui/ui/select';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   ArrowLeft,
@@ -33,6 +33,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TimeZoneSelect } from '../../../components/locale/timezone-select';
 import { useI18n } from '../../../i18n';
+import { ApiError } from '../../../lib/api';
+import { EditLockBanner } from '../../../lib/edit-lock/edit-lock-banner';
+import { editLockPath, useEditLock } from '../../../lib/edit-lock/use-edit-lock';
 import { editorLabels } from '../../../lib/labels';
 import { MultiChoice } from '../../crm/components/inputs';
 import { TagPicker } from '../../crm/components/tag-picker';
@@ -102,6 +105,18 @@ interface Draft {
   readonly throttle: string;
 }
 
+function draftOf(broadcast: Broadcast): Draft {
+  return {
+    name: broadcast.name,
+    subject: broadcast.subject,
+    fromName: broadcast.from_name ?? '',
+    replyTo: broadcast.reply_to ?? '',
+    audience: audienceFromSegment(broadcast.segment),
+    doc: (broadcast.body ?? { type: 'doc', content: [] }) as EmailDoc,
+    throttle: broadcast.throttle_per_hour === null ? '' : String(broadcast.throttle_per_hour),
+  };
+}
+
 function draftPatch(draft: Draft, fallbackName: string): UpdateBroadcastInput {
   return {
     name: draft.name.trim() === '' ? fallbackName : draft.name.trim(),
@@ -120,16 +135,18 @@ export function BroadcastWizard({ broadcast }: { broadcast: Broadcast }) {
   const { t, locale } = useI18n();
   const { slug, api } = useEmailApi();
   const { can } = usePermissions();
-  const editable = can('broadcasts:write');
-  const [draft, setDraft] = useState<Draft>(() => ({
-    name: broadcast.name,
-    subject: broadcast.subject,
-    fromName: broadcast.from_name ?? '',
-    replyTo: broadcast.reply_to ?? '',
-    audience: audienceFromSegment(broadcast.segment),
-    doc: (broadcast.body ?? { type: 'doc', content: [] }) as EmailDoc,
-    throttle: broadcast.throttle_per_hour === null ? '' : String(broadcast.throttle_per_hour),
-  }));
+  const queryClient = useQueryClient();
+  const canWrite = can('broadcasts:write');
+  const reloadRef = useRef<() => Promise<void>>(async () => undefined);
+  const lock = useEditLock(canWrite ? editLockPath(slug, 'broadcasts', broadcast.id) : null, {
+    onLost: (holder) =>
+      toast.warning(holder ? t('common.lock.takenOver', { name: holder.user_name }) : t('common.lock.takenOverSomeone')),
+    onStale: () => void reloadRef.current(),
+  });
+  const editable = canWrite && lock.canEdit;
+  const [draft, setDraft] = useState<Draft>(() => draftOf(broadcast));
+  /** Bumped when the draft is reloaded from the server: remounts the steps (the email editor is uncontrolled). */
+  const [reloads, setReloads] = useState(0);
   const [step, setStep] = useState<number>(() => {
     const stored = Number(window.sessionStorage.getItem(stepStorageKey(broadcast.id)) ?? 0);
     return Number.isInteger(stored) && stored >= 0 && stored < WIZARD_STEPS.length ? stored : 0;
@@ -171,12 +188,32 @@ export function BroadcastWizard({ broadcast }: { broadcast: Broadcast }) {
         })
         .catch((error: unknown) => {
           setSaveState('error');
-          toast.error(errorMessage(error));
+          if (error instanceof ApiError && error.status === 423) toast.warning(t('common.lock.lost'));
+          else toast.error(errorMessage(error));
         });
       return saving.current;
     },
-    [api, broadcast.id, broadcast.name, editable, refetchEstimate],
+    [api, broadcast.id, broadcast.name, editable, refetchEstimate, t],
   );
+
+  /** Adopts the server draft (someone else may have edited it); a broadcast no longer draft leaves the wizard. */
+  const reload = useCallback(async () => {
+    try {
+      const fresh = await api.broadcasts.get(broadcast.id);
+      queryClient.setQueryData(emailKeys.broadcast(slug, broadcast.id), fresh);
+      if (fresh.status !== 'draft') return;
+      const next = draftOf(fresh);
+      const json = JSON.stringify(draftPatch(next, fresh.name));
+      if (json === lastSaved.current) return;
+      lastSaved.current = json;
+      setDraft(next);
+      setReloads((n) => n + 1);
+      void refetchEstimate();
+    } catch {
+      // next poll or lock change retries
+    }
+  }, [api, broadcast.id, queryClient, slug, refetchEstimate]);
+  reloadRef.current = reload;
 
   useEffect(() => {
     const timer = window.setTimeout(() => void flush(draft), AUTOSAVE_MS);
@@ -228,17 +265,19 @@ export function BroadcastWizard({ broadcast }: { broadcast: Broadcast }) {
           </span>
         }
       />
+      <EditLockBanner lock={lock} canTakeover={can('broadcasts:send')} />
       <PageBody className="grid gap-4 pt-4">
         <SendingDomainBanner slug={slug} />
         <Stepper step={step} state={wizardState} onOpen={(target) => void go(target)} />
         {current === 'recipients' ? (
-          <RecipientsStep draft={draft} patch={patch} editable={editable} estimate={estimate.data ?? null} refreshing={estimate.isFetching} />
+          <RecipientsStep key={reloads} draft={draft} patch={patch} editable={editable} estimate={estimate.data ?? null} refreshing={estimate.isFetching} />
         ) : null}
         {current === 'email' ? (
-          <EmailStep broadcast={broadcast} draft={draft} patch={patch} editable={editable} fromEmail={fromEmail} flush={() => flush(draft)} />
+          <EmailStep key={reloads} broadcast={broadcast} draft={draft} patch={patch} editable={editable} canTest={canWrite} fromEmail={fromEmail} flush={() => flush(draft)} />
         ) : null}
         {current === 'review' ? (
           <ReviewStep
+            key={reloads}
             broadcast={broadcast}
             draft={draft}
             patch={patch}
@@ -470,6 +509,7 @@ function EmailStep({
   draft,
   patch,
   editable,
+  canTest,
   fromEmail,
   flush,
 }: {
@@ -477,6 +517,8 @@ function EmailStep({
   draft: Draft;
   patch: (next: Partial<Draft>) => void;
   editable: boolean;
+  /** Test sends stay available read-only (they send the saved draft). */
+  canTest: boolean;
   fromEmail: string | null;
   flush: () => Promise<void>;
 }) {
@@ -600,7 +642,7 @@ function EmailStep({
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2">
               {t('broadcasts.wizard.preview')}
-              {editable ? (
+              {canTest ? (
                 <Button size="sm" variant="outline" onClick={() => void flush().then(() => setTestOpen(true))}>
                   <Send className="size-3.5" />
                   {t('email.test.button')}
@@ -788,7 +830,7 @@ function ReviewStep({
               />
             </div>
             {can('broadcasts:send') ? (
-              <DashboardButton variant="primary" disabled={blocked || schedule.isPending} onClick={() => setConfirmOpen(true)}>
+              <DashboardButton variant="primary" disabled={!editable || blocked || schedule.isPending} onClick={() => setConfirmOpen(true)}>
                 <Send className="size-4" />
                 {mode === 'now' ? t('broadcasts.wizard.sendNow') : t('broadcasts.wizard.schedule')}
               </DashboardButton>

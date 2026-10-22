@@ -26,7 +26,7 @@ export { Engine } from './do/engine';
 export { TenantDb } from './do/tenant-db';
 export { MailDb } from './email/mail-db';
 export { BookingCalendar } from './booking/calendar-do';
-export { EditSession } from './pages/edit-session';
+export { EditSession } from './edit-lock/session';
 
 const handler = {
   // /api/* is handled by Hono. Documents (run_worker_first, everything except

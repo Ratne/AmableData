@@ -5,7 +5,6 @@ import {
   createSavedSectionSchema,
   deletedResponseSchema,
   duplicatePageSchema,
-  editLockStateSchema,
   errorResponseSchema,
   idSchema,
   landingPageDetailSchema,
@@ -32,18 +31,16 @@ import type { Context } from 'hono';
 import { ulid } from 'ulid';
 import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
 import { invalidMany } from '../crm/errors';
+import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../edit-lock/routes';
 import { registerFolderRoutes } from '../folders/routes';
-import { audit, defer, getAuth, getTenant, type AppEnv } from '../middleware';
-import type { EditSession } from './edit-session';
+import { audit, defer, getTenant, type AppEnv } from '../middleware';
 import type { MediaRow } from './library';
-import { EDIT_SESSION_HEADERS } from './lock';
 import { cleanFilename, mediaExtension, sniffImageType } from './media';
 import type { PageDetailRecord, PageRecord } from './pages';
 
 type Ctx = Context<AppEnv>;
 
 const pagesTag = ['Landing pages'];
-const lockTag = ['Landing page edit lock'];
 const sectionsTag = ['Saved sections'];
 const mediaTag = ['Media'];
 
@@ -76,15 +73,6 @@ function serializeMedia(c: Ctx, row: MediaRow): MediaFile {
     created_at: new Date(row.created_at).toISOString(),
   };
 }
-
-function lockStub(c: Ctx, pageId: string): DurableObjectStub<EditSession> | null {
-  const ns = c.env.EDIT_SESSION;
-  if (ns === undefined) return null;
-  return ns.get(ns.idFromName(`${getTenant(c).tenant.id}:${pageId}`));
-}
-
-const lockUnavailable = (c: Ctx) =>
-  c.json({ error: 'lock_unavailable', message: 'EDIT_SESSION binding missing' }, 503);
 
 const errorJson = (description: string) => json(errorResponseSchema, description);
 
@@ -154,10 +142,12 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
       tags: pagesTag,
       summary: 'Update title, path, host, SEO or settings (live only after the next publish)',
       request: { params: pageIdParam, body: jsonBody(updatePageSchema) },
-      responses: { 200: json(landingPageDetailSchema, 'The page') },
+      responses: { 200: json(landingPageDetailSchema, 'The page'), ...LOCKED_RESPONSE },
     }),
     async (c) => {
-      const page = await callCrm(c, 'pages.update', { id: c.req.valid('param').id, data: c.req.valid('json') });
+      const { id } = c.req.valid('param');
+      await assertEditable(c, 'pages', id);
+      const page = await callCrm(c, 'pages.update', { id, data: c.req.valid('json') });
       return c.json(withUrl(c, page) as never, 200);
     },
   );
@@ -168,10 +158,11 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
       tags: pagesTag,
       summary: 'Soft-delete a page (it stops being served; restorable)',
       request: { params: pageIdParam },
-      responses: { 200: json(deletedResponseSchema, 'Deleted') },
+      responses: { 200: json(deletedResponseSchema, 'Deleted'), ...LOCKED_RESPONSE },
     }),
     async (c) => {
       const { id } = c.req.valid('param');
+      await assertEditable(c, 'pages', id);
       const result = await callCrm(c, 'pages.delete', { id });
       await audit(c, 'pages.page_deleted', { target: id });
       return c.json(result, 200);
@@ -222,16 +213,13 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
       responses: {
         200: json(savePageDraftResponseSchema, 'New draft revision'),
         409: json(errorResponseSchema.extend({ draft_revision: z.number().int() }), 'The draft moved on (`stale_draft`)'),
-        423: errorJson('Another user holds the edit lock (`locked`)'),
+        ...LOCKED_RESPONSE,
       },
     }),
     async (c) => {
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
-      const stub = lockStub(c, id);
-      if (stub !== null && !(await stub.canSave(getAuth(c).user.id))) {
-        return c.json({ error: 'locked', message: 'another user is editing this page' }, 423);
-      }
+      await assertEditable(c, 'pages', id);
       const result = await callCrm(c, 'pages.saveDraft', { id, document: body.document, base_revision: body.base_revision });
       if (!result.ok) {
         return c.json(
@@ -269,13 +257,14 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
         params: pageIdParam,
         body: { required: false, content: { 'application/json': { schema: publishPageSchema } } },
       },
-      responses: { 200: json(publishPageResponseSchema, 'Published page and version') },
+      responses: { 200: json(publishPageResponseSchema, 'Published page and version'), ...LOCKED_RESPONSE },
     }),
     async (c) => {
       const raw: unknown = await c.req.json().catch(() => ({}));
       const parsed = publishPageSchema.safeParse(raw ?? {});
       const note = parsed.success ? parsed.data.note : undefined;
       const { id } = c.req.valid('param');
+      await assertEditable(c, 'pages', id);
       const result = await callCrm(c, 'pages.publish', { id, ...(note === undefined ? {} : { note }) });
       await audit(c, 'pages.page_published', { target: id, details: { version: result.version.version } });
       return c.json({ page: withUrl(c, result.page), version: result.version }, 200);
@@ -288,10 +277,11 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
       tags: pagesTag,
       summary: 'Take the page offline (versions are kept)',
       request: { params: pageIdParam },
-      responses: { 200: json(landingPageDetailSchema, 'The page') },
+      responses: { 200: json(landingPageDetailSchema, 'The page'), ...LOCKED_RESPONSE },
     }),
     async (c) => {
       const { id } = c.req.valid('param');
+      await assertEditable(c, 'pages', id);
       const page = await callCrm(c, 'pages.unpublish', { id });
       await audit(c, 'pages.page_unpublished', { target: id });
       return c.json(withUrl(c, page) as never, 200);
@@ -315,74 +305,25 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
       tags: pagesTag,
       summary: 'Replace the draft with a published version (publish again to go live)',
       request: { params: versionParam },
-      responses: { 200: json(landingPageDetailSchema, 'The page'), 423: errorJson('Another user holds the edit lock') },
+      responses: { 200: json(landingPageDetailSchema, 'The page'), ...LOCKED_RESPONSE },
     }),
     async (c) => {
       const { id, versionId } = c.req.valid('param');
-      const stub = lockStub(c, id);
-      if (stub !== null && !(await stub.canSave(getAuth(c).user.id))) {
-        return c.json({ error: 'locked', message: 'another user is editing this page' }, 423);
-      }
+      await assertEditable(c, 'pages', id);
       return c.json(withUrl(c, await callCrm(c, 'pages.restoreVersion', { id, versionId })) as never, 200);
     },
   );
 
   // ---------------------------------------------------------- edit lock
-  router.openapi(
-    crmRoute('pages:write', {
-      method: 'get',
-      path: '/pages/{id}/lock',
-      tags: lockTag,
-      summary:
-        'WebSocket upgrade to the edit lock. Server → client `{type:"state",holder,role,waiting}`; client → server `{type:"heartbeat"}` every 10 s, `{type:"release"}`, `{type:"takeover"}` (pages:publish)',
-      request: { params: pageIdParam },
-      responses: { 101: { description: 'Switching protocols' }, 426: errorJson('Not a WebSocket upgrade'), 503: errorJson('Lock service unavailable') },
-    }),
-    async (c) => {
-      const { id } = c.req.valid('param');
-      if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
-        return c.json({ error: 'websocket_required', message: 'expected a WebSocket upgrade' }, 426);
-      }
-      const origin = c.req.header('origin');
-      if (origin !== undefined && !sameApp(c, origin)) {
-        return c.json({ error: 'origin_not_allowed', message: 'cross-site WebSocket refused' }, 403);
-      }
-      const stub = lockStub(c, id);
-      if (stub === null) return lockUnavailable(c);
-      await callCrm(c, 'pages.get', { id });
-      const user = getAuth(c).user;
-      const tenant = getTenant(c);
-      const headers = new Headers(c.req.raw.headers);
-      const h = EDIT_SESSION_HEADERS;
-      headers.set(h.userId, user.id);
-      headers.set(h.userName, user.name ?? user.email);
-      headers.set(h.canTakeover, tenant.can('pages:publish') ? '1' : '0');
-      headers.set(h.tenantId, tenant.tenant.id);
-      headers.set(h.pageId, id);
-      const res = await stub.fetch(new Request('https://edit-session.internal/connect', { headers }));
-      return new Response(res.body, {
-        status: res.status,
-        statusText: res.statusText,
-        headers: new Headers(res.headers),
-        webSocket: res.webSocket,
-      }) as never;
-    },
-  );
-  router.openapi(
-    crmRoute('pages:read', {
-      method: 'get',
-      path: '/pages/{id}/lock/status',
-      tags: lockTag,
-      summary: 'Who is editing the page (same state as the WebSocket, for the caller)',
-      request: { params: pageIdParam },
-      responses: { 200: json(editLockStateSchema, 'Lock state'), 503: errorJson('Lock service unavailable') },
-    }),
-    async (c) => {
-      const stub = lockStub(c, c.req.valid('param').id);
-      if (stub === null) return lockUnavailable(c);
-      return c.json(await stub.status(getAuth(c).user.id), 200);
-    },
-  );
+  registerEditLockRoutes(router, {
+    kind: 'pages',
+    basePath: '/pages',
+    tag: 'Landing page edit lock',
+    write: 'pages:write',
+    read: 'pages:read',
+    takeover: 'pages:publish',
+    exists: (c, id) => callCrm(c, 'pages.get', { id }),
+  });
 
   // ------------------------------------------------------ saved sections
   router.openapi(
@@ -533,29 +474,6 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
       }) as never;
     },
   );
-}
-
-function sameApp(c: Ctx, origin: string): boolean {
-  let host = '';
-  try {
-    host = new URL(origin).host;
-  } catch {
-    return false;
-  }
-  const own = new URL(c.req.url).host;
-  const app = c.env.APP_ORIGIN === undefined ? null : new URL(c.env.APP_ORIGIN).host;
-  const extra = (c.env.ALLOWED_ORIGINS ?? '')
-    .split(',')
-    .map((o) => o.trim())
-    .filter((o) => o !== '')
-    .map((o) => {
-      try {
-        return new URL(o).host;
-      } catch {
-        return '';
-      }
-    });
-  return host === own || host === app || extra.includes(host);
 }
 
 /** Draft rendered exactly like the public page, without the tracker. */

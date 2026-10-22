@@ -1,15 +1,17 @@
 import { formDefinitionSchema, type FormDefinition, type FormField } from '@amable/forms';
-import { DashboardButton, PageBody, PageToolbar } from '@amable/ui';
+import { DashboardButton, PageBody, PageToolbar, toast } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
 import { Switch } from '@amable/ui/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@amable/ui/ui/tabs';
 import { Textarea } from '@amable/ui/ui/textarea';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { Check, Copy, ExternalLink, Save } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
+import { EditLockBanner } from '../../../lib/edit-lock/edit-lock-banner';
+import { editLockPath, useEditLock } from '../../../lib/edit-lock/use-edit-lock';
 import type { TypedForm } from '../api/client';
 import { formsKeys, useCrmReferences, useForm, useForms, useFormsMutation, usePermissions } from '../api/hooks';
 import { Choice, ErrorNotice, FormField as Field, PageState, SectionCard } from '../components/common';
@@ -57,7 +59,15 @@ function Builder({ form }: { form: TypedForm }) {
   const { slug, api } = useForms();
   const { can } = usePermissions();
   const refs = useCrmReferences();
-  const writable = can('forms:write');
+  const queryClient = useQueryClient();
+  const canWrite = can('forms:write');
+  const reloadRef = useRef<() => Promise<void>>(async () => undefined);
+  const lock = useEditLock(canWrite ? editLockPath(slug, 'forms', form.id) : null, {
+    onLost: (holder) =>
+      toast.warning(holder ? t('common.lock.takenOver', { name: holder.user_name }) : t('common.lock.takenOverSomeone')),
+    onStale: () => void reloadRef.current(),
+  });
+  const writable = canWrite && lock.canEdit;
   const [name, setName] = useState(form.name);
   const [active, setActive] = useState(form.status === 'active');
   const [definition, setDefinition] = useState<FormDefinition>(form.definition);
@@ -71,6 +81,20 @@ function Builder({ form }: { form: TypedForm }) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
+
+  /** Adopts the server version (someone else may have edited it). */
+  reloadRef.current = async () => {
+    try {
+      const fresh = await api.forms.get(form.id);
+      queryClient.setQueryData(formsKeys.form(slug, form.id), fresh);
+      setName(fresh.name);
+      setActive(fresh.status === 'active');
+      setDefinition(fresh.definition);
+      setDirty(false);
+    } catch {
+      // next poll or lock change retries
+    }
+  };
 
   const edit = (next: FormDefinition) => {
     setDefinition(next);
@@ -129,10 +153,10 @@ function Builder({ form }: { form: TypedForm }) {
           </div>
         }
         actions={
-          writable ? (
+          canWrite ? (
             <DashboardButton
               variant="primary"
-              disabled={!dirty || save.isPending || !validation.success || name.trim() === ''}
+              disabled={!writable || !dirty || save.isPending || !validation.success || name.trim() === ''}
               onClick={() => save.mutate(undefined)}
             >
               <Save aria-hidden /> {dirty ? t('common.save') : t('forms.builder.saved')}
@@ -140,6 +164,7 @@ function Builder({ form }: { form: TypedForm }) {
           ) : null
         }
       />
+      <EditLockBanner lock={lock} canTakeover={canWrite} />
       <PageBody className="grid gap-4 pt-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
         <div className="grid min-w-0 content-start gap-4">
           {firstIssue ? (

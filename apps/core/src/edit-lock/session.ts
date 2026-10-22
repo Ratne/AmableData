@@ -10,16 +10,22 @@ interface Attachment {
   userName: string;
   canTakeover: boolean;
   tenantId: string;
-  pageId: string;
+  /** Edited resource; absent on sockets opened before resources other than pages had a lock. */
+  kind?: string;
+  resourceId?: string;
+  takeoverPermission?: string;
+  /** Legacy attachment of a page socket. */
+  pageId?: string;
 }
 
 const STORAGE_KEY = 'lock';
 
 /**
- * Editing lock of one landing page (one instance per page, `<tenantId>:<pageId>`):
- * exclusive mode, FIFO waiters, heartbeat grace, forced takeover. Clients hold
- * a hibernatable WebSocket; the lock logic is the pure `EditLock`, persisted
- * after every change so it survives hibernation.
+ * Editing lock of one resource (one instance per resource: `<tenantId>:<pageId>`
+ * for landing pages, `<tenantId>:<kind>:<id>` for the others): exclusive mode,
+ * FIFO waiters, heartbeat grace, forced takeover. Clients hold a hibernatable
+ * WebSocket; the lock logic is the pure `EditLock`, persisted after every
+ * change so it survives hibernation.
  */
 export class EditSession extends DurableObject<Env> {
   private lock = new EditLock();
@@ -45,7 +51,9 @@ export class EditSession extends DurableObject<Env> {
       userName: request.headers.get(h.userName) ?? '',
       canTakeover: request.headers.get(h.canTakeover) === '1',
       tenantId: request.headers.get(h.tenantId) ?? '',
-      pageId: request.headers.get(h.pageId) ?? '',
+      kind: request.headers.get(h.kind) ?? 'pages',
+      resourceId: request.headers.get(h.resourceId) ?? '',
+      takeoverPermission: request.headers.get(h.takeoverPermission) ?? 'pages:publish',
     };
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
@@ -58,7 +66,7 @@ export class EditSession extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  /** Draft saves are allowed to the holder, or to anyone while nobody is editing (API keys). */
+  /** Writes are allowed to the holder, or to anyone while nobody is editing (API keys). */
   async canSave(userId: string): Promise<boolean> {
     if (this.lock.expire(Date.now())) await this.commit();
     return this.lock.holder === null || this.lock.holds(userId);
@@ -96,7 +104,8 @@ export class EditSession extends DurableObject<Env> {
       return;
     }
     if (!me.canTakeover) {
-      ws.send(JSON.stringify({ type: 'error', error: 'forbidden', message: 'takeover requires pages:publish' }));
+      const permission = me.takeoverPermission ?? 'pages:publish';
+      ws.send(JSON.stringify({ type: 'error', error: 'forbidden', message: `takeover requires ${permission}` }));
       return;
     }
     const { changed, previous } = this.lock.takeover(me.connId, now);
@@ -105,8 +114,8 @@ export class EditSession extends DurableObject<Env> {
         tenantId: me.tenantId || null,
         actorUserId: me.userId,
         actorType: 'user',
-        action: 'pages.lock_takeover',
-        target: me.pageId || null,
+        action: `${me.kind ?? 'pages'}.lock_takeover`,
+        target: (me.resourceId ?? me.pageId) || null,
         details: { previous_holder: previous?.userId ?? null },
         ip: null,
         now,

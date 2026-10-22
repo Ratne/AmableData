@@ -1,7 +1,7 @@
 import type { AnalyticsNamespace } from '@amable/app-edge/analytics';
 import type { BookingCalendar } from './booking/calendar-do';
 import type { Engine } from './do/engine';
-import type { EditSession } from './pages/edit-session';
+import type { EditSession } from './edit-lock/session';
 import type { TenantDb } from './do/tenant-db';
 import type { MailDb } from './email/mail-db';
 

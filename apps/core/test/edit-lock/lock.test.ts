@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EditLock, LOCK_GRACE_MS } from '../../src/pages/lock';
+import { EditLock, LOCK_GRACE_MS } from '../../src/edit-lock/lock';
 
 const ada = { connId: 'c1', userId: 'u_ada', userName: 'Ada' };
 const bob = { connId: 'c2', userId: 'u_bob', userName: 'Bob' };

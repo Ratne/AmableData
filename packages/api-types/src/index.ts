@@ -36,6 +36,9 @@ export * from './booking/index';
 /** Landing pages REST v2: pages, versions, publish, saved sections, media. */
 export * from './pages/index';
 
+/** Exclusive edit lock of pages, automations, broadcasts, email templates and forms. */
+export * from './edit-lock/index';
+
 /** Folders of automations and landing pages. */
 export * from './folders/index';
 

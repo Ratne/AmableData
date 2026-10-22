@@ -293,14 +293,5 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.preview.reload': 'Ricarica',
   'landing.preview.newTab': 'Apri in nuova scheda',
 
-  'landing.lock.connecting': 'Connessione alla sessione di modifica…',
-  'landing.lock.offline': 'Connessione persa — riconnessione in corso. La modifica è in pausa.',
-  'landing.lock.unavailable': 'La modifica esclusiva non è disponibile ora: le modifiche di altre persone potrebbero sovrascrivere le tue.',
-  'landing.lock.heldBy': 'Questa pagina è in modifica da {name}',
-  'landing.lock.heldBySomeone': "Questa pagina è in modifica da un'altra persona",
-  'landing.lock.waiting': 'Puoi guardare; la modifica si sblocca quando esce.',
-  'landing.lock.waitingMany': '{count} persone in attesa; la modifica si sblocca quando tocca a te.',
-  'landing.lock.takeover': 'Prendi il controllo',
-  'landing.lock.lost': "Non hai più il blocco di modifica: l'ultima modifica non è stata salvata.",
   'landing.lock.holding': 'Stai modificando questa pagina in esclusiva.',
 };

@@ -291,15 +291,6 @@ export const landingEn = {
   'landing.preview.reload': 'Reload',
   'landing.preview.newTab': 'Open in new tab',
 
-  'landing.lock.connecting': 'Connecting to the editing session…',
-  'landing.lock.offline': 'Connection lost — reconnecting. Editing is paused.',
-  'landing.lock.unavailable': 'Exclusive editing is not available right now: changes from other people may overwrite yours.',
-  'landing.lock.heldBy': 'This page is being edited by {name}',
-  'landing.lock.heldBySomeone': 'This page is being edited by someone else',
-  'landing.lock.waiting': 'You can look around; editing unlocks when they leave.',
-  'landing.lock.waitingMany': '{count} people are waiting; editing unlocks when it is your turn.',
-  'landing.lock.takeover': 'Take over editing',
-  'landing.lock.lost': 'You no longer hold the editing lock: your last change was not saved.',
   'landing.lock.holding': 'You are editing this page exclusively.',
 } as const;
 

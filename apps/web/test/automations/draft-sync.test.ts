@@ -93,6 +93,22 @@ describe('draft autosave with revision conflicts', () => {
     expect(sync.getSnapshot()).toMatchObject({ status: 'saved', revision: 2 });
   });
 
+  it('saves nothing while paused behind another editor, then adopts the server draft', async () => {
+    const { api, timers, sync } = setup();
+    sync.update(graphWith('a'));
+    expect(timers.count).toBe(1);
+    sync.setPaused(true);
+    expect(timers.count).toBe(0);
+    sync.update(graphWith('b'));
+    await sync.flush();
+    expect(api.state.saves).toBe(0);
+    api.otherTab(graphWith('theirs'));
+    sync.setPaused(false);
+    const server = await sync.resolveWithServer();
+    expect(server).toEqual({ revision: 2, graph: graphWith('theirs') });
+    expect(sync.getSnapshot()).toMatchObject({ status: 'saved', revision: 2 });
+  });
+
   it('goes back to saved without a request when the edit is undone', async () => {
     const { api, timers, sync } = setup();
     sync.update(graphWith('a'));

@@ -39,6 +39,7 @@ import type { Context } from 'hono';
 import { ulid } from 'ulid';
 import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
 import { maskValue } from '../crm/custom-fields/validate';
+import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../edit-lock/routes';
 import { CrmError, invalidMany } from '../crm/errors';
 import { toIso } from '../crm/util';
 import type { Env } from '../env';
@@ -323,10 +324,13 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
       tags: formsTag,
       summary: 'Update name, status or definition',
       request: { params: formIdParamSchema, body: jsonBody(updateFormSchema) },
-      responses: { 200: json(formSchema, 'The form') },
+      responses: { 200: json(formSchema, 'The form'), ...LOCKED_RESPONSE },
     }),
-    async (c) =>
-      c.json(await callCrm(c, 'forms.update', { id: c.req.valid('param').formId, data: c.req.valid('json') }), 200),
+    async (c) => {
+      const { formId } = c.req.valid('param');
+      await assertEditable(c, 'forms', formId);
+      return c.json(await callCrm(c, 'forms.update', { id: formId, data: c.req.valid('json') }), 200);
+    },
   );
   router.openapi(
     crmRoute('forms:write', {
@@ -335,10 +339,11 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
       tags: formsTag,
       summary: 'Delete a form (and its connections); submissions are kept',
       request: { params: formIdParamSchema },
-      responses: { 200: json(deletedResponseSchema, 'Deleted') },
+      responses: { 200: json(deletedResponseSchema, 'Deleted'), ...LOCKED_RESPONSE },
     }),
     async (c) => {
       const { formId } = c.req.valid('param');
+      await assertEditable(c, 'forms', formId);
       const result = await callCrm(c, 'forms.delete', { id: formId });
       await audit(c, 'forms.form_deleted', { target: formId });
       return c.json(result, 200);
@@ -377,11 +382,25 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
         tags: formsTag,
         summary: action === 'archive' ? 'Archive a form (stops accepting submissions)' : 'Restore an archived form',
         request: { params: formIdParamSchema },
-        responses: { 200: json(formSchema, 'The form') },
+        responses: { 200: json(formSchema, 'The form'), ...LOCKED_RESPONSE },
       }),
-      async (c) => c.json(await callCrm(c, op, { id: c.req.valid('param').formId }), 200),
+      async (c) => {
+        const { formId } = c.req.valid('param');
+        await assertEditable(c, 'forms', formId);
+        return c.json(await callCrm(c, op, { id: formId }), 200);
+      },
     );
   }
+  registerEditLockRoutes(router, {
+    kind: 'forms',
+    basePath: '/forms',
+    param: 'formId',
+    tag: 'Form edit lock',
+    write: 'forms:write',
+    read: 'forms:read',
+    takeover: 'forms:write',
+    exists: (c, id) => callCrm(c, 'forms.get', { id }),
+  });
   router.openapi(
     crmRoute('forms:read', {
       method: 'get',

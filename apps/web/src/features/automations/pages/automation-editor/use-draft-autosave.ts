@@ -32,6 +32,7 @@ export function useDraftAutosave(detail: AutomationDetail, graphJson: string, re
   useEffect(() => () => sync.dispose(), [sync]);
   const snapshot = useSyncExternalStore(sync.subscribe, sync.getSnapshot);
 
+  useEffect(() => sync.setPaused(readOnly), [readOnly, sync]);
   useEffect(() => {
     if (!readOnly) sync.update(JSON.parse(graphJson) as AutomationGraph);
   }, [graphJson, readOnly, sync]);

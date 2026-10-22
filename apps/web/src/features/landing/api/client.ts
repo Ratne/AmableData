@@ -10,7 +10,6 @@ import type {
   FormOption,
   LandingPage,
   LandingPageWithDraft,
-  LockState,
   MediaFile,
   PageStatus,
   PageVersion,
@@ -93,11 +92,6 @@ export function landingClient(slug: string) {
       restoreVersion: (pageId: string, versionId: string) =>
         post<unknown>(`${page(pageId)}/versions/${id(versionId)}/restore`),
       preview: (pageId: string) => get<{ html: string }>(`${page(pageId)}/preview`),
-      lockStatus: (pageId: string) => get<Omit<LockState, 'type'>>(`${page(pageId)}/lock/status`),
-      lockSocketUrl: (pageId: string) => {
-        const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        return `${proto}://${window.location.host}${base}${page(pageId)}/lock`;
-      },
     },
     savedSections: {
       list: async (): Promise<SavedSection[]> => {

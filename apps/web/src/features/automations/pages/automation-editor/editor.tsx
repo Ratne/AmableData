@@ -1,7 +1,7 @@
 import type { AutomationDetail, GraphNode, NodeStats, ValidationResult } from '@amable/api-types';
 import { DashboardConfirmDialog, toast, useTheme } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   Background,
@@ -40,6 +40,9 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '../../../../i18n';
+import { EditLockBanner } from '../../../../lib/edit-lock/edit-lock-banner';
+import { editLockPath, useEditLock } from '../../../../lib/edit-lock/use-edit-lock';
+import { CrmApiError } from '../../../crm/api/client';
 import { errorMessage } from '../../../crm/api/hooks';
 import { automationKeys, useAutomationApi, useAutomationPermissions } from '../../api/hooks';
 import { CanvasContext, statsKey, type CanvasContextValue } from '../../components/canvas-context';
@@ -87,8 +90,15 @@ export function Editor({ detail }: { detail: AutomationDetail }) {
   const { resolvedTheme } = useTheme();
   const { slug, api } = useAutomationApi();
   const perms = useAutomationPermissions();
-  const readOnly = !perms.canWrite;
+  const queryClient = useQueryClient();
   const automationId = detail.id;
+  const reloadRef = useRef<() => void>(() => undefined);
+  const lock = useEditLock(perms.canWrite ? editLockPath(slug, 'automations', automationId) : null, {
+    onLost: (holder) =>
+      toast.warning(holder ? t('common.lock.takenOver', { name: holder.user_name }) : t('common.lock.takenOverSomeone')),
+    onStale: () => reloadRef.current(),
+  });
+  const readOnly = !perms.canWrite || !lock.canEdit;
   const flow = useReactFlow<AutomationFlowNode, AutomationFlowEdge>();
   const wrapper = useRef<HTMLDivElement>(null);
 
@@ -262,6 +272,22 @@ export function Editor({ detail }: { detail: AutomationDetail }) {
     sync,
     setValidation,
   );
+
+  // ------------------------------------------------------------ edit lock
+  // Behind another editor, or right after getting the lock from them: adopt the server draft.
+  reloadRef.current = () => {
+    void sync
+      .resolveWithServer()
+      .then((server) => applyGraph(server.graph, false))
+      .catch(() => undefined);
+    void queryClient.invalidateQueries({ queryKey: automationKeys.detail(slug, automationId), exact: true });
+  };
+
+  useEffect(() => {
+    if (snapshot.status === 'error' && snapshot.error instanceof CrmApiError && snapshot.error.status === 423) {
+      toast.warning(t('common.lock.lost'));
+    }
+  }, [snapshot.status, snapshot.error, t]);
 
   // ------------------------------------------------------------- keyboard
   const clearSelection = useCallback(() => {
@@ -445,6 +471,7 @@ export function Editor({ detail }: { detail: AutomationDetail }) {
                   size="sm"
                   className="ml-1 h-8"
                   onClick={() => setDialog('unpublish')}
+                  disabled={readOnly}
                   data-testid="unpublish"
                 >
                   <Pause className="size-3.5" aria-hidden /> {t('auto.editor.unpublish')}
@@ -454,6 +481,7 @@ export function Editor({ detail }: { detail: AutomationDetail }) {
                 size="sm"
                 className="ml-1 h-8"
                 disabled={
+                  readOnly ||
                   publishing ||
                   (detail.status === 'active' &&
                     !detail.has_unpublished_changes &&
@@ -472,6 +500,8 @@ export function Editor({ detail }: { detail: AutomationDetail }) {
             </>
           ) : null}
         </div>
+
+        <EditLockBanner lock={lock} canTakeover={perms.canPublish} />
 
         {reporting && stats.data ? (
           <div
@@ -616,7 +646,7 @@ export function Editor({ detail }: { detail: AutomationDetail }) {
         automation={detail}
         open={dialog === 'versions'}
         onOpenChange={(open) => !open && setDialog(null)}
-        canRestore={perms.canWrite}
+        canRestore={!readOnly}
         onRestored={(restored) => {
           sync.reset({ revision: restored.draft_revision, graph: restored.draft_graph });
           applyGraph(restored.draft_graph, false);

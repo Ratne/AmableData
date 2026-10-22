@@ -4,7 +4,7 @@ import { folderFilterQuery } from '../folders/index';
 
 /**
  * Landing pages REST v2 schemas: pages (draft document + published versions),
- * edit lock state, saved sections and the media library. The builder document
+ * saved sections and the media library (the edit lock lives in `edit-lock`). The builder document
  * itself is validated server-side by `builderDocumentSchema` of @amable/builder.
  */
 
@@ -152,37 +152,6 @@ export type PublishPageInput = z.infer<typeof publishPageSchema>;
 export const publishPageResponseSchema = z.object({ page: landingPageSchema, version: pageVersionSchema });
 
 export const pagePreviewSchema = z.object({ html: z.string() });
-
-// -------------------------------------------------------------- edit lock
-
-export const editLockHolderSchema = z.object({
-  user_id: z.string(),
-  user_name: z.string(),
-  /** Epoch ms the holder acquired the lock. */
-  since: z.number().int(),
-});
-export type EditLockHolder = z.infer<typeof editLockHolderSchema>;
-
-/**
- * Lock state, pushed on the `GET /pages/{id}/lock` WebSocket (`type: 'state'`)
- * and returned by `GET /pages/{id}/lock/status`. `role` is the caller's.
- * Client → server messages: `{type:'heartbeat'}` every 10 s, `{type:'release'}`,
- * `{type:'takeover'}` (requires pages:publish).
- */
-export const editLockStateSchema = z.object({
-  type: z.literal('state'),
-  holder: editLockHolderSchema.nullable(),
-  role: z.enum(['holder', 'waiting']),
-  waiting: z.number().int(),
-});
-export type EditLockState = z.infer<typeof editLockStateSchema>;
-
-export const editLockClientMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('heartbeat') }),
-  z.object({ type: z.literal('release') }),
-  z.object({ type: z.literal('takeover') }),
-]);
-export type EditLockClientMessage = z.infer<typeof editLockClientMessageSchema>;
 
 // --------------------------------------------------------- saved sections
 

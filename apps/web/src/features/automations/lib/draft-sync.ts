@@ -10,7 +10,8 @@ import type { AutomationGraph } from '@amable/api-types';
  *   the user either reloads the server draft (`resolveWithServer`) or keeps
  *   their own (`resolveKeepMine`, which saves on top of the latest revision);
  * - a draft that fails the local check (shape the server would reject) is not
- *   sent: state `invalid` until it is fixed.
+ *   sent: state `invalid` until it is fixed;
+ * - while paused (read-only behind another editor) nothing is saved.
  */
 
 export type DraftStatus = 'saved' | 'dirty' | 'saving' | 'invalid' | 'error' | 'conflict';
@@ -54,6 +55,7 @@ export class DraftSync {
   private savedAt: number | null = null;
   private inFlight: Promise<void> | null = null;
   private timer: unknown = null;
+  private paused = false;
   private readonly listeners = new Set<() => void>();
   private snapshot: DraftSyncSnapshot;
 
@@ -113,10 +115,16 @@ export class DraftSync {
     }, this.options.debounceMs ?? 1200);
   }
 
+  /** Paused (someone else holds the edit lock): nothing is saved, a scheduled save is dropped. */
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (paused) this.cancelTimer();
+  }
+
   /** Records a local edit. */
   update(graph: AutomationGraph): void {
     this.current = graph;
-    if (this.status === 'conflict') return;
+    if (this.status === 'conflict' || this.paused) return;
     if (sameGraph(graph, this.saved)) {
       this.cancelTimer();
       if (this.inFlight === null) this.set('saved');
@@ -135,7 +143,7 @@ export class DraftSync {
   async flush(): Promise<void> {
     this.cancelTimer();
     while (this.inFlight !== null) await this.inFlight;
-    if (this.status === 'conflict') return;
+    if (this.status === 'conflict' || this.paused) return;
     const graph = this.current;
     if (sameGraph(graph, this.saved)) {
       this.set('saved');

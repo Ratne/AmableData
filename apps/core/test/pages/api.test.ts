@@ -1,8 +1,8 @@
 import { ROLES, type Role } from '@amable/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app';
-import type { Env } from '../../src/env';
-import { EditLock } from '../../src/pages/lock';
+import { EditLock } from '../../src/edit-lock/lock';
+import { fakeEditSessions } from '../helpers/edit-lock';
 import { fakeTenantDbNamespace } from '../crm/helpers';
 import {
   addMember,
@@ -25,31 +25,10 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0
 let h: Harness;
 const clients = {} as Record<Role, TestClient>;
 const users = {} as Record<Role, string>;
-const locks = new Map<string, EditLock>();
-const forwarded: Headers[] = [];
+const sessions = fakeEditSessions();
+const locks = sessions.locks;
+const forwarded = sessions.forwarded;
 let pageId = '';
-
-function fakeEditSessions(): Env['EDIT_SESSION'] {
-  const lockOf = (name: string) => {
-    let lock = locks.get(name);
-    if (lock === undefined) {
-      lock = new EditLock();
-      locks.set(name, lock);
-    }
-    return lock;
-  };
-  return {
-    idFromName: (name: string) => name,
-    get: (name: string) => ({
-      canSave: (userId: string) => Promise.resolve(lockOf(name).holder === null || lockOf(name).holds(userId)),
-      status: (userId: string) => Promise.resolve(lockOf(name).stateFor(null, userId)),
-      fetch: (request: Request) => {
-        forwarded.push(request.headers);
-        return Promise.resolve(new Response('forwarded', { status: 200 }));
-      },
-    }),
-  } as unknown as Env['EDIT_SESSION'];
-}
 
 async function forEachRole(fn: (client: TestClient, role: Role) => Promise<number>): Promise<Record<Role, number>> {
   const out = {} as Record<Role, number>;
@@ -83,7 +62,7 @@ beforeAll(async () => {
   h.env.EDGE_ORIGIN = 'https://t.acme.example';
   h.env.TENANT_DB = fakeTenantDbNamespace();
   h.env.FILES = fakeR2();
-  h.env.EDIT_SESSION = fakeEditSessions();
+  h.env.EDIT_SESSION = sessions.namespace;
   const acme = await seedTenant(h, 'acme');
   for (const role of ROLES) {
     const user = await seedUser(h, { email: `${role}@acme.test` });
@@ -158,6 +137,10 @@ describe('pages REST v2', () => {
     locks.set(`${tenantId}:${pageId}`, lock);
     const locked = await clients.marketer.request('PUT', `${BASE}/pages/${pageId}/draft`, { document, base_revision: base + 1 });
     expect(locked).toMatchObject({ status: 423, body: { error: 'locked' } });
+    expect((await clients.marketer.patch(`${BASE}/pages/${pageId}`, { seo: { title: 'X' } })).status).toBe(423);
+    expect((await clients.marketer.post(`${BASE}/pages/${pageId}/publish`, {})).status).toBe(423);
+    expect((await clients.marketer.post(`${BASE}/pages/${pageId}/unpublish`)).status).toBe(423);
+    expect((await clients.marketer.request('DELETE', `${BASE}/pages/${pageId}`)).status).toBe(423);
     const holder = await clients.admin.request('PUT', `${BASE}/pages/${pageId}/draft`, { document, base_revision: base + 1 });
     expect(holder.status).toBe(200);
     const status = await clients.viewer.get(`${BASE}/pages/${pageId}/lock/status`);
@@ -174,7 +157,9 @@ describe('pages REST v2', () => {
     const headers = forwarded.at(-1);
     expect(headers?.get('x-amable-user-id')).toBe(users.marketer);
     expect(headers?.get('x-amable-can-takeover')).toBe('1');
-    expect(headers?.get('x-amable-page-id')).toBe(pageId);
+    expect(headers?.get('x-amable-lock-kind')).toBe('pages');
+    expect(headers?.get('x-amable-lock-resource-id')).toBe(pageId);
+    expect(headers?.get('x-amable-lock-takeover-permission')).toBe('pages:publish');
     const evil = await raw(clients.marketer, 'GET', `${BASE}/pages/${pageId}/lock`, undefined, {
       upgrade: 'websocket',
       origin: 'https://evil.example',

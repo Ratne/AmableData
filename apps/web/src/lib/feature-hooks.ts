@@ -42,6 +42,7 @@ export function apiErrorMessage(
     if (error.status === 409 && messages.conflict !== undefined)
       return error.detail ?? t(messages.conflict);
     if (error.status === 413 && messages.tooLarge !== undefined) return t(messages.tooLarge);
+    if (error.status === 423) return t('common.lock.busy');
     if (error.status === 422 || error.status === 400) {
       const first = error.details[0];
       if (first !== undefined)

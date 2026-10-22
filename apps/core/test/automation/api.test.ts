@@ -10,6 +10,7 @@ import {
   type TestClient,
 } from '../helpers/harness';
 import { fakeTenantDbNamespace } from '../crm/helpers';
+import { fakeEditSessions } from '../helpers/edit-lock';
 import { edge, fakeEngineNamespace, goal, graph, seq } from './helpers';
 
 const BASE = '/api/v2/t/acme';
@@ -19,18 +20,24 @@ let owner: TestClient;
 let marketer: TestClient;
 let sales: TestClient;
 let viewer: TestClient;
+const sessions = fakeEditSessions();
+let tenantId = '';
+let ownerId = '';
 
 beforeAll(async () => {
   h = await createHarness();
   h.env.TENANT_DB = fakeTenantDbNamespace();
   h.env.ENGINE = fakeEngineNamespace(h.env.TENANT_DB, h.clock);
+  h.env.EDIT_SESSION = sessions.namespace;
   const acme = await seedTenant(h, 'acme');
+  tenantId = acme.id;
   const users = {
     owner: await seedUser(h, { email: 'owner@example.com' }),
     marketer: await seedUser(h, { email: 'marketer@example.com' }),
     sales: await seedUser(h, { email: 'sales@example.com' }),
     viewer: await seedUser(h, { email: 'viewer@example.com' }),
   };
+  ownerId = users.owner.id;
   await addMember(h, users.owner.id, acme.id, 'owner');
   await addMember(h, users.marketer.id, acme.id, 'marketer');
   await addMember(h, users.sales.id, acme.id, 'sales');
@@ -166,6 +173,48 @@ describe('automation REST v2', () => {
       authorization: `Bearer ${String(key.body['key'])}`,
     });
     expect(viaKey.status).toBe(200);
+  });
+
+  it('keeps the automation read-only for everyone but the edit lock holder', async () => {
+    const created = await marketer.post(`${BASE}/automations`, { name: 'Shared' });
+    const id = String(created.body['id']);
+    const lock = `${tenantId}:automations:${id}`;
+    sessions.hold(lock, ownerId, 'Owner');
+    const draft = graph([goal('g', [{ type: 'api', call_name: 'shared' }]), seq('s', [])], [edge('g', 's')]);
+
+    const blocked = [
+      await marketer.request('PUT', `${BASE}/automations/${id}/draft`, { graph: draft, revision: 1 }),
+      await marketer.patch(`${BASE}/automations/${id}`, { name: 'Renamed' }),
+      await marketer.post(`${BASE}/automations/${id}/publish`),
+      await marketer.post(`${BASE}/automations/${id}/unpublish`),
+      await marketer.delete(`${BASE}/automations/${id}`),
+    ];
+    for (const res of blocked) expect(res).toMatchObject({ status: 423, body: { error: 'locked' } });
+    expect((await marketer.get(`${BASE}/automations/${id}`)).status).toBe(200);
+    expect((await marketer.post(`${BASE}/automations/${id}/validate`)).status).toBe(200);
+    const status = await viewer.get(`${BASE}/automations/${id}/lock/status`);
+    expect(status.body).toMatchObject({ holder: { user_id: ownerId, user_name: 'Owner' }, role: 'waiting', waiting: 0 });
+
+    const saved = await owner.request('PUT', `${BASE}/automations/${id}/draft`, { graph: draft, revision: 1 });
+    expect(saved.status).toBe(200);
+    expect((await owner.post(`${BASE}/automations/${id}/publish`)).status).toBe(200);
+
+    sessions.release(lock);
+    expect((await marketer.patch(`${BASE}/automations/${id}`, { name: 'Renamed' })).status).toBe(200);
+  });
+
+  it('forwards the automation lock WebSocket with its kind and takeover permission', async () => {
+    const created = await marketer.post(`${BASE}/automations`, { name: 'Socket' });
+    const id = String(created.body['id']);
+    expect((await viewer.get(`${BASE}/automations/${id}/lock`, { upgrade: 'websocket' })).status).toBe(403);
+    const res = await marketer.get(`${BASE}/automations/${id}/lock`, { upgrade: 'websocket' });
+    expect(res.status).toBe(200);
+    const headers = sessions.forwarded.at(-1);
+    expect(headers?.get('x-amable-lock-kind')).toBe('automations');
+    expect(headers?.get('x-amable-lock-resource-id')).toBe(id);
+    expect(headers?.get('x-amable-lock-takeover-permission')).toBe('automations:publish');
+    expect(headers?.get('x-amable-can-takeover')).toBe('1');
+    expect((await marketer.get(`${BASE}/automations/missing/lock`, { upgrade: 'websocket' })).status).toBe(404);
   });
 
   it('documents every automation route with its permission', async () => {

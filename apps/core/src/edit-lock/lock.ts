@@ -1,12 +1,17 @@
 import type { EditLockState } from '@amable/api-types';
 
+/** Resources edited by one person at a time; also the prefix of the takeover audit action. */
+export type EditLockKind = 'pages' | 'automations' | 'broadcasts' | 'templates' | 'forms';
+
 /** Identity forwarded by the core route after authentication; never read from the client. */
 export const EDIT_SESSION_HEADERS = {
   userId: 'x-amable-user-id',
   userName: 'x-amable-user-name',
   canTakeover: 'x-amable-can-takeover',
   tenantId: 'x-amable-tenant-id',
-  pageId: 'x-amable-page-id',
+  kind: 'x-amable-lock-kind',
+  resourceId: 'x-amable-lock-resource-id',
+  takeoverPermission: 'x-amable-lock-takeover-permission',
 } as const;
 
 /** A connection silent for longer than this loses its place (holder or waiter). */
@@ -27,7 +32,7 @@ export interface LockSnapshot {
 }
 
 /**
- * Exclusive editing lock of one page: one holder, FIFO waiters. Pure and
+ * Exclusive editing lock of one resource: one holder, FIFO waiters. Pure and
  * serializable so the Durable Object can persist it across hibernation and
  * vitest can drive it with a fake clock. Every mutation returns whether the
  * state changed (the DO then broadcasts it).

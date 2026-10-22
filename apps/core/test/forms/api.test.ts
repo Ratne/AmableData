@@ -12,6 +12,7 @@ import {
   type Harness,
   type TestClient,
 } from '../helpers/harness';
+import { fakeEditSessions } from '../helpers/edit-lock';
 import { collectWaits, gatewayCtx, inspectableTenantDb, leadDefinition, serviceAccountKey, useFormsFakes } from './helpers';
 
 const BASE = '/api/v2/t/acme';
@@ -20,6 +21,9 @@ let h: Harness;
 const clients = {} as Record<Role, TestClient>;
 let formId = '';
 let submissionId = '';
+const sessions = fakeEditSessions();
+let tenantId = '';
+const userIds = {} as Record<Role, string>;
 
 function expectByRole(results: Record<Role, number>, allowed: readonly Role[], ok: number) {
   const expected = Object.fromEntries(ROLES.map((role) => [role, allowed.includes(role) ? ok : 403]));
@@ -37,9 +41,12 @@ beforeAll(async () => {
   h.env.EDGE_ORIGIN = 'https://t.acme.example';
   const tenants = inspectableTenantDb();
   h.env.TENANT_DB = tenants.namespace;
+  h.env.EDIT_SESSION = sessions.namespace;
   const acme = await seedTenant(h, 'acme');
+  tenantId = acme.id;
   for (const role of ROLES) {
     const user = await seedUser(h, { email: `${role}@acme.test` });
+    userIds[role] = user.id;
     await addMember(h, user.id, acme.id, role);
     clients[role] = await login(h, user.email);
   }
@@ -205,5 +212,22 @@ describe('forms REST v2 permissions by role', () => {
     const removed = await clients.marketer.delete(`${BASE}/forms/${formId}/submissions/${submissionId}`);
     expect(removed.status).toBe(200);
     expect((await clients.owner.get(`${BASE}/forms/${formId}/submissions/${submissionId}`)).status).toBe(404);
+  });
+
+  it('keeps the form read-only for everyone but the edit lock holder', async () => {
+    const created = await clients.marketer.post(`${BASE}/forms`, { name: 'Shared', definition: leadDefinition() });
+    const id = String(created.body['id']);
+    const lock = `${tenantId}:forms:${id}`;
+    sessions.hold(lock, userIds.admin, 'Admin');
+    expect(await clients.marketer.patch(`${BASE}/forms/${id}`, { name: 'X' })).toMatchObject({ status: 423, body: { error: 'locked' } });
+    expect((await clients.marketer.post(`${BASE}/forms/${id}/archive`)).status).toBe(423);
+    expect((await clients.marketer.delete(`${BASE}/forms/${id}`)).status).toBe(423);
+    expect((await clients.marketer.get(`${BASE}/forms/${id}/embed`)).status).toBe(200);
+    expect((await clients.viewer.get(`${BASE}/forms/${id}/lock/status`)).body).toMatchObject({ role: 'waiting', holder: { user_name: 'Admin' } });
+    expect((await clients.admin.patch(`${BASE}/forms/${id}`, { name: 'Admin edit' })).status).toBe(200);
+    expect((await clients.marketer.get(`${BASE}/forms/${id}/lock`, { upgrade: 'websocket' })).status).toBe(200);
+    expect(sessions.forwarded.at(-1)?.get('x-amable-lock-kind')).toBe('forms');
+    sessions.release(lock);
+    expect((await clients.marketer.patch(`${BASE}/forms/${id}`, { name: 'Free again' })).status).toBe(200);
   });
 });

@@ -15,6 +15,7 @@ import {
   updateBroadcastSchema,
 } from '@amable/api-types';
 import { crmRoute, json, jsonBody } from '../crm/api/core';
+import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../edit-lock/routes';
 import { callMail } from '../email/http';
 import { audit, getAuth, type AppEnv } from '../middleware';
 
@@ -65,13 +66,13 @@ export function registerBroadcastRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Update a draft broadcast',
       request: { params: idParamSchema, body: jsonBody(updateBroadcastSchema) },
-      responses: { 200: json(broadcastSchema, 'The broadcast') },
+      responses: { 200: json(broadcastSchema, 'The broadcast'), ...LOCKED_RESPONSE },
     }),
-    async (c) =>
-      c.json(
-        await callMail(c, 'broadcasts.update', { id: c.req.valid('param').id, data: c.req.valid('json') }),
-        200,
-      ),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      await assertEditable(c, 'broadcasts', id);
+      return c.json(await callMail(c, 'broadcasts.update', { id, data: c.req.valid('json') }), 200);
+    },
   );
   app.openapi(
     crmRoute('broadcasts:write', {
@@ -80,9 +81,12 @@ export function registerBroadcastRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Delete a draft, sent or cancelled broadcast',
       request: { params: idParamSchema },
-      responses: { 200: json(deletedResponseSchema, 'Deleted') },
+      responses: { 200: json(deletedResponseSchema, 'Deleted'), ...LOCKED_RESPONSE },
     }),
-    async (c) => c.json(await callMail(c, 'broadcasts.delete', c.req.valid('param')), 200),
+    async (c) => {
+      await assertEditable(c, 'broadcasts', c.req.valid('param').id);
+      return c.json(await callMail(c, 'broadcasts.delete', c.req.valid('param')), 200);
+    },
   );
   app.openapi(
     crmRoute('broadcasts:read', {
@@ -123,10 +127,11 @@ export function registerBroadcastRoutes(app: OpenAPIHono<AppEnv>): void {
       description:
         'Blocked (409/402/422) when the sending domain is not verified, sending is suspended, the physical address is missing, the segment is empty, the content does not compile, or the QuotaGuard denies the send.',
       request: { params: idParamSchema, body: jsonBody(broadcastScheduleSchema) },
-      responses: { 200: json(scheduleBroadcastResponseSchema, 'Scheduled, with send-time buckets') },
+      responses: { 200: json(scheduleBroadcastResponseSchema, 'Scheduled, with send-time buckets'), ...LOCKED_RESPONSE },
     }),
     async (c) => {
       const id = c.req.valid('param').id;
+      await assertEditable(c, 'broadcasts', id);
       const result = await callMail(c, 'broadcasts.schedule', { id, schedule: c.req.valid('json') });
       await audit(c, 'broadcast.scheduled', {
         target: id,
@@ -166,4 +171,13 @@ export function registerBroadcastRoutes(app: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => c.json(await callMail(c, 'broadcasts.stats', c.req.valid('param')), 200),
   );
+  registerEditLockRoutes(app, {
+    kind: 'broadcasts',
+    basePath: '/broadcasts',
+    tag: 'Broadcast edit lock',
+    write: 'broadcasts:write',
+    read: 'broadcasts:read',
+    takeover: 'broadcasts:send',
+    exists: (c, id) => callMail(c, 'broadcasts.get', { id }),
+  });
 }

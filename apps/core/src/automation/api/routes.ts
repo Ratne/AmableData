@@ -39,6 +39,7 @@ import { callCrm, CrmHttpError, crmRoute, json, jsonBody } from '../../crm/api/c
 import type { CrmResult } from '../../crm/ops';
 import type { Engine } from '../../do/engine';
 import type { CatalogInput } from '../engine';
+import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../../edit-lock/routes';
 import { registerFolderRoutes } from '../../folders/routes';
 import type { Env } from '../../env';
 import type { AutomationOpInput, AutomationOpName, AutomationOpOutput } from '../ops';
@@ -174,16 +175,13 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Update name, description or settings',
       request: { params: automationIdParamSchema, body: jsonBody(updateAutomationSchema) },
-      responses: { 200: json(automationDetailSchema, 'The automation') },
+      responses: { 200: json(automationDetailSchema, 'The automation'), ...LOCKED_RESPONSE },
     }),
-    async (c) =>
-      c.json(
-        await callEngine(c, 'automations.update', {
-          id: c.req.valid('param').id,
-          data: c.req.valid('json'),
-        }),
-        200,
-      ),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      await assertEditable(c, 'automations', id);
+      return c.json(await callEngine(c, 'automations.update', { id, data: c.req.valid('json') }), 200);
+    },
   );
   app.openapi(
     crmRoute('automations:write', {
@@ -192,9 +190,12 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Delete an unpublished automation (active enrollments are removed)',
       request: { params: automationIdParamSchema },
-      responses: { 200: json(deletedResponseSchema, 'Deleted') },
+      responses: { 200: json(deletedResponseSchema, 'Deleted'), ...LOCKED_RESPONSE },
     }),
-    async (c) => c.json(await callEngine(c, 'automations.delete', c.req.valid('param')), 200),
+    async (c) => {
+      await assertEditable(c, 'automations', c.req.valid('param').id);
+      return c.json(await callEngine(c, 'automations.delete', c.req.valid('param')), 200);
+    },
   );
   app.openapi(
     crmRoute('automations:write', {
@@ -203,16 +204,13 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Save the draft graph (optimistic lock on `revision`)',
       request: { params: automationIdParamSchema, body: jsonBody(saveDraftSchema) },
-      responses: { 200: json(automationDetailSchema, 'The automation with the saved draft') },
+      responses: { 200: json(automationDetailSchema, 'The automation with the saved draft'), ...LOCKED_RESPONSE },
     }),
-    async (c) =>
-      c.json(
-        await callEngine(c, 'automations.saveDraft', {
-          id: c.req.valid('param').id,
-          data: c.req.valid('json'),
-        }),
-        200,
-      ),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      await assertEditable(c, 'automations', id);
+      return c.json(await callEngine(c, 'automations.saveDraft', { id, data: c.req.valid('json') }), 200);
+    },
   );
   app.openapi(
     crmRoute('automations:read', {
@@ -241,16 +239,18 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       description:
         'Running enrollments stay on the version they started with. A draft with errors is rejected with 422 and the issues as `details`.',
       request: { params: automationIdParamSchema },
-      responses: { 200: json(publishResultSchema, 'The published version') },
+      responses: { 200: json(publishResultSchema, 'The published version'), ...LOCKED_RESPONSE },
     }),
-    async (c) =>
-      c.json(
+    async (c) => {
+      await assertEditable(c, 'automations', c.req.valid('param').id);
+      return c.json(
         await callEngine(c, 'automations.publish', {
           ...c.req.valid('param'),
           ...(await publishCatalogs(c)),
         }),
         200,
-      ),
+      );
+    },
   );
   app.openapi(
     crmRoute('automations:publish', {
@@ -259,9 +259,12 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Stop the automation: no new entries, running positions are suspended',
       request: { params: automationIdParamSchema },
-      responses: { 200: json(automationSchema, 'The automation') },
+      responses: { 200: json(automationSchema, 'The automation'), ...LOCKED_RESPONSE },
     }),
-    async (c) => c.json(await callEngine(c, 'automations.unpublish', c.req.valid('param')), 200),
+    async (c) => {
+      await assertEditable(c, 'automations', c.req.valid('param').id);
+      return c.json(await callEngine(c, 'automations.unpublish', c.req.valid('param')), 200);
+    },
   );
   app.openapi(
     crmRoute('automations:read', {
@@ -298,11 +301,22 @@ export function registerAutomationRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Copy a published version into the draft',
       request: { params: automationVersionParamSchema },
-      responses: { 200: json(automationDetailSchema, 'The automation with the restored draft') },
+      responses: { 200: json(automationDetailSchema, 'The automation with the restored draft'), ...LOCKED_RESPONSE },
     }),
-    async (c) =>
-      c.json(await callEngine(c, 'automations.restoreVersion', c.req.valid('param')), 200),
+    async (c) => {
+      await assertEditable(c, 'automations', c.req.valid('param').id);
+      return c.json(await callEngine(c, 'automations.restoreVersion', c.req.valid('param')), 200);
+    },
   );
+  registerEditLockRoutes(app, {
+    kind: 'automations',
+    basePath: '/automations',
+    tag: 'Automation edit lock',
+    write: 'automations:write',
+    read: 'automations:read',
+    takeover: 'automations:publish',
+    exists: (c, id) => callEngine(c, 'automations.get', { id }),
+  });
   app.openapi(
     crmRoute('automations:read', {
       method: 'get',
