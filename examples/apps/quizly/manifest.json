@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "id": "quizly",
+  "name": "Quizly",
+  "version": "1.0.0",
+  "tagline": {
+    "en": "Quiz funnels with scores, tags and branching",
+    "it": "Quiz funnel con punteggi, tag e percorsi"
+  },
+  "description": {
+    "en": "Quizzes that qualify your leads: open and multiple-choice questions, a path per answer, points and optional CRM tags. Opt-in with any of your forms, its connections keep working. Answers reach the contact as they are given, even if the quiz is left halfway. The score picks the result: a thank-you page, a tag and the \"Quiz completed\" trigger. Embed it in landing pages or share its link.",
+    "it": "Quiz che qualificano i lead: domande aperte e a scelta, un percorso per risposta, punti e tag CRM facoltativi. Opt-in con uno dei tuoi form, le sue connessioni continuano a funzionare. Le risposte arrivano sul contatto mentre le dà, anche a quiz lasciato a metà. Il punteggio sceglie il risultato: pagina di ringraziamento, tag e trigger \"Quiz completato\". Incorporalo nelle landing page o condividi il link."
+  },
+  "developer": {
+    "name": "AmableData",
+    "url": "https://github.com/Ratne/AmableData",
+    "email": "apps@amabledata.com"
+  },
+  "categories": ["marketing", "forms"],
+  "icon_url": "https://raw.githubusercontent.com/Ratne/amable-apps/main/apps/quizly/icon.png",
+  "homepage": "https://github.com/Ratne/AmableData/tree/main/examples/apps/quizly",
+  "support_url": "https://github.com/Ratne/AmableData/issues",
+  "privacy_url": "https://github.com/Ratne/AmableData/tree/main/examples/apps/quizly#privacy",
+  "base_url": "https://deployed-app.invalid",
+  "jwks_url": "https://deployed-app.invalid/.well-known/jwks.json",
+  "redirect_uris": ["https://deployed-app.invalid/install"],
+  "min_version": "2026.10.19",
+  "api_version": "2026-10",
+  "scopes": ["contacts:read", "contacts:write", "tags:write", "forms:read", "automations:trigger"],
+  "webhooks": {
+    "endpoint": "/webhooks",
+    "events": ["form.submitted"]
+  },
+  "privacy": {
+    "handles_personal_data": true,
+    "erasure_endpoint": "/privacy/erasure",
+    "data_request_endpoint": "/privacy/data"
+  },
+  "pricing": {
+    "model": "free"
+  },
+  "custom_fields": [
+    {
+      "key": "last_quiz",
+      "label": {
+        "en": "Last quiz",
+        "it": "Ultimo quiz"
+      },
+      "type": "TEXT"
+    },
+    {
+      "key": "last_score",
+      "label": {
+        "en": "Last quiz score",
+        "it": "Punteggio ultimo quiz"
+      },
+      "type": "WHOLE_NUMBER"
+    },
+    {
+      "key": "last_result",
+      "label": {
+        "en": "Last quiz result",
+        "it": "Risultato ultimo quiz"
+      },
+      "type": "TEXT"
+    }
+  ],
+  "extensions": {
+    "automation_triggers": [
+      {
+        "key": "quiz_completed",
+        "name": {
+          "en": "Quiz completed",
+          "it": "Quiz completato"
+        },
+        "description": {
+          "en": "The contact finished a Quizly quiz (data: quiz_id, quiz_name, score, max_score, result).",
+          "it": "Il contatto ha finito un quiz Quizly (dati: quiz_id, quiz_name, score, max_score, result)."
+        }
+      }
+    ],
+    "ui": [
+      {
+        "slot": "app.page",
+        "key": "quizzes",
+        "path": "/ui/quizzes",
+        "nav_group": "marketing",
+        "title": {
+          "en": "Quizly",
+          "it": "Quizly"
+        },
+        "height": 1100
+      }
+    ]
+  },
+  "deployment": {
+    "kind": "cloudflare_worker",
+    "compatibility_date": "2026-10-01",
+    "d1": [{ "binding": "DB" }]
+  }
+}

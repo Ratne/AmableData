@@ -1,0 +1,25 @@
+{
+  "name": "@amable/example-app-quizly",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build:screens": "esbuild quizzes=src/quizzes-screen.ts --bundle --format=esm --target=es2022 --outdir=public && esbuild src/player.ts --bundle --minify --format=iife --target=es2019 --outfile=public/player.js && esbuild src/embed.ts --bundle --minify --format=iife --target=es2019 --outfile=public/embed.js",
+    "dev": "pnpm run build:screens && wrangler dev",
+    "bundle": "pnpm run build:screens && node ../../../scripts/bundle-app.mjs .",
+    "typecheck": "tsc -p . && tsc -p tsconfig.screens.json",
+    "test": "vitest run --root ../../.. examples/apps/quizly"
+  },
+  "dependencies": {
+    "@amable/app-bridge": "workspace:*",
+    "@amable/app-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261015.1",
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "~5.9.3",
+    "wrangler": "^4.151.0"
+  }
+}

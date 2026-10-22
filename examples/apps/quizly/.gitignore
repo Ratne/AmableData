@@ -1,0 +1,5 @@
+public/*.js
+dist/
+.amable/
+.dev.vars
+.wrangler/

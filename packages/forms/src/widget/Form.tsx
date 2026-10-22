@@ -167,7 +167,16 @@ export function Form({ config, strings, apiBase, host, preview }: FormProps) {
         }
         return;
       }
-      if (body.success_mode === 'redirect' && body.redirect_url) {
+      // The page embedding the form (e.g. a quiz) hears the submission and may take over the redirect.
+      const proceed = host.dispatchEvent(
+        new CustomEvent('amable-form:submitted', {
+          bubbles: true,
+          composed: true,
+          cancelable: true,
+          detail: { form_id: config.id, submission_id: body.submission_id ?? '' },
+        }),
+      );
+      if (proceed && body.success_mode === 'redirect' && body.redirect_url) {
         window.location.assign(body.redirect_url);
         return;
       }
