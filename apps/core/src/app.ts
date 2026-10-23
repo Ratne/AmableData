@@ -31,6 +31,7 @@ import { mountPublishingApi } from './public/mount';
 import { mountEmailApi } from './email/mount';
 import { mountReportsApi } from './reports/routes';
 import { mountDevelopersApi } from './developers/mount';
+import { mountMcpServer, selfFetcher } from './mcp/server';
 import { ensureInstallationMigrated } from './migrate';
 import { mountPlatformApi } from './platform/mount';
 
@@ -59,7 +60,11 @@ app.get('/health', (c) => {
 app.use('*', authServices());
 // /api/dev/* only exists with ENVIRONMENT=dev (local seed script).
 // /api/platform/v1/* carries no cookie: every request is Ed25519-signed by the control plane.
-app.use('*', csrfProtection({ exempt: ['/api/dev/', '/api/platform/v1/', '/api/apps/v1/'] }));
+// /api/mcp/* never reads the session cookie: Bearer only, refused without it.
+app.use(
+  '*',
+  csrfProtection({ exempt: ['/api/dev/', '/api/platform/v1/', '/api/apps/v1/', '/api/mcp/'] }),
+);
 app.use('/invites/accept', optionalAuth());
 app.route('/', publicAuthRoutes);
 app.route('/', accountRoutes);
@@ -95,6 +100,8 @@ mountReportsApi(app);
 mountDevelopersApi(app);
 // Platform link (managed offering): signed control plane calls, support, ideas, assisted access.
 mountPlatformApi(app);
+// Remote MCP server under /api/mcp/t/:slug: tools run the v2 routes above with the caller's key.
+mountMcpServer(app, selfFetcher(app));
 
 /**
  * Dev-only seed route — exists only when ENVIRONMENT=dev (never in production).
