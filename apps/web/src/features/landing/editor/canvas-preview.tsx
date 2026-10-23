@@ -5,6 +5,9 @@ import { useI18n } from '../../../i18n';
 import type { CanvasZoom } from '../lib/devices';
 import { editorCanvasDocument, serializeDocument } from '../lib/preview-html';
 
+export const CANVAS_SHORTCUTS = ['copy', 'paste', 'duplicate', 'undo', 'redo'] as const;
+export type CanvasShortcut = (typeof CANVAS_SHORTCUTS)[number];
+
 export interface ColumnResize {
   leftId: string;
   rightId: string;
@@ -22,6 +25,7 @@ interface PreviewMessage {
   rightId?: string;
   leftPct?: number;
   rightPct?: number;
+  action?: string;
 }
 
 /**
@@ -44,6 +48,7 @@ export function CanvasPreview({
   onStartMove,
   onDelete,
   onResize,
+  onShortcut,
 }: {
   doc: BuilderDocument;
   pageId: string;
@@ -57,6 +62,8 @@ export function CanvasPreview({
   onStartMove: (id: string) => void;
   onDelete: (id: string) => void;
   onResize: (resize: ColumnResize) => void;
+  /** Builder shortcuts pressed while focus is inside the iframe. */
+  onShortcut?: (action: CanvasShortcut) => void;
 }) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -67,8 +74,8 @@ export function CanvasPreview({
   const savedScroll = useRef(0);
   const selectedRef = useRef<string | null>(selectedId);
   selectedRef.current = selectedId;
-  const handlers = useRef({ onSelectNode, onContextMenu, onStartMove, onDelete, onResize });
-  handlers.current = { onSelectNode, onContextMenu, onStartMove, onDelete, onResize };
+  const handlers = useRef({ onSelectNode, onContextMenu, onStartMove, onDelete, onResize, onShortcut });
+  handlers.current = { onSelectNode, onContextMenu, onStartMove, onDelete, onResize, onShortcut };
 
   useEffect(() => {
     const el = containerRef.current;
@@ -125,6 +132,10 @@ export function CanvasPreview({
       const d = event.data as PreviewMessage | null;
       if (d?.source !== 'b-preview') return;
       const h = handlers.current;
+      if (d.type === 'shortcut') {
+        if (d.action && (CANVAS_SHORTCUTS as readonly string[]).includes(d.action)) h.onShortcut?.(d.action as CanvasShortcut);
+        return;
+      }
       if (d.type === 'resize') {
         if (d.leftId && d.rightId && typeof d.leftPct === 'number' && typeof d.rightPct === 'number') {
           h.onResize({ leftId: d.leftId, rightId: d.rightId, leftPct: d.leftPct, rightPct: d.rightPct });

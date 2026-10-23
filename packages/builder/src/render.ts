@@ -481,6 +481,22 @@ const EDIT_OVERLAY_JS = `<script>
     var r=el.getBoundingClientRect();
     parent.postMessage({source:"b-preview",type:"contextmenu",id:el.getAttribute("data-b-id"),x:e.clientX,y:e.clientY},"*");
   });
+  // With focus inside the iframe, keystrokes never reach the editor window:
+  // forward the builder shortcuts (copy/paste/duplicate/undo/redo).
+  document.addEventListener("keydown",function(e){
+    if(!(e.metaKey||e.ctrlKey)||e.altKey)return;
+    var a=document.activeElement,tag=a&&a.tagName;
+    if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||(a&&a.isContentEditable))return;
+    var k=(e.key||"").toLowerCase(),action=null;
+    if(k==="c"&&!String(window.getSelection()||""))action="copy";
+    else if(k==="v")action="paste";
+    else if(k==="d")action="duplicate";
+    else if(k==="z")action=e.shiftKey?"redo":"undo";
+    else if(k==="y")action="redo";
+    if(!action)return;
+    e.preventDefault();
+    parent.postMessage({source:"b-preview",type:"shortcut",action:action},"*");
+  });
   var handle=document.createElement("div");
   handle.id="b-move-handle";
   handle.innerHTML='<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg><span>move</span>';

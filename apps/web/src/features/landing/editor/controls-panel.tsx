@@ -13,7 +13,7 @@ import {
 } from '@amable/builder';
 import { cn } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
-import { BookmarkPlus, ChevronDown, ChevronRight, Copy, Lock, Trash2, Unlock } from 'lucide-react';
+import { BookmarkPlus, ChevronDown, ChevronRight, ClipboardCopy, CopyPlus, Lock, Trash2, Unlock } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { useBuilderLabel } from '../lib/builder-i18n';
@@ -85,6 +85,7 @@ export function ControlsPanel({
   onSetStyle,
   onToggleLock,
   onDuplicate,
+  onCopy,
   onRemove,
   onSaveSection,
 }: {
@@ -97,6 +98,8 @@ export function ControlsPanel({
   onSetStyle: (key: string, value: unknown, bp: Breakpoint, state: ElementState) => void;
   onToggleLock: () => void;
   onDuplicate: () => void;
+  /** Copies the node to the clipboard (always allowed: read-only action). */
+  onCopy?: () => void;
   onRemove: () => void;
   onSaveSection?: () => void;
 }) {
@@ -226,8 +229,13 @@ export function ControlsPanel({
           >
             {node.locked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
           </Button>
+          {onCopy ? (
+            <Button variant="ghost" size="icon" className="size-7" aria-label={t('landing.editor.copyToClipboard')} title={t('landing.editor.copyToClipboard')} onClick={onCopy}>
+              <ClipboardCopy className="size-4" />
+            </Button>
+          ) : null}
           <Button variant="ghost" size="icon" className="size-7" aria-label={t('landing.editor.duplicate')} title={t('landing.editor.duplicate')} onClick={onDuplicate} disabled={disabled}>
-            <Copy className="size-4" />
+            <CopyPlus className="size-4" />
           </Button>
           <Button variant="ghost" size="icon" className="size-7 text-destructive" aria-label={t('landing.editor.delete')} title={t('landing.editor.delete')} onClick={onRemove} disabled={disabled}>
             <Trash2 className="size-4" />

@@ -20,6 +20,8 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import {
   ArrowLeft,
   Check,
+  ClipboardCopy,
+  ClipboardPaste,
   CloudOff,
   ExternalLink,
   Eye,
@@ -52,7 +54,7 @@ import { PopupsDialog } from '../editor/popups-dialog';
 import { PreviewDialog } from '../editor/preview-dialog';
 import { SavedSectionsPicker, SaveSectionDialog } from '../editor/saved-sections';
 import { TokensPanel } from '../editor/tokens-panel';
-import { readBlockClip, readStyleClip, useBlockClipboard } from '../hooks/use-block-clipboard';
+import { clipAge, countNodes, readBlockClip, readStyleClip, useBlockClipboard, type BlockClip } from '../hooks/use-block-clipboard';
 import { useBuilderDocument, type SaveState } from '../hooks/use-builder-document';
 import { useCanvasDnd } from '../hooks/use-canvas-dnd';
 import { useBuilderLabel } from '../lib/builder-i18n';
@@ -118,6 +120,8 @@ interface ContextMenuState {
   id: string;
   x: number;
   y: number;
+  /** Selection before the right click (the canvas re-targets the node under the cursor). */
+  prevSelectedId?: string | null;
 }
 
 function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: LandingPage }) {
@@ -282,22 +286,68 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
     if (nid) select(nid);
   };
 
+  /** "Container (14 elementi)" — the toast/menu label for one node. */
+  const clipLabelOf = (node: ElementNode): string => {
+    const inner = countNodes(node.children);
+    return inner > 0 ? t('landing.editor.blockLabel', { name: titleOf(node.type), count: inner }) : titleOf(node.type);
+  };
+
+  /** Menu entry description: label + source page + age. */
+  const describeClip = (clip: BlockClip): string => {
+    const from = clip.sourcePageName ? ` — ${t('landing.editor.fromPage', { name: clip.sourcePageName })}` : '';
+    const age = clipAge(clip.copiedAt);
+    return `${clip.label}${from}${age ? `, ${age}` : ''}`;
+  };
+
   const copyBlock = (id: string) => {
     const node = findNode(doc.body, id);
     if (!node) return;
-    clipboard.copyBlock(node);
-    toast.success(t('landing.editor.copied', { name: titleOf(node.type) }));
+    const label = clipLabelOf(node);
+    if (!clipboard.copyNodes([node], { label, wholePage: false, sourcePageName: meta.title })) {
+      toast.error(t('landing.editor.copyFailed'));
+      return;
+    }
+    toast.success(t('landing.editor.copied', { name: label }));
+  };
+
+  /** Copies every root block of the page (popups included), in order. */
+  const copyPage = () => {
+    if (doc.body.length === 0) {
+      toast.error(t('landing.editor.pageEmpty'));
+      return;
+    }
+    const label = t('landing.editor.pageLabel', { name: meta.title || t('landing.untitled'), count: doc.body.length });
+    if (!clipboard.copyNodes(doc.body, { label, wholePage: true, sourcePageName: meta.title })) {
+      toast.error(t('landing.editor.copyFailed'));
+      return;
+    }
+    toast.success(t('landing.editor.copied', { name: label }));
   };
 
   /** Pastes after the target (inside when it is an empty container or `inside`), else at the end of the scope. */
   const pasteBlock = (targetId: string | null, mode: 'after' | 'inside' = 'after') => {
     if (!editable) return;
     const clip = readBlockClip();
+    clipboard.refresh();
     if (!clip) {
       toast.error(t('landing.editor.clipboardEmpty'));
       return;
     }
-    const copy = cloneNodeWithNewIds(clip.node);
+    if (clip.nodes.length > 1) {
+      // Whole page: append every block at the end in ONE operation, so a
+      // single undo reverts the whole paste.
+      const copies = clip.nodes.map(cloneNodeWithNewIds);
+      if (editingPopupId) {
+        setEditingPopupId(null);
+      }
+      b.replaceDocument({ ...doc, body: [...doc.body, ...copies] });
+      select(copies[0]?.id ?? null);
+      toast.success(t('landing.editor.pastedMany', { count: copies.length }), { description: describeClip(clip) });
+      return;
+    }
+    const first = clip.nodes[0];
+    if (!first) return;
+    const copy = cloneNodeWithNewIds(first);
     const target = targetId ? findNode(doc.body, targetId) : null;
     const inside = target && isContainerType(target.type) && (mode === 'inside' || target.children.length === 0);
     if (copy.type === 'popup') b.insertNode(copy, null, doc.body.length);
@@ -308,12 +358,16 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
       b.insertNode(copy, loc.parentId, loc.index + 1);
     } else b.insertNode(copy, editingPopupId, editingPopupId ? undefined : doc.body.length);
     select(copy.id);
+    toast.success(t('landing.editor.pasted', { name: clip.label }), { description: describeClip(clip) });
   };
 
   const copyStyle = (id: string) => {
     const node = findNode(doc.body, id);
     if (!node) return;
-    clipboard.copyStyle(node);
+    if (!clipboard.copyStyle(node)) {
+      toast.error(t('landing.editor.copyFailed'));
+      return;
+    }
     toast.success(t('landing.editor.styleCopied'));
   };
 
@@ -372,13 +426,24 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
     setShowPopups(false);
   };
 
-  const openCtxMenu = (id: string, x: number, y: number) => {
+  const openCtxMenu = (id: string, x: number, y: number, prevSelectedId?: string | null) => {
     clipboard.refresh();
-    setCtxMenu({ id, x, y });
+    setCtxMenu({ id, x, y, prevSelectedId });
   };
 
   const actions = useRef({ requestDelete, moveWithinParent, copyBlock, pasteBlock, duplicate });
   actions.current = { requestDelete, moveWithinParent, copyBlock, pasteBlock, duplicate };
+
+  /** Shortcuts pressed while focus is INSIDE the canvas iframe (forwarded by the overlay). */
+  const onShortcut = useCallback((action: 'copy' | 'paste' | 'duplicate' | 'undo' | 'redo') => {
+    const a = actions.current;
+    const sel = selectedRef.current;
+    if (action === 'undo') bRef.current.undo();
+    else if (action === 'redo') bRef.current.redo();
+    else if (action === 'paste') a.pasteBlock(sel);
+    else if (sel && action === 'copy') a.copyBlock(sel);
+    else if (sel && action === 'duplicate') a.duplicate(sel);
+  }, []);
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
   const bRef = useRef(b);
@@ -431,19 +496,30 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
   }, []);
 
   const ctxNode = ctxMenu ? findNode(doc.body, ctxMenu.id) : null;
-  const ctxItems: { id: string; label: string; run: () => void; danger?: boolean }[] = ctxNode
+  const ctxItems: { id: string; label: string; sub?: string; run: () => void; danger?: boolean }[] = ctxNode
     ? [
         { id: 'up', label: t('landing.editor.moveUp'), run: () => moveWithinParent(ctxNode.id, -1) },
         { id: 'down', label: t('landing.editor.moveDown'), run: () => moveWithinParent(ctxNode.id, 1) },
         { id: 'dup', label: t('landing.editor.duplicate'), run: () => duplicate(ctxNode.id) },
         { id: 'copy', label: t('landing.editor.copy'), run: () => copyBlock(ctxNode.id) },
+        // The canvas right click targets the node UNDER THE CURSOR: when a
+        // different element was selected (e.g. a container picked from the
+        // tree) it stays copiable without re-selecting it.
+        ...(() => {
+          const prevId = ctxMenu?.prevSelectedId;
+          const prev = prevId && prevId !== ctxNode.id ? findNode(doc.body, prevId) : null;
+          return prev ? [{ id: 'copySel', label: t('landing.editor.copySelected', { name: clipLabelOf(prev) }), run: () => copyBlock(prev.id) }] : [];
+        })(),
+        { id: 'copyPage', label: t('landing.editor.copyPage'), run: copyPage },
         ...(clipboard.block
-          ? [
-              { id: 'paste', label: t('landing.editor.pasteAfter', { name: titleOf(clipboard.block.type) }), run: () => pasteBlock(ctxNode.id) },
-              ...(isContainerType(ctxNode.type)
-                ? [{ id: 'pasteIn', label: t('landing.editor.pasteInside', { name: titleOf(clipboard.block.type) }), run: () => pasteBlock(ctxNode.id, 'inside') }]
-                : []),
-            ]
+          ? clipboard.block.nodes.length > 1
+            ? [{ id: 'pasteEnd', label: t('landing.editor.pasteAtEnd', { count: clipboard.block.nodes.length }), sub: describeClip(clipboard.block), run: () => pasteBlock(null) }]
+            : [
+                { id: 'paste', label: t('landing.editor.pasteAfter', { name: clipboard.block.label }), sub: describeClip(clipboard.block), run: () => pasteBlock(ctxNode.id) },
+                ...(isContainerType(ctxNode.type)
+                  ? [{ id: 'pasteIn', label: t('landing.editor.pasteInside', { name: clipboard.block.label }), sub: describeClip(clipboard.block), run: () => pasteBlock(ctxNode.id, 'inside') }]
+                  : []),
+              ]
           : []),
         { id: 'copyStyle', label: t('landing.editor.copyStyle'), run: () => copyStyle(ctxNode.id) },
         ...(clipboard.style ? [{ id: 'pasteStyle', label: t('landing.editor.pasteStyle'), run: () => pasteStyle(ctxNode.id) }] : []),
@@ -514,6 +590,22 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
         >
           {fullView ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
         </Button>
+        <Button type="button" variant="ghost" size="icon" aria-label={t('landing.editor.copyPage')} title={t('landing.editor.copyPage')} onClick={copyPage}>
+          <ClipboardCopy aria-hidden />
+        </Button>
+        {clipboard.block ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={t('landing.editor.pasteAtEnd', { count: clipboard.block.nodes.length })}
+            title={`${t('landing.editor.pasteAtEnd', { count: clipboard.block.nodes.length })} — ${describeClip(clipboard.block)}`}
+            disabled={!editable}
+            onClick={() => pasteBlock(null)}
+          >
+            <ClipboardPaste aria-hidden />
+          </Button>
+        ) : null}
         <Button type="button" variant={editingPopupId ? 'secondary' : 'outline'} size="sm" onClick={() => setShowPopups(true)}>
           <SquareStack aria-hidden /> {t('landing.popups.button', { count: popupList.length })}
         </Button>
@@ -598,6 +690,7 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
                 onSelect={select}
                 onMove={b.moveNode}
                 onDuplicate={duplicate}
+                onCopy={copyBlock}
                 onToggleLock={b.toggleLock}
                 onDelete={requestDelete}
                 onContextMenu={openCtxMenu}
@@ -639,9 +732,11 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
               onStartMove={(id) => dnd.startDrag({ kind: 'move', nodeId: id })}
               onDelete={requestDelete}
               onResize={commitColumnResize}
+              onShortcut={onShortcut}
               onContextMenu={(id, x, y) => {
+                const prev = selectedRef.current;
                 select(id);
-                openCtxMenu(id, x, y);
+                openCtxMenu(id, x, y, prev);
               }}
             />
             {selected ? (
@@ -699,6 +794,7 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
                 onSetStyle={(key, value, bp, st) => b.setStyle(selected.id, key, value, bp, st)}
                 onToggleLock={() => b.toggleLock(selected.id)}
                 onDuplicate={() => duplicate(selected.id)}
+                onCopy={() => copyBlock(selected.id)}
                 onRemove={() => requestDelete(selected.id)}
                 onSaveSection={() => setSavingSection(selected)}
               />
@@ -770,9 +866,12 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
           <div
             ref={ctxMenuRef}
             role="menu"
-            className="fixed z-50 w-52 overflow-hidden rounded-md border bg-popover py-1 text-sm text-popover-foreground shadow-lg"
+            className="fixed z-50 w-72 overflow-hidden rounded-md border bg-popover py-1 text-sm text-popover-foreground shadow-lg"
             style={{ top: ctxMenu.y, left: ctxMenu.x }}
           >
+            <div className="border-b px-3 pt-1 pb-1.5 text-xs text-muted-foreground">
+              {t('landing.editor.ctxTarget')} <span className="font-semibold text-foreground">{clipLabelOf(ctxNode)}</span>
+            </div>
             {ctxItems.map((item) => (
               <button
                 key={item.id}
@@ -785,7 +884,8 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
                   setCtxMenu(null);
                 }}
               >
-                {item.label}
+                <span className="block truncate">{item.label}</span>
+                {item.sub ? <span className="block truncate text-xs text-muted-foreground">{item.sub}</span> : null}
               </button>
             ))}
           </div>

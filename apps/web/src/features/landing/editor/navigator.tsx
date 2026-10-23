@@ -1,7 +1,7 @@
 import { cn } from '@amable/ui';
 import { findNode, getWidgetDef, isContainerType, locateNode, type ElementNode } from '@amable/builder';
 import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { Copy, GripVertical, Lock, LockOpen, Trash2 } from 'lucide-react';
+import { ClipboardCopy, CopyPlus, GripVertical, Lock, LockOpen, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useI18n } from '../../../i18n';
 import { useBuilderLabel } from '../lib/builder-i18n';
@@ -9,6 +9,8 @@ import { useBuilderLabel } from '../lib/builder-i18n';
 interface NodeActions {
   disabled?: boolean;
   onDuplicate: (id: string) => void;
+  /** Copies the subtree to the clipboard (paste here or on another page). */
+  onCopy: (id: string) => void;
   onToggleLock: (id: string) => void;
   onDelete: (id: string) => void;
   onContextMenu: (id: string, x: number, y: number) => void;
@@ -66,11 +68,21 @@ function NodeRow({
           <div className={cn('items-center gap-0.5', selected ? 'flex' : 'hidden group-hover:flex')}>
             <button
               type="button"
+              aria-label={t('landing.editor.copyToClipboard')}
+              title={t('landing.editor.copyToClipboard')}
+              className="p-1 text-muted-foreground hover:text-foreground"
+              onClick={() => actions.onCopy(node.id)}
+            >
+              <ClipboardCopy aria-hidden className="size-3.5" />
+            </button>
+            <button
+              type="button"
               aria-label={t('landing.editor.duplicate')}
+              title={t('landing.editor.duplicate')}
               className="p-1 text-muted-foreground hover:text-foreground"
               onClick={() => actions.onDuplicate(node.id)}
             >
-              <Copy aria-hidden className="size-3.5" />
+              <CopyPlus aria-hidden className="size-3.5" />
             </button>
             <button
               type="button"
@@ -110,6 +122,7 @@ export function Navigator({
   onSelect,
   onMove,
   onDuplicate,
+  onCopy,
   onToggleLock,
   onDelete,
   onContextMenu,
@@ -120,6 +133,7 @@ export function Navigator({
   onSelect: (id: string) => void;
   onMove: (id: string, parentId: string | null, index: number) => void;
   onDuplicate: (id: string) => void;
+  onCopy: (id: string) => void;
   onToggleLock: (id: string) => void;
   onDelete: (id: string) => void;
   onContextMenu: (id: string, x: number, y: number) => void;
@@ -157,7 +171,7 @@ export function Navigator({
             depth={0}
             selectedId={selectedId}
             onSelect={onSelect}
-            actions={{ disabled, onDuplicate, onToggleLock, onDelete, onContextMenu }}
+            actions={{ disabled, onDuplicate, onCopy, onToggleLock, onDelete, onContextMenu }}
           />
         ))}
       </div>
