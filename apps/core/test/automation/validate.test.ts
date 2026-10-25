@@ -104,6 +104,30 @@ describe('publish validation', () => {
     ]);
   });
 
+  it('requires a JSON object body for the custom HTTP payload', () => {
+    const http = (body?: string) =>
+      graph(
+        [
+          entry,
+          seq('s', [
+            {
+              id: 'h',
+              type: 'http_request',
+              method: 'POST',
+              url: 'https://hooks.example.com/x',
+              payload: 'custom',
+              ...(body === undefined ? {} : { body }),
+            },
+          ]),
+        ],
+        [edge('g', 's')],
+      );
+    expect(codes(http())).toEqual(['body_not_json']);
+    expect(codes(http('{"broken": '))).toEqual(['body_not_json']);
+    expect(codes(http('[1, 2]'))).toEqual(['body_not_json']);
+    expect(codes(http('{"email": "{{ contact.email }}"}'))).toEqual([]);
+  });
+
   it('rejects unknown fields in the graph JSON (strict schema)', () => {
     const parsed = automationGraphSchema.safeParse({
       schema_version: 1,

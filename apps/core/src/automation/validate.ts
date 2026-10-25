@@ -229,6 +229,17 @@ type Add = (
   nodeId?: string | null,
 ) => void;
 
+/** True when the text parses as a JSON object (the `custom` body of `http_request`). */
+function isJsonObjectText(text: string | undefined): boolean {
+  if (text === undefined) return false;
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  } catch {
+    return false;
+  }
+}
+
 function checkZone(zone: string | undefined, path: string, add: Add, nodeId: string): void {
   if (zone !== undefined && zone !== 'tenant' && !isValidTimeZone(zone)) {
     add('error', 'invalid_time_zone', `unknown time zone ${zone}`, path, nodeId);
@@ -302,6 +313,9 @@ function validateStep(
       } catch (error) {
         const reason = error instanceof SsrfBlockedError ? error.message : 'invalid URL';
         add('error', 'url_blocked', `URL not allowed: ${reason}`, `${path}.url`, nodeId);
+      }
+      if (step.payload === 'custom' && !isJsonObjectText(step.body)) {
+        add('error', 'body_not_json', 'the custom body must be a JSON object', `${path}.body`, nodeId);
       }
       return;
     case 'add_to_sequence':

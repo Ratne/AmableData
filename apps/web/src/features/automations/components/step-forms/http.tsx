@@ -1,6 +1,7 @@
 import type { StepOf } from '@amable/api-types';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
+import { Textarea } from '@amable/ui/ui/textarea';
 import { Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '../../../../i18n';
 import { ChoiceSelect } from '../../../crm/components/inputs';
@@ -9,9 +10,20 @@ import { Field, NumberInput, SwitchRow } from '../form-bits';
 import type { FormProps } from './shared';
 import { SigningInfo } from './signature';
 
+/** True when the text parses as a JSON object (mirrors the publish validation). */
+function isJsonObjectText(text: string): boolean {
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  } catch {
+    return false;
+  }
+}
+
 export function HttpForm({ step, onChange, disabled, ctx }: FormProps<'http_request'>) {
   const { t } = useI18n();
   const headers = Object.entries(step.headers ?? {});
+  const payloadKind = step.payload ?? (step.method === 'GET' ? 'none' : 'contact');
   const setHeaders = (entries: Array<[string, string]>) =>
     onChange(
       clean({ ...step, headers: entries.length > 0 ? Object.fromEntries(entries) : undefined }),
@@ -90,16 +102,16 @@ export function HttpForm({ step, onChange, disabled, ctx }: FormProps<'http_requ
       <div className="grid grid-cols-2 gap-2">
         <Field label={t('auto.step.payload')}>
           <ChoiceSelect
-            value={step.payload ?? (step.method === 'GET' ? 'none' : 'contact')}
+            value={payloadKind}
             allowEmpty={false}
             disabled={disabled}
             className="w-full"
-            choices={(['contact', 'minimal', 'none'] as const).map((p) => ({
+            choices={(['contact', 'minimal', 'none', 'custom'] as const).map((p) => ({
               value: p,
               label: t(`auto.step.payload.${p}`),
             }))}
             onChange={(payload) =>
-              onChange({ ...step, payload: payload as 'contact' | 'minimal' | 'none' })
+              onChange({ ...step, payload: payload as StepOf<'http_request'>['payload'] })
             }
           />
         </Field>
@@ -113,6 +125,23 @@ export function HttpForm({ step, onChange, disabled, ctx }: FormProps<'http_requ
           />
         </Field>
       </div>
+      {payloadKind === 'custom' ? (
+        <Field label={t('auto.step.bodyTemplate')} hint={t('auto.step.bodyTemplateHint')}>
+          <Textarea
+            value={step.body ?? ''}
+            rows={6}
+            disabled={disabled}
+            className="font-mono text-xs"
+            placeholder={'{\n  "email": "{{ contact.email }}"\n}'}
+            onChange={(e) =>
+              onChange(clean({ ...step, body: e.target.value === '' ? undefined : e.target.value }))
+            }
+          />
+          {!isJsonObjectText(step.body ?? '') ? (
+            <p className="text-[11px] leading-snug text-destructive">{t('auto.step.bodyInvalid')}</p>
+          ) : null}
+        </Field>
+      ) : null}
       <SwitchRow
         label={t('auto.step.sign')}
         checked={step.sign !== false}

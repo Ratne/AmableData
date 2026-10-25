@@ -749,6 +749,92 @@ describe('steps', () => {
     expect(detail.data[0]?.positions[0]?.last_error).toMatch(/blocked URL/);
   });
 
+  it('sends a custom JSON body: merge tags render inside values and cannot break the structure', async () => {
+    const h = createEngineHarness();
+    const t = h.tag('Go');
+    const id = await h.publish(
+      graph(
+        [
+          goal('g', [{ type: 'tag_applied', tag_ids: [t] }]),
+          seq('s', [
+            {
+              id: 'hook',
+              type: 'http_request',
+              method: 'POST',
+              url: 'https://hooks.example.com/custom',
+              payload: 'custom',
+              body: JSON.stringify({
+                email: '{{ contact.email }}',
+                name: '{{ contact.name }}',
+                plan: { code: 'pro', active: true },
+                tags: ['{{ contact.first_name }}', 'fixed'],
+              }),
+            },
+          ]),
+        ],
+        [edge('g', 's')],
+      ),
+    );
+    const email = `ada${h.clock.now}@example.com`;
+    const ada = h.tenant.op('contacts.create', {
+      given_name: 'Ada "the Countess"',
+      family_name: 'Lovelace',
+      emails: [{ email }],
+    }).id;
+    h.tenant.op('contacts.applyTags', { id: ada, data: { tag_ids: [t] } });
+    await h.flush();
+    const call = h.fetchCalls[0];
+    const headers = new Headers(call?.init?.headers);
+    expect(headers.get('content-type')).toBe('application/json');
+    const body = String(call?.init?.body);
+    expect(JSON.parse(body)).toEqual({
+      email,
+      name: 'Ada "the Countess" Lovelace',
+      plan: { code: 'pro', active: true },
+      tags: ['Ada "the Countess"', 'fixed'],
+    });
+    const { secret } = await h.op('automations.signingSecret', { id });
+    expect(
+      await verifyWebhook({
+        secrets: [secret],
+        header: headers.get('amable-signature'),
+        rawBody: body,
+        nowMs: h.clock.now,
+      }),
+    ).toEqual({ ok: true });
+    expect(enrollments(h, id)).toEqual([{ contact_id: ada, status: 'completed' }]);
+  });
+
+  it('fails custom bodies permanently when a merge tag cannot render', async () => {
+    const h = createEngineHarness();
+    const t = h.tag('Go');
+    const id = await h.publish(
+      graph(
+        [
+          goal('g', [{ type: 'tag_applied', tag_ids: [t] }]),
+          seq('s', [
+            {
+              id: 'hook',
+              type: 'http_request',
+              method: 'POST',
+              url: 'https://hooks.example.com/custom',
+              payload: 'custom',
+              body: '{"x": "{{ contact.email | nope }}"}',
+            },
+          ]),
+        ],
+        [edge('g', 's')],
+      ),
+    );
+    const ada = h.contact();
+    h.tenant.op('contacts.applyTags', { id: ada, data: { tag_ids: [t] } });
+    await h.flush();
+    expect(h.fetchCalls).toHaveLength(0);
+    const detail = await h.op('automations.enrollments', { id, query: { limit: 10 } });
+    expect(detail.data[0]?.status).toBe('failed');
+    expect(detail.data[0]?.positions[0]?.last_error).toMatch(/body:/);
+  });
+
   it('pauses email steps when the quota guard says so and resumes them later', async () => {
     const h = createEngineHarness();
     const t = h.tag('Go');

@@ -417,24 +417,68 @@ async function runCancelSubscription(
 
 // -------------------------------------------------------------------- HTTP
 
+/**
+ * Renders the `custom` payload of an HTTP step: the template is parsed first
+ * and Liquid runs inside string values only, so rendered text can never change
+ * the JSON structure (the final stringify escapes it).
+ */
+async function renderHttpBody(ctx: StepContext, template: string): Promise<string> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(template) as unknown;
+  } catch {
+    throw new StepFailure('the custom body is not valid JSON', true);
+  }
+  const hasTags = (text: string): boolean => text.includes('{{') || text.includes('{%');
+  let render: ((text: string) => Promise<string>) | null = null;
+  if (hasTags(template)) {
+    const vars = liquidVars(await crm(() => ctx.contact()));
+    const timezone = await ctx.timeZone();
+    render = (text) => renderSandboxed(text, vars, { escapeHtml: false, timezone });
+  }
+  const walk = async (value: unknown): Promise<unknown> => {
+    if (typeof value === 'string' && render !== null && hasTags(value)) {
+      try {
+        return await render(value);
+      } catch (error) {
+        throw new StepFailure(`body: ${error instanceof Error ? error.message : String(error)}`, true);
+      }
+    }
+    if (Array.isArray(value)) {
+      const out: unknown[] = [];
+      for (const item of value) out.push(await walk(item));
+      return out;
+    }
+    if (typeof value === 'object' && value !== null) {
+      const out: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(value)) out[key] = await walk(item);
+      return out;
+    }
+    return value;
+  };
+  return JSON.stringify(await walk(parsed));
+}
+
 async function runHttp(ctx: StepContext, step: StepOf<'http_request'>): Promise<StepOutcome> {
   const { ports } = ctx.host;
   const payloadKind = step.payload ?? (step.method === 'GET' ? 'none' : 'contact');
   const body =
-    payloadKind === 'none'
-      ? undefined
-      : JSON.stringify({
-          event: 'automation.http_request',
-          id: ctx.key,
-          automation_id: ctx.automationId,
-          version_id: ctx.versionId,
-          node_id: ctx.node.id,
-          step_id: step.id,
-          enrollment_id: ctx.enrollmentId,
-          contact_id: ctx.contactId,
-          ...(payloadKind === 'contact' ? { contact: await ctx.contact() } : {}),
-          sent_at: iso(ctx.now),
-        });
+    payloadKind === 'custom'
+      ? await renderHttpBody(ctx, step.body ?? '')
+      : payloadKind === 'none'
+        ? undefined
+        : JSON.stringify({
+            event: 'automation.http_request',
+            id: ctx.key,
+            automation_id: ctx.automationId,
+            version_id: ctx.versionId,
+            node_id: ctx.node.id,
+            step_id: step.id,
+            enrollment_id: ctx.enrollmentId,
+            contact_id: ctx.contactId,
+            ...(payloadKind === 'contact' ? { contact: await ctx.contact() } : {}),
+            sent_at: iso(ctx.now),
+          });
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(step.headers ?? {})) {
     if (!HTTP_FORBIDDEN_HEADERS.has(name.toLowerCase())) headers[name] = value;
@@ -484,6 +528,18 @@ function appActionContact(contact: Contact): AppActionContact {
   };
 }
 
+/** Context of `{{ … }}` merge tags (app action inputs, custom HTTP bodies). */
+function liquidVars(contact: Contact): Record<string, unknown> {
+  return {
+    contact: {
+      ...appActionContact(contact),
+      name: [contact.given_name, contact.family_name].filter(Boolean).join(' '),
+      job_title: contact.job_title,
+      custom: contact.custom_fields,
+    },
+  };
+}
+
 async function resolveAppInput(
   ctx: StepContext,
   input: Readonly<Record<string, unknown>>,
@@ -496,14 +552,7 @@ async function resolveAppInput(
       out[key] = value;
       continue;
     }
-    vars ??= {
-      contact: {
-        ...appActionContact(contact),
-        name: [contact.given_name, contact.family_name].filter(Boolean).join(' '),
-        job_title: contact.job_title,
-        custom: contact.custom_fields,
-      },
-    };
+    vars ??= liquidVars(contact);
     try {
       out[key] = await renderSandboxed(value, vars, { escapeHtml: false, timezone: await ctx.timeZone() });
     } catch (error) {

@@ -390,8 +390,18 @@ export const stepSchema = z.discriminatedUnion('type', [
     method: z.enum(HTTP_METHODS),
     url: z.url().max(2048),
     headers: z.record(z.string().regex(/^[A-Za-z0-9-]{1,64}$/), z.string().max(1000)).optional(),
-    /** `contact` (default for non-GET): JSON with the contact; `minimal`: ids only; `none`. */
-    payload: z.enum(['contact', 'minimal', 'none']).optional(),
+    /**
+     * `contact` (default for non-GET): JSON with the contact; `minimal`: ids
+     * only; `none`; `custom`: the `body` template.
+     */
+    payload: z.enum(['contact', 'minimal', 'none', 'custom']).optional(),
+    /**
+     * `custom` payload only: a JSON object whose string values may hold Liquid
+     * merge tags (`{{ contact.email }}`). Tags are rendered inside the parsed
+     * values, so they can never change the JSON structure. Publish validation
+     * requires a JSON object.
+     */
+    body: z.string().max(20_000).optional(),
     sign: z.boolean().optional(),
     timeout_ms: z.number().int().min(500).max(30_000).optional(),
   }),

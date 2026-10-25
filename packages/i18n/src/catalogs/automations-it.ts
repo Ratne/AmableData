@@ -312,6 +312,11 @@ export const automationsIt: Readonly<Record<AutomationsMessageKey, string>> = {
   'auto.step.payload.contact': 'JSON del contatto',
   'auto.step.payload.minimal': 'Solo ID',
   'auto.step.payload.none': 'Nessun corpo',
+  'auto.step.payload.custom': 'JSON personalizzato',
+  'auto.step.bodyTemplate': 'Template JSON',
+  'auto.step.bodyTemplateHint':
+    'Un oggetto JSON; i merge tag come {{ contact.email }} funzionano nei valori stringa e non possono cambiare la struttura.',
+  'auto.step.bodyInvalid': 'Il corpo deve essere un oggetto JSON valido.',
   'auto.step.sign': 'Firma la richiesta',
   'auto.step.timeout': 'Timeout (ms)',
   'auto.step.signingTitle': 'Firma delle richieste',

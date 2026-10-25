@@ -310,6 +310,11 @@ export const automationsEn = {
   'auto.step.payload.contact': 'Contact JSON',
   'auto.step.payload.minimal': 'IDs only',
   'auto.step.payload.none': 'No body',
+  'auto.step.payload.custom': 'Custom JSON',
+  'auto.step.bodyTemplate': 'JSON template',
+  'auto.step.bodyTemplateHint':
+    'A JSON object; merge tags like {{ contact.email }} work inside string values and cannot change the structure.',
+  'auto.step.bodyInvalid': 'The body must be a valid JSON object.',
   'auto.step.sign': 'Sign the request',
   'auto.step.timeout': 'Timeout (ms)',
   'auto.step.signingTitle': 'Request signing',
