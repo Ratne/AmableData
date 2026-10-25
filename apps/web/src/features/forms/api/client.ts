@@ -1,4 +1,6 @@
 import type {
+  ArchivedMonths,
+  ArchivedSubmissions,
   ConnectionTestResult,
   ConnectorInfo,
   CreateConnectionInput,
@@ -64,6 +66,9 @@ export function formsClient(slug: string) {
         del<Deleted>(`${form(formId)}/submissions/${id(submissionId)}`),
       reprocess: (formId: string, submissionId: string) =>
         post<FormSubmission>(`${form(formId)}/submissions/${id(submissionId)}/reprocess`),
+      archivedMonths: (formId: string) => get<ArchivedMonths>(`${form(formId)}/archivedSubmissions`),
+      archived: (formId: string, month: string, offset = 0) =>
+        get<ArchivedSubmissions>(`${form(formId)}/archivedSubmissions/${id(month)}`, { offset, limit: 50 }),
     },
     connections: {
       catalog: () => get<{ data: ConnectorInfo[] }>('/formConnectorTypes'),

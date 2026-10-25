@@ -4,7 +4,7 @@ import {
   BREAKPOINTS,
   BUILDER_LIMITS,
   ELEMENT_STATES,
-  HTML_DOCUMENT_MAX_CHARS,
+  HTML_DOCUMENT_MAX_BYTES,
   ICON_NAMES,
   WIDGETS,
   builderTokensSchema,
@@ -131,7 +131,7 @@ export function builderOverview(target: EmbedTarget): { [key: string]: Json } {
         when: 'Full control: a page written from scratch as one HTML document. Served exactly as written; only the analytics tracker is added before </body>. Edited in the web app as source code, not on the canvas.',
         shape: '{ editorKind: "html", html: "<!doctype html><html>…</html>" }',
         rules: [
-          `Max ${HTML_DOCUMENT_MAX_CHARS} characters.`,
+          `Max ${HTML_DOCUMENT_MAX_BYTES} bytes of UTF-8 (accented letters and emoji take 2 to 4 bytes).`,
           'Write the whole document: doctype, <head> (title, meta description, viewport, og tags, fonts, CSS) and <body>. The page SEO fields are not injected.',
           'Inline and https scripts, styles, images and iframes are allowed.',
           'Images: upload_media returns a url to use in <img src>.',

@@ -263,6 +263,8 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
 
   'crm.timeline.empty': 'Ancora nessuna attività.',
   'crm.timeline.api': 'API',
+  'crm.timeline.loadArchived': 'Carica eventi precedenti',
+  'crm.timeline.noArchived': 'Nessun evento archiviato.',
   'crm.activity.contactCreated': 'Contatto creato',
   'crm.activity.contactUpdated': 'Contatto aggiornato',
   'crm.activity.contactDeleted': 'Contatto archiviato',

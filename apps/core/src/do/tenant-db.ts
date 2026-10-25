@@ -1,5 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { createDoSqliteMigrationStore, runMigrations, tenantMigrations } from '@amable/db';
+import { TENANT_ARCHIVE_STREAMS } from '../archive/model';
+import { runArchiveOp, type ArchiveHost, type ArchiveOpResult } from '../archive/store';
 import type { BackupRow } from '../backup/format';
 import {
   backupSqlFromStorage,
@@ -161,6 +163,23 @@ export class TenantDb extends DurableObject<Env> {
     );
     if (candidates.length === 0) void this.ctx.storage.deleteAlarm();
     else void this.ctx.storage.setAlarm(Math.max(Math.min(...candidates), now));
+  }
+
+  /** Event archive (apps/core/src/archive): the retention cron and the archive read routes only. */
+  archive(op: string, input: unknown): ArchiveOpResult<unknown> {
+    const host: ArchiveHost = {
+      db: this.crmDb,
+      streams: TENANT_ARCHIVE_STREAMS,
+      outbox: 'crm_outbox',
+      settingsTable: 'tenant_meta',
+      now: () => Date.now(),
+    };
+    return runArchiveOp(host, op, input);
+  }
+
+  /** Size of this object's SQLite database (bytes), for the owner diagnostics. */
+  storageInfo(): { bytes: number } {
+    return { bytes: this.ctx.storage.sql.databaseSize };
   }
 
   private readonly backup = createSqlBackup(backupSqlFromStorage(this.ctx.storage), {

@@ -35,6 +35,7 @@ import {
 } from '../email/render';
 import { fromAddress, getSetting, sendGate, suspension, tenantTimeZone, warmupState, sentToday } from '../email/settings';
 import { suppressedSet } from '../email/suppressions';
+import { frozenStats, liveLinks, liveTotals } from './frozen';
 import { getBroadcastRow, type BroadcastRow } from './store';
 import { bucketize, scheduleRecipients } from './tz';
 
@@ -83,6 +84,7 @@ function progressOf(deps: MailDeps, ids: readonly string[]): Map<string, Progres
       });
     }
   }
+  for (const [id, frozen] of frozenStats(deps.db, ids)) progress.set(id, frozen.progress);
   return progress;
 }
 
@@ -156,6 +158,9 @@ export function listBroadcasts(deps: MailDeps, input: ListBroadcastsQuery): Page
     )) {
       stats.set(s.broadcast_id, { sent: s.sent, opened: s.opened, clicked: s.clicked });
     }
+  }
+  for (const [id, frozen] of frozenStats(deps.db, ids)) {
+    stats.set(id, { sent: frozen.totals.sent, opened: frozen.totals.opened, clicked: frozen.totals.clicked });
   }
   const progress = progressOf(deps, ids);
   const last = page.at(-1);
@@ -590,62 +595,20 @@ async function tickOne(deps: MailDeps, b: BroadcastRow, now: number): Promise<nu
 
 export function broadcastStats(deps: MailDeps, input: { id: string }): BroadcastStats {
   const row = getBroadcastRow(deps, input.id);
-  const t = deps.db.all<{
-    total: number;
-    sent: number;
-    delivered: number;
-    opened: number;
-    clicked: number;
-    bounced: number;
-    complained: number;
-    unsubscribed: number;
-    failed: number;
-    skipped: number;
-  }>(
-    `SELECT COUNT(*) AS total,
-            COALESCE(SUM(CASE WHEN sent_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS sent,
-            COALESCE(SUM(CASE WHEN delivered_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS delivered,
-            COALESCE(SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS opened,
-            COALESCE(SUM(CASE WHEN clicked_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS clicked,
-            COALESCE(SUM(CASE WHEN bounced_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS bounced,
-            COALESCE(SUM(CASE WHEN complained_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS complained,
-            COALESCE(SUM(CASE WHEN unsubscribed_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS unsubscribed,
-            COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
-            COALESCE(SUM(CASE WHEN status IN ('skipped', 'blocked') THEN 1 ELSE 0 END), 0) AS skipped
-       FROM mail_messages WHERE broadcast_id = ?`,
-    row.id,
-  )[0] ?? {
-    total: 0, sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0, unsubscribed: 0, failed: 0, skipped: 0,
-  };
-  const progress = progressOfOne(deps, row.id);
-  const known = new Map<string, { url: string; position: number; clicks: number; unique_clicks: number }>();
-  for (const l of deps.db.all<{ url: string; position: number }>(
-    `SELECT l.url AS url, MIN(l.position) AS position FROM mail_message_links l
-       JOIN mail_messages m ON m.id = l.message_id
-      WHERE m.broadcast_id = ? GROUP BY l.url`,
-    row.id,
-  )) {
-    known.set(l.url, { url: l.url, position: l.position, clicks: 0, unique_clicks: 0 });
-  }
-  for (const c of deps.db.all<{ url: string; position: number; clicks: number; unique_clicks: number }>(
-    `SELECT url, MIN(position) AS position, COUNT(*) AS clicks, COUNT(DISTINCT message_id) AS unique_clicks
-       FROM mail_clicks WHERE broadcast_id = ? GROUP BY url`,
-    row.id,
-  )) {
-    const entry = known.get(c.url);
-    known.set(c.url, {
-      url: c.url,
-      position: entry?.position ?? c.position,
-      clicks: c.clicks,
-      unique_clicks: c.unique_clicks,
-    });
-  }
+  const frozen = frozenStats(deps.db, [row.id]).get(row.id);
+  const progress = frozen?.progress ?? progressOfOne(deps, row.id);
+  const t = frozen?.totals ?? { recipients: progress.recipients, ...liveTotals(deps.db, row.id) };
+  const links = frozen?.links ?? liveLinks(deps.db, row.id);
   const rate = (n: number, d: number): number => (d === 0 ? 0 : Math.round((n / d) * 10_000) / 10_000);
   return {
     broadcast_id: row.id,
     status: row.status,
+    archived: frozen !== undefined,
+    messages_archived:
+      frozen !== undefined &&
+      deps.db.all(`SELECT 1 FROM archive_catalog WHERE stream = 'mail_messages' AND partition = ? LIMIT 1`, row.id).length > 0,
     totals: {
-      recipients: progress.recipients,
+      recipients: t.recipients,
       sent: t.sent,
       delivered: t.delivered,
       opened: t.opened,
@@ -663,7 +626,7 @@ export function broadcastStats(deps: MailDeps, input: { id: string }): Broadcast
       bounce: rate(t.bounced, t.sent),
       unsubscribe: rate(t.unsubscribed, t.sent),
     },
-    links: [...known.values()].sort((a, b) => b.clicks - a.clicks || a.position - b.position),
+    links,
     progress,
   };
 }

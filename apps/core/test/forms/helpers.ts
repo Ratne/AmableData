@@ -2,6 +2,8 @@ import type { GatewayClientInfo } from '@amable/api-types';
 import { devOAuthProvider, type OAuthTokenProvider, type SystemEmail } from '@amable/core';
 import type { FormDefinitionInput } from '@amable/forms';
 import { createGatewayContext, type GatewayContext } from '../../src/public/context';
+import { TENANT_ARCHIVE_STREAMS } from '../../src/archive/model';
+import { runArchiveOp } from '../../src/archive/store';
 import { runCrmOp } from '../../src/crm/ops';
 import type { CrmActor } from '../../src/crm/context';
 import type { Env } from '../../src/env';
@@ -27,6 +29,16 @@ export function inspectableTenantDb(): { namespace: Env['TENANT_DB']; tenant(id:
         crm: (op: string, actor: CrmActor, input: unknown) =>
           Promise.resolve(
             structuredClone(runCrmOp({ db: current.db, searchMode: current.mode }, actor, op, structuredClone(input))),
+          ),
+        archive: (op: string, input: unknown) =>
+          Promise.resolve(
+            structuredClone(
+              runArchiveOp(
+                { db: current.db, streams: TENANT_ARCHIVE_STREAMS, outbox: 'crm_outbox', settingsTable: 'tenant_meta', now: () => Date.now() },
+                op,
+                structuredClone(input),
+              ),
+            ),
           ),
       };
     },

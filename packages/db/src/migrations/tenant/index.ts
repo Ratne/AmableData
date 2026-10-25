@@ -16,6 +16,7 @@ import { t0014DropMapboxSettings } from './0014_drop_mapbox_settings';
 import { t0015SheetsServiceAccount } from './0015_sheets_service_account';
 import { t0016Esign } from './0016_esign';
 import { t0017Checkout } from './0017_checkout';
+import { t0018Archive } from './0018_archive';
 
 /**
  * Ordered list of tenant-DO SQLite migrations.
@@ -39,4 +40,5 @@ export const tenantMigrations: readonly Migration[] = [
   t0015SheetsServiceAccount,
   t0016Esign,
   t0017Checkout,
+  t0018Archive,
 ];

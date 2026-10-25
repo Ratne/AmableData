@@ -11,6 +11,7 @@ import {
   renderBuilderPage,
   sanitizeBuilderDocument,
   validateBuilderDocument,
+  utf8Bytes,
   validatePageDocument,
   type BuilderDocument,
   type ElementNode,
@@ -176,6 +177,12 @@ describe('raw HTML pages', () => {
     expect(validatePageDocument({ editorKind: 'html' }).ok).toBe(false);
     expect(validatePageDocument({ editorKind: 'html', html: source, body: [] }).ok).toBe(false);
     expect(validatePageDocument({ editorKind: 'html', html: 'x'.repeat(1_500_001) }).ok).toBe(false);
+    // The limit is in UTF-8 bytes: 600k "è" are 1.2 MB, 800k are 1.6 MB.
+    expect(validatePageDocument({ editorKind: 'html', html: 'è'.repeat(600_000) }).ok).toBe(true);
+    expect(validatePageDocument({ editorKind: 'html', html: 'è'.repeat(800_000) }).ok).toBe(false);
+    expect(utf8Bytes('è😀')).toBe(6);
+    const sizes: Array<[string, number]> = [['a', 1], ['ß€', 5], ['日本語', 9], ['👩‍💻 ok', 14], ['\ud800x', 4]];
+    for (const [sample, bytes] of sizes) expect(utf8Bytes(sample)).toBe(bytes);
     expect(validatePageDocument(emptyBuilderDocument()).ok).toBe(true);
     expect(validatePageDocument({ body: [{ id: 'x', type: 'nope' }] }).ok).toBe(false);
   });

@@ -260,6 +260,8 @@ export const crmEn = {
 
   'crm.timeline.empty': 'No activity yet.',
   'crm.timeline.api': 'API',
+  'crm.timeline.loadArchived': 'Load earlier events',
+  'crm.timeline.noArchived': 'No archived events.',
   'crm.activity.contactCreated': 'Contact created',
   'crm.activity.contactUpdated': 'Contact updated',
   'crm.activity.contactDeleted': 'Contact archived',

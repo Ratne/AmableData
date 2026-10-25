@@ -113,20 +113,55 @@ export async function runTenantSync(env: Env, tenantId: string): Promise<SyncRep
   }
 }
 
+/** Wall-clock share of a cron tick for the analytics sync (the tick also runs backups, archive, apps). */
+export const ANALYTICS_TICK_BUDGET_MS = 10_000;
+export const ANALYTICS_CURSOR_KEY = 'analytics/_cron.json';
+
+async function readCursor(env: Env): Promise<string | null> {
+  try {
+    const object = await env.FILES?.get(ANALYTICS_CURSOR_KEY);
+    if (object === null || object === undefined) return null;
+    const value = ((await object.json()) as { after?: unknown }).after;
+    return typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCursor(env: Env, after: string | null): Promise<void> {
+  await env.FILES?.put(ANALYTICS_CURSOR_KEY, JSON.stringify({ after }), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+}
+
 /**
  * Cron entry point: CRM sync of every tenant having sites, then the daily pull
- * of connected ad / search integrations.
+ * of connected ad / search integrations. Tenants are visited round-robin from
+ * where the previous tick stopped, under a wall-clock budget, so a large
+ * installation is covered over several ticks instead of running out of time
+ * on the same first tenants.
  */
-export async function runScheduledAnalytics(env: Env): Promise<void> {
+export async function runScheduledAnalytics(
+  env: Env,
+  options: { budgetMs?: number; now?: () => number } = {},
+): Promise<{ visited: string[]; complete: boolean }> {
   const ns = env.ANALYTICS;
-  if (ns === undefined) return;
-  const tenants = await env.DB.prepare(`SELECT id FROM tenants`).all<{ id: string }>();
+  if (ns === undefined) return { visited: [], complete: true };
+  const now = options.now ?? (() => Date.now());
+  const deadline = now() + (options.budgetMs ?? ANALYTICS_TICK_BUDGET_MS);
+  const { results } = await env.DB.prepare(`SELECT id FROM tenants ORDER BY id`).all<{ id: string }>();
+  const after = await readCursor(env);
+  const start = after === null ? 0 : results.findIndex((t) => t.id > after);
+  const ordered = start <= 0 ? results : [...results.slice(start), ...results.slice(0, start)];
   const integrations = integrationsFor(env);
-  for (const { id } of tenants.results) {
-    const sites = await tenantSitesStub(ns, id).indexList();
-    if (sites.length === 0) continue;
-    await runTenantSync(env, id);
+  const visited: string[] = [];
+  for (const { id } of ordered) {
+    if (visited.length > 0 && now() >= deadline) break;
+    visited.push(id);
     try {
+      const sites = await tenantSitesStub(ns, id).indexList();
+      if (sites.length === 0) continue;
+      await runTenantSync(env, id);
       const active: string[] = [];
       for (const siteId of sites) {
         const record = await siteStub(ns, siteId).getSite();
@@ -134,7 +169,11 @@ export async function runScheduledAnalytics(env: Env): Promise<void> {
       }
       await syncDueIntegrations(ns, active, integrations, Date.now());
     } catch (error) {
-      console.error(`[analytics] integrations sync of ${id} failed: ${String(error)}`);
+      console.error(`[analytics] scheduled sync of ${id} failed: ${String(error)}`);
     }
   }
+  const complete = visited.length === ordered.length;
+  const next = complete ? null : (visited.at(-1) ?? null);
+  if (next !== after) await writeCursor(env, next);
+  return { visited, complete };
 }

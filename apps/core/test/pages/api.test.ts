@@ -191,6 +191,25 @@ describe('pages REST v2', () => {
     expect((await clients.viewer.get(`${BASE}/pages/${id}`)).body['editor_kind']).toBe('canvas');
     const bad = await clients.marketer.post(`${BASE}/pages`, { title: 'Bad', path: '/bad', document: { editorKind: 'html' } });
     expect(bad.status).toBe(422);
+    // 700k "è" are 700k characters but 1.4 MB: fine. 800k are 1.6 MB, over the HTML limit.
+    const heavy = await clients.marketer.post(`${BASE}/pages`, { title: 'Heavy', path: '/heavy', document: { editorKind: 'html', html: 'è'.repeat(700_000) } });
+    expect(heavy.status).toBe(201);
+    const tooHeavy = await clients.marketer.post(`${BASE}/pages`, { title: 'Too heavy', path: '/too-heavy', document: { editorKind: 'html', html: 'è'.repeat(800_000) } });
+    expect(tooHeavy.status).toBe(422);
+  });
+
+  it('rejects canvas documents over the stored byte limit instead of failing the row write', async () => {
+    const text = '😀'.repeat(250_000);
+    const body = Array.from({ length: 2 }, (_, i) => ({
+      id: `h${i}`,
+      type: 'heading',
+      settings: { title: text },
+      styles: [],
+      children: [],
+    }));
+    const res = await clients.marketer.post(`${BASE}/pages`, { title: 'Emoji', path: '/emoji', document: { editorKind: 'canvas', body } });
+    expect(res.status).toBe(413);
+    expect(res.body).toMatchObject({ error: 'payload_too_large' });
   });
 
   it('accepts only real images by magic bytes, up to 10 MB, and streams them back', async () => {

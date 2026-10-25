@@ -53,6 +53,7 @@ import type {
   UpdateTagInput,
   UpdateTaskInput,
 } from '@amable/api-types/crm';
+import type { ArchivedTimeline } from '@amable/api-types';
 import { request, tenantRest } from '../../../lib/tenant-api';
 
 export { TenantApiError as CrmApiError } from '../../../lib/tenant-api';
@@ -109,6 +110,8 @@ export function crmClient(slug: string) {
         del<Contact>(`/contacts/${id(contactId)}/tags/${id(tagId)}`),
       timeline: (contactId: string, params: ListParams = {}) =>
         get<Page<Activity>>(`/contacts/${id(contactId)}/timeline`, params),
+      archivedTimeline: (contactId: string, before?: string) =>
+        get<ArchivedTimeline>(`/contacts/${id(contactId)}/timeline/archive`, before === undefined ? {} : { before }),
     },
     leadSources: {
       list: () => get<{ data: LeadSource[] }>('/leadSources'),
@@ -123,6 +126,8 @@ export function crmClient(slug: string) {
       restore: (companyId: string) => post<Company>(`/companies/${id(companyId)}/restore`),
       timeline: (companyId: string, params: ListParams = {}) =>
         get<Page<Activity>>(`/companies/${id(companyId)}/timeline`, params),
+      archivedTimeline: (companyId: string, before?: string) =>
+        get<ArchivedTimeline>(`/companies/${id(companyId)}/timeline/archive`, before === undefined ? {} : { before }),
     },
     tags: {
       list: (
@@ -239,6 +244,8 @@ export function crmClient(slug: string) {
         post<Opportunity>(`/opportunities/${id(opportunityId)}/restore`),
       timeline: (opportunityId: string, params: ListParams = {}) =>
         get<Page<Activity>>(`/opportunities/${id(opportunityId)}/timeline`, params),
+      archivedTimeline: (opportunityId: string, before?: string) =>
+        get<ArchivedTimeline>(`/opportunities/${id(opportunityId)}/timeline/archive`, before === undefined ? {} : { before }),
     },
     search: {
       query: (query: SearchQueryInput) => post<SearchResult>('/search', query),

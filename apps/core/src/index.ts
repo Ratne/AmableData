@@ -4,6 +4,7 @@ import { runScheduledTrackingDomains } from './analytics/routes-tracking-domains
 import { runScheduledAnalytics } from './analytics/runtime';
 import { app } from './app';
 import { runAppsCron } from './apps/cron';
+import { archiveDeps, runScheduledArchive } from './archive/scheduler';
 import { DISCOVERY_PATH, handleWellKnown, JWKS_PATH } from './apps/well-known';
 import { backupDeps, runScheduledBackups } from './backup/service';
 import { handleEmailSendBatch } from './email/consumer';
@@ -66,28 +67,32 @@ const handler = {
     }, (promise) => ctx.waitUntil(promise));
   },
 
-  // Cron: platform link (heartbeat, usage blocks, error outbox, grant expiry).
-  // Other failures are reported to the fleet monitor, then rethrown.
+  // Cron: platform link (heartbeat, usage blocks, error outbox, grant expiry), then
+  // the scheduled jobs; their failures are reported to the fleet monitor.
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     await platformScheduled(env, controller.scheduledTime);
-    return withErrorReporting(env, 'cron', controller.cron, async () => {
-      // Web analytics: CRM → analytics sync of every tenant, daily ad / search integrations.
-      await runScheduledAnalytics(env);
-      // Ad platforms: hourly spend of the current day, daily reconciliation, token refresh.
-      await runScheduledAdsSync(env);
-      // Tracking domains: status of the pending ones, removals left by deleted sites.
-      await runScheduledTrackingDomains(env, controller.scheduledTime);
-      // Outgoing webhooks: delivery log retention.
-      await webhookService(env).prune();
-      // R2 backups: installation D1 + each tenant's DOs, once a day, a few per tick.
-      await runScheduledBackups(backupDeps(env)).catch((error: unknown) => {
-        console.error('[backup] scheduler failed:', error instanceof Error ? error.message : error);
-      });
-      // Self-hosted: latest public release, once a day.
-      await runUpdateCheck(env, controller.scheduledTime);
-      // Marketplace apps: catalog sync (every 6 hours), uninstall cleanup, metrics retention.
-      await runAppsCron(env, controller.scheduledTime);
-    }, (promise) => ctx.waitUntil(promise));
+    // Each job runs on its own: one that throws is reported and the next ones still run.
+    const job = <R>(name: string, fn: () => Promise<R>): Promise<R | null> =>
+      withErrorReporting(env, 'cron', `${controller.cron} ${name}`, fn, (promise) => ctx.waitUntil(promise)).catch(
+        () => null,
+      );
+    // Web analytics: CRM → analytics sync of every tenant, daily ad / search integrations.
+    await job('analytics', () => runScheduledAnalytics(env));
+    // Ad platforms: hourly spend of the current day, daily reconciliation, token refresh.
+    await job('ads', () => runScheduledAdsSync(env));
+    // Tracking domains: status of the pending ones, removals left by deleted sites.
+    await job('tracking-domains', () => runScheduledTrackingDomains(env, controller.scheduledTime));
+    // Outgoing webhooks: delivery log retention.
+    await job('webhooks', () => webhookService(env).prune());
+    // R2 backups: installation D1 + each tenant's DOs, once a day, a few per tick.
+    const backups = await job('backups', () => runScheduledBackups(backupDeps(env)));
+    // Event archive: rows past the retention window to R2, once a day per tenant.
+    // Skipped on ticks that ran backups, so one tick never does both heavy jobs.
+    if (backups?.status !== 'ran') await job('archive', () => runScheduledArchive(archiveDeps(env)));
+    // Self-hosted: latest public release, once a day.
+    await job('update-check', () => runUpdateCheck(env, controller.scheduledTime));
+    // Marketplace apps: catalog sync (every 6 hours), uninstall cleanup, metrics retention.
+    await job('apps', () => runAppsCron(env, controller.scheduledTime));
   },
 } satisfies ExportedHandler<Env>;
 

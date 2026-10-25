@@ -23,11 +23,14 @@ import {
   uploadEsignPageImageQuerySchema,
   uploadEsignPdfQuerySchema,
   voidEsignRequestSchema,
+  type EsignEvent,
 } from '@amable/api-types';
 import { sha256Hex } from '@amable/auth';
 import type { Context } from 'hono';
 import { ulid } from 'ulid';
+import { archiveCatalog, readArchiveObject } from '../archive/read';
 import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
+import { toIso } from '../crm/util';
 import { audit, clientCountry, clientIp, getAuth, getTenant, type AppEnv } from '../middleware';
 import { cleanFilename } from '../pages/media';
 import type { ClientFacts, TenantFacts } from './model';
@@ -43,6 +46,32 @@ const binaryBody = (type: string) => ({
   required: true,
   content: { [type]: { schema: z.string().openapi({ format: 'binary' }) } },
 });
+
+/** Requests whose audit events the archive may have moved to R2 (see apps/core/src/archive/streams.ts). */
+const ENDED_STATUSES = new Set(['completed', 'declined', 'voided', 'expired']);
+
+const textOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+/** Audit trail of an ended request read back from the archive, in id order. */
+async function archivedEsignEvents(c: Ctx, requestId: string): Promise<EsignEvent[]> {
+  const events: EsignEvent[] = [];
+  for (const entry of (await archiveCatalog(c, 'esign_events', requestId)).sort((a, b) => a.part - b.part)) {
+    for await (const row of readArchiveObject(c, entry)) {
+      events.push({
+        id: String(row['id']),
+        signer_id: textOrNull(row['signer_id']),
+        type: String(row['type']) as EsignEvent['type'],
+        actor: { type: row['actor_type'] as EsignEvent['actor']['type'], id: textOrNull(row['actor_id']) },
+        ip: textOrNull(row['ip']),
+        user_agent: textOrNull(row['user_agent']),
+        country: textOrNull(row['country']),
+        meta: typeof row['meta'] === 'object' && row['meta'] !== null ? (row['meta'] as Record<string, unknown>) : {},
+        occurred_at: toIso(Number(row['occurred_at'])),
+      });
+    }
+  }
+  return events.sort((a, b) => (a.id < b.id ? -1 : 1));
+}
 
 const PAGE_IMAGE_TYPES = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg' } as const;
 
@@ -377,11 +406,11 @@ export function registerEsignRoutes(router: OpenAPIHono<AppEnv>): void {
       request: { params: esignRequestParamSchema },
       responses: { 200: json(esignRequestDetailSchema, 'The request') },
     }),
-    async (c) =>
-      c.json(
-        await callCrm(c, 'esign.requests.detail', { id: c.req.valid('param').requestId }),
-        200,
-      ),
+    async (c) => {
+      const detail = await callCrm(c, 'esign.requests.detail', { id: c.req.valid('param').requestId });
+      if (detail.events.length > 0 || !ENDED_STATUSES.has(detail.status)) return c.json(detail, 200);
+      return c.json({ ...detail, events: await archivedEsignEvents(c, detail.id) }, 200);
+    },
   );
   router.openapi(
     crmRoute('esign:write', {

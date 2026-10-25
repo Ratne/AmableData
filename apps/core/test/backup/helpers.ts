@@ -11,7 +11,10 @@ import {
 } from '../../src/backup/sql-dump';
 import { mailMigrations } from '../../src/email/db/migrations';
 import type { Env } from '../../src/env';
-import { createTestTenant, type TestTenant } from '../crm/helpers';
+import { MAIL_ARCHIVE_STREAMS, TENANT_ARCHIVE_STREAMS, type ArchiveDb } from '../../src/archive/model';
+import type { ArchiveDoStub } from '../../src/archive/scheduler';
+import { runArchiveOp, type ArchiveHost } from '../../src/archive/store';
+import { createNodeSqlDb, createTestTenant, type TestTenant } from '../crm/helpers';
 
 /** BackupSql over node:sqlite; records the largest parameter count seen. */
 export function nodeBackupSql(db: DatabaseSync): BackupSql & { maxParams: number } {
@@ -108,6 +111,18 @@ export class FakeDos {
         dos.restoredCalls += 1;
         return Promise.resolve();
       },
+    };
+  }
+
+  /** The `archive(op, input)` RPC of the tenant's TenantDb or MailDb. */
+  archiveStub(tenantId: string, name: ArchiveDb, now: () => number = () => Date.now()): ArchiveDoStub {
+    const dos = this.get(tenantId);
+    const host: ArchiveHost =
+      name === 'tenant_db'
+        ? { db: dos.crm.db, streams: TENANT_ARCHIVE_STREAMS, outbox: 'crm_outbox', settingsTable: 'tenant_meta', now }
+        : { db: createNodeSqlDb(dos.mail), streams: MAIL_ARCHIVE_STREAMS, outbox: 'mail_outbox', settingsTable: null, now };
+    return {
+      archive: (op, input) => Promise.resolve(structuredClone(runArchiveOp(host, op, structuredClone(input)))),
     };
   }
 

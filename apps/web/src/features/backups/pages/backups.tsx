@@ -28,6 +28,7 @@ import {
   type BackupItem,
   type BackupKind,
 } from '../api';
+import { ArchiveCard } from './archive-card';
 
 const KIND_KEYS: Readonly<Record<BackupKind, MessageKey>> = {
   scheduled: 'backups.kind.scheduled',
@@ -192,6 +193,8 @@ export function BackupsPage() {
             ) : null}
           </CardContent>
         </Card>
+
+        {isOwner ? <ArchiveCard slug={slug} /> : null}
 
         <Alert>
           <Info className="size-4" />

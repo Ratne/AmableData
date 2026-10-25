@@ -46,32 +46,66 @@ function emailsSpec(): GenericSpec {
   };
 }
 
+/**
+ * Per-broadcast totals: counted from the live messages, or read from the frozen
+ * row once the archive started moving the broadcast's messages to R2.
+ */
+const BROADCAST_TOTALS = `(
+  SELECT broadcast_id, COUNT(*) AS total, COUNT(sent_at) AS sent, COUNT(delivered_at) AS delivered,
+         COUNT(opened_at) AS opened, COUNT(clicked_at) AS clicked, COUNT(bounced_at) AS bounced,
+         COUNT(complained_at) AS complained, COUNT(unsubscribed_at) AS unsubscribed
+    FROM mail_messages
+   WHERE broadcast_id IS NOT NULL AND broadcast_id NOT IN (SELECT broadcast_id FROM mail_broadcast_stats)
+   GROUP BY broadcast_id
+  UNION ALL
+  SELECT broadcast_id, total, sent, delivered, opened, clicked, bounced, complained, unsubscribed
+    FROM mail_broadcast_stats
+)`;
+
 function broadcastsSpec(): GenericSpec {
   const anchor = 'bc.started_at';
+  const sum = (column: string) => ({ expr: `COALESCE(SUM(m.${column}), 0)`, anchor });
   return {
-    from: 'mail_broadcasts bc JOIN mail_messages m ON m.broadcast_id = bc.id',
+    from: `mail_broadcasts bc JOIN ${BROADCAST_TOTALS} m ON m.broadcast_id = bc.id`,
     where: ['bc.deleted_at IS NULL'],
     measures: {
-      recipients: { expr: 'COUNT(*)', anchor },
-      sent: { expr: 'COUNT(m.sent_at)', anchor },
-      ...engagement(anchor),
+      recipients: sum('total'),
+      sent: sum('sent'),
+      ...Object.fromEntries(Object.keys(ENGAGEMENT).map((k) => [k, sum(k)])),
     },
     dimensions: { broadcast: { key: 'bc.id', label: 'MAX(bc.name)' } },
     currencyColumn: null,
   };
 }
 
+/**
+ * Clicks per (broadcast, link, message) from the live table, plus the frozen
+ * per-link counts of archived broadcasts (no message ids: their unique clicks
+ * are summed as frozen).
+ */
+const LINK_CLICKS = `(
+  SELECT broadcast_id, url, message_id, COUNT(*) AS clicks, NULL AS frozen_unique
+    FROM mail_clicks
+   WHERE broadcast_id IS NOT NULL AND broadcast_id NOT IN (SELECT broadcast_id FROM mail_broadcast_stats)
+   GROUP BY broadcast_id, url, message_id
+  UNION ALL
+  SELECT s.broadcast_id, json_extract(j.value, '$.url'), NULL, json_extract(j.value, '$.clicks'),
+         json_extract(j.value, '$.unique_clicks')
+    FROM mail_broadcast_stats s, json_each(s.links) j
+   WHERE json_extract(j.value, '$.clicks') > 0
+)`;
+
 function linksSpec(broadcastId: string | null): GenericSpec {
   const anchor = broadcastId === null ? 'bc.started_at' : null;
   return {
-    from: `mail_clicks k JOIN mail_broadcasts bc ON bc.id = k.broadcast_id AND bc.deleted_at IS NULL${
+    from: `${LINK_CLICKS} k JOIN mail_broadcasts bc ON bc.id = k.broadcast_id AND bc.deleted_at IS NULL${
       broadcastId === null ? '' : ' AND bc.id = ?'
     }`,
     fromParams: broadcastId === null ? [] : [broadcastId],
     where: [],
     measures: {
-      clicks: { expr: 'COUNT(*)', anchor },
-      unique_clicks: { expr: 'COUNT(DISTINCT k.message_id)', anchor },
+      clicks: { expr: 'COALESCE(SUM(k.clicks), 0)', anchor },
+      unique_clicks: { expr: 'COUNT(DISTINCT k.message_id) + COALESCE(SUM(k.frozen_unique), 0)', anchor },
     },
     dimensions: {
       link:

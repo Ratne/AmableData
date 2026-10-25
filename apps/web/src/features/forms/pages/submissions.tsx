@@ -11,7 +11,7 @@ import {
 } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@amable/ui/ui/sheet';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { RefreshCw, Trash2, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -40,7 +40,7 @@ function valueText(fields: Map<string, FormField>, key: string, value: unknown, 
 }
 
 export function SubmissionsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { formId = '' } = useParams({ strict: false }) as { formId?: string };
   const search: { submission?: unknown } = useSearch({ strict: false });
   const { slug, api } = useForms();
@@ -60,9 +60,27 @@ export function SubmissionsPage() {
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
-  const rows = useMemo(() => submissions.data?.pages.flatMap((p) => p.data) ?? [], [submissions.data]);
+  // "live" = the database; otherwise a month moved to the archive (read-only, decrypted on demand).
+  const [period, setPeriod] = useState<string>('live');
+  const inArchive = period !== 'live';
+  const archivedMonths = useQuery({
+    queryKey: [...formsKeys.submissions(slug, formId), 'archive'],
+    queryFn: () => api.submissions.archivedMonths(formId),
+  });
+  const archived = useInfiniteQuery({
+    queryKey: [...formsKeys.submissions(slug, formId), 'archive', period],
+    queryFn: ({ pageParam }) => api.submissions.archived(formId, period, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.next_offset ?? undefined,
+    enabled: inArchive,
+  });
+  const active = inArchive ? archived : submissions;
+  const rows = useMemo(() => active.data?.pages.flatMap((p) => p.data) ?? [], [active.data]);
   const open = rows.find((r) => r.id === openId) ?? null;
-  const writable = can('forms:write');
+  const writable = can('forms:write') && !inArchive;
+  const monthLabel = (month: string) =>
+    new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T00:00:00Z`));
+  const months = archivedMonths.data?.data ?? [];
 
   const reprocess = useFormsMutation({
     mutationFn: (id: string) => api.submissions.reprocess(formId, id),
@@ -138,20 +156,41 @@ export function SubmissionsPage() {
     <>
       <PageToolbar
         filters={
-          <DashboardFilterMenu
-            label={t('forms.field.status')}
-            value={status}
-            onValueChange={(value) => setStatus(value as 'all' | SubmissionStatus)}
-            options={(['all', 'pending', 'processed', 'failed'] as const).map((value) => ({
-              value,
-              label: value === 'all' ? t('forms.filter.all') : t(`forms.submissions.status.${value}`),
-            }))}
-          />
+          <>
+            {months.length > 0 ? (
+              <DashboardFilterMenu
+                label={t('forms.submissions.period')}
+                value={period}
+                onValueChange={(value) => {
+                  setPeriod(value);
+                  setOpenId(null);
+                }}
+                options={[
+                  { value: 'live', label: t('forms.submissions.periodLive') },
+                  ...months.map((m) => ({ value: m.month, label: `${monthLabel(m.month)} (${m.rows})` })),
+                ]}
+              />
+            ) : null}
+            {inArchive ? null : (
+              <DashboardFilterMenu
+                label={t('forms.field.status')}
+                value={status}
+                onValueChange={(value) => setStatus(value as 'all' | SubmissionStatus)}
+                options={(['all', 'pending', 'processed', 'failed'] as const).map((value) => ({
+                  value,
+                  label: value === 'all' ? t('forms.filter.all') : t(`forms.submissions.status.${value}`),
+                }))}
+              />
+            )}
+          </>
         }
       />
-      {submissions.error ? (
+      {inArchive ? (
+        <p className="px-4 pt-2 text-xs text-muted-foreground">{t('forms.submissions.archivedNotice')}</p>
+      ) : null}
+      {active.error ? (
         <PageBody>
-          <ErrorNotice error={submissions.error} />
+          <ErrorNotice error={active.error} />
         </PageBody>
       ) : (
         <ListTable<FormSubmission>
@@ -163,14 +202,14 @@ export function SubmissionsPage() {
           labels={listTableLabels(t)}
           selectable={false}
           manualSorting
-          loading={submissions.isPending}
+          loading={active.isPending}
           onRowOpen={(s) => setOpenId(s.id)}
           rowActions={writable ? rowActions : undefined}
           emptyState={<p className="py-10 text-center text-sm text-muted-foreground">{t('forms.submissions.empty')}</p>}
           footer={
-            submissions.hasNextPage ? (
+            active.hasNextPage ? (
               <div className="flex justify-center py-3">
-                <DashboardButton variant="ghost" disabled={submissions.isFetchingNextPage} onClick={() => void submissions.fetchNextPage()}>
+                <DashboardButton variant="ghost" disabled={active.isFetchingNextPage} onClick={() => void active.fetchNextPage()}>
                   {t('forms.common.loadMore')}
                 </DashboardButton>
               </div>

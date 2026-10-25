@@ -10,6 +10,7 @@ import {
   emptyBuilderDocument,
   isHtmlDocument,
   sanitizeBuilderDocument,
+  utf8Bytes,
   validatePageDocument,
   type PageDocument,
 } from '@amable/builder';
@@ -20,8 +21,12 @@ import { emit } from '../crm/events';
 import { decodeCursor, paginate, parseJson, toIso } from '../crm/util';
 import { createFolderStore, type FolderStore } from '../folders/store';
 
-/** Stored draft documents are bounded (the TenantDb row and the SSR stay small). */
-export const MAX_DOCUMENT_BYTES = 2_000_000;
+/**
+ * Stored documents are bounded in UTF-8 bytes: the draft (and each published
+ * version) is one TenantDb row, which Durable Object SQLite caps at 2 MB with the
+ * other columns included.
+ */
+export const MAX_DOCUMENT_BYTES = 1_800_000;
 
 /**
  * Paths the edge serves itself on every host (other edge routes win over the
@@ -132,8 +137,8 @@ export function parseDocument(input: unknown, path = 'document'): PageDocument {
   const clean = isHtmlDocument(result.document)
     ? result.document
     : sanitizeBuilderDocument(result.document, (html) => sanitizeHtml(html, { allowStyles: true }));
-  if (JSON.stringify(clean).length > MAX_DOCUMENT_BYTES) {
-    throw new CrmError('payload_too_large', 'document too large');
+  if (utf8Bytes(JSON.stringify(clean)) > MAX_DOCUMENT_BYTES) {
+    throw new CrmError('payload_too_large', `document larger than ${MAX_DOCUMENT_BYTES} bytes`);
   }
   return clean;
 }

@@ -393,6 +393,10 @@ export const testSendResponseSchema = z.object({
 export const broadcastStatsSchema = z.object({
   broadcast_id: idSchema,
   status: broadcastStatusSchema,
+  /** Messages and clicks moved to the R2 archive: numbers are the totals frozen before. */
+  archived: z.boolean(),
+  /** Some of its messages are in the archive (`GET /broadcasts/{id}/archive.csv`). */
+  messages_archived: z.boolean(),
   totals: z.object({
     recipients: z.number().int(),
     sent: z.number().int(),

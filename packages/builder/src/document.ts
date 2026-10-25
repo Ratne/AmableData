@@ -96,8 +96,30 @@ export const builderDocumentSchema = z.object({
 export type BuilderDocument = z.output<typeof builderDocumentSchema>;
 export type BuilderDocumentInput = z.input<typeof builderDocumentSchema>;
 
-/** Max length (characters) of the markup of an HTML document. */
-export const HTML_DOCUMENT_MAX_CHARS = 1_500_000;
+/**
+ * Max size of the markup of an HTML document, in UTF-8 bytes: the page row holds
+ * the whole document and Durable Object SQLite rejects rows over 2 MB, so accented
+ * letters, emoji and inline SVG text count for what they weigh.
+ */
+export const HTML_DOCUMENT_MAX_BYTES = 1_500_000;
+
+/** UTF-8 size of a string (what SQLite stores); a lone surrogate counts as U+FFFD (3 bytes). */
+export function utf8Bytes(value: string): number {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && i + 1 < value.length) {
+      const next = value.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else bytes += 3;
+    } else bytes += 3;
+  }
+  return bytes;
+}
 
 /**
  * A page written entirely by its author as one HTML document (`<!doctype html>…`).
@@ -106,7 +128,13 @@ export const HTML_DOCUMENT_MAX_CHARS = 1_500_000;
  */
 export const htmlDocumentSchema = z.strictObject({
   editorKind: z.literal("html"),
-  html: z.string().max(HTML_DOCUMENT_MAX_CHARS),
+  html: z
+    .string()
+    // A UTF-16 unit is never less than one UTF-8 byte: cheap rejection before encoding.
+    .max(HTML_DOCUMENT_MAX_BYTES)
+    .refine((html) => utf8Bytes(html) <= HTML_DOCUMENT_MAX_BYTES, {
+      message: `HTML larger than ${HTML_DOCUMENT_MAX_BYTES} bytes (UTF-8: accented letters and emoji take 2 to 4 bytes each)`,
+    }),
 });
 export type HtmlDocument = z.output<typeof htmlDocumentSchema>;
 

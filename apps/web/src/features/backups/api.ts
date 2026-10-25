@@ -1,3 +1,4 @@
+import type { ArchiveSettings, UpdateArchiveRetentionInput } from '@amable/api-types';
 import type { MessageKey } from '@amable/i18n';
 import { ApiError, apiFetch } from '../../lib/api';
 import { stepUpFetch } from '../../lib/step-up';
@@ -16,8 +17,17 @@ export interface BackupList {
   retention: { scheduled: number; manual: number };
 }
 
+export interface DatabaseSizes {
+  databases: Array<{ name: 'tenant_db' | 'mail_db' | 'engine'; bytes: number | null }>;
+  limit: number;
+  warning: number;
+}
+
+export type ArchiveOverview = ArchiveSettings & { storage: DatabaseSizes };
+
 export const backupKeys = {
   list: (slug: string) => ['backups', slug] as const,
+  archive: (slug: string) => ['backups', slug, 'archive'] as const,
   me: (slug: string) => ['tenant-me', slug] as const,
 };
 
@@ -32,6 +42,9 @@ export const backupsApi = {
       method: 'POST',
       body: JSON.stringify({ confirm }),
     }),
+  archive: (slug: string) => apiFetch<ArchiveOverview>(`${base(slug)}/archive`),
+  saveArchive: (slug: string, input: UpdateArchiveRetentionInput) =>
+    apiFetch<ArchiveOverview>(`${base(slug)}/archive`, { method: 'PUT', body: JSON.stringify(input) }),
   me: (slug: string) =>
     apiFetch<{ role: string }>(`/api/t/${encodeURIComponent(slug)}/me`),
   /** Streams the file into a blob and saves it (the GET needs the session and a fresh step-up). */

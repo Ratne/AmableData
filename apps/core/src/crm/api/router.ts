@@ -12,6 +12,7 @@ import { registerStripeRoutes } from '../../commerce/stripe/api';
 import { registerCheckoutRoutes } from '../../checkout/api';
 import { registerWorkspaceRoutes } from '../../workspace/api';
 import { registerConversationRoutes } from '../../conversations/api';
+import { registerArchiveTimelineRoutes } from '../../archive/api';
 
 /** Every CRM REST v2 route, relative to `/api/v2/t/{slug}`. */
 export const crmApi = createCrmRouter();
@@ -27,6 +28,7 @@ registerStripeRoutes(crmApi);
 registerCheckoutRoutes(crmApi);
 registerWorkspaceRoutes(crmApi);
 registerConversationRoutes(crmApi);
+registerArchiveTimelineRoutes(crmApi);
 
 crmApi.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
   type: 'http',

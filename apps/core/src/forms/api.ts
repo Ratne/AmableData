@@ -1,5 +1,9 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi';
 import {
+  archivedMonthsSchema,
+  archivedSubmissionsParamSchema,
+  archivedSubmissionsQuerySchema,
+  archivedSubmissionsSchema,
   connectionParamSchema,
   connectionTestResultSchema,
   connectorInfoSchema,
@@ -37,6 +41,7 @@ import { randomToken } from '@amable/auth';
 import { displayValue, type SubmissionValue } from '@amable/forms';
 import type { Context } from 'hono';
 import { ulid } from 'ulid';
+import { archiveCatalog, archiveMonths, readArchiveObject } from '../archive/read';
 import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
 import { maskValue } from '../crm/custom-fields/validate';
 import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../edit-lock/routes';
@@ -462,6 +467,60 @@ export function registerFormsRoutes(router: OpenAPIHono<AppEnv>): void {
       const { formId, submissionId } = c.req.valid('param');
       const found = await callCrm(c, 'forms.getSubmission', { formId, id: submissionId });
       return c.json(await serializeSubmission(c, found.submission, found.deliveries), 200);
+    },
+  );
+  router.openapi(
+    crmRoute('forms:submissions_read', {
+      method: 'get',
+      path: '/forms/{formId}/archivedSubmissions',
+      tags: submissionsTag,
+      summary: 'Months of submissions moved to the archive (past the retention window), newest first',
+      request: { params: formIdParamSchema },
+      responses: { 200: json(archivedMonthsSchema, 'Archived months with their submission counts') },
+    }),
+    async (c) => c.json({ data: await archiveMonths(c, 'form_submissions', c.req.valid('param').formId) }, 200),
+  );
+  router.openapi(
+    crmRoute('forms:submissions_read', {
+      method: 'get',
+      path: '/forms/{formId}/archivedSubmissions/{month}',
+      tags: submissionsTag,
+      summary: 'Decrypted submissions of one archived month, oldest first (offset-paginated)',
+      request: { params: archivedSubmissionsParamSchema, query: archivedSubmissionsQuerySchema },
+      responses: { 200: json(archivedSubmissionsSchema, 'A page of archived submissions') },
+    }),
+    async (c) => {
+      const { formId, month } = c.req.valid('param');
+      const { offset, limit } = c.req.valid('query');
+      const entries = await archiveCatalog(c, 'form_submissions', formId, { month });
+      const rows: Record<string, unknown>[] = [];
+      let seen = 0;
+      let more = false;
+      scan: for (const entry of entries.sort((a, b) => a.part - b.part)) {
+        if (seen + entry.rows <= offset) {
+          seen += entry.rows;
+          continue;
+        }
+        for await (const row of readArchiveObject(c, entry)) {
+          seen += 1;
+          if (seen <= offset) continue;
+          if (rows.length === limit) {
+            more = true;
+            break scan;
+          }
+          rows.push(row);
+        }
+      }
+      const data = await Promise.all(
+        rows.map((row) =>
+          serializeSubmission(
+            c,
+            row as unknown as SubmissionRow,
+            Array.isArray(row['deliveries']) ? (row['deliveries'] as DeliveryRow[]) : [],
+          ),
+        ),
+      );
+      return c.json({ data, next_offset: more ? offset + rows.length : null }, 200);
     },
   );
   router.openapi(

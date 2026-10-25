@@ -1,6 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { createDoSqliteMigrationStore, runMigrations } from '@amable/db';
 import { monotonicFactory } from 'ulid';
+import { MAIL_ARCHIVE_STREAMS } from '../archive/model';
+import { runArchiveOp, type ArchiveHost, type ArchiveOpResult } from '../archive/store';
 import type { BackupRow } from '../backup/format';
 import {
   backupSqlFromStorage,
@@ -91,6 +93,23 @@ export class MailDb extends DurableObject<Env> {
     const result = await runMailOp(deps, op, input);
     if (hasPendingEmailEvents(deps)) await deps.scheduleAlarm(Date.now() + BRIDGE_DELAY_MS);
     return result;
+  }
+
+  /** Event archive (apps/core/src/archive): the retention cron and the archive read routes only. */
+  archive(op: string, input: unknown): ArchiveOpResult<unknown> {
+    const host: ArchiveHost = {
+      db: this.db,
+      streams: MAIL_ARCHIVE_STREAMS,
+      outbox: 'mail_outbox',
+      settingsTable: null,
+      now: () => Date.now(),
+    };
+    return runArchiveOp(host, op, input);
+  }
+
+  /** Size of this object's SQLite database (bytes), for the owner diagnostics. */
+  storageInfo(): { bytes: number } {
+    return { bytes: this.ctx.storage.sql.databaseSize };
   }
 
   private readonly backup = createSqlBackup(backupSqlFromStorage(this.ctx.storage), {

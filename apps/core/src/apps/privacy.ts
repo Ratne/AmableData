@@ -1,3 +1,5 @@
+import { eraseContactFromArchive } from '../archive/erase';
+import { archiveDeps } from '../archive/scheduler';
 import type { Env } from '../env';
 import { callApp } from './call';
 import { sendAppEvent } from './events';
@@ -22,6 +24,7 @@ export async function eraseContactEverywhere(
   nowMs: number,
 ): Promise<{ facts: ContactPrivacyFacts; apps: string[]; request_id: string }> {
   const facts = await tenantOp<ContactPrivacyFacts>(env, tenantId, 'contacts.erase', { contactId });
+  await eraseContactFromArchive(archiveDeps(env), tenantId, contactId);
   const requestId = `prv_${crypto.randomUUID()}`;
   const apps: string[] = [];
   for (const install of await personalDataInstalls(env, tenantId)) {

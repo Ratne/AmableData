@@ -53,3 +53,6 @@ export * from './conversations/index';
 
 /** Electronic signatures: templates, signature requests, audit trail. */
 export * from './esign/index';
+
+/** Event archive: old timeline events, submissions and email messages kept in R2. */
+export * from './archive/index';

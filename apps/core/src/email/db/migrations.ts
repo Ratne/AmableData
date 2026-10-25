@@ -160,4 +160,47 @@ export const mailMigrations: readonly Migration[] = [
       `CREATE INDEX mail_broadcast_recipients_due ON mail_broadcast_recipients (broadcast_id, status, send_at)`,
     ],
   },
+  {
+    id: 2,
+    name: 'mail_archive',
+    statements: [
+      // Objects of messages and clicks moved to R2 past the retention window
+      // (same shape as the TenantDb catalog; partition = broadcast id or "tx").
+      `CREATE TABLE archive_catalog (
+        stream TEXT NOT NULL,
+        month TEXT NOT NULL,
+        partition TEXT NOT NULL,
+        part INTEGER NOT NULL,
+        object_key TEXT NOT NULL,
+        rows INTEGER NOT NULL,
+        bytes INTEGER NOT NULL,
+        last_cursor TEXT,
+        final INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (stream, month, partition, part)
+      )`,
+      `CREATE INDEX archive_catalog_partition ON archive_catalog (stream, partition, month)`,
+      // Totals of a broadcast frozen before its first message or click leaves
+      // the database: lists, stats and reports read them from then on.
+      `CREATE TABLE mail_broadcast_stats (
+        broadcast_id TEXT PRIMARY KEY,
+        recipients INTEGER NOT NULL,
+        total INTEGER NOT NULL,
+        sent INTEGER NOT NULL,
+        delivered INTEGER NOT NULL,
+        opened INTEGER NOT NULL,
+        clicked INTEGER NOT NULL,
+        bounced INTEGER NOT NULL,
+        complained INTEGER NOT NULL,
+        unsubscribed INTEGER NOT NULL,
+        failed INTEGER NOT NULL,
+        skipped INTEGER NOT NULL,
+        progress TEXT NOT NULL,
+        links TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX mail_messages_created ON mail_messages (created_at)`,
+      `CREATE INDEX mail_clicks_created ON mail_clicks (created_at)`,
+    ],
+  },
 ];

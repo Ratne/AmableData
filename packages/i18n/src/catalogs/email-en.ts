@@ -171,6 +171,8 @@ export const emailEn = {
   'broadcasts.report.clicks': 'Clicks',
   'broadcasts.report.uniqueClicks': 'Unique clicks',
   'broadcasts.report.noLinks': 'No links tracked yet.',
+  'broadcasts.report.archived': 'Archived broadcast: its statistics are frozen and its older messages are in the workspace archive.',
+  'broadcasts.report.archiveExport': 'Export archived messages (CSV)',
   'broadcasts.report.pause': 'Pause',
   'broadcasts.report.resume': 'Resume',
   'broadcasts.report.cancel': 'Cancel broadcast',

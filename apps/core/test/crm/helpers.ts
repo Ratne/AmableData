@@ -9,6 +9,8 @@ import {
 import type { SqlDb, SqlValue } from '../../src/crm/db/sql';
 import { runCrmOp, type CrmOpInput, type CrmOpName, type CrmOpOutput } from '../../src/crm/ops';
 import { ensureSearchIndex } from '../../src/crm/search/index-store';
+import { TENANT_ARCHIVE_STREAMS } from '../../src/archive/model';
+import { runArchiveOp } from '../../src/archive/store';
 import type { Env } from '../../src/env';
 
 /** SqlDb over node:sqlite with savepoint-based nesting (mirrors transactionSync). */
@@ -109,6 +111,22 @@ export function fakeTenantDbNamespace(now?: () => number): Env['TENANT_DB'] {
               runCrmOp(
                 { db: current.db, searchMode: current.mode, ...(now === undefined ? {} : { now }) },
                 actor,
+                op,
+                structuredClone(input),
+              ),
+            ),
+          ),
+        archive: (op: string, input: unknown) =>
+          Promise.resolve(
+            structuredClone(
+              runArchiveOp(
+                {
+                  db: current.db,
+                  streams: TENANT_ARCHIVE_STREAMS,
+                  outbox: 'crm_outbox',
+                  settingsTable: 'tenant_meta',
+                  now: now ?? (() => Date.now()),
+                },
                 op,
                 structuredClone(input),
               ),

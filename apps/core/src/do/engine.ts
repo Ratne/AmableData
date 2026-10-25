@@ -156,6 +156,11 @@ export class Engine extends DurableObject<Env> {
     metaTable: 'engine_meta',
   });
 
+  /** Size of this object's SQLite database (bytes), for the owner diagnostics. */
+  storageInfo(): { bytes: number } {
+    return { bytes: this.ctx.storage.sql.databaseSize };
+  }
+
   /** Backup RPCs (apps/core/src/backup), reached only by the owner-guarded backup routes and the cron. */
   backupInfo(): BackupDbInfo {
     return this.backup.info();

@@ -1,4 +1,5 @@
 import type { Hono } from 'hono';
+import { registerArchiveBroadcastRoutes } from '../archive/api';
 import { registerBroadcastRoutes } from '../broadcast/api';
 import type { AppEnv } from '../middleware';
 import { registerEmailRoutes } from './api';
@@ -9,6 +10,7 @@ import { registerLiquidRoutes } from './liquid-api';
 export const emailApi = createMailRouter();
 registerEmailRoutes(emailApi);
 registerBroadcastRoutes(emailApi);
+registerArchiveBroadcastRoutes(emailApi);
 registerLiquidRoutes(emailApi);
 
 /** OpenAPI 3.1 document of the email + broadcast surface. */

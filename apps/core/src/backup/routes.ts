@@ -1,5 +1,7 @@
+import { updateArchiveRetentionSchema } from '@amable/api-types';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
+import { archiveSettings, saveArchiveRetention } from '../archive/settings';
 import { getTenant, requireSession, requireStepUp } from '../middleware/access';
 import { audit } from '../middleware/audit';
 import type { AppEnv } from '../middleware/context';
@@ -48,6 +50,16 @@ backupRoutes.get('/', async (c) => {
     backups: backups.map(({ id, kind, createdAt, size }) => ({ id, kind, createdAt, size })),
     retention: { scheduled: BACKUP_RETENTION_SCHEDULED, manual: BACKUP_RETENTION_MANUAL },
   });
+});
+
+// Data & archiving: retention windows of the event archive, archive totals, database sizes.
+backupRoutes.get('/archive', async (c) => c.json(await archiveSettings(c.env, getTenant(c).tenant.id)));
+
+backupRoutes.put('/archive', requireStepUp(), async (c) => {
+  const input = await parseJson(c, updateArchiveRetentionSchema);
+  const retention = await saveArchiveRetention(c.env, getTenant(c).tenant.id, input);
+  await audit(c, 'tenant.archive_retention_updated', { details: retention });
+  return c.json(await archiveSettings(c.env, getTenant(c).tenant.id));
 });
 
 backupRoutes.post('/', requireStepUp(), async (c) => {

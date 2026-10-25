@@ -97,9 +97,9 @@ export function TimelinePanel({
   subject: Subject;
   tagName: (id: string) => string;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { slug, api } = useCrm();
-  const { nameOf } = useDirectory();
+  const [showArchive, setShowArchive] = useState(false);
   const timeline = useInfiniteQuery({
     queryKey: crmKeys.timeline(slug, subject.kind, subject.id),
     queryFn: ({ pageParam }) =>
@@ -111,48 +111,86 @@ export function TimelinePanel({
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
+  // Months past the retention window, read from the workspace archive on demand.
+  const archive = useInfiniteQuery({
+    queryKey: [...crmKeys.timeline(slug, subject.kind, subject.id), 'archive'],
+    queryFn: ({ pageParam }) =>
+      subject.kind === 'contact'
+        ? api.contacts.archivedTimeline(subject.id, pageParam)
+        : subject.kind === 'company'
+          ? api.companies.archivedTimeline(subject.id, pageParam)
+          : api.opportunities.archivedTimeline(subject.id, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_before ?? undefined,
+    enabled: showArchive,
+  });
   if (timeline.error) return <ErrorNotice error={timeline.error} />;
   if (timeline.isPending) return <Skeleton className="h-32 w-full" />;
   const items = timeline.data.pages.flatMap((p) => p.data);
-  if (items.length === 0)
-    return <p className="text-sm text-muted-foreground">{t('crm.timeline.empty')}</p>;
+  const archived = archive.data?.pages.flatMap((p) => p.data) ?? [];
+  const archiveDone = showArchive && archive.isSuccess && !archive.hasNextPage;
   return (
     <div>
-      <ol className="relative ml-2 border-l">
-        {items.map((activity) => {
-          const key = activityLabelKey(activity.type);
-          const detail = activityDetail(activity, { locale, tagName });
-          const Icon = activityIcon(activity.type);
-          return (
-            <li key={activity.id} className="mb-3 ml-5">
-              <span
-                className="absolute -left-2.5 mt-0.5 flex size-5 items-center justify-center rounded-full border bg-background text-muted-foreground"
-                aria-hidden
-              >
-                <Icon className="size-3" />
-              </span>
-              <p className="text-sm" title={activity.type}>
-                {key ? t(key) : fallbackActivityLabel(activity.type)}
-                {detail ? <span className="text-muted-foreground"> · {detail}</span> : null}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {formatDate(locale, activity.occurred_at, true)}
-                {activity.actor.type === 'user' && activity.actor.id
-                  ? ` · ${nameOf(activity.actor.id)}`
-                  : activity.actor.type === 'api_key'
-                    ? ` · ${t('crm.timeline.api')}`
-                    : ''}
-              </p>
-            </li>
-          );
-        })}
-      </ol>
+      {items.length === 0 && archived.length === 0 && (!showArchive || archiveDone) ? (
+        <p className="text-sm text-muted-foreground">{t('crm.timeline.empty')}</p>
+      ) : (
+        <ActivityList items={[...items, ...archived]} tagName={tagName} />
+      )}
       {timeline.hasNextPage ? (
         <Button variant="ghost" size="sm" onClick={() => void timeline.fetchNextPage()}>
           {t('crm.common.loadMore')}
         </Button>
+      ) : archive.error ? (
+        <ErrorNotice error={archive.error} />
+      ) : !showArchive || archive.hasNextPage || archive.isFetching ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={archive.isFetching}
+          onClick={() => (showArchive ? void archive.fetchNextPage() : setShowArchive(true))}
+        >
+          {t('crm.timeline.loadArchived')}
+        </Button>
+      ) : archiveDone && archived.length === 0 && items.length > 0 ? (
+        <p className="text-xs text-muted-foreground">{t('crm.timeline.noArchived')}</p>
       ) : null}
     </div>
+  );
+}
+
+function ActivityList({ items, tagName }: { items: Activity[]; tagName: (id: string) => string }) {
+  const { t, locale } = useI18n();
+  const { nameOf } = useDirectory();
+  return (
+    <ol className="relative ml-2 border-l">
+      {items.map((activity) => {
+        const key = activityLabelKey(activity.type);
+        const detail = activityDetail(activity, { locale, tagName });
+        const Icon = activityIcon(activity.type);
+        return (
+          <li key={activity.id} className="mb-3 ml-5">
+            <span
+              className="absolute -left-2.5 mt-0.5 flex size-5 items-center justify-center rounded-full border bg-background text-muted-foreground"
+              aria-hidden
+            >
+              <Icon className="size-3" />
+            </span>
+            <p className="text-sm" title={activity.type}>
+              {key ? t(key) : fallbackActivityLabel(activity.type)}
+              {detail ? <span className="text-muted-foreground"> · {detail}</span> : null}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatDate(locale, activity.occurred_at, true)}
+              {activity.actor.type === 'user' && activity.actor.id
+                ? ` · ${nameOf(activity.actor.id)}`
+                : activity.actor.type === 'api_key'
+                  ? ` · ${t('crm.timeline.api')}`
+                  : ''}
+            </p>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

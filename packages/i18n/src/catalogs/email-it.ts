@@ -173,6 +173,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.report.clicks': 'Clic',
   'broadcasts.report.uniqueClicks': 'Clic unici',
   'broadcasts.report.noLinks': 'Nessun link tracciato finora.',
+  'broadcasts.report.archived': 'Invio archiviato: le statistiche sono congelate e i messaggi più vecchi sono nell\'archivio del workspace.',
+  'broadcasts.report.archiveExport': 'Esporta messaggi archiviati (CSV)',
   'broadcasts.report.pause': 'Pausa',
   'broadcasts.report.resume': 'Riprendi',
   'broadcasts.report.cancel': 'Annulla broadcast',

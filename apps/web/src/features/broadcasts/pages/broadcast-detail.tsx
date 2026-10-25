@@ -6,6 +6,7 @@ import {
   PageToolbar,
   usePageChrome,
 } from '@amable/ui';
+import { buttonVariants } from '@amable/ui/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@amable/ui/ui/card';
 import { Progress } from '@amable/ui/ui/progress';
 import {
@@ -18,7 +19,7 @@ import {
 } from '@amable/ui/ui/table';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Pause, Play, XCircle } from 'lucide-react';
+import { Archive, ArrowLeft, Download, Pause, Play, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
@@ -143,6 +144,26 @@ function Report({ broadcast }: { broadcast: Broadcast }) {
             <Stat label={t('broadcasts.report.complained')} value={s.totals.complained} />
             <Stat label={t('broadcasts.report.skipped')} value={s.totals.skipped + s.totals.failed} />
           </div>
+        ) : null}
+        {s?.archived ? (
+          <Card>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6 text-sm">
+              <p className="flex items-center gap-2">
+                <Archive className="size-4 shrink-0" aria-hidden />
+                {t('broadcasts.report.archived')}
+              </p>
+              {s.messages_archived && can('contacts:read') ? (
+                <a
+                  href={`/api/v2/t/${encodeURIComponent(slug)}/broadcasts/${encodeURIComponent(broadcast.id)}/archive.csv`}
+                  download
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  <Download className="size-3.5" aria-hidden />
+                  {t('broadcasts.report.archiveExport')}
+                </a>
+              ) : null}
+            </CardContent>
+          </Card>
         ) : null}
         <Card>
           <CardHeader>
