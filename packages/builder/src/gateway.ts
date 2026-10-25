@@ -1,10 +1,10 @@
-import type { BuilderDocument } from "./document";
+import type { PageDocument } from "./document";
 
 /** A published page as the core gateway hands it to the edge for SSR. */
 export interface PublishedPage {
   page: { id: string; title: string; path: string; host: string | null };
   version: { id: string; version: number; published_at: number };
-  document: BuilderDocument;
+  document: PageDocument;
   seo: {
     title: string | null;
     description: string | null;

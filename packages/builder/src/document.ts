@@ -96,6 +96,32 @@ export const builderDocumentSchema = z.object({
 export type BuilderDocument = z.output<typeof builderDocumentSchema>;
 export type BuilderDocumentInput = z.input<typeof builderDocumentSchema>;
 
+/** Max length (characters) of the markup of an HTML document. */
+export const HTML_DOCUMENT_MAX_CHARS = 1_500_000;
+
+/**
+ * A page written entirely by its author as one HTML document (`<!doctype html>…`).
+ * Served as-is: no builder shell, base CSS or runtime; only the analytics tracker
+ * is injected. Not editable on the canvas.
+ */
+export const htmlDocumentSchema = z.strictObject({
+  editorKind: z.literal("html"),
+  html: z.string().max(HTML_DOCUMENT_MAX_CHARS),
+});
+export type HtmlDocument = z.output<typeof htmlDocumentSchema>;
+
+/** What a landing page stores: a canvas document or a raw HTML one. */
+export type PageDocument = BuilderDocument | HtmlDocument;
+
+/** Type guard: is this document (or stored JSON) a raw HTML page? */
+export function isHtmlDocument(json: unknown): json is HtmlDocument {
+  return (
+    typeof json === "object" &&
+    json !== null &&
+    (json as { editorKind?: unknown }).editorKind === "html"
+  );
+}
+
 /** Type guard: is this stored JSON a canvas document? */
 export function isBuilderDocument(json: unknown): boolean {
   return (

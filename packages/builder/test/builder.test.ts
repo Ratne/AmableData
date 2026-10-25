@@ -11,6 +11,7 @@ import {
   renderBuilderPage,
   sanitizeBuilderDocument,
   validateBuilderDocument,
+  validatePageDocument,
   type BuilderDocument,
   type ElementNode,
 } from '../src/index';
@@ -161,5 +162,36 @@ describe('builder render', () => {
     const editor = renderBuilderPage(sales, { mode: 'editor', tenantSlug: 'acme' });
     expect(editor.html).toContain('data-b-embed-ph="checkout"');
     expect(editor.embeds).toEqual([]);
+  });
+});
+
+describe('raw HTML pages', () => {
+  const source = '<!doctype html><html><head><title>Raw</title></head><body><h1>Raw</h1></body></html>';
+
+  it('validates html documents and keeps canvas validation for the rest', () => {
+    expect(validatePageDocument({ editorKind: 'html', html: source })).toEqual({
+      ok: true,
+      document: { editorKind: 'html', html: source },
+    });
+    expect(validatePageDocument({ editorKind: 'html' }).ok).toBe(false);
+    expect(validatePageDocument({ editorKind: 'html', html: source, body: [] }).ok).toBe(false);
+    expect(validatePageDocument({ editorKind: 'html', html: 'x'.repeat(1_500_001) }).ok).toBe(false);
+    expect(validatePageDocument(emptyBuilderDocument()).ok).toBe(true);
+    expect(validatePageDocument({ body: [{ id: 'x', type: 'nope' }] }).ok).toBe(false);
+  });
+
+  it('serves the markup as written, adding only the tracker before </body>', () => {
+    const plain = renderBuilderPage({ editorKind: 'html', html: source }, { tenantSlug: 'acme' });
+    expect(plain).toMatchObject({ html: source, hasRawHtml: true, hasTracker: false, embeds: [] });
+    const tracked = renderBuilderPage({ editorKind: 'html', html: source }, { trackerSiteId: 'site_1', scriptOrigin: 'https://e.test' });
+    expect(tracked.hasTracker).toBe(true);
+    expect(tracked.html.startsWith('<!doctype html><html><head><title>Raw</title></head><body><h1>Raw</h1><script>')).toBe(true);
+    expect(tracked.html).toContain('<script defer data-site="site_1" src="https://e.test/s.js"></script>\n</body></html>');
+    expect(tracked.html).not.toContain('b-container');
+    expect(builderPageCsp(tracked, [])).toContain("script-src 'self' 'unsafe-inline' https:");
+    const fragment = renderBuilderPage({ editorKind: 'html', html: '<p>no body tag</p>' }, { trackerSiteId: 'site_1' });
+    expect(fragment.html.startsWith('<p>no body tag</p>\n<script>')).toBe(true);
+    const editor = renderBuilderPage({ editorKind: 'html', html: source }, { mode: 'editor', trackerSiteId: 'site_1' });
+    expect(editor.html).toBe(source);
   });
 });

@@ -1,6 +1,9 @@
 import {
   type BuilderDocument,
   type ElementNode,
+  type HtmlDocument,
+  type PageDocument,
+  isHtmlDocument,
   tokensToCss,
   tokenFontFamilies,
   shapeDividerById,
@@ -1013,8 +1016,26 @@ function headMeta(meta: PageMeta, pageId: string | null): string {
   return out.join("\n");
 }
 
-/** Render a canvas document to a full HTML page, with the data needed for its CSP. */
-export function renderBuilderPage(doc: BuilderDocument, opts: RenderOptions = {}): RenderedPage {
+/**
+ * A raw HTML page: the author's markup as-is, plus the analytics tracker before
+ * `</body>` (appended when there is none) in public mode. Author HTML: the CSP
+ * takes the relaxed `hasRawHtml` branch.
+ */
+function renderHtmlPage(doc: HtmlDocument, opts: RenderOptions): RenderedPage {
+  const editable = opts.mode === "editor" || (opts.mode === undefined && opts.editable === true);
+  const siteId = editable ? null : (opts.trackerSiteId ?? null);
+  if (siteId === null) {
+    return { html: doc.html, inlineScripts: [], embeds: [], hasRawHtml: true, hasTracker: false };
+  }
+  const tracker = `<script>${trackerStub()}</script><script defer data-site="${esc(siteId)}" src="${esc(opts.scriptOrigin ?? "")}/s.js"></script>`;
+  const close = doc.html.toLowerCase().lastIndexOf("</body");
+  const html = close === -1 ? `${doc.html}\n${tracker}` : `${doc.html.slice(0, close)}${tracker}\n${doc.html.slice(close)}`;
+  return { html, inlineScripts: [trackerStub()], embeds: [], hasRawHtml: true, hasTracker: true };
+}
+
+/** Render a page document to a full HTML page, with the data needed for its CSP. */
+export function renderBuilderPage(doc: PageDocument, opts: RenderOptions = {}): RenderedPage {
+  if (isHtmlDocument(doc)) return renderHtmlPage(doc, opts);
   const editable = opts.mode === "editor" || (opts.mode === undefined && opts.editable === true);
   const pageId = opts.pageId ?? null;
   const pass: RenderPass = {
@@ -1074,8 +1095,8 @@ ${editable ? EDIT_OVERLAY_JS : ""}
   };
 }
 
-/** Render a canvas document to a full HTML page (public SSR + editor preview). */
-export function renderBuilderDocumentHtml(doc: BuilderDocument, opts: RenderOptions = {}): string {
+/** Render a page document to a full HTML page (public SSR + editor preview). */
+export function renderBuilderDocumentHtml(doc: PageDocument, opts: RenderOptions = {}): string {
   return renderBuilderPage(doc, opts).html;
 }
 

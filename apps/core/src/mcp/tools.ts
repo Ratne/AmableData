@@ -1,5 +1,6 @@
 import type { Permission } from '@amable/core';
 import type { AuthContext, TenantContext } from '../middleware';
+import { builderOverview, widgetReference, widgetTypes } from './builder-reference';
 import {
   isAvailable,
   missingPermissions,
@@ -41,6 +42,8 @@ export interface ToolContext {
   readonly catalog: Catalog;
   readonly target: DispatchTarget;
   readonly caller: Caller | null;
+  /** Origin of the edge worker serving published pages and the embed scripts. */
+  readonly edgeOrigin: string;
 }
 
 export interface McpTool {
@@ -408,6 +411,48 @@ export const CURATED_TOOLS: readonly CuratedSpec[] = [
   },
   { name: 'list_reports', operation: 'GET /reports', title: 'List reports' },
   { name: 'run_report', operation: 'POST /reports/{reportId}/run', title: 'Run a report' },
+  { name: 'list_pages', operation: 'GET /pages', title: 'List landing pages' },
+  {
+    name: 'create_page',
+    operation: 'POST /pages',
+    title: 'Create a landing page (draft)',
+    hint: 'document is a canvas document (widgets) or a raw HTML page { editorKind: "html", html }: call describe_page_builder first. Without document the page starts with one empty container. Embed CRM forms, bookings and checkouts with the snippets of describe_page_builder.',
+  },
+  {
+    name: 'get_page',
+    operation: 'GET /pages/{id}',
+    title: 'Get a landing page with its draft',
+    hint: 'draft_revision is the base_revision of the next save_page_draft.',
+  },
+  {
+    name: 'update_page',
+    operation: 'PATCH /pages/{id}',
+    title: 'Update title, path, domain, SEO or settings of a page',
+  },
+  {
+    name: 'save_page_draft',
+    operation: 'PUT /pages/{id}/draft',
+    title: 'Replace the draft document of a page',
+    hint: 'Send the whole document (canvas or { editorKind: "html", html }); see describe_page_builder. 409 stale_draft: get_page and retry with the new draft_revision. Nothing goes live before publish_page.',
+  },
+  {
+    name: 'preview_page',
+    operation: 'GET /pages/{id}/preview',
+    title: 'Rendered HTML of the draft',
+  },
+  {
+    name: 'publish_page',
+    operation: 'POST /pages/{id}/publish',
+    title: 'Publish the draft of a page',
+    hint: 'The page goes live at public_url. Confirm with the user before publishing.',
+  },
+  { name: 'list_media', operation: 'GET /media', title: 'List uploaded images' },
+  {
+    name: 'upload_media',
+    operation: 'PUT /media',
+    title: 'Upload an image for the pages',
+    hint: 'Returns url: use it in media controls ({ url }) or in <img src> of HTML pages.',
+  },
 ];
 
 function operationByKey(catalog: Catalog, key: string): CatalogOperation {
@@ -750,6 +795,54 @@ const whoamiTool: McpTool = {
   },
 };
 
+const PAGE_PERMISSIONS: readonly Permission[] = ['pages:read', 'pages:write', 'pages:publish'];
+
+const pageBuilderTool: McpTool = {
+  definition: {
+    name: 'describe_page_builder',
+    title: 'Landing page document reference',
+    description:
+      'How to write the document of a landing page. Without widget: the two document kinds (canvas widgets, or a raw HTML page served as-is), the snippets that embed CRM forms, bookings and checkouts (needed for automations and integrations), the widget index, breakpoints, tokens, an example and the workflow. With widget: every control of that widget type (settings and style keys, value formats, options, defaults).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        widget: {
+          type: 'string',
+          maxLength: 64,
+          description: 'Widget type, e.g. heading, button, container, form.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      title: 'Landing page document reference',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  needsCaller: true,
+  operation: null,
+  visibleTo: (granted) => PAGE_PERMISSIONS.some((p) => granted.has(p)),
+  run: (args, ctx) => {
+    requireCaller(ctx);
+    const widget = stringArg(args, 'widget');
+    if (widget === undefined) {
+      return Promise.resolve(
+        text(builderOverview({ slug: ctx.target.slug, edgeOrigin: ctx.edgeOrigin })),
+      );
+    }
+    const reference = widgetReference(widget);
+    if (reference === null) {
+      return Promise.resolve(
+        text({ error: 'unknown_widget', widget, widgets: widgetTypes() }, true),
+      );
+    }
+    return Promise.resolve(text(reference));
+  },
+};
+
 let cachedTools: { catalog: Catalog; tools: McpTool[] } | null = null;
 
 /** Meta tools first, then the curated ones (built once per catalog). */
@@ -760,6 +853,7 @@ export function buildTools(catalog: Catalog): McpTool[] {
     searchTool,
     describeTool,
     callTool,
+    pageBuilderTool,
     ...CURATED_TOOLS.map((spec) => curatedTool(spec, catalog)),
   ];
   cachedTools = { catalog, tools };

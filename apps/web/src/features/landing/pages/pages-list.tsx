@@ -116,6 +116,11 @@ export function PagesListPage() {
       cell: (p) => (
         <DraggableItem enabled={writable} ids={() => draggedIds(p.id, selectedIds)}>
           <span className="truncate font-medium">{p.title || t('landing.untitled')}</span>
+          {p.editor_kind === 'html' ? (
+            <span className="ml-2" title={t('landing.kind.htmlHint')}>
+              <Pill tone="neutral">{t('landing.kind.html')}</Pill>
+            </span>
+          ) : null}
         </DraggableItem>
       ),
       sortable: true,

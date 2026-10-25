@@ -8,9 +8,10 @@ import type {
 import { sanitizeHtml } from '@amable/auth/security';
 import {
   emptyBuilderDocument,
+  isHtmlDocument,
   sanitizeBuilderDocument,
-  validateBuilderDocument,
-  type BuilderDocument,
+  validatePageDocument,
+  type PageDocument,
 } from '@amable/builder';
 import type { CrmContext } from '../crm/context';
 import type { SqlValue } from '../crm/db/sql';
@@ -63,7 +64,7 @@ export interface VersionRow {
 
 /** A page as stored; the API adds `public_url` (needs the tenant slug and edge origin). */
 export type PageRecord = Omit<LandingPage, 'public_url'>;
-export type PageDetailRecord = PageRecord & { draft: BuilderDocument; draft_revision: number };
+export type PageDetailRecord = PageRecord & { draft: PageDocument; draft_revision: number };
 
 export interface StoredSeo {
   title: string | null;
@@ -118,21 +119,27 @@ function normalizeHost(raw: string | null | undefined): string | null {
   return host === '' ? null : host;
 }
 
-/** Validates a builder document and sanitizes its rich text; issues become `validation_failed` under `document.`. */
-export function parseDocument(input: unknown, path = 'document'): BuilderDocument {
-  const result = validateBuilderDocument(input);
+/**
+ * Validates a page document and sanitizes the rich text of canvas documents (raw
+ * HTML pages are author HTML, like the html widget); issues become
+ * `validation_failed` under `document.`.
+ */
+export function parseDocument(input: unknown, path = 'document'): PageDocument {
+  const result = validatePageDocument(input);
   if (!result.ok) {
     throw invalidMany(result.issues.map((i) => ({ path: `${path}.${i.path}`, message: i.message })));
   }
-  const clean = sanitizeBuilderDocument(result.document, (html) => sanitizeHtml(html, { allowStyles: true }));
+  const clean = isHtmlDocument(result.document)
+    ? result.document
+    : sanitizeBuilderDocument(result.document, (html) => sanitizeHtml(html, { allowStyles: true }));
   if (JSON.stringify(clean).length > MAX_DOCUMENT_BYTES) {
     throw new CrmError('payload_too_large', 'document too large');
   }
   return clean;
 }
 
-function storedDocument(json: string): BuilderDocument {
-  const result = validateBuilderDocument(parseJson<unknown>(json, {}));
+function storedDocument(json: string): PageDocument {
+  const result = validatePageDocument(parseJson<unknown>(json, {}));
   return result.ok ? result.document : emptyBuilderDocument();
 }
 
@@ -168,6 +175,11 @@ function assertRouteFree(ctx: CrmContext, host: string | null, path: string, exc
   }
 }
 
+/** Drafts are stored as `JSON.stringify` of a parsed document, whose first key is `editorKind`. */
+function draftKind(draft: string): 'canvas' | 'html' {
+  return draft.startsWith('{"editorKind":"html"') ? 'html' : 'canvas';
+}
+
 export function serializePage(row: PageRow): PageRecord {
   return {
     id: row.id,
@@ -175,6 +187,7 @@ export function serializePage(row: PageRow): PageRecord {
     path: row.path,
     host: row.host,
     status: row.status,
+    editor_kind: draftKind(row.draft),
     folder_id: row.folder_id,
     published_version_id: row.published_version_id,
     published_at: toIso(row.published_at),
@@ -478,7 +491,7 @@ export function restoreVersion(ctx: CrmContext, input: { id: string; versionId: 
 export interface ResolvedPage {
   page: { id: string; title: string; path: string; host: string | null; updated_at: number };
   version: { id: string; version: number; published_at: number };
-  document: BuilderDocument;
+  document: PageDocument;
   seo: StoredSeo;
   settings: StoredSettings;
 }

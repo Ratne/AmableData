@@ -19,10 +19,12 @@ export const PAGE_STATUSES = ['draft', 'published'] as const;
 export const pageStatusSchema = z.enum(PAGE_STATUSES);
 export type PageStatus = z.infer<typeof pageStatusSchema>;
 
-/** Builder document JSON ({ editorKind, tokens, body, customCss? }) — see @amable/builder. */
+/** Page document JSON: canvas ({ editorKind, tokens, body, customCss? }) or raw HTML ({ editorKind: "html", html }) — see @amable/builder. */
 export const builderDocumentJsonSchema = z
   .record(z.string(), z.unknown())
-  .describe('Builder document: { editorKind: "canvas", tokens, body, customCss? } (schema of @amable/builder)');
+  .describe(
+    'Page document, one of: canvas { editorKind: "canvas", tokens, body, customCss? } (builder widgets, editable in the visual editor) or raw HTML { editorKind: "html", html: "<!doctype html>…" } (served as-is). Over MCP, call describe_page_builder for the widget reference and the snippets that embed forms, bookings and checkouts.',
+  );
 
 /** Path of a page: always starts with `/`, lowercase segments, no trailing slash (except `/`). */
 export const pagePathSchema = z
@@ -64,6 +66,8 @@ export const landingPageSchema = z.object({
   path: z.string(),
   host: z.string().nullable(),
   status: pageStatusSchema,
+  /** Kind of the draft document: `canvas` (builder widgets) or `html` (raw HTML page). */
+  editor_kind: z.enum(['canvas', 'html']),
   /** Folder of the page (null = unfiled). */
   folder_id: idSchema.nullable(),
   published_version_id: idSchema.nullable(),

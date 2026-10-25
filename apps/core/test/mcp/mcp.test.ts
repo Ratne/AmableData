@@ -1,3 +1,4 @@
+import { validateBuilderDocument } from '@amable/builder';
 import { PERMISSIONS, ROLE_PERMISSIONS, type Permission } from '@amable/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -56,7 +57,7 @@ function recordingTarget(respond: (r: Recorded) => Response = () => Response.jso
 }
 
 function toolContext(target: DispatchTarget): ToolContext {
-  return { catalog: catalog(), target, caller: null };
+  return { catalog: catalog(), target, caller: null, edgeOrigin: 'http://localhost:8788' };
 }
 
 function toolText(result: { content: Array<{ text: string }> }): unknown {
@@ -223,13 +224,14 @@ describe('MCP tools', () => {
       expect(tool.definition.inputSchema['type']).toBe('object');
       expect(tool.definition.description.length).toBeGreaterThan(10);
     }
-    expect(names.slice(0, 4)).toEqual([
+    expect(names.slice(0, 5)).toEqual([
       'whoami',
       'search_operations',
       'describe_operation',
       'call_operation',
+      'describe_page_builder',
     ]);
-    expect(tools.length).toBe(4 + CURATED_TOOLS.length);
+    expect(tools.length).toBe(5 + CURATED_TOOLS.length);
   });
 
   it('runs each curated tool against its own endpoint', async () => {
@@ -240,7 +242,8 @@ describe('MCP tools', () => {
         throw new Error(`missing ${spec.name}`);
       expect(`${op.method} ${op.path}`).toBe(spec.operation);
       const { target, calls } = recordingTarget();
-      const args = Object.fromEntries(op.pathParams.map((p) => [p.name, `v-${p.name}`]));
+      const args: Record<string, unknown> = Object.fromEntries(op.pathParams.map((p) => [p.name, `v-${p.name}`]));
+      if (op.transport === 'raw_body') args['body_base64'] = btoa('file');
       const result = await tool.run(args, toolContext(target));
       expect(result.isError, spec.name).toBe(false);
       expect(calls[0]?.method).toBe(op.method);
@@ -542,6 +545,80 @@ describe('MCP endpoint', () => {
     expect((batch.body as unknown as unknown[]).length).toBe(2);
     expect(batch.status).toBe(200);
     expect((await h.client().get(MCP, { authorization: `Bearer ${fullKey}` })).status).toBe(405);
+  });
+
+  it('describe_page_builder documents both document kinds, the widgets and the CRM embeds', async () => {
+    const readNames = ((await rpc(readKey, 'tools/list')).body['result'] as { tools: Array<{ name: string }> }).tools.map(
+      (t) => t.name,
+    );
+    expect(readNames).not.toContain('describe_page_builder');
+    expect(readNames).not.toContain('create_page');
+
+    const overview = await callTool(fullKey, 'describe_page_builder');
+    expect(overview.isError).toBe(false);
+    expect(Object.keys(overview.data['document_kinds'] as object)).toEqual(['canvas', 'html']);
+    const embeds = overview.data['crm_embeds'] as Record<string, { snippet: string }>;
+    expect(embeds['form']?.snippet).toBe(
+      '<div data-amable-form="<formId>" data-amable-tenant="acme" data-amable-page="<pageId>"></div>\n<script async src="http://localhost:8788/forms.js"></script>',
+    );
+    expect(embeds['booking']?.snippet).toContain('data-amable-booking="<eventTypeSlug>"');
+    expect(embeds['checkout']?.snippet).toContain('http://localhost:8788/checkout.js');
+    const canvasRef = overview.data['canvas'] as { widgets: Record<string, Array<{ type: string }>>; example: unknown };
+    expect(canvasRef.widgets['basic']?.map((w) => w.type)).toContain('heading');
+    expect(validateBuilderDocument(canvasRef.example).ok).toBe(true);
+
+    const heading = await callTool(fullKey, 'describe_page_builder', { widget: 'heading' });
+    expect(heading.data).toMatchObject({ type: 'heading', container: false });
+    const controls = (heading.data['sections'] as Array<{ controls: Array<{ key: string; stored_in: string }> }>).flatMap(
+      (s) => s.controls,
+    );
+    expect(controls).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'title', stored_in: 'settings' })]));
+    expect(heading.data['advanced']).toBeDefined();
+
+    const unknown = await callTool(fullKey, 'describe_page_builder', { widget: 'carousel3d' });
+    expect(unknown.isError).toBe(true);
+    expect(unknown.data['widgets']).toContain('button');
+  });
+
+  it('builds, previews and publishes canvas and raw HTML pages', async () => {
+    const created = await callTool(fullKey, 'create_page', { title: 'Launch', path: '/launch' });
+    expect(created.isError).toBe(false);
+    const id = String(created.data['id']);
+    const saved = await callTool(fullKey, 'save_page_draft', {
+      id,
+      base_revision: created.data['draft_revision'],
+      document: {
+        editorKind: 'canvas',
+        body: [
+          {
+            id: 'root',
+            type: 'container',
+            children: [{ id: 'title', type: 'heading', settings: { title: 'Launch day', htmlTag: 'h1' } }],
+          },
+        ],
+      },
+    });
+    expect(saved.data).toEqual({ draft_revision: 2 });
+    const preview = await callTool(fullKey, 'preview_page', { id });
+    expect(String(preview.data['html'])).toContain('<h1 class="b-heading">Launch day</h1>');
+    const published = await callTool(fullKey, 'publish_page', { id });
+    expect(published.data).toMatchObject({ page: { status: 'published' }, version: { version: 1 } });
+
+    const html =
+      '<!doctype html><html><head><title>Free</title></head><body><h1>Free</h1>' +
+      '<div data-amable-form="01FORM" data-amable-tenant="acme"></div><script async src="http://localhost:8788/forms.js"></script></body></html>';
+    const raw = await callTool(fullKey, 'create_page', {
+      title: 'Free',
+      path: '/free',
+      document: { editorKind: 'html', html },
+    });
+    expect(raw.data).toMatchObject({ editor_kind: 'html', draft: { editorKind: 'html', html } });
+    const rawPreview = await callTool(fullKey, 'preview_page', { id: raw.data['id'] });
+    expect(rawPreview.data['html']).toBe(html);
+    const rawPublished = await callTool(fullKey, 'publish_page', { id: raw.data['id'] });
+    expect(rawPublished.isError).toBe(false);
+    const pages = await callTool(fullKey, 'list_pages', { status: 'published' });
+    expect((pages.data['data'] as Array<{ path: string }>).map((p) => p.path).sort()).toEqual(['/free', '/launch']);
   });
 
   it('every owner permission is a known permission', () => {

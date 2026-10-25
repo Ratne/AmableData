@@ -47,7 +47,7 @@ const mediaTag = ['Media'];
 const pageIdParam = z.object({ id: idSchema });
 const versionParam = z.object({ id: idSchema, versionId: idSchema });
 
-function edgeOrigin(c: Ctx): string {
+export function edgeOrigin(c: Ctx): string {
   return (c.env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
 }
 

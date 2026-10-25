@@ -173,6 +173,26 @@ describe('pages REST v2', () => {
     expect(String(preview.body['html'])).toContain('<meta name="robots" content="noindex,nofollow"/>');
   });
 
+  it('stores raw HTML pages untouched and previews them as written', async () => {
+    const html = '<!doctype html><html><head><title>Raw</title></head><body><p onclick="x()">Raw</p><script>x=1</script></body></html>';
+    const created = await clients.marketer.post(`${BASE}/pages`, { title: 'Raw', path: '/raw', document: { editorKind: 'html', html } });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ editor_kind: 'html', draft: { editorKind: 'html', html } });
+    const id = String(created.body['id']);
+    const listed = await clients.viewer.get(`${BASE}/pages?q=raw`);
+    expect(listed.body['data']).toEqual([expect.objectContaining({ id, editor_kind: 'html' })]);
+    const preview = await clients.viewer.get(`${BASE}/pages/${id}/preview`);
+    expect(preview.body['html']).toBe(html);
+    const back = await clients.marketer.request('PUT', `${BASE}/pages/${id}/draft`, {
+      document: { editorKind: 'canvas', body: [] },
+      base_revision: Number(created.body['draft_revision']),
+    });
+    expect(back.status).toBe(200);
+    expect((await clients.viewer.get(`${BASE}/pages/${id}`)).body['editor_kind']).toBe('canvas');
+    const bad = await clients.marketer.post(`${BASE}/pages`, { title: 'Bad', path: '/bad', document: { editorKind: 'html' } });
+    expect(bad.status).toBe(422);
+  });
+
   it('accepts only real images by magic bytes, up to 10 MB, and streams them back', async () => {
     const svg = await raw(clients.owner, 'PUT', `${BASE}/media?filename=x.png`, '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', {
       'content-type': 'image/png',

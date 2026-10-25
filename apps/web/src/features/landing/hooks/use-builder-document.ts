@@ -16,7 +16,7 @@ import {
 } from '@amable/builder';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LandingApiError, type LandingClient } from '../api/client';
-import type { LandingPageWithDraft } from '../api/types';
+import type { CanvasPageWithDraft } from '../api/types';
 
 const HISTORY_LIMIT = 80;
 const AUTOSAVE_MS = 1500;
@@ -28,7 +28,7 @@ interface HistEntry {
 
 export type SaveState = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
-function parseDraft(page: LandingPageWithDraft): BuilderDocument {
+function parseDraft(page: CanvasPageWithDraft): BuilderDocument {
   const parsed = builderDocumentSchema.safeParse(page.draft);
   return parsed.success ? parsed.data : page.draft;
 }
@@ -42,7 +42,7 @@ function parseDraft(page: LandingPageWithDraft): BuilderDocument {
  */
 export function useBuilderDocument(options: {
   api: LandingClient;
-  page: LandingPageWithDraft;
+  page: CanvasPageWithDraft;
   editable: boolean;
   onStale: () => void;
   onLocked: () => void;
@@ -65,7 +65,7 @@ export function useBuilderDocument(options: {
   const dirty = useMemo(() => JSON.stringify(doc) !== baseline, [doc, baseline]);
 
   /** Replaces the whole state with a server copy (reload after a conflict, lock regained, version restored). */
-  const reset = useCallback((next: LandingPageWithDraft) => {
+  const reset = useCallback((next: CanvasPageWithDraft) => {
     const parsed = parseDraft(next);
     docRef.current = parsed;
     revision.current = next.draft_revision;

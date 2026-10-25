@@ -1,5 +1,6 @@
 import type { Context, Hono } from 'hono';
 import { requireAuth, requireTenant, type AppEnv } from '../middleware';
+import { edgeOrigin } from '../pages/api';
 import { catalog } from './catalog';
 import type { Fetcher } from './dispatch';
 import { buildTools, UnauthorizedError, type McpTool, type ToolContext } from './tools';
@@ -12,6 +13,7 @@ const INSTRUCTIONS = [
   'amabledata CRM workspace (contacts, companies, deals, tasks, commerce, checkouts, email, automations, forms, bookings, landing pages, e-sign, web analytics, reports, webhooks, domains).',
   'Start with whoami to see the workspace and the permissions of this API key; tools the key cannot use are not listed.',
   'The dedicated tools cover the everyday flows. For anything else: search_operations → describe_operation → call_operation, which reaches every operation of the REST API.',
+  'Landing pages: call describe_page_builder before writing a page document; a page is built from widgets or written as one raw HTML document, and embeds the CRM forms, bookings and checkouts with the snippets it gives.',
   'Lists are cursor-paginated (limit, cursor). Money amounts are integer minor units (cents) with a currency.',
   'Ask the user before destructive actions (deleting, refunding, sending broadcasts, cancelling).',
 ].join(' ');
@@ -200,6 +202,7 @@ export function mountMcpServer(app: Hono<AppEnv>, fetcher: (c: Context<AppEnv>) 
         requestId: c.req.header('x-request-id') ?? null,
       },
       caller: auth !== undefined && tenant !== undefined ? { auth, tenant } : null,
+      edgeOrigin: edgeOrigin(c),
     };
 
     const responses: JsonRpcResponse[] = [];

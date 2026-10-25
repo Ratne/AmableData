@@ -4,7 +4,7 @@ import type {
   SavedSection,
   UpdateSavedSectionInput,
 } from '@amable/api-types';
-import { cloneNodeWithNewIds, validateBuilderDocument, type ElementNode } from '@amable/builder';
+import { cloneNodeWithNewIds, isHtmlDocument, validateBuilderDocument, type ElementNode } from '@amable/builder';
 import type { CrmContext } from '../crm/context';
 import type { SqlValue } from '../crm/db/sql';
 import { CrmError, invalidMany, notFound } from '../crm/errors';
@@ -28,7 +28,8 @@ function parseNode(input: unknown): ElementNode {
   if (!result.ok) {
     throw invalidMany(result.issues.map((i) => ({ path: i.path.replace(/^body\.0/, 'node'), message: i.message })));
   }
-  const node = parseDocument({ editorKind: 'canvas', body: result.document.body }, 'node').body[0];
+  const parsed = parseDocument({ editorKind: 'canvas', body: result.document.body }, 'node');
+  const node = isHtmlDocument(parsed) ? undefined : parsed.body[0];
   if (node === undefined) throw new CrmError('validation_failed', 'node required');
   return node;
 }

@@ -1,4 +1,4 @@
-import { elementNodeSchema, type BuilderDocument, type ElementNode } from '@amable/builder';
+import { elementNodeSchema, type ElementNode, type PageDocument } from '@amable/builder';
 import { TenantApiError, tenantRest } from '../../../lib/tenant-api';
 
 export { TenantApiError as LandingApiError } from '../../../lib/tenant-api';
@@ -73,7 +73,7 @@ export function landingClient(slug: string) {
       duplicate: (pageId: string) => post<LandingPage>(`${page(pageId)}/duplicate`),
       saveDraft: (
         pageId: string,
-        document: BuilderDocument,
+        document: PageDocument,
         baseRevision: number,
         keepalive = false,
       ) =>

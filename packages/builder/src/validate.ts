@@ -1,4 +1,11 @@
-import { type BuilderDocument, type ElementNode, builderDocumentSchema } from "./document";
+import {
+  type BuilderDocument,
+  type ElementNode,
+  type PageDocument,
+  builderDocumentSchema,
+  htmlDocumentSchema,
+  isHtmlDocument,
+} from "./document";
 import { type ControlDef } from "./controls";
 import { getWidgetDef } from "./catalog";
 import { sectionsForType } from "./factory";
@@ -58,6 +65,24 @@ export function validateBuilderDocument(json: unknown): BuilderValidation {
     issues.push({ path: "body", message: `more than ${BUILDER_LIMITS.maxNodes} nodes` });
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true, document: parsed.data };
+}
+
+export type PageDocumentValidation =
+  | { ok: true; document: PageDocument }
+  | { ok: false; issues: BuilderIssue[] };
+
+/** Validate a page document: `editorKind: "html"` → raw HTML page, anything else → canvas. */
+export function validatePageDocument(json: unknown): PageDocumentValidation {
+  if (!isHtmlDocument(json)) return validateBuilderDocument(json);
+  const parsed = htmlDocumentSchema.safeParse(json);
+  if (parsed.success) return { ok: true, document: parsed.data };
+  return {
+    ok: false,
+    issues: parsed.error.issues.slice(0, 50).map((i) => ({
+      path: i.path.map(String).join("."),
+      message: i.message,
+    })),
+  };
 }
 
 function richtextKeys(controls: readonly ControlDef[]): { direct: string[]; repeaters: Map<string, string[]> } {

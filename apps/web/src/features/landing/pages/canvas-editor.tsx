@@ -14,15 +14,12 @@ import {
 } from '@amable/builder';
 import { cn, DashboardConfirmDialog, toast } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
-import { Spinner } from '@amable/ui/ui/spinner';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import {
   ArrowLeft,
-  Check,
   ClipboardCopy,
   ClipboardPaste,
-  CloudOff,
   ExternalLink,
   Eye,
   Layers,
@@ -42,10 +39,11 @@ import { useI18n } from '../../../i18n';
 import { EditLockBanner } from '../../../lib/edit-lock/edit-lock-banner';
 import { editLockPath, useEditLock, type EditLockStatus } from '../../../lib/edit-lock/use-edit-lock';
 import { errorMessage, landingKeys, useLanding, usePage, usePermissions } from '../api/hooks';
-import type { LandingPage, LandingPageWithDraft } from '../api/types';
+import { isCanvasPage, isHtmlPage, type CanvasPageWithDraft, type LandingPage } from '../api/types';
 import { Choice, PageState, Pill } from '../components/common';
 import { useLandingChrome } from '../components/page-chrome';
 import { PublishDialog } from '../components/publish';
+import { SaveIndicator } from '../components/save-indicator';
 import { CanvasPreview, type ColumnResize } from '../editor/canvas-preview';
 import { ControlsPanel } from '../editor/controls-panel';
 import { Navigator } from '../editor/navigator';
@@ -55,10 +53,11 @@ import { PreviewDialog } from '../editor/preview-dialog';
 import { SavedSectionsPicker, SaveSectionDialog } from '../editor/saved-sections';
 import { TokensPanel } from '../editor/tokens-panel';
 import { clipAge, countNodes, readBlockClip, readStyleClip, useBlockClipboard, type BlockClip } from '../hooks/use-block-clipboard';
-import { useBuilderDocument, type SaveState } from '../hooks/use-builder-document';
+import { useBuilderDocument } from '../hooks/use-builder-document';
 import { useCanvasDnd } from '../hooks/use-canvas-dnd';
 import { useBuilderLabel } from '../lib/builder-i18n';
 import { breakpointForWidth, DEVICES, ZOOMS, type CanvasZoom, type DeviceKey } from '../lib/devices';
+import { HtmlEditor } from './html-editor';
 
 export function CanvasEditorPage() {
   const { pageId = '' } = useParams({ strict: false }) as { pageId?: string };
@@ -66,7 +65,11 @@ export function CanvasEditorPage() {
   useLandingChrome(pageId, page.data, 'editor');
   return (
     <PageState isPending={page.isPending} error={page.error}>
-      {() => (page.data ? <Editor key={page.data.id} initial={page.data} meta={page.data} /> : null)}
+      {() => {
+        if (!page.data) return null;
+        if (isHtmlPage(page.data)) return <HtmlEditor key={page.data.id} initial={page.data} meta={page.data} />;
+        return isCanvasPage(page.data) ? <Editor key={page.data.id} initial={page.data} meta={page.data} /> : null;
+      }}
     </PageState>
   );
 }
@@ -91,31 +94,6 @@ function typingInField(): boolean {
   return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || (el as HTMLElement).isContentEditable;
 }
 
-function SaveIndicator({ state, dirty, editable }: { state: SaveState; dirty: boolean; editable: boolean }) {
-  const { t } = useI18n();
-  if (!editable) return null;
-  if (state === 'saving') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-muted-foreground" role="status">
-        <Spinner className="size-3" /> {t('landing.editor.saving')}
-      </span>
-    );
-  }
-  if (state === 'error') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-destructive" role="status">
-        <CloudOff aria-hidden className="size-3.5" /> {t('landing.editor.saveFailed')}
-      </span>
-    );
-  }
-  if (dirty) return <span className="text-xs text-muted-foreground" role="status">{t('landing.editor.unsaved')}</span>;
-  return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground" role="status">
-      <Check aria-hidden className="size-3.5" /> {t('landing.editor.allSaved')}
-    </span>
-  );
-}
-
 interface ContextMenuState {
   id: string;
   x: number;
@@ -124,7 +102,7 @@ interface ContextMenuState {
   prevSelectedId?: string | null;
 }
 
-function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: LandingPage }) {
+function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: LandingPage }) {
   const { t } = useI18n();
   const label = useBuilderLabel();
   const { slug, api } = useLanding();
@@ -152,7 +130,7 @@ function Editor({ initial, meta }: { initial: LandingPageWithDraft; meta: Landin
     try {
       const fresh = await api.pages.get(initial.id);
       queryClient.setQueryData(landingKeys.page(slug, initial.id), fresh);
-      b.reset(fresh);
+      if (isCanvasPage(fresh)) b.reset(fresh);
     } catch (error) {
       toast.error(errorMessage(t, error));
     }

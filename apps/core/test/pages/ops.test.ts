@@ -1,4 +1,4 @@
-import type { BuilderDocumentInput } from '@amable/builder';
+import { isHtmlDocument, type BuilderDocumentInput, type ElementNode, type PageDocument } from '@amable/builder';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestTenant, type TestTenant } from '../crm/helpers';
 
@@ -24,6 +24,12 @@ function doc(title = 'Hello'): BuilderDocumentInput {
   };
 }
 
+function body(document: PageDocument | undefined): ElementNode[] {
+  if (document === undefined) return [];
+  if (isHtmlDocument(document)) throw new Error('expected a canvas document');
+  return document.body;
+}
+
 function outbox(type: string): Array<Record<string, unknown>> {
   return t.db
     .all<{ payload: string }>(`SELECT payload FROM crm_outbox WHERE type = ? ORDER BY occurred_at`, type)
@@ -43,7 +49,7 @@ describe('pages ops', () => {
   it('creates pages with a normalized path, unique per host', () => {
     const page = t.op('pages.create', { title: 'Launch', path: 'Promo//Spring/' });
     expect(page).toMatchObject({ path: '/promo/spring', host: null, status: 'draft', draft_revision: 1 });
-    expect(page.draft.body).toHaveLength(1);
+    expect(body(page.draft)).toHaveLength(1);
     expect(errorCode(() => t.op('pages.create', { title: 'Dup', path: '/promo/spring' }))).toBe('conflict');
     expect(t.op('pages.create', { title: 'Other host', path: '/promo/spring', host: 'www.acme.test' }).host).toBe('www.acme.test');
     expect(errorCode(() => t.op('pages.create', { title: 'Bad', path: '/../x' }))).toBe('validation_failed');
@@ -59,7 +65,7 @@ describe('pages ops', () => {
       draft_revision: 2,
     });
     const stored = t.op('pages.get', { id: page.id });
-    const text = stored.draft.body[0]?.children[1]?.settings['editor'];
+    const text = body(stored.draft)[0]?.children[1]?.settings['editor'];
     expect(text).toContain('<p>Hi</p>');
     expect(String(text)).not.toMatch(/script|onerror/);
     expect(
@@ -85,11 +91,11 @@ describe('pages ops', () => {
 
     const resolved = t.op('pages.resolve', { host: null, path: '/launch/' });
     expect(resolved?.version.id).toBe(second.version.id);
-    expect(resolved?.document.body[0]?.children[0]?.settings['title']).toBe('Second');
+    expect(body(resolved?.document)[0]?.children[0]?.settings['title']).toBe('Second');
 
     const restored = t.op('pages.restoreVersion', { id: page.id, versionId: first.version.id });
     expect(restored.draft_revision).toBe(3);
-    expect(restored.draft.body[0]?.children[0]?.settings['title']).toBe('First');
+    expect(body(restored.draft)[0]?.children[0]?.settings['title']).toBe('First');
     // The live page is unchanged until the next publish.
     expect(t.op('pages.resolve', { host: null, path: '/launch' })?.version.version).toBe(2);
 

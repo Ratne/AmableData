@@ -159,6 +159,23 @@ describe('publish → edge SSR', () => {
     expect(await fallbackSitemap.text()).toContain('<loc>https://t.acme.example/p/acme/spring</loc>');
   });
 
+  it('serves a raw HTML page as written, with the tracker and the relaxed CSP', async () => {
+    const source =
+      '<!doctype html><html lang="it"><head><title>Hand made</title><style>body{background:#111}</style></head>' +
+      '<body><h1 onclick="go()">Hand made</h1><script>function go(){}</script>' +
+      '<div data-amable-form="01FORMID" data-amable-tenant="acme"></div><script async src="/forms.js"></script></body></html>';
+    const raw = db.op('pages.create', { title: 'Hand made', path: '/hand-made', document: { editorKind: 'html', html: source } });
+    expect(raw.editor_kind).toBe('html');
+    db.op('pages.publish', { id: raw.id });
+    const res = await edge('https://t.acme.example/p/acme/hand-made');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-security-policy')).toContain("script-src 'self' 'unsafe-inline' https:");
+    const html = await res.text();
+    const tracker = `<script defer data-site="${SITE_MAIN}" src="/s.js"></script>`;
+    expect(html).toBe(source.replace('</body>', `<script>${'window.amable=window.amable||function(){(window.amable.q=window.amable.q||[]).push(arguments)};'}</script>${tracker}\n</body>`));
+    expect(html).not.toContain('b-container');
+  });
+
   it('answers 404 for unknown pages, unpublished pages and unknown hosts', async () => {
     expect((await edge('https://t.acme.example/p/acme/nope')).status).toBe(404);
     expect((await edge('https://unknown.example/')).status).toBe(404);
