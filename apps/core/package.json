@@ -24,7 +24,7 @@
     "@amable/forms": "workspace:*",
     "@amable/i18n": "workspace:*",
     "@hono/zod-openapi": "^1.6.3",
-    "@phi-ag/argon2": "^0.6.1",
+    "@phi-ag/argon2": "^0.6.2",
     "drizzle-orm": "^0.45.4",
     "fflate": "^0.8.3",
     "hono": "^4.13.13",
@@ -34,9 +34,9 @@
   },
   "devDependencies": {
     "@amable/app-sdk": "workspace:*",
-    "@cloudflare/workers-types": "^5.20261015.1",
+    "@cloudflare/workers-types": "^5.20261023.1",
     "@types/node": "^24.19.2",
     "typescript": "~5.9.3",
-    "wrangler": "^4.151.0"
+    "wrangler": "^4.152.0"
   }
 }
