@@ -11,7 +11,7 @@
     "typecheck": "tsc -p ."
   },
   "devDependencies": {
-    "@types/react": "^18.3.31",
+    "@types/react": "^19.3.0",
     "@types/react-dom": "^18.3.7",
     "typescript": "~5.9.3"
   },
@@ -19,7 +19,7 @@
     "@amable/auth": "workspace:*",
     "@react-email/components": "^1.0.12",
     "liquidjs": "^10.30.0",
-    "react": "^18.3.1",
+    "react": "^19.3.1",
     "react-dom": "^18.3.1"
   }
 }
