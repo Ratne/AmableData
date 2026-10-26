@@ -313,6 +313,25 @@ export const landingEn = {
   'landing.preview.newTab': 'Open in new tab',
 
   'landing.lock.holding': 'You are editing this page exclusively.',
+
+  'landing.transfer.export': 'Export (.zip)',
+  'landing.transfer.import': 'Import',
+  'landing.transfer.importHint': 'Import a page exported from any installation (.zip)',
+  'landing.transfer.exporting': 'Preparing the export…',
+  'landing.transfer.importing': 'Importing the page…',
+  'landing.transfer.imported': 'Page imported as a draft',
+  'landing.transfer.invalidArchive': 'This file is not a landing page export.',
+  'landing.transfer.reportTitle': 'Page imported: what to check',
+  'landing.transfer.reportMedia': '{imported} images added to the library, {reused} already there.',
+  'landing.transfer.relinkForms': '{count} form widgets still point at the original installation: create the forms here and select them in the editor.',
+  'landing.transfer.relinkBookings': '{count} booking widgets need an event type of this workspace.',
+  'landing.transfer.relinkCheckouts': '{count} checkout widgets need a checkout of this workspace.',
+  'landing.transfer.mediaMissing': 'Images not imported (missing or damaged in the file): {files}',
+  'landing.transfer.mediaSkipped': 'Images left out of the export (size limit or missing at the source): {files}',
+  'landing.transfer.pathRenamed': 'The path was taken: the page is at {path}.',
+  'landing.transfer.analytics': 'The analytics site was reset to automatic.',
+  'landing.transfer.openEditor': 'Open editor',
+  'landing.transfer.close': 'Close',
 } as const;
 
 export type LandingMessageKey = keyof typeof landingEn;

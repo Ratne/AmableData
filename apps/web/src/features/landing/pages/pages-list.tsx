@@ -20,8 +20,18 @@ import { Input } from '@amable/ui/ui/input';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@amable/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { Copy, ExternalLink, FolderInput, FolderTree, PenTool, Plus, Settings } from 'lucide-react';
-import { useEffect, useState, type FormEvent } from 'react';
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  FolderInput,
+  FolderTree,
+  PenTool,
+  Plus,
+  Settings,
+  Upload,
+} from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { folderKeys, useFolderTree } from '../../folders/api';
@@ -40,7 +50,7 @@ import {
   useLandingMutation,
   usePermissions,
 } from '../api/hooks';
-import type { LandingPage, PageStatus } from '../api/types';
+import type { ImportPageResponse, LandingPage, PageImportWarnings, PageStatus } from '../api/types';
 import { ErrorNotice, FormField, normalizePath, Pill, slugifyTitle } from '../components/common';
 
 type StatusFilter = 'all' | PageStatus;
@@ -107,6 +117,20 @@ export function PagesListPage() {
   const duplicate = useLandingMutation({
     mutationFn: (id: string) => api.pages.duplicate(id),
     success: t('landing.list.duplicated'),
+  });
+  const exportZip = useLandingMutation({
+    mutationFn: (id: string) => api.pages.exportZip(id),
+    invalidate: [],
+  });
+  const importInput = useRef<HTMLInputElement>(null);
+  const [importReport, setImportReport] = useState<ImportPageResponse | null>(null);
+  const importZip = useLandingMutation({
+    mutationFn: (file: File) => api.pages.importZip(file),
+    success: t('landing.transfer.imported'),
+    onSuccess: (result) => {
+      if (hasImportWarnings(result.warnings)) setImportReport(result);
+      else openEditor(result.page);
+    },
   });
 
   const columns: ListTableColumn<LandingPage>[] = [
@@ -181,6 +205,12 @@ export function PagesListPage() {
         label: t('landing.action.settings'),
         icon: Settings,
         onSelect: () => openSettings(page),
+      },
+      {
+        id: 'export',
+        label: exportZip.isPending ? t('landing.transfer.exporting') : t('landing.transfer.export'),
+        icon: Download,
+        onSelect: () => exportZip.mutate(page.id),
       },
     ];
     if (page.status === 'published' && page.public_url) {
@@ -265,9 +295,30 @@ export function PagesListPage() {
           }
           actions={
             writable ? (
-              <DashboardButton variant="primary" onClick={() => setCreating(true)}>
-                <Plus aria-hidden /> {t('landing.list.new')}
-              </DashboardButton>
+              <>
+                <input
+                  ref={importInput}
+                  type="file"
+                  accept=".zip,application/zip"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (file) importZip.mutate(file);
+                  }}
+                />
+                <DashboardButton
+                  onClick={() => importInput.current?.click()}
+                  disabled={importZip.isPending}
+                  title={t('landing.transfer.importHint')}
+                >
+                  <Upload aria-hidden />{' '}
+                  {importZip.isPending ? t('landing.transfer.importing') : t('landing.transfer.import')}
+                </DashboardButton>
+                <DashboardButton variant="primary" onClick={() => setCreating(true)}>
+                  <Plus aria-hidden /> {t('landing.list.new')}
+                </DashboardButton>
+              </>
             ) : null
           }
         />
@@ -351,6 +402,17 @@ export function PagesListPage() {
         )}
       </div>
       {moveTo.dialog}
+      {importReport ? (
+        <ImportReportDialog
+          report={importReport}
+          onClose={() => setImportReport(null)}
+          onOpen={() => {
+            const page = importReport.page;
+            setImportReport(null);
+            openEditor(page);
+          }}
+        />
+      ) : null}
       {creating ? (
         <CreatePageDialog
           folderId={createTarget(folders.selection)}
@@ -362,6 +424,64 @@ export function PagesListPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function hasImportWarnings(w: PageImportWarnings): boolean {
+  return (
+    w.relink.forms + w.relink.bookings + w.relink.checkouts > 0 ||
+    w.media_missing.length > 0 ||
+    w.media_skipped.length > 0 ||
+    w.path_renamed !== null ||
+    w.analytics_disconnected
+  );
+}
+
+function ImportReportDialog({
+  report,
+  onClose,
+  onOpen,
+}: {
+  report: ImportPageResponse;
+  onClose: () => void;
+  onOpen: () => void;
+}) {
+  const { t } = useI18n();
+  const w = report.warnings;
+  const items: string[] = [];
+  if (w.relink.forms > 0) items.push(t('landing.transfer.relinkForms', { count: w.relink.forms }));
+  if (w.relink.bookings > 0) items.push(t('landing.transfer.relinkBookings', { count: w.relink.bookings }));
+  if (w.relink.checkouts > 0) items.push(t('landing.transfer.relinkCheckouts', { count: w.relink.checkouts }));
+  if (w.media_missing.length > 0) items.push(t('landing.transfer.mediaMissing', { files: w.media_missing.join(', ') }));
+  if (w.media_skipped.length > 0) items.push(t('landing.transfer.mediaSkipped', { files: w.media_skipped.join(', ') }));
+  if (w.path_renamed !== null) items.push(t('landing.transfer.pathRenamed', { path: w.path_renamed }));
+  if (w.analytics_disconnected) items.push(t('landing.transfer.analytics'));
+  return (
+    <Dialog open onOpenChange={(next) => (next ? undefined : onClose())}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t('landing.transfer.reportTitle')}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {t('landing.transfer.reportMedia', { imported: report.media_imported, reused: report.media_reused })}
+        </p>
+        <ul className="grid list-disc gap-2 pl-5 text-sm">
+          {items.map((item) => (
+            <li key={item} className="break-words">
+              {item}
+            </li>
+          ))}
+        </ul>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose}>
+            {t('landing.transfer.close')}
+          </Button>
+          <Button type="button" onClick={onOpen}>
+            {t('landing.transfer.openEditor')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -1,4 +1,5 @@
 import { elementNodeSchema, type ElementNode, type PageDocument } from '@amable/builder';
+import { stepUpFetch } from '../../../lib/step-up';
 import { TenantApiError, tenantRest } from '../../../lib/tenant-api';
 
 export { TenantApiError as LandingApiError } from '../../../lib/tenant-api';
@@ -8,6 +9,7 @@ import type {
   CursorPage,
   EventTypeOption,
   FormOption,
+  ImportPageResponse,
   LandingPage,
   LandingPageWithDraft,
   MediaFile,
@@ -71,6 +73,26 @@ export function landingClient(slug: string) {
       remove: (pageId: string) => del<unknown>(page(pageId)),
       restore: (pageId: string) => post<LandingPage>(`${page(pageId)}/restore`),
       duplicate: (pageId: string) => post<LandingPage>(`${page(pageId)}/duplicate`),
+      /** Saves the `.zip` export (draft, SEO, settings and library images) to the user's disk. */
+      exportZip: async (pageId: string): Promise<void> => {
+        const response = await stepUpFetch(`${base}${page(pageId)}/export`, { credentials: 'same-origin' });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
+          throw new TenantApiError(response.status, body?.error ?? 'http_error', body?.message ?? null, []);
+        }
+        const disposition = response.headers.get('content-disposition') ?? '';
+        const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'page.zip';
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      },
+      importZip: (file: File) =>
+        call<ImportPageResponse>('/pages/import', { method: 'POST', raw: file, contentType: 'application/zip' }),
       saveDraft: (
         pageId: string,
         document: PageDocument,

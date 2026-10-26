@@ -26,6 +26,7 @@
     "@hono/zod-openapi": "^1.6.3",
     "@phi-ag/argon2": "^0.6.1",
     "drizzle-orm": "^0.45.4",
+    "fflate": "^0.8.3",
     "hono": "^4.13.13",
     "pdf-lib": "^1.17.1",
     "ulid": "^3.0.2",

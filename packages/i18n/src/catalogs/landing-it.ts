@@ -315,4 +315,23 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.preview.newTab': 'Apri in nuova scheda',
 
   'landing.lock.holding': 'Stai modificando questa pagina in esclusiva.',
+
+  'landing.transfer.export': 'Esporta (.zip)',
+  'landing.transfer.import': 'Importa',
+  'landing.transfer.importHint': 'Importa una pagina esportata da qualsiasi installazione (.zip)',
+  'landing.transfer.exporting': 'Preparo l’export…',
+  'landing.transfer.importing': 'Importo la pagina…',
+  'landing.transfer.imported': 'Pagina importata come bozza',
+  'landing.transfer.invalidArchive': 'Il file non è un export di landing page.',
+  'landing.transfer.reportTitle': 'Pagina importata: cosa controllare',
+  'landing.transfer.reportMedia': '{imported} immagini aggiunte alla libreria, {reused} già presenti.',
+  'landing.transfer.relinkForms': '{count} widget form puntano ancora all’installazione di origine: crea i form qui e selezionali nell’editor.',
+  'landing.transfer.relinkBookings': '{count} widget prenotazione vanno collegati a un tipo di evento di questo workspace.',
+  'landing.transfer.relinkCheckouts': '{count} widget checkout vanno collegati a un checkout di questo workspace.',
+  'landing.transfer.mediaMissing': 'Immagini non importate (mancanti o danneggiate nel file): {files}',
+  'landing.transfer.mediaSkipped': 'Immagini escluse dall’export (limite di dimensione o mancanti all’origine): {files}',
+  'landing.transfer.pathRenamed': 'Il percorso era già usato: la pagina è su {path}.',
+  'landing.transfer.analytics': 'Il sito analytics è stato reimpostato su automatico.',
+  'landing.transfer.openEditor': 'Apri editor',
+  'landing.transfer.close': 'Chiudi',
 };

@@ -170,6 +170,31 @@ export function mediaByFile(ctx: CrmContext, input: { file: string }): MediaRow 
   return ctx.db.all<MediaRow>(`SELECT * FROM media_files WHERE file = ? AND deleted_at IS NULL`, input.file)[0] ?? null;
 }
 
+/** Live library files among `files` (page export); unknown names are left out. */
+export function mediaByFiles(ctx: CrmContext, input: { files: string[] }): MediaRow[] {
+  const out: MediaRow[] = [];
+  for (let at = 0; at < input.files.length; at += 100) {
+    const chunk = input.files.slice(at, at + 100);
+    out.push(
+      ...ctx.db.all<MediaRow>(
+        `SELECT * FROM media_files WHERE deleted_at IS NULL AND file IN (${chunk.map(() => '?').join(', ')})`,
+        ...chunk,
+      ),
+    );
+  }
+  return out;
+}
+
+/** A live file with this content, if the library already has one (dedup on page import). */
+export function mediaBySha(ctx: CrmContext, input: { sha256: string }): MediaRow | null {
+  return (
+    ctx.db.all<MediaRow>(
+      `SELECT * FROM media_files WHERE sha256 = ? AND deleted_at IS NULL ORDER BY created_at LIMIT 1`,
+      input.sha256,
+    )[0] ?? null
+  );
+}
+
 /** Soft delete; the worker removes the R2 object afterwards. */
 export function deleteMedia(ctx: CrmContext, input: { id: string }): MediaRow {
   const row = getMedia(ctx, input);

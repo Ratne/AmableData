@@ -385,6 +385,70 @@ export function duplicatePage(
   return getPage(ctx, { id });
 }
 
+export interface ImportPageInput {
+  /** Chosen by the worker: the document already carries it (embed `data-amable-page`). */
+  id: string;
+  title: string;
+  path: string;
+  document: unknown;
+  seo: Partial<StoredSeo>;
+  settings: Partial<StoredSettings>;
+}
+
+/**
+ * A page from another installation as a new unfiled draft without host: a
+ * taken path falls back to `<path>-copy[-n]`, the analytics site is reset to auto.
+ */
+export function importPage(
+  ctx: CrmContext,
+  input: ImportPageInput,
+): { page: PageDetailRecord; path_renamed: string | null; analytics_disconnected: boolean } {
+  let wanted: string;
+  try {
+    wanted = normalizePath(input.path);
+  } catch {
+    wanted = '/imported';
+  }
+  const taken =
+    ctx.db.all<{ id: string }>(
+      `SELECT id FROM page_pages WHERE COALESCE(host, '') = '' AND path = ? AND deleted_at IS NULL`,
+      wanted,
+    ).length > 0;
+  const path = taken ? freePath(ctx, null, wanted) : wanted;
+  const document = parseDocument(input.document);
+  const seo: StoredSeo = {
+    title: str(input.seo.title),
+    description: str(input.seo.description),
+    og_image: str(input.seo.og_image),
+    canonical: str(input.seo.canonical),
+    noindex: input.seo.noindex === true,
+  };
+  const settings: StoredSettings = {
+    analytics_site_id: null,
+    favicon: str(input.settings.favicon),
+    lang: str(input.settings.lang),
+  };
+  const now = ctx.now();
+  ctx.db.run(
+    `INSERT INTO page_pages (id, title, path, host, status, draft, draft_revision, seo, settings, created_by, created_at, updated_at, folder_id)
+     VALUES (?, ?, ?, NULL, 'draft', ?, 1, ?, ?, ?, ?, ?, NULL)`,
+    input.id,
+    input.title.trim().slice(0, 200),
+    path,
+    JSON.stringify(document),
+    JSON.stringify(seo),
+    JSON.stringify(settings),
+    ctx.actor.id,
+    now,
+    now,
+  );
+  return {
+    page: getPage(ctx, { id: input.id }),
+    path_renamed: path === input.path ? null : path,
+    analytics_disconnected: str(input.settings.analytics_site_id) !== null,
+  };
+}
+
 // ------------------------------------------------------- draft & versions
 
 export type SaveDraftResult =

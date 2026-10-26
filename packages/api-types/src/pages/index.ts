@@ -157,6 +157,30 @@ export const publishPageResponseSchema = z.object({ page: landingPageSchema, ver
 
 export const pagePreviewSchema = z.object({ html: z.string() });
 
+/** What the importer could not carry over: shown to the user after `POST /pages/import`. */
+export const pageImportWarningsSchema = z.object({
+  /** Embeds still pointing at the source installation's forms, event types and checkouts. */
+  relink: z.object({ forms: z.number().int(), bookings: z.number().int(), checkouts: z.number().int() }),
+  /** Images listed in the export but missing or invalid in the archive (file names). */
+  media_missing: z.array(z.string()),
+  /** Images the export left out (over the size cap or missing at the source). */
+  media_skipped: z.array(z.string()),
+  /** New path when the original one was taken, else null. */
+  path_renamed: z.string().nullable(),
+  /** The source page reported to a specific analytics site: reset to auto. */
+  analytics_disconnected: z.boolean(),
+});
+export type PageImportWarnings = z.infer<typeof pageImportWarningsSchema>;
+
+export const importPageResponseSchema = z.object({
+  page: landingPageDetailSchema,
+  /** Images added to the library (the rest were already there, matched by content). */
+  media_imported: z.number().int(),
+  media_reused: z.number().int(),
+  warnings: pageImportWarningsSchema,
+});
+export type ImportPageResponse = z.infer<typeof importPageResponseSchema>;
+
 // --------------------------------------------------------- saved sections
 
 export const savedSectionSchema = z.object({

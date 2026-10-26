@@ -20,6 +20,7 @@ export const pagesOps = {
   'pages.delete': pages.deletePage,
   'pages.restore': pages.restorePage,
   'pages.duplicate': pages.duplicatePage,
+  'pages.import': pages.importPage,
   'pages.saveDraft': pages.saveDraft,
   'pages.publish': pages.publishPage,
   'pages.unpublish': pages.unpublishPage,
@@ -37,6 +38,8 @@ export const pagesOps = {
   'pages.createMedia': library.createMedia,
   'pages.getMedia': library.getMedia,
   'pages.mediaByFile': library.mediaByFile,
+  'pages.mediaByFiles': library.mediaByFiles,
+  'pages.mediaBySha': library.mediaBySha,
   'pages.deleteMedia': library.deleteMedia,
   // folders
   'pages.folders.list': (ctx: CrmContext, _input: Record<string, never>) => pages.pageFolders(ctx).tree(),

@@ -124,6 +124,7 @@ export function errorMessage(t: Translate, error: unknown): string {
   return apiErrorMessage(t, error, LANDING_ERRORS, (e) => {
     if (e.status === 409 && e.code === 'stale_draft') return t('landing.error.staleDraft');
     if (e.status === 423) return t('landing.error.locked');
+    if (e.code === 'invalid_archive') return t('landing.transfer.invalidArchive');
     return null;
   });
 }

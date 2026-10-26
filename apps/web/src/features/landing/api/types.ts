@@ -7,7 +7,9 @@ import type { BuilderDocument, ElementNode, HtmlDocument, PageDocument } from '@
 
 export type {
   CreatePageInput,
+  ImportPageResponse,
   MediaFile,
+  PageImportWarnings,
   PageSeo,
   PageSettings,
   PageStatus,
