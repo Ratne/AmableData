@@ -21,6 +21,69 @@ const num = (value: string, fallback: number): number => {
   return Number.isFinite(n) ? Math.round(n) : fallback;
 };
 
+const weightTotal = (weights: Record<string, number>): number => Object.values(weights).reduce((sum, w) => sum + w, 0);
+
+/** Integer percentages as even as possible (the first hosts take the remainder). */
+function evenWeights(hostIds: readonly string[]): Record<string, number> {
+  const base = Math.floor(100 / hostIds.length);
+  const rest = 100 - base * hostIds.length;
+  return Object.fromEntries(hostIds.map((id, index) => [id, base + (index < rest ? 1 : 0)]));
+}
+
+function HostWeights({
+  hostIds,
+  names,
+  weights,
+  onChange,
+}: {
+  hostIds: readonly string[];
+  names: ReadonlyMap<string, string>;
+  weights: Record<string, number>;
+  onChange: (weights: Record<string, number>) => void;
+}) {
+  const { t } = useI18n();
+  const custom = Object.keys(weights).length > 0;
+  const total = weightTotal(weights);
+  return (
+    <div className="grid gap-2 rounded-md border p-3">
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <Switch checked={custom} onCheckedChange={(on) => onChange(on ? evenWeights(hostIds) : {})} />
+        {t('booking.weights.custom')}
+      </label>
+      <p className="text-xs text-muted-foreground">{t(custom ? 'booking.weights.customHint' : 'booking.weights.evenHint')}</p>
+      {custom ? (
+        <>
+          {hostIds.map((id) => (
+            <label key={id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="truncate">{names.get(id) ?? id}</span>
+              <span className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  className="h-8 w-20 text-right"
+                  aria-label={t('booking.weights.share', { name: names.get(id) ?? id })}
+                  value={weights[id] ?? 0}
+                  onChange={(e) => onChange({ ...weights, [id]: Math.min(100, Math.max(0, num(e.target.value, 0))) })}
+                />
+                %
+              </span>
+            </label>
+          ))}
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className={total === 100 ? 'text-muted-foreground' : 'font-medium text-destructive'} role="status">
+              {t(total === 100 ? 'booking.weights.total' : 'booking.weights.totalInvalid', { total })}
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => onChange(evenWeights(hostIds))}>
+              {t('booking.weights.even')}
+            </Button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function EventTypeEditorPage() {
   const { eventTypeId } = useParams({ strict: false }) as { eventTypeId: string };
   const { slug, api } = useBooking();
@@ -45,6 +108,7 @@ function Editor({ initial }: { initial: BookingEventType }) {
   const writable = can('booking:write');
   const set = <K extends keyof BookingEventType>(key: K, value: BookingEventType[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const weightsValid = weightTotal(draft.host_weights) === 100 || Object.keys(draft.host_weights).length === 0;
 
   const save = useBookingMutation({
     mutationFn: () => {
@@ -60,7 +124,7 @@ function Editor({ initial }: { initial: BookingEventType }) {
       <PageToolbar
         actions={
           writable ? (
-            <DashboardButton variant="primary" disabled={!dirty || save.isPending} onClick={() => save.mutate(undefined)}>
+            <DashboardButton variant="primary" disabled={!dirty || !weightsValid || save.isPending} onClick={() => save.mutate(undefined)}>
               <Save aria-hidden /> {t('common.save')}
             </DashboardButton>
           ) : null
@@ -129,7 +193,11 @@ function Editor({ initial }: { initial: BookingEventType }) {
                     <Checkbox
                       checked={draft.host_calendar_ids.includes(calendar.id)}
                       onCheckedChange={(checked) =>
-                        set('host_calendar_ids', checked === true ? [...draft.host_calendar_ids, calendar.id] : draft.host_calendar_ids.filter((id) => id !== calendar.id))
+                        setDraft((d) => ({
+                          ...d,
+                          host_calendar_ids: checked === true ? [...d.host_calendar_ids, calendar.id] : d.host_calendar_ids.filter((id) => id !== calendar.id),
+                          host_weights: {},
+                        }))
                       }
                     />
                     {calendar.name} <span className="text-muted-foreground">· {calendar.time_zone}</span>
@@ -142,11 +210,21 @@ function Editor({ initial }: { initial: BookingEventType }) {
                     <Choice
                       id={id}
                       value={draft.assignment}
-                      onChange={(v) => set('assignment', (v ?? 'round_robin') as BookingEventType['assignment'])}
+                      onChange={(v) =>
+                        setDraft((d) => ({ ...d, assignment: (v ?? 'round_robin') as BookingEventType['assignment'], host_weights: {} }))
+                      }
                       options={(['round_robin', 'collective'] as const).map((a) => ({ value: a, label: t(`booking.assignment.${a}`) }))}
                     />
                   )}
                 </Field>
+              ) : null}
+              {draft.host_calendar_ids.length > 1 && draft.assignment === 'round_robin' ? (
+                <HostWeights
+                  hostIds={draft.host_calendar_ids}
+                  names={new Map((calendars.data ?? []).map((c) => [c.id, c.name]))}
+                  weights={draft.host_weights}
+                  onChange={(weights) => set('host_weights', weights)}
+                />
               ) : null}
             </div>
           </SectionCard>

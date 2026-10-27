@@ -54,7 +54,8 @@ export function fakeCalendars(options: { oauth?: OAuthTokenProvider; fetch?: (in
     get: (name: string) => {
       const c = core(name);
       return {
-        busy: (ref: Parameters<CalendarCore['busy']>[0], from: number, to: number) => c.busy(ref, from, to),
+        busy: (ref: Parameters<CalendarCore['busy']>[0], from: number, to: number, maxAgeMs?: number) =>
+          c.busy(ref, from, to, maxAgeMs),
         sync: (ref: Parameters<CalendarCore['sync']>[0]) => c.sync(ref),
         bookingChanged: (
           id: string,

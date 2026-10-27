@@ -96,6 +96,8 @@ export interface HostSchedule {
   readonly bookedStarts: readonly number[];
   /** Round robin fairness: confirmed bookings in the recent window and last assignment. */
   readonly load?: { readonly count: number; readonly lastAssignedAt: number | null };
+  /** Round robin target share (0..1, the shares of all hosts add up to 1); absent = even split. */
+  readonly share?: number;
 }
 
 export interface AvailableSlot {

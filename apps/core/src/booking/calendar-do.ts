@@ -49,8 +49,8 @@ export class BookingCalendar extends DurableObject<Env> {
     });
   }
 
-  async busy(ref: CalendarDoRef, from: number, to: number): Promise<{ intervals: Interval[]; sync: SyncResult }> {
-    return this.core.busy(ref, from, to);
+  async busy(ref: CalendarDoRef, from: number, to: number, maxAgeMs?: number): Promise<{ intervals: Interval[]; sync: SyncResult }> {
+    return this.core.busy(ref, from, to, maxAgeMs);
   }
 
   async sync(ref: CalendarDoRef): Promise<SyncResult> {

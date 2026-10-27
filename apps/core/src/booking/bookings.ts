@@ -28,6 +28,7 @@ import {
   hostIdsOf,
   questionsOf,
   rulesOf,
+  weightsOf,
   type EventTypeRow,
 } from './event-types';
 
@@ -184,7 +185,9 @@ function hostSchedules(
       hi,
     )
     .filter((b) => b.id !== excludeBookingId);
+  const weights = event.assignment === 'round_robin' ? weightsOf(event) : {};
   return calendars.map((calendar) => {
+    const weight = weights[calendar.id];
     const appointments = ctx.db
       .all<{ id: string; start_at: number; end_at: number }>(
         `SELECT id, start_at, end_at FROM crm_appointments
@@ -212,6 +215,7 @@ function hostSchedules(
         count: recent.length,
         lastAssignedAt: recent.reduce<number | null>((max, b) => (max === null || b.created_at > max ? b.created_at : max), null),
       },
+      ...(weight === undefined ? {} : { share: weight / 100 }),
     };
   });
 }

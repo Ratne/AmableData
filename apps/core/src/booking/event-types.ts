@@ -30,6 +30,8 @@ export interface EventTypeRow {
   max_days_ahead: number;
   max_per_day: number | null;
   host_calendar_ids: string;
+  /** Added by tenant migration 19: `{ calendarId: percent }`, `{}` = even. */
+  host_weights: string;
   assignment: Assignment;
   phone_mode: PhoneMode;
   questions: string;
@@ -66,6 +68,36 @@ export function hostIdsOf(row: EventTypeRow): string[] {
   return parseJson<string[]>(row.host_calendar_ids, []);
 }
 
+export function weightsOf(row: EventTypeRow): Record<string, number> {
+  return parseJson<Record<string, number>>(row.host_weights, {});
+}
+
+/**
+ * Round robin shares as given (validated) or `{}`: one key per host, integers
+ * adding up to 100, round robin only.
+ */
+function validWeights(weights: Record<string, number>, hosts: readonly string[], assignment: Assignment): Record<string, number> {
+  const keys = Object.keys(weights);
+  if (keys.length === 0) return {};
+  if (assignment !== 'round_robin') throw invalid('host_weights', 'weights apply to round robin event types only');
+  const missing = hosts.find((id) => !(id in weights));
+  if (missing !== undefined) throw invalid(`host_weights.${missing}`, 'every host needs a weight');
+  const extra = keys.find((id) => !hosts.includes(id));
+  if (extra !== undefined) throw invalid(`host_weights.${extra}`, 'not a host of this event type');
+  const total = keys.reduce((sum, id) => sum + (weights[id] ?? 0), 0);
+  if (total !== 100) throw invalid('host_weights', `weights must add up to 100 (now ${String(total)})`);
+  return Object.fromEntries(hosts.map((id) => [id, weights[id] as number]));
+}
+
+/** Stored weights that still fit the hosts and assignment after an update, else even. */
+function keptWeights(weights: Record<string, number>, hosts: readonly string[], assignment: Assignment): Record<string, number> {
+  try {
+    return validWeights(weights, hosts, assignment);
+  } catch {
+    return {};
+  }
+}
+
 export function messagesOf(row: EventTypeRow): BookingMessages {
   return { ...EMPTY_MESSAGES, ...parseJson<Partial<BookingMessages>>(row.messages, {}) };
 }
@@ -97,6 +129,7 @@ export function eventTypeToApi(row: EventTypeRow): BookingEventType {
     max_days_ahead: row.max_days_ahead,
     max_per_day: row.max_per_day,
     host_calendar_ids: hostIdsOf(row),
+    host_weights: weightsOf(row),
     assignment: row.assignment,
     phone: row.phone_mode,
     questions: questionsOf(row).map((q) => ({ ...q, options: [...q.options] })),
@@ -184,14 +217,16 @@ export function createEventType(ctx: CrmContext, input: WithQuestionInputs<Creat
     min_notice_minutes: input.min_notice_minutes ?? 240,
   };
   checkLimits(data);
+  const assignment = input.assignment ?? 'round_robin';
+  const weights = validWeights(input.host_weights ?? {}, input.host_calendar_ids, assignment);
   const id = ctx.newId();
   const now = ctx.now();
   ctx.db.run(
     `INSERT INTO booking_event_types (id, slug, title, description, duration_minutes, location, slot_interval_minutes,
        buffer_before_minutes, buffer_after_minutes, min_notice_minutes, max_days_ahead, max_per_day, host_calendar_ids,
-       assignment, phone_mode, questions, tag_ids, reminder_minutes, messages, success_message, redirect_url, locale,
-       turnstile_enabled, active, color, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       host_weights, assignment, phone_mode, questions, tag_ids, reminder_minutes, messages, success_message, redirect_url,
+       locale, turnstile_enabled, active, color, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.slug,
     input.title,
@@ -205,7 +240,8 @@ export function createEventType(ctx: CrmContext, input: WithQuestionInputs<Creat
     data.max_days_ahead,
     input.max_per_day ?? null,
     JSON.stringify(input.host_calendar_ids),
-    input.assignment ?? 'round_robin',
+    JSON.stringify(weights),
+    assignment,
     input.phone ?? 'optional',
     JSON.stringify(normalizeQuestions(input.questions ?? [])),
     JSON.stringify(input.tag_ids ?? []),
@@ -238,13 +274,19 @@ export function updateEventType(
     max_days_ahead: data.max_days_ahead ?? current.max_days_ahead,
     min_notice_minutes: data.min_notice_minutes ?? current.min_notice_minutes,
   });
+  const hosts = data.host_calendar_ids ?? hostIdsOf(current);
+  const assignment = data.assignment ?? current.assignment;
+  const weights =
+    data.host_weights !== undefined
+      ? validWeights(data.host_weights, hosts, assignment)
+      : keptWeights(weightsOf(current), hosts, assignment);
   const pick = <T extends SqlValue>(value: T | undefined, fallback: T): T => (value === undefined ? fallback : value);
   const json = (value: unknown, fallback: string): string => (value === undefined ? fallback : JSON.stringify(value));
   const flag = (value: boolean | undefined, fallback: number): number => (value === undefined ? fallback : value ? 1 : 0);
   ctx.db.run(
     `UPDATE booking_event_types SET slug = ?, title = ?, description = ?, duration_minutes = ?, location = ?,
        slot_interval_minutes = ?, buffer_before_minutes = ?, buffer_after_minutes = ?, min_notice_minutes = ?,
-       max_days_ahead = ?, max_per_day = ?, host_calendar_ids = ?, assignment = ?, phone_mode = ?, questions = ?,
+       max_days_ahead = ?, max_per_day = ?, host_calendar_ids = ?, host_weights = ?, assignment = ?, phone_mode = ?, questions = ?,
        tag_ids = ?, reminder_minutes = ?, messages = ?, success_message = ?, redirect_url = ?, locale = ?,
        turnstile_enabled = ?, active = ?, color = ?, updated_at = ? WHERE id = ?`,
     pick(data.slug, current.slug),
@@ -259,7 +301,8 @@ export function updateEventType(
     pick(data.max_days_ahead, current.max_days_ahead),
     pick(data.max_per_day, current.max_per_day),
     json(data.host_calendar_ids, current.host_calendar_ids),
-    pick(data.assignment, current.assignment),
+    JSON.stringify(weights),
+    assignment,
     pick(data.phone, current.phone_mode),
     data.questions === undefined ? current.questions : JSON.stringify(normalizeQuestions(data.questions)),
     json(data.tag_ids, current.tag_ids),

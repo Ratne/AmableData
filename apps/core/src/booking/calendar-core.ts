@@ -87,8 +87,12 @@ export interface CalendarDeps {
   sendEmail(request: EmailSendRequest): Promise<void>;
 }
 
-/** Busy time older than this is refreshed before answering. */
+/** Busy time older than this is refreshed before answering (callers may ask for fresher). */
 export const BUSY_TTL_MS = 5 * 60_000;
+/** Busy time freshness of the slot lists shown to visitors. */
+export const SLOTS_MAX_AGE_MS = 60_000;
+/** Freshness right before a booking is confirmed; also the floor that stops a burst from hammering Google. */
+export const BOOKING_MAX_AGE_MS = 10_000;
 /** Window of the external busy time kept in cache. */
 export const BUSY_WINDOW_MS = 120 * 86_400_000;
 const GOOGLE_FREEBUSY_URL = 'https://www.googleapis.com/calendar/v3/freeBusy';
@@ -276,10 +280,19 @@ export class CalendarCore {
     return this.deps.db.all<{ n: number }>(`SELECT COUNT(*) AS n FROM external_busy`)[0]?.n ?? 0;
   }
 
-  /** External busy time overlapping `[from, to)`, refreshed first when stale or the account changed. */
-  async busy(ref: CalendarDoRef, from: number, to: number): Promise<{ intervals: Interval[]; sync: SyncResult }> {
+  /**
+   * External busy time overlapping `[from, to)`, refreshed first when older
+   * than `maxAgeMs` (never below `BOOKING_MAX_AGE_MS`) or the account changed.
+   */
+  async busy(
+    ref: CalendarDoRef,
+    from: number,
+    to: number,
+    maxAgeMs: number = BUSY_TTL_MS,
+  ): Promise<{ intervals: Interval[]; sync: SyncResult }> {
     const last = this.lastSync();
-    const stale = last.syncedAt === null || this.deps.now() - last.syncedAt > BUSY_TTL_MS;
+    const maxAge = Math.max(BOOKING_MAX_AGE_MS, maxAgeMs);
+    const stale = last.syncedAt === null || this.deps.now() - last.syncedAt > maxAge;
     const changed = (this.meta('sync_account') ?? '') !== (ref.googleAccountId ?? '');
     const sync = stale || changed ? await this.sync(ref) : last;
     const intervals = this.deps.db

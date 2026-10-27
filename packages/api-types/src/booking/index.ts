@@ -221,6 +221,11 @@ const eventTypeFields = {
   /** Per host and day; null = unlimited. */
   max_per_day: z.number().int().min(1).max(100).nullable(),
   host_calendar_ids: uniqueIds(20, 1),
+  /**
+   * Round robin share of each host calendar in percent (integers adding up to
+   * 100, one key per host). `{}` spreads the bookings evenly.
+   */
+  host_weights: z.record(idSchema, z.number().int().min(0).max(100)),
   assignment: z.enum(BOOKING_ASSIGNMENTS),
   phone: z.enum(BOOKING_PHONE_MODES),
   questions: questionsSchema,
@@ -245,6 +250,7 @@ export const createBookingEventTypeSchema = z.strictObject({
   title: eventTypeFields.title,
   duration_minutes: eventTypeFields.duration_minutes,
   host_calendar_ids: eventTypeFields.host_calendar_ids,
+  host_weights: eventTypeFields.host_weights.optional(),
   description: eventTypeFields.description.optional(),
   location: eventTypeFields.location.optional(),
   slot_interval_minutes: eventTypeFields.slot_interval_minutes.optional(),

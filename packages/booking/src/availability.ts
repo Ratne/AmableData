@@ -186,19 +186,29 @@ export function checkSlot(input: AvailabilityInput, start: number): SlotCheck {
   return { ok: false, reason };
 }
 
-/** Least loaded free host, then the one assigned least recently, then the id (deterministic). */
+/**
+ * Free host furthest below its share: deficit `share × (total + 1) − count`
+ * over every host's recent bookings, so assignments converge to the shares
+ * (even shares: the least loaded host). A 0% host only gets a booking when no
+ * weighted host is free. Ties: assigned least recently, then the id.
+ */
 export function pickRoundRobinHost(hosts: readonly HostSchedule[], freeIds: readonly string[]): string | null {
-  const free = hosts.filter((h) => freeIds.includes(h.calendarId));
-  free.sort((a, b) => {
-    const la = a.load ?? { count: 0, lastAssignedAt: null };
-    const lb = b.load ?? { count: 0, lastAssignedAt: null };
-    if (la.count !== lb.count) return la.count - lb.count;
-    const ta = la.lastAssignedAt ?? 0;
-    const tb = lb.lastAssignedAt ?? 0;
-    if (ta !== tb) return ta - tb;
-    return a.calendarId < b.calendarId ? -1 : a.calendarId > b.calendarId ? 1 : 0;
+  const even = hosts.length === 0 ? 0 : 1 / hosts.length;
+  const total = hosts.reduce((sum, h) => sum + (h.load?.count ?? 0), 0);
+  const ranked = hosts
+    .filter((h) => freeIds.includes(h.calendarId))
+    .map((h) => {
+      const share = h.share ?? even;
+      const count = h.load?.count ?? 0;
+      return { host: h, weighted: share > 0, deficit: share * (total + 1) - count, last: h.load?.lastAssignedAt ?? 0 };
+    });
+  ranked.sort((a, b) => {
+    if (a.weighted !== b.weighted) return a.weighted ? -1 : 1;
+    if (Math.abs(a.deficit - b.deficit) > 1e-9) return b.deficit - a.deficit;
+    if (a.last !== b.last) return a.last - b.last;
+    return a.host.calendarId < b.host.calendarId ? -1 : a.host.calendarId > b.host.calendarId ? 1 : 0;
   });
-  return free[0]?.calendarId ?? null;
+  return ranked[0]?.host.calendarId ?? null;
 }
 
 /** Slots grouped by local date in the viewer's time zone (keys `YYYY-MM-DD`, ascending). */

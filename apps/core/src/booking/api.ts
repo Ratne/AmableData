@@ -35,7 +35,7 @@ import { CrmError, invalid } from '../crm/errors';
 import { toIso } from '../crm/util';
 import { appOrigin, audit, getTenant, type AppEnv } from '../middleware';
 import type { BookingOutcome } from './bookings';
-import type { SyncResult } from './calendar-core';
+import { BOOKING_MAX_AGE_MS, SLOTS_MAX_AGE_MS, type SyncResult } from './calendar-core';
 import type { CalendarRef } from './calendars';
 import {
   afterChange,
@@ -110,7 +110,7 @@ export async function finishChange(c: Ctx, outcome: BookingOutcome, token: strin
 async function busyFor(c: Ctx, eventTypeId: string, extra: readonly CalendarRef[], start: number, durationMinutes: number) {
   const context = await callCrm(c, 'booking.eventTypeContext', { id: eventTypeId });
   const calendars = [...extra, ...context.calendars.filter((h) => !extra.some((e) => e.calendarId === h.calendarId))];
-  return externalBusy(c.env, tenantId(c), calendars, start - DAY_MS, start + durationMinutes * 60_000 + DAY_MS);
+  return externalBusy(c.env, tenantId(c), calendars, start - DAY_MS, start + durationMinutes * 60_000 + DAY_MS, BOOKING_MAX_AGE_MS);
 }
 
 function startOf(value: string, path: string): number {
@@ -454,7 +454,7 @@ export function registerBookingRoutes(router: OpenAPIHono<AppEnv>): void {
       const from = zonedToUtc(fromDate, 0, timeZone);
       const to = zonedToUtc(addDays(toDate, 1), 0, timeZone) - 1;
       if (to < from || to - from > MAX_PREVIEW_DAYS * DAY_MS) throw invalid('to', `the range must cover 1 to ${String(MAX_PREVIEW_DAYS)} days`);
-      const busy = await externalBusy(c.env, tenantId(c), context.calendars, from, to + DAY_MS);
+      const busy = await externalBusy(c.env, tenantId(c), context.calendars, from, to + DAY_MS, SLOTS_MAX_AGE_MS);
       const result = await callCrm(c, 'booking.slots', { eventTypeId, from, to, externalBusy: busy });
       return c.json(
         {

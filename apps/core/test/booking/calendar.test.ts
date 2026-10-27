@@ -1,7 +1,7 @@
 import { OAUTH_SCOPES, type OAuthScope, type OAuthTokenProvider } from '@amable/core';
 import { describe, expect, it } from 'vitest';
 import type { BookingOutcome } from '../../src/booking/bookings';
-import { googleEventId, type CalendarEventChange } from '../../src/booking/calendar-core';
+import { BOOKING_MAX_AGE_MS, googleEventId, SLOTS_MAX_AGE_MS, type CalendarEventChange } from '../../src/booking/calendar-core';
 import { calendarEventFor, messagesFor } from '../../src/booking/flow';
 import { fillBookingVars, textToDoc } from '../../src/booking/messages';
 import { createTestTenant } from '../crm/helpers';
@@ -135,6 +135,20 @@ describe('BookingCalendar core', () => {
     calendars.clock.now += 6 * 60_000;
     await stub.busy(ref, busyStart, busyStart + 1);
     expect(requests).toHaveLength(2);
+
+    calendars.clock.now += 2 * 60_000;
+    await stub.busy(ref, busyStart, busyStart + 1);
+    expect(requests).toHaveLength(2);
+    await stub.busy(ref, busyStart, busyStart + 1, SLOTS_MAX_AGE_MS);
+    expect(requests).toHaveLength(3);
+    calendars.clock.now += 30_000;
+    await stub.busy(ref, busyStart, busyStart + 1, SLOTS_MAX_AGE_MS);
+    expect(requests).toHaveLength(3);
+    await stub.busy(ref, busyStart, busyStart + 1, BOOKING_MAX_AGE_MS);
+    expect(requests).toHaveLength(4);
+    calendars.clock.now += 5_000;
+    await stub.busy(ref, busyStart, busyStart + 1, 0);
+    expect(requests).toHaveLength(4);
   });
 
   it('writes the booking to Google Calendar, moves it, deletes it, and retries failures', async () => {

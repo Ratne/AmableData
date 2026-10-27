@@ -48,12 +48,17 @@ export function doRef(tenantId: string, ref: CalendarRef): CalendarDoRef {
   };
 }
 
+/**
+ * External busy time of every host calendar, each at most `maxAgeMs` old:
+ * `SLOTS_MAX_AGE_MS` for slot lists, `BOOKING_MAX_AGE_MS` before confirming a booking.
+ */
 export async function externalBusy(
   env: Env,
   tenantId: string,
   calendars: readonly CalendarRef[],
   from: number,
   to: number,
+  maxAgeMs: number,
 ): Promise<ExternalBusy> {
   const out: ExternalBusy = {};
   await Promise.all(
@@ -61,7 +66,7 @@ export async function externalBusy(
       const stub = calendarStub(env, tenantId, calendar.calendarId);
       if (stub === null) return;
       try {
-        const result = (await stub.busy(doRef(tenantId, calendar), from, to)) as { intervals: Interval[] };
+        const result = (await stub.busy(doRef(tenantId, calendar), from, to, maxAgeMs)) as { intervals: Interval[] };
         out[calendar.calendarId] = result.intervals;
       } catch (error) {
         console.error('[booking] external busy unavailable', calendar.calendarId, error);

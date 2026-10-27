@@ -168,6 +168,44 @@ describe('availability engine', () => {
     expect(pickRoundRobinHost([a, b, c], [])).toBeNull();
   });
 
+  function simulate(shares: Array<number | undefined>, rounds: number, free?: (round: number) => string[]): Record<string, number> {
+    const ids = shares.map((_, i) => `cal_${i}`);
+    const counts: Record<string, number> = Object.fromEntries(ids.map((id) => [id, 0]));
+    const last: Record<string, number> = Object.fromEntries(ids.map((id) => [id, 0]));
+    for (let round = 1; round <= rounds; round += 1) {
+      const hosts = ids.map((id, i) => {
+        const share = shares[i];
+        return host({ calendarId: id, load: { count: counts[id] ?? 0, lastAssignedAt: last[id] ?? 0 }, ...(share === undefined ? {} : { share }) });
+      });
+      const picked = pickRoundRobinHost(hosts, free?.(round) ?? ids);
+      if (picked === null) continue;
+      counts[picked] = (counts[picked] ?? 0) + 1;
+      last[picked] = round;
+    }
+    return counts;
+  }
+
+  it('weighted round robin follows the shares exactly over a series of bookings', () => {
+    expect(simulate([0.7, 0.3], 10)).toEqual({ cal_0: 7, cal_1: 3 });
+    expect(simulate([0.7, 0.3], 100)).toEqual({ cal_0: 70, cal_1: 30 });
+    expect(simulate([0.5, 0.3, 0.2], 20)).toEqual({ cal_0: 10, cal_1: 6, cal_2: 4 });
+    expect(simulate([0.7, 0.3], 10)).toEqual(simulate([0.7, 0.3], 10));
+  });
+
+  it('weighted round robin without shares splits evenly', () => {
+    expect(simulate([undefined, undefined, undefined], 9)).toEqual({ cal_0: 3, cal_1: 3, cal_2: 3 });
+  });
+
+  it('a 0% host only gets bookings nobody else can take', () => {
+    expect(simulate([1, 0], 10)).toEqual({ cal_0: 10, cal_1: 0 });
+    expect(simulate([1, 0], 10, (round) => (round % 5 === 0 ? ['cal_1'] : ['cal_0', 'cal_1']))).toEqual({ cal_0: 8, cal_1: 2 });
+  });
+
+  it('weighted round robin catches up the host that was busy', () => {
+    const counts = simulate([0.5, 0.5], 20, (round) => (round <= 4 ? ['cal_0'] : ['cal_0', 'cal_1']));
+    expect(counts).toEqual({ cal_0: 10, cal_1: 10 });
+  });
+
   it('collective: every host must be free', () => {
     const a = host({ calendarId: 'cal_a', busy: [{ start: rome(2026, 10, 19, 9), end: rome(2026, 10, 19, 10) }] });
     const b = host({ calendarId: 'cal_b', weeklyRules: weekdays('10:30', '12:00') });

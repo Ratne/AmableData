@@ -15,6 +15,7 @@ import {
 import { z } from 'zod';
 import { GatewayError, type GatewayContext, type GatewayHandlers, type GatewayRawHandlers } from '../public/context';
 import type { BookingOutcome, BookingSource } from './bookings';
+import { BOOKING_MAX_AGE_MS, SLOTS_MAX_AGE_MS } from './calendar-core';
 import type { CalendarRef } from './calendars';
 import { afterChange, calendarStub, externalBusy, hashToken, hostNames, manageUrl, newManageToken, versionOf } from './flow';
 import { bookingRuntime, type BookingRuntime } from './runtime';
@@ -137,7 +138,7 @@ async function slots(ctx: GatewayContext, input: unknown): Promise<Output<'booki
   }
   const found = await context(ctx, parsed.eventSlug);
   const [busy, version] = await Promise.all([
-    externalBusy(ctx.env, ctx.tenant.id, found.calendars, from, to + DAY_MS),
+    externalBusy(ctx.env, ctx.tenant.id, found.calendars, from, to + DAY_MS, SLOTS_MAX_AGE_MS),
     versionOf(ctx.env, ctx.tenant.id, found.calendars[0]?.calendarId),
   ]);
   const result = await ctx.crm('booking.slots', { eventTypeId: found.eventType.id, from, to, externalBusy: busy, publicOnly: true });
@@ -175,7 +176,7 @@ async function bookSlot(ctx: GatewayContext, input: unknown): Promise<Output<'bo
   const timeZone = timeZoneOf(payload.time_zone);
   const start = Date.parse(payload.start);
   const end = start + found.eventType.duration_minutes * 60_000;
-  const busy = await externalBusy(ctx.env, ctx.tenant.id, found.calendars, start - DAY_MS, end + DAY_MS);
+  const busy = await externalBusy(ctx.env, ctx.tenant.id, found.calendars, start - DAY_MS, end + DAY_MS, BOOKING_MAX_AGE_MS);
   const { token, hash } = await newManageToken();
   const tracking = payload.tracking ?? {};
   const meta = payload.meta ?? {};
@@ -275,7 +276,7 @@ async function reschedule(ctx: GatewayContext, input: unknown): Promise<Output<'
   const start = Date.parse(parsed.start);
   const end = start + current.eventType.duration_minutes * 60_000;
   const calendars = [...current.calendars, ...hosts.calendars.filter((c) => !current.calendars.some((k) => k.calendarId === c.calendarId))];
-  const busy = await externalBusy(ctx.env, ctx.tenant.id, calendars, start - DAY_MS, end + DAY_MS);
+  const busy = await externalBusy(ctx.env, ctx.tenant.id, calendars, start - DAY_MS, end + DAY_MS, BOOKING_MAX_AGE_MS);
   const outcome = await ctx.crm('booking.reschedule', { tokenHash, start, externalBusy: busy, by: 'invitee', timeZone });
   ctx.executionCtx.waitUntil(
     afterChange(ctx.env, {

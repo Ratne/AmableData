@@ -70,6 +70,9 @@ function Header({ config, strings, extra }: { config: PublicBookingConfig; strin
   );
 }
 
+/** Slot reload period of an open, visible picker (the server keeps busy time at most a minute old). */
+const SLOTS_REFRESH_MS = 60_000;
+
 /** Month calendar + times of the selected day, live-refreshed while open. */
 function Picker({
   api,
@@ -119,6 +122,22 @@ function Picker({
       }),
     [config.slug, month, timeZone],
   );
+  // Busy time changed in Google Calendar does not reach the live socket: poll while visible.
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const visible = () => document.visibilityState === 'visible';
+    const timer = setInterval(() => {
+      if (visible()) load();
+    }, SLOTS_REFRESH_MS);
+    const onVisibility = () => {
+      if (visible()) load();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [config.slug, month, timeZone]);
 
   const days = useMemo(() => new Map(groupSlotsByDay(slots ?? [], timeZone).map((d) => [d.date, d.slots])), [slots, timeZone]);
   useEffect(() => {

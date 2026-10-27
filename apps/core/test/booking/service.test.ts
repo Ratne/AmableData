@@ -214,6 +214,50 @@ describe('booking ops', () => {
     expect(joint.notifyCalendarIds).toEqual(expect.arrayContaining([alice.id, bob.id]));
   });
 
+  it('weighted round robin: percentages validated, kept only while they fit the hosts', () => {
+    const t = createTestTenant();
+    const { alice, bob } = seedBooking(t);
+    const base = { title: 'Demo', duration_minutes: 30, host_calendar_ids: [alice.id, bob.id], min_notice_minutes: 60 };
+    const failure = (data: Record<string, unknown>) => errorOf(() => t.op('booking.createEventType', { ...base, slug: 'bad', ...data }));
+    expect(failure({ host_weights: { [alice.id]: 70, [bob.id]: 20 } })).toMatchObject({ code: 'validation_failed', details: [{ path: 'host_weights' }] });
+    expect(failure({ host_weights: { [alice.id]: 100 } }).details?.[0]?.path).toBe(`host_weights.${bob.id}`);
+    expect(failure({ host_weights: { [alice.id]: 50, [bob.id]: 40, cal_other: 10 } }).details?.[0]?.path).toBe('host_weights.cal_other');
+    expect(failure({ assignment: 'collective', host_weights: { [alice.id]: 50, [bob.id]: 50 } }).details?.[0]?.path).toBe('host_weights');
+
+    const weighted = t.op('booking.createEventType', { ...base, slug: 'demo', host_weights: { [bob.id]: 30, [alice.id]: 70 } });
+    expect(weighted.host_weights).toEqual({ [alice.id]: 70, [bob.id]: 30 });
+    expect(t.op('booking.getEventType', { id: weighted.id }).host_weights).toEqual({ [alice.id]: 70, [bob.id]: 30 });
+    expect(t.op('booking.updateEventType', { id: weighted.id, data: { title: 'Demo 2' } }).host_weights).toEqual({ [alice.id]: 70, [bob.id]: 30 });
+    expect(t.op('booking.updateEventType', { id: weighted.id, data: { host_calendar_ids: [alice.id] } }).host_weights).toEqual({});
+
+    const plain = t.op('booking.createEventType', { ...base, slug: 'plain' });
+    expect(plain.host_weights).toEqual({});
+    const reweighted = t.op('booking.updateEventType', { id: plain.id, data: { host_weights: { [alice.id]: 25, [bob.id]: 75 } } });
+    expect(reweighted.host_weights).toEqual({ [alice.id]: 25, [bob.id]: 75 });
+    expect(t.op('booking.updateEventType', { id: plain.id, data: { assignment: 'collective' } }).host_weights).toEqual({});
+  });
+
+  it('weighted round robin assigns bookings by the percentages', () => {
+    const t = createTestTenant();
+    const { alice, bob } = seedBooking(t);
+    const rr = t.op('booking.createEventType', {
+      slug: 'demo',
+      title: 'Demo',
+      duration_minutes: 30,
+      host_calendar_ids: [alice.id, bob.id],
+      host_weights: { [alice.id]: 75, [bob.id]: 25 },
+      min_notice_minutes: 60,
+    });
+    const start = nextMonday(t.clock.now, 9);
+    const hosts = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+      t.clock.now += 1000;
+      const invitee = { given_name: `P${String(i)}`, family_name: '', email: `p${String(i)}@example.com`, phone: '' };
+      return t.op('booking.book', bookInput(t, rr.id, start + Math.floor(i / 2) * 1800_000 + (i % 2) * 86_400_000, { answers: {}, invitee })).booking.calendar_id;
+    });
+    expect(hosts.filter((id) => id === alice.id)).toHaveLength(6);
+    expect(hosts.filter((id) => id === bob.id)).toHaveLength(2);
+  });
+
   it('lists bookings with filters and cursor pagination', () => {
     const t = createTestTenant();
     const { eventType } = seedBooking(t);
