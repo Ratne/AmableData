@@ -258,6 +258,47 @@ describe('booking ops', () => {
     expect(hosts.filter((id) => id === bob.id)).toHaveLength(2);
   });
 
+  it('validates the notification emails and stores them in send order', () => {
+    const t = createTestTenant();
+    const { alice } = seedBooking(t);
+    const base = { title: 'Demo', duration_minutes: 30, host_calendar_ids: [alice.id] };
+    const created = t.op('booking.createEventType', { ...base, slug: 'defaults' });
+    expect(created).toMatchObject({
+      notifications: [{ when: 'before', offset_minutes: 1440, subject: '', body: '' }],
+      allow_reschedule: true,
+      allow_cancel: true,
+    });
+    const before = (offset_minutes: number) => ({ when: 'before' as const, offset_minutes });
+    const after = (offset_minutes: number) => ({ when: 'after' as const, offset_minutes });
+    const failure = (notifications: unknown[]) =>
+      errorOf(() => t.op('booking.createEventType', { ...base, slug: 'bad', notifications: notifications as never }));
+    expect(failure([before(60), before(120), before(180), before(240)])).toMatchObject({ code: 'validation_failed', details: [{ path: 'notifications.3.when' }] });
+    expect(failure([after(60), after(60)]).details?.[0]?.path).toBe('notifications.1.offset_minutes');
+    expect(failure([before(1)]).details?.[0]?.path).toBe('notifications.0.offset_minutes');
+
+    const full = t.op('booking.createEventType', {
+      ...base,
+      slug: 'full',
+      notifications: [after(1440), before(60), after(60), before(2880), before(60 * 5), after(4320)],
+      allow_reschedule: false,
+    });
+    expect(full.notifications.map((n) => `${n.when}:${String(n.offset_minutes)}`)).toEqual([
+      'before:2880',
+      'before:300',
+      'before:60',
+      'after:60',
+      'after:1440',
+      'after:4320',
+    ]);
+    expect(full).toMatchObject({ allow_reschedule: false, allow_cancel: true });
+    const row = t.db.all<{ reminder_minutes: string }>(`SELECT reminder_minutes FROM booking_event_types WHERE id = ?`, full.id)[0];
+    expect(JSON.parse(row?.reminder_minutes ?? '')).toEqual([2880, 300, 60]);
+
+    const updated = t.op('booking.updateEventType', { id: full.id, data: { notifications: [after(30)], allow_cancel: false } });
+    expect(updated).toMatchObject({ notifications: [{ when: 'after', offset_minutes: 30 }], allow_reschedule: false, allow_cancel: false });
+    expect(t.op('booking.updateEventType', { id: full.id, data: { title: 'Full 2' } }).notifications).toEqual(updated.notifications);
+  });
+
   it('lists bookings with filters and cursor pagination', () => {
     const t = createTestTenant();
     const { eventType } = seedBooking(t);

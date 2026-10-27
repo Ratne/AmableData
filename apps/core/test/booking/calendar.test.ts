@@ -9,9 +9,15 @@ import { fakeCalendars, nextMonday, seedBooking, SOURCE } from './helpers';
 
 const REF = { tenantId: 'ten_1', calendarId: 'cal_1', hostUserId: 'user_alice', googleAccountId: null, googleCalendarId: null };
 
-function bookedOutcome(): { outcome: BookingOutcome; now: number } {
+function bookedOutcome(overrides: Record<string, unknown> = {}): { outcome: BookingOutcome; now: number } {
   const t = createTestTenant();
-  const { eventType } = seedBooking(t, { messages: { reminder_subject: 'Soon: {{ booking.event_title }} at {{ booking.start_time }}' } });
+  const { eventType } = seedBooking(t, {
+    notifications: [
+      { when: 'before', offset_minutes: 1440, subject: 'Soon: {{ booking.event_title }} at {{ booking.start_time }}' },
+      { when: 'before', offset_minutes: 60 },
+    ],
+    ...overrides,
+  });
   const outcome = t.op('booking.book', {
     eventTypeId: eventType.id,
     start: nextMonday(t.clock.now, 10),
@@ -50,6 +56,46 @@ describe('booking messages', () => {
     const start = Date.parse(outcome.booking.starts_at);
     expect(reminders.map((r) => r.fireAt)).toEqual([start - 1440 * 60_000, start - 60 * 60_000]);
     expect(reminders[0]?.request).toMatchObject({ notAfter: outcome.booking.starts_at, content: { subject: 'Soon: Intro call at 10:00 AM' } });
+  });
+
+  it('schedules emails before the start and after the end, each with its own text', () => {
+    const { outcome, now } = bookedOutcome({
+      notifications: [
+        { when: 'after', offset_minutes: 1440 },
+        { when: 'before', offset_minutes: 120, subject: 'In two hours', body: 'See you at {{ booking.start_time }}' },
+        { when: 'after', offset_minutes: 60, subject: 'How did {{ booking.event_title }} go?', body: 'Tell us, {{ contact.first_name }}.' },
+      ],
+    });
+    expect(outcome.eventType.notifications.map((n) => `${n.when}:${String(n.offset_minutes)}`)).toEqual(['before:120', 'after:60', 'after:1440']);
+    const { reminders } = messagesFor({ tenantId: 'ten_1', outcome, manageUrl: 'https://x/m', hostName: 'Alice', now });
+    const start = Date.parse(outcome.booking.starts_at);
+    const end = Date.parse(outcome.booking.ends_at);
+    expect(reminders.map((r) => r.fireAt)).toEqual([start - 120 * 60_000, end + 60 * 60_000, end + 1440 * 60_000]);
+    expect(reminders.map((r) => r.id)).toEqual([
+      `booking:${outcome.booking.id}:reminder:120:0`,
+      `booking:${outcome.booking.id}:followup:60:0`,
+      `booking:${outcome.booking.id}:followup:1440:0`,
+    ]);
+    expect(reminders.map((r) => r.request.notAfter)).toEqual([outcome.booking.starts_at, null, null]);
+    expect(reminders.map((r) => r.request.content.subject)).toEqual(['In two hours', 'How did Intro call go?', 'Thank you for Intro call']);
+    expect(JSON.stringify(reminders[0]?.request.content.body)).toContain('See you at 10:00 AM');
+    expect(JSON.stringify(reminders[2]?.request.content.body)).toContain('thank you for meeting Alice');
+
+    const cancelled = { ...outcome, booking: { ...outcome.booking, status: 'cancelled' as const } };
+    expect(messagesFor({ tenantId: 'ten_1', outcome: cancelled, manageUrl: '', hostName: 'Alice', now }).reminders).toEqual([]);
+  });
+
+  it('words the manage link after what the invitee may do', () => {
+    const body = (overrides: Record<string, unknown>) => {
+      const { outcome, now } = bookedOutcome(overrides);
+      return JSON.stringify(messagesFor({ tenantId: 'ten_1', outcome, manageUrl: 'https://x/m', hostName: 'Alice', now }).email?.content.body);
+    };
+    expect(body({})).toContain('Need to change it? Cancel or reschedule here: ');
+    expect(body({ allow_cancel: false })).toContain('Need to change it? Reschedule here: ');
+    expect(body({ allow_reschedule: false })).toContain("Can't make it? Cancel here: ");
+    const none = body({ allow_reschedule: false, allow_cancel: false });
+    expect(none).not.toContain('https://x/m');
+    expect(none).not.toContain('Cancel');
   });
 
   it('fills booking variables only and turns text into a Tiptap document', () => {

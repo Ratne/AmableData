@@ -141,6 +141,8 @@ export function messagesFor(input: {
     location: eventType.location,
     manageUrl: input.manageUrl,
     inviteeName: booking.invitee_name,
+    allowReschedule: eventType.allow_reschedule,
+    allowCancel: eventType.allow_cancel,
   };
   const base = {
     tenantId: input.tenantId,
@@ -153,18 +155,26 @@ export function messagesFor(input: {
   };
   const kind = KIND_OF[input.outcome.kind];
   const email = emailRequest({ ...base, id: `booking:${booking.id}:${kind}:${String(booking.reschedule_count)}`, kind, notAfter: null });
+  const endsAt = Date.parse(booking.ends_at);
   const reminders =
     booking.status === 'cancelled'
       ? []
-      : eventType.reminder_minutes
-          .map((offset) => ({ offset, fireAt: startsAt - offset * 60_000 }))
-          .filter((r) => r.fireAt > input.now)
-          .map((r) => {
-            const id = `booking:${booking.id}:reminder:${String(r.offset)}:${String(booking.reschedule_count)}`;
+      : eventType.notifications
+          .map((n) => ({ ...n, fireAt: n.when === 'before' ? startsAt - n.offset_minutes * 60_000 : endsAt + n.offset_minutes * 60_000 }))
+          .filter((n) => n.fireAt > input.now)
+          .map((n) => {
+            const kind = n.when === 'before' ? 'reminder' : 'followup';
+            const id = `booking:${booking.id}:${kind}:${String(n.offset_minutes)}:${String(booking.reschedule_count)}`;
             return {
               id,
-              fireAt: r.fireAt,
-              request: emailRequest({ ...base, id, kind: 'reminder', notAfter: booking.starts_at }),
+              fireAt: n.fireAt,
+              request: emailRequest({
+                ...base,
+                id,
+                kind,
+                text: { subject: n.subject, body: n.body },
+                notAfter: n.when === 'before' ? booking.starts_at : null,
+              }),
             };
           });
   return { email, reminders };

@@ -157,8 +157,6 @@ describe('transactional sends', () => {
       messages: {
         confirmation_subject: '',
         confirmation_body: '',
-        reminder_subject: '',
-        reminder_body: '',
       },
       vars: {
         eventTitle: 'Intro call',

@@ -84,6 +84,122 @@ function HostWeights({
   );
 }
 
+type Notification = BookingEventType['notifications'][number];
+type Unit = 'minutes' | 'hours' | 'days';
+const UNIT_MINUTES: Record<Unit, number> = { minutes: 1, hours: 60, days: 1440 };
+const MIN_OFFSET = 5;
+const MAX_OFFSET = 20_160;
+
+const unitOf = (minutes: number): Unit => (minutes % 1440 === 0 ? 'days' : minutes % 60 === 0 ? 'hours' : 'minutes');
+const offsetValid = (minutes: number): boolean => Number.isInteger(minutes) && minutes >= MIN_OFFSET && minutes <= MAX_OFFSET;
+
+/** Offsets in range and no two emails at the same time on the same side. */
+function notificationsValid(list: readonly Notification[]): boolean {
+  const keys = list.map((n) => `${n.when}:${String(n.offset_minutes)}`);
+  return list.every((n) => offsetValid(n.offset_minutes)) && new Set(keys).size === keys.length;
+}
+
+function NotificationRow({
+  value,
+  duplicate,
+  onChange,
+  onRemove,
+}: {
+  value: Notification;
+  duplicate: boolean;
+  onChange: (value: Notification) => void;
+  onRemove: () => void;
+}) {
+  const { t } = useI18n();
+  const [unit, setUnit] = useState<Unit>(() => unitOf(value.offset_minutes));
+  const amount = value.offset_minutes / UNIT_MINUTES[unit];
+  const invalid = !offsetValid(value.offset_minutes) || duplicate;
+  return (
+    <div className="grid gap-2 rounded-md border p-3">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Input
+          type="number"
+          min={1}
+          className="h-8 w-20"
+          aria-label={t('booking.notify.amount')}
+          aria-invalid={invalid}
+          value={Number.isInteger(amount) ? amount : Math.round(amount * 100) / 100}
+          onChange={(e) => onChange({ ...value, offset_minutes: Math.max(0, num(e.target.value, 0)) * UNIT_MINUTES[unit] })}
+        />
+        <select
+          className="h-8 rounded-md border bg-background px-2 text-sm"
+          aria-label={t('booking.notify.unit')}
+          value={unit}
+          onChange={(e) => {
+            const next = e.target.value as Unit;
+            setUnit(next);
+            onChange({ ...value, offset_minutes: Math.max(1, Math.round(amount)) * UNIT_MINUTES[next] });
+          }}
+        >
+          {(['minutes', 'hours', 'days'] as const).map((u) => (
+            <option key={u} value={u}>
+              {t(`booking.notify.unit.${u}`)}
+            </option>
+          ))}
+        </select>
+        <span className="text-muted-foreground">{t(value.when === 'before' ? 'booking.notify.beforeSuffix' : 'booking.notify.afterSuffix')}</span>
+        <Button type="button" variant="ghost" size="sm" className="ml-auto" aria-label={t('booking.notify.remove')} onClick={onRemove}>
+          <Trash2 aria-hidden />
+        </Button>
+      </div>
+      {invalid ? (
+        <p className="text-xs text-destructive" role="alert">
+          {t(duplicate ? 'booking.notify.duplicate' : 'booking.notify.range')}
+        </p>
+      ) : null}
+      <Field label={t('booking.notify.subject')}>
+        {(id) => <Input id={id} value={value.subject} maxLength={300} placeholder={t('booking.editor.defaultText')} onChange={(e) => onChange({ ...value, subject: e.target.value })} />}
+      </Field>
+      <Field label={t('booking.notify.body')}>
+        {(id) => <Textarea id={id} rows={4} value={value.body} placeholder={t('booking.editor.defaultText')} onChange={(e) => onChange({ ...value, body: e.target.value })} />}
+      </Field>
+    </div>
+  );
+}
+
+/** Up to `MAX_PER_SIDE` emails before the start and after the end. */
+function NotificationsEditor({ value, onChange }: { value: readonly Notification[]; onChange: (value: Notification[]) => void }) {
+  const { t } = useI18n();
+  const MAX_PER_SIDE = 3;
+  return (
+    <>
+      {(['before', 'after'] as const).map((when) => {
+        const rows = value.map((n, index) => ({ n, index })).filter((r) => r.n.when === when);
+        const add = () => {
+          const used = new Set(rows.map((r) => r.n.offset_minutes));
+          const offset = (when === 'before' ? [1440, 60, 15, 2880] : [60, 1440, 4320]).find((m) => !used.has(m)) ?? 30;
+          onChange([...value, { when, offset_minutes: offset, subject: '', body: '' }]);
+        };
+        return (
+          <div key={when} className="grid gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{t(when === 'before' ? 'booking.notify.before' : 'booking.notify.after')}</span>
+              <Button type="button" variant="outline" size="sm" disabled={rows.length >= MAX_PER_SIDE} onClick={add}>
+                <Plus aria-hidden /> {t('booking.notify.add')}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">{t(when === 'before' ? 'booking.notify.beforeHint' : 'booking.notify.afterHint')}</p>
+            {rows.map(({ n, index }, position) => (
+              <NotificationRow
+                key={`${when}:${String(position)}:${String(rows.length)}`}
+                value={n}
+                duplicate={rows.some((r) => r.index !== index && r.n.offset_minutes === n.offset_minutes)}
+                onChange={(next) => onChange(value.map((item, i) => (i === index ? next : item)))}
+                onRemove={() => onChange(value.filter((_, i) => i !== index))}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function EventTypeEditorPage() {
   const { eventTypeId } = useParams({ strict: false }) as { eventTypeId: string };
   const { slug, api } = useBooking();
@@ -104,11 +220,11 @@ function Editor({ initial }: { initial: BookingEventType }) {
   const calendars = useCalendars();
   const { customFields } = useReferences();
   const [draft, setDraft] = useState(initial);
-  const [reminder, setReminder] = useState('60');
   const writable = can('booking:write');
   const set = <K extends keyof BookingEventType>(key: K, value: BookingEventType[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const weightsValid = weightTotal(draft.host_weights) === 100 || Object.keys(draft.host_weights).length === 0;
+  const valid = weightsValid && notificationsValid(draft.notifications);
 
   const save = useBookingMutation({
     mutationFn: () => {
@@ -124,7 +240,7 @@ function Editor({ initial }: { initial: BookingEventType }) {
       <PageToolbar
         actions={
           writable ? (
-            <DashboardButton variant="primary" disabled={!dirty || !weightsValid || save.isPending} onClick={() => save.mutate(undefined)}>
+            <DashboardButton variant="primary" disabled={!dirty || !valid || save.isPending} onClick={() => save.mutate(undefined)}>
               <Save aria-hidden /> {t('common.save')}
             </DashboardButton>
           ) : null
@@ -252,40 +368,16 @@ function Editor({ initial }: { initial: BookingEventType }) {
 
           <SectionCard title={t('booking.editor.notifications')}>
             <div className="grid gap-4">
-              <div className="grid gap-2">
-                <span className="text-sm font-medium">{t('booking.editor.reminders')}</span>
-                <div className="flex flex-wrap items-center gap-2">
-                  {draft.reminder_minutes.map((minutes) => (
-                    <span key={minutes} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm">
-                      {t('booking.editor.reminderBefore', { count: minutes })}
-                      <button type="button" aria-label={t('booking.editor.removeReminder')} onClick={() => set('reminder_minutes', draft.reminder_minutes.filter((m) => m !== minutes))}>
-                        <Trash2 className="size-3.5" aria-hidden />
-                      </button>
-                    </span>
-                  ))}
-                  <Input type="number" min={5} max={20160} step={5} className="w-28" aria-label={t('booking.editor.reminderMinutes')} value={reminder} onChange={(e) => setReminder(e.target.value)} />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={draft.reminder_minutes.length >= 5 || draft.reminder_minutes.includes(num(reminder, 0)) || num(reminder, 0) < 5}
-                    onClick={() => set('reminder_minutes', [...draft.reminder_minutes, num(reminder, 60)].sort((a, b) => b - a))}
-                  >
-                    <Plus aria-hidden /> {t('booking.editor.addReminder')}
-                  </Button>
-                </div>
-              </div>
               <p className="text-xs text-muted-foreground">{t('booking.editor.messagesHint')}</p>
-              {(['confirmation', 'reminder'] as const).map((kind) => (
-                <div key={kind} className="grid gap-2">
-                  <Field label={t(`booking.editor.${kind}Subject`)}>
-                    {(id) => <Input id={id} value={draft.messages[`${kind}_subject`]} maxLength={300} placeholder={t('booking.editor.defaultText')} onChange={(e) => set('messages', { ...draft.messages, [`${kind}_subject`]: e.target.value })} />}
-                  </Field>
-                  <Field label={t(`booking.editor.${kind}Body`)}>
-                    {(id) => <Textarea id={id} rows={5} value={draft.messages[`${kind}_body`]} placeholder={t('booking.editor.defaultText')} onChange={(e) => set('messages', { ...draft.messages, [`${kind}_body`]: e.target.value })} />}
-                  </Field>
-                </div>
-              ))}
+              <div className="grid gap-2">
+                <Field label={t('booking.editor.confirmationSubject')}>
+                  {(id) => <Input id={id} value={draft.messages.confirmation_subject} maxLength={300} placeholder={t('booking.editor.defaultText')} onChange={(e) => set('messages', { ...draft.messages, confirmation_subject: e.target.value })} />}
+                </Field>
+                <Field label={t('booking.editor.confirmationBody')}>
+                  {(id) => <Textarea id={id} rows={5} value={draft.messages.confirmation_body} placeholder={t('booking.editor.defaultText')} onChange={(e) => set('messages', { ...draft.messages, confirmation_body: e.target.value })} />}
+                </Field>
+              </div>
+              <NotificationsEditor value={draft.notifications} onChange={(list) => set('notifications', list)} />
             </div>
           </SectionCard>
 
@@ -295,6 +387,15 @@ function Editor({ initial }: { initial: BookingEventType }) {
               <Field label={t('booking.field.redirectUrl')} hint={t('booking.editor.redirectHint')}>
                 {(id) => <Input id={id} type="url" value={draft.redirect_url} maxLength={2048} placeholder="https://" onChange={(e) => set('redirect_url', e.target.value)} />}
               </Field>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={draft.allow_reschedule} onCheckedChange={(v) => set('allow_reschedule', v)} />
+                {t('booking.permissions.reschedule')}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={draft.allow_cancel} onCheckedChange={(v) => set('allow_cancel', v)} />
+                {t('booking.permissions.cancel')}
+              </label>
+              <p className="text-xs text-muted-foreground">{t('booking.permissions.hint')}</p>
               <label className="flex items-center gap-2 text-sm">
                 <Switch checked={draft.turnstile_enabled} onCheckedChange={(v) => set('turnstile_enabled', v)} />
                 {t('booking.editor.turnstile')}

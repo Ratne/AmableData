@@ -16,6 +16,7 @@ let db: TestTenant;
 let edgeEnv: EdgeEnv;
 let calendars: FakeCalendars;
 let emails: ReturnType<typeof fakeEmailQueue>;
+let deskId: string;
 const waits = collectWaits();
 
 function edge(path: string, init: RequestInit = {}) {
@@ -41,6 +42,7 @@ beforeAll(async () => {
   const acme = await seedTenant(h, 'acme');
   db = tenants.tenant(acme.id);
   const calendar = db.op('booking.createCalendar', { name: 'Desk', host_user_id: 'user_host', time_zone: ROME });
+  deskId = calendar.id;
   db.op('booking.createEventType', {
     slug: 'consult',
     title: 'Consultation',
@@ -127,7 +129,7 @@ describe('edge → core booking', () => {
     const later = new Date(Date.parse(start) + 90 * 60_000).toISOString();
     const moved = await edge(`/b/acme/manage/${token}/reschedule`, json({ start: later, time_zone: 'Europe/Rome' }));
     expect(moved.status).toBe(200);
-    expect(await moved.json()).toMatchObject({ status: 'confirmed', start: later, can_change: true });
+    expect(await moved.json()).toMatchObject({ status: 'confirmed', start: later, can_change: true, can_reschedule: true, can_cancel: true });
     await waits.flush();
     expect(emails.messages.map((m) => m.id)).toContain(`booking:${booked.booking_id}:rescheduled:1`);
 
@@ -137,5 +139,46 @@ describe('edge → core booking', () => {
     expect(core?.pendingReminders().filter((r) => r.request.contactId === row?.contact_id)).toEqual([]);
     expect(db.db.all(`SELECT 1 FROM crm_outbox WHERE type = 'appointment.cancelled'`)).toHaveLength(1);
     expect(db.db.all(`SELECT 1 FROM crm_outbox WHERE type = 'appointment.booked'`)).toHaveLength(1);
+  });
+
+  it('honours the invitee permissions of the event type; staff can still change the booking', async () => {
+    const locked = db.op('booking.createEventType', {
+      slug: 'locked',
+      title: 'Locked',
+      duration_minutes: 30,
+      host_calendar_ids: [deskId],
+      min_notice_minutes: 60,
+      allow_reschedule: false,
+      allow_cancel: false,
+    });
+    const start = new Date(nextMonday(Date.now(), 11, 0, 2)).toISOString();
+    const res = await edge('/b/acme/locked/book', json({ start, time_zone: 'Europe/Rome', given_name: 'Ada', email: 'ada@example.com' }));
+    expect(res.status).toBe(200);
+    const booked = (await res.json()) as { booking_id: string; manage_url: string };
+    await waits.flush();
+    const token = booked.manage_url.split('/manage/')[1] ?? '';
+
+    const later = new Date(Date.parse(start) + 30 * 60_000).toISOString();
+    const moved = await edge(`/b/acme/manage/${token}/reschedule`, json({ start: later, time_zone: 'Europe/Rome' }));
+    expect(moved.status).toBe(409);
+    expect(await moved.json()).toMatchObject({ details: [{ message: 'reschedule_disabled' }] });
+    const cancelled = await edge(`/b/acme/manage/${token}/cancel`, json({}));
+    expect(cancelled.status).toBe(409);
+    expect(await cancelled.json()).toMatchObject({ details: [{ message: 'cancel_disabled' }] });
+
+    db.op('booking.updateEventType', { id: locked.id, data: { allow_cancel: true } });
+    const cancellable = await edge(`/b/acme/manage/${token}/cancel`, json({}));
+    expect(await cancellable.json()).toMatchObject({ status: 'cancelled', can_reschedule: false, can_cancel: false });
+
+    db.op('booking.updateEventType', { id: locked.id, data: { allow_cancel: false } });
+    const second = await edge(
+      '/b/acme/locked/book',
+      json({ start: later, time_zone: 'Europe/Rome', given_name: 'Bo', email: 'bo@example.com' }),
+    );
+    const secondId = ((await second.json()) as { booking_id: string }).booking_id;
+    await waits.flush();
+    const staffMoved = db.op('booking.reschedule', { id: secondId, start: Date.parse(start), externalBusy: {}, by: 'staff' });
+    expect(staffMoved.booking.starts_at).toBe(start);
+    expect(db.op('booking.cancel', { id: secondId, by: 'staff' }).booking.status).toBe('cancelled');
   });
 });

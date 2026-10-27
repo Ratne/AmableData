@@ -100,5 +100,9 @@ export interface ManageView {
   readonly cancelled_at: string | null;
   /** False once the booking has started or was cancelled. */
   readonly can_change: boolean;
+  /** `can_change` and the event type lets the invitee move it. */
+  readonly can_reschedule: boolean;
+  /** `can_change` and the event type lets the invitee cancel it. */
+  readonly can_cancel: boolean;
   readonly config: PublicBookingConfig;
 }

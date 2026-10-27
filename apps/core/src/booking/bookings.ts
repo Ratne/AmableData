@@ -527,6 +527,11 @@ function appointmentAlive(ctx: CrmContext, id: string | null): boolean {
   return ctx.db.all(`SELECT 1 FROM crm_appointments WHERE id = ? AND deleted_at IS NULL`, id).length > 0;
 }
 
+/** The event type does not let the invitee do this from the manage link. */
+function notAllowed(reason: 'reschedule_disabled' | 'cancel_disabled'): CrmError {
+  return new CrmError('conflict', `the host does not allow this change (${reason})`, [{ path: 'booking', message: reason }]);
+}
+
 function assertChangeable(ctx: CrmContext, row: BookingRow, by: 'invitee' | 'staff'): void {
   if (row.status === 'cancelled') throw new CrmError('conflict', 'the booking is cancelled');
   if (by === 'invitee' && row.starts_at <= ctx.now()) throw new CrmError('conflict', 'the booking has already started');
@@ -548,6 +553,7 @@ export function rescheduleBooking(
   const row = bookingRow(ctx, input);
   assertChangeable(ctx, row, input.by);
   const event = getEventTypeRow(ctx, row.event_type_id);
+  if (input.by === 'invitee' && event.allow_reschedule !== 1) throw notAllowed('reschedule_disabled');
   const current = calendarIdsOf(row);
   const end = input.start + event.duration_minutes * 60_000;
   const candidates = event.assignment === 'collective' ? current : [...new Set([...current, ...hostIdsOf(event)])];
@@ -621,6 +627,7 @@ export function cancelBooking(
   const row = bookingRow(ctx, input);
   if (row.status === 'cancelled') return outcome(ctx, 'cancelled', row.id, false, null);
   assertChangeable(ctx, row, input.by);
+  if (input.by === 'invitee' && getEventTypeRow(ctx, row.event_type_id).allow_cancel !== 1) throw notAllowed('cancel_disabled');
   if (row.appointment_id !== null && appointmentAlive(ctx, row.appointment_id)) {
     if (getAppointment(ctx, { id: row.appointment_id }).status !== 'cancelled') {
       updateAppointment(ctx, { id: row.appointment_id, data: { status: 'cancelled' } });

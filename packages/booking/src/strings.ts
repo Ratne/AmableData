@@ -43,6 +43,8 @@ export interface BookingWidgetStrings {
   reschedule: string;
   rescheduledTitle: string;
   pastBooking: string;
+  /** The event type does not let the invitee change the booking. */
+  changeDisabled: string;
   weekdaysShort: [string, string, string, string, string, string, string];
   rejections: Record<SlotRejection, string>;
   fieldErrors: Record<AnswerError, string>;
@@ -89,6 +91,7 @@ const en: BookingWidgetStrings = {
   reschedule: 'Reschedule',
   rescheduledTitle: 'Booking rescheduled',
   pastBooking: 'This booking can no longer be changed.',
+  changeDisabled: 'To change this booking, please contact the host.',
   weekdaysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   rejections: {
     no_hosts: 'This event has no available host.',
@@ -150,6 +153,7 @@ const it: BookingWidgetStrings = {
   reschedule: 'Sposta',
   rescheduledTitle: 'Prenotazione spostata',
   pastBooking: 'Questa prenotazione non può più essere modificata.',
+  changeDisabled: "Per modificare questa prenotazione contatta l'organizzatore.",
   weekdaysShort: ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'],
   rejections: {
     no_hosts: 'Nessun organizzatore disponibile per questo evento.',

@@ -1,7 +1,10 @@
 import {
+  bookingNotificationsSchema,
   bookingQuestionSchema,
   type BookingEventType,
   type BookingMessages,
+  type BookingNotification,
+  type BookingNotificationInput,
   type BookingQuestionInput,
   type CreateBookingEventTypeInput,
   type UpdateBookingEventTypeInput,
@@ -36,7 +39,12 @@ export interface EventTypeRow {
   phone_mode: PhoneMode;
   questions: string;
   tag_ids: string;
+  /** Mirror of the `before` notification offsets, read by releases before migration 20. */
   reminder_minutes: string;
+  /** Added by tenant migration 20. */
+  notifications: string;
+  allow_reschedule: number;
+  allow_cancel: number;
   messages: string;
   success_message: string;
   redirect_url: string;
@@ -51,13 +59,32 @@ export interface EventTypeRow {
 const EMPTY_MESSAGES: BookingMessages = {
   confirmation_subject: '',
   confirmation_body: '',
-  reminder_subject: '',
-  reminder_body: '',
 };
+
+const DEFAULT_NOTIFICATIONS: BookingNotification[] = [{ when: 'before', offset_minutes: 1440, subject: '', body: '' }];
 
 /** Question defaults (REST input is already parsed; direct op callers may omit optional keys). */
 function normalizeQuestions(list: readonly BookingQuestionInput[]): BookingQuestion[] {
   return list.map((q) => bookingQuestionSchema.parse(q));
+}
+
+/** Validated (caps, duplicates) and in send order: before the start farthest first, then after the end nearest first. */
+function normalizeNotifications(list: readonly BookingNotificationInput[]): BookingNotification[] {
+  const parsed = bookingNotificationsSchema.safeParse(list);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw invalid(['notifications', ...(issue?.path ?? []).map(String)].join('.'), issue?.message ?? 'invalid notifications');
+  }
+  const rank = (n: BookingNotification) => (n.when === 'before' ? -n.offset_minutes : n.offset_minutes + 1_000_000);
+  return [...parsed.data].sort((a, b) => rank(a) - rank(b));
+}
+
+export function notificationsOf(row: EventTypeRow): BookingNotification[] {
+  return parseJson<BookingNotification[]>(row.notifications, []);
+}
+
+function reminderMirror(list: readonly BookingNotification[]): string {
+  return JSON.stringify(list.filter((n) => n.when === 'before').map((n) => n.offset_minutes));
 }
 
 export function questionsOf(row: EventTypeRow): BookingQuestion[] {
@@ -99,7 +126,11 @@ function keptWeights(weights: Record<string, number>, hosts: readonly string[], 
 }
 
 export function messagesOf(row: EventTypeRow): BookingMessages {
-  return { ...EMPTY_MESSAGES, ...parseJson<Partial<BookingMessages>>(row.messages, {}) };
+  const stored = parseJson<Partial<BookingMessages>>(row.messages, {});
+  return {
+    confirmation_subject: stored.confirmation_subject ?? '',
+    confirmation_body: stored.confirmation_body ?? '',
+  };
 }
 
 export function rulesOf(row: EventTypeRow): EventTypeRules {
@@ -134,7 +165,9 @@ export function eventTypeToApi(row: EventTypeRow): BookingEventType {
     phone: row.phone_mode,
     questions: questionsOf(row).map((q) => ({ ...q, options: [...q.options] })),
     tag_ids: parseJson<string[]>(row.tag_ids, []),
-    reminder_minutes: parseJson<number[]>(row.reminder_minutes, []),
+    notifications: notificationsOf(row),
+    allow_reschedule: row.allow_reschedule === 1,
+    allow_cancel: row.allow_cancel === 1,
     messages: messagesOf(row),
     success_message: row.success_message,
     redirect_url: row.redirect_url,
@@ -204,8 +237,11 @@ export function getEventType(ctx: CrmContext, input: { id: string }): BookingEve
   return eventTypeToApi(getEventTypeRow(ctx, input.id));
 }
 
-/** Questions may omit optional keys (defaults applied); REST input is already parsed. */
-type WithQuestionInputs<T> = Omit<T, 'questions'> & { questions?: BookingQuestionInput[] };
+/** Questions and notifications may omit optional keys (defaults applied); REST input is already parsed. */
+type WithQuestionInputs<T> = Omit<T, 'questions' | 'notifications'> & {
+  questions?: BookingQuestionInput[];
+  notifications?: BookingNotificationInput[];
+};
 
 export function createEventType(ctx: CrmContext, input: WithQuestionInputs<CreateBookingEventTypeInput>): BookingEventType {
   assertSlugFree(ctx, input.slug, null);
@@ -219,14 +255,16 @@ export function createEventType(ctx: CrmContext, input: WithQuestionInputs<Creat
   checkLimits(data);
   const assignment = input.assignment ?? 'round_robin';
   const weights = validWeights(input.host_weights ?? {}, input.host_calendar_ids, assignment);
+  const notifications = input.notifications === undefined ? DEFAULT_NOTIFICATIONS : normalizeNotifications(input.notifications);
   const id = ctx.newId();
   const now = ctx.now();
   ctx.db.run(
     `INSERT INTO booking_event_types (id, slug, title, description, duration_minutes, location, slot_interval_minutes,
        buffer_before_minutes, buffer_after_minutes, min_notice_minutes, max_days_ahead, max_per_day, host_calendar_ids,
-       host_weights, assignment, phone_mode, questions, tag_ids, reminder_minutes, messages, success_message, redirect_url,
-       locale, turnstile_enabled, active, color, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       host_weights, assignment, phone_mode, questions, tag_ids, reminder_minutes, notifications, allow_reschedule,
+       allow_cancel, messages, success_message, redirect_url, locale, turnstile_enabled, active, color, created_by,
+       created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.slug,
     input.title,
@@ -245,7 +283,10 @@ export function createEventType(ctx: CrmContext, input: WithQuestionInputs<Creat
     input.phone ?? 'optional',
     JSON.stringify(normalizeQuestions(input.questions ?? [])),
     JSON.stringify(input.tag_ids ?? []),
-    JSON.stringify(input.reminder_minutes ?? [1440]),
+    reminderMirror(notifications),
+    JSON.stringify(notifications),
+    input.allow_reschedule === false ? 0 : 1,
+    input.allow_cancel === false ? 0 : 1,
     JSON.stringify({ ...EMPTY_MESSAGES, ...input.messages }),
     input.success_message ?? '',
     input.redirect_url ?? '',
@@ -283,12 +324,14 @@ export function updateEventType(
   const pick = <T extends SqlValue>(value: T | undefined, fallback: T): T => (value === undefined ? fallback : value);
   const json = (value: unknown, fallback: string): string => (value === undefined ? fallback : JSON.stringify(value));
   const flag = (value: boolean | undefined, fallback: number): number => (value === undefined ? fallback : value ? 1 : 0);
+  const notifications = data.notifications === undefined ? notificationsOf(current) : normalizeNotifications(data.notifications);
   ctx.db.run(
     `UPDATE booking_event_types SET slug = ?, title = ?, description = ?, duration_minutes = ?, location = ?,
        slot_interval_minutes = ?, buffer_before_minutes = ?, buffer_after_minutes = ?, min_notice_minutes = ?,
        max_days_ahead = ?, max_per_day = ?, host_calendar_ids = ?, host_weights = ?, assignment = ?, phone_mode = ?, questions = ?,
-       tag_ids = ?, reminder_minutes = ?, messages = ?, success_message = ?, redirect_url = ?, locale = ?,
-       turnstile_enabled = ?, active = ?, color = ?, updated_at = ? WHERE id = ?`,
+       tag_ids = ?, reminder_minutes = ?, notifications = ?, allow_reschedule = ?, allow_cancel = ?, messages = ?,
+       success_message = ?, redirect_url = ?, locale = ?, turnstile_enabled = ?, active = ?, color = ?, updated_at = ?
+     WHERE id = ?`,
     pick(data.slug, current.slug),
     pick(data.title, current.title),
     pick(data.description, current.description),
@@ -306,8 +349,13 @@ export function updateEventType(
     pick(data.phone, current.phone_mode),
     data.questions === undefined ? current.questions : JSON.stringify(normalizeQuestions(data.questions)),
     json(data.tag_ids, current.tag_ids),
-    json(data.reminder_minutes, current.reminder_minutes),
-    data.messages === undefined ? current.messages : JSON.stringify({ ...messagesOf(current), ...data.messages }),
+    data.notifications === undefined ? current.reminder_minutes : reminderMirror(notifications),
+    JSON.stringify(notifications),
+    flag(data.allow_reschedule, current.allow_reschedule),
+    flag(data.allow_cancel, current.allow_cancel),
+    data.messages === undefined
+      ? current.messages
+      : JSON.stringify({ ...parseJson<Record<string, unknown>>(current.messages, {}), ...data.messages }),
     pick(data.success_message, current.success_message),
     pick(data.redirect_url, current.redirect_url),
     pick(data.locale, current.locale),

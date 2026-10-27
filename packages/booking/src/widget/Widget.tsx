@@ -46,6 +46,7 @@ function failureText(strings: BookingWidgetStrings, failure: ApiFailure): string
   if (failure.error === 'turnstile_failed') return strings.turnstileFailed;
   if (failure.status === 409) {
     const reason = failure.details[0]?.message;
+    if (reason === 'reschedule_disabled' || reason === 'cancel_disabled') return strings.changeDisabled;
     if (reason !== undefined && (SLOT_REJECTIONS as readonly string[]).includes(reason)) {
       return strings.rejections[reason as SlotRejection];
     }
@@ -585,15 +586,20 @@ export function ManageWidget({ api, strings, locale, view: initial, token }: Com
         <p class="ab-muted">{timeZone.replace(/_/g, ' ')}</p>
         {cancelled ? <p>{strings.cancelledText}</p> : null}
         {!cancelled && !view.can_change ? <p class="ab-muted">{strings.pastBooking}</p> : null}
+        {view.can_change && !view.can_reschedule && !view.can_cancel ? <p class="ab-muted">{strings.changeDisabled}</p> : null}
         {error !== '' ? <div class="ab-err" role="alert">{error}</div> : null}
-        {!cancelled && view.can_change && mode === 'view' ? (
+        {(view.can_reschedule || view.can_cancel) && mode === 'view' ? (
           <div class="ab-actions" style="justify-content:center">
-            <button type="button" class="ab-ghost" onClick={() => setMode('reschedule')}>
-              {strings.reschedule}
-            </button>
-            <button type="button" class="ab-cta ab-danger" onClick={() => setMode('cancel')}>
-              {strings.cancel}
-            </button>
+            {view.can_reschedule ? (
+              <button type="button" class="ab-ghost" onClick={() => setMode('reschedule')}>
+                {strings.reschedule}
+              </button>
+            ) : null}
+            {view.can_cancel ? (
+              <button type="button" class="ab-cta ab-danger" onClick={() => setMode('cancel')}>
+                {strings.cancel}
+              </button>
+            ) : null}
           </div>
         ) : null}
         {mode === 'cancel' ? (

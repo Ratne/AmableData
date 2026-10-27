@@ -233,6 +233,7 @@ async function bookSlot(ctx: GatewayContext, input: unknown): Promise<Output<'bo
 async function manageView(ctx: GatewayContext, outcome: BookingOutcome, runtime: BookingRuntime): Promise<ManageView> {
   const found = await ctx.crm('booking.eventTypeContext', { id: outcome.eventType.id });
   const booking = outcome.booking;
+  const changeable = booking.status === 'confirmed' && Date.parse(booking.starts_at) > runtime.now();
   return {
     booking_id: booking.id,
     status: booking.status,
@@ -241,7 +242,9 @@ async function manageView(ctx: GatewayContext, outcome: BookingOutcome, runtime:
     time_zone: booking.time_zone,
     invitee_name: booking.invitee_name,
     cancelled_at: booking.cancelled_at,
-    can_change: booking.status === 'confirmed' && Date.parse(booking.starts_at) > runtime.now(),
+    can_change: changeable,
+    can_reschedule: changeable && found.eventType.allow_reschedule,
+    can_cancel: changeable && found.eventType.allow_cancel,
     config: await publicConfig(ctx, found.eventType, found.calendars, runtime),
   };
 }

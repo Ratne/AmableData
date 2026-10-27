@@ -97,7 +97,10 @@ export function seedBooking(t: TestTenant, overrides: Record<string, unknown> = 
     duration_minutes: 30,
     host_calendar_ids: [alice.id],
     min_notice_minutes: 60,
-    reminder_minutes: [1440, 60],
+    notifications: [
+      { when: 'before', offset_minutes: 1440 },
+      { when: 'before', offset_minutes: 60 },
+    ],
     questions: [
       { key: 'company', label: 'Company', kind: 'text', map_to: 'company_name' },
       { key: 'budget', label: 'Budget', kind: 'number', map_to: 'custom.budget' },

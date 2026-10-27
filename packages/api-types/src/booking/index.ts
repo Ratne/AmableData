@@ -194,10 +194,39 @@ const questionsSchema = z
 export const bookingMessagesSchema = z.object({
   confirmation_subject: z.string().max(300).default(''),
   confirmation_body: z.string().max(20_000).default(''),
-  reminder_subject: z.string().max(300).default(''),
-  reminder_body: z.string().max(20_000).default(''),
 });
 export type BookingMessages = z.infer<typeof bookingMessagesSchema>;
+
+export const BOOKING_NOTIFICATION_WHEN = ['before', 'after'] as const;
+/** Notification emails per side (before the start, after the end). */
+export const MAX_BOOKING_NOTIFICATIONS = 3;
+
+/**
+ * An email sent `offset_minutes` before the booking starts or after it ends.
+ * Empty subject/body use the built-in (localized) reminder or follow-up text.
+ */
+export const bookingNotificationSchema = z.object({
+  when: z.enum(BOOKING_NOTIFICATION_WHEN),
+  offset_minutes: z.number().int().min(5).max(20_160),
+  subject: z.string().max(300).default(''),
+  body: z.string().max(20_000).default(''),
+});
+export type BookingNotificationInput = z.input<typeof bookingNotificationSchema>;
+export type BookingNotification = z.infer<typeof bookingNotificationSchema>;
+
+export const bookingNotificationsSchema = z.array(bookingNotificationSchema).superRefine((list, ctx) => {
+  const seen = new Set<string>();
+  const counts = { before: 0, after: 0 };
+  list.forEach((n, index) => {
+    const key = `${n.when}:${String(n.offset_minutes)}`;
+    if (seen.has(key)) ctx.addIssue({ code: 'custom', path: [index, 'offset_minutes'], message: 'duplicate notification' });
+    seen.add(key);
+    counts[n.when] += 1;
+    if (counts[n.when] === MAX_BOOKING_NOTIFICATIONS + 1) {
+      ctx.addIssue({ code: 'custom', path: [index, 'when'], message: `at most ${String(MAX_BOOKING_NOTIFICATIONS)} emails ${n.when} the event` });
+    }
+  });
+});
 
 const uniqueIds = (max: number, min = 0) =>
   z
@@ -231,11 +260,12 @@ const eventTypeFields = {
   questions: questionsSchema,
   /** Applied to the contact on every booking. */
   tag_ids: uniqueIds(50),
-  /** Minutes before the start at which a reminder email is sent. */
-  reminder_minutes: z
-    .array(z.number().int().min(5).max(20_160))
-    .max(5)
-    .refine((list) => new Set(list).size === list.length, 'duplicate reminders'),
+  /** Reminder (before) and follow-up (after) emails, up to 3 per side. */
+  notifications: bookingNotificationsSchema,
+  /** The invitee may move the booking from the manage link (staff always can). */
+  allow_reschedule: z.boolean(),
+  /** The invitee may cancel the booking from the manage link (staff always can). */
+  allow_cancel: z.boolean(),
   messages: bookingMessagesSchema,
   success_message: z.string().max(2000),
   redirect_url: z.union([z.literal(''), z.url({ protocol: /^https?$/ }).max(2048)]),
@@ -263,7 +293,9 @@ export const createBookingEventTypeSchema = z.strictObject({
   phone: eventTypeFields.phone.optional(),
   questions: eventTypeFields.questions.optional(),
   tag_ids: eventTypeFields.tag_ids.optional(),
-  reminder_minutes: eventTypeFields.reminder_minutes.optional(),
+  notifications: eventTypeFields.notifications.optional(),
+  allow_reschedule: eventTypeFields.allow_reschedule.optional(),
+  allow_cancel: eventTypeFields.allow_cancel.optional(),
   messages: eventTypeFields.messages.optional(),
   success_message: eventTypeFields.success_message.optional(),
   redirect_url: eventTypeFields.redirect_url.optional(),
@@ -292,11 +324,17 @@ export const bookingEventTypeSchema = z.object({
       map_to: z.string().nullable(),
     }),
   ),
+  notifications: z.array(
+    z.object({
+      when: z.enum(BOOKING_NOTIFICATION_WHEN),
+      offset_minutes: z.number().int(),
+      subject: z.string(),
+      body: z.string(),
+    }),
+  ),
   messages: z.object({
     confirmation_subject: z.string(),
     confirmation_body: z.string(),
-    reminder_subject: z.string(),
-    reminder_body: z.string(),
   }),
   redirect_url: z.string(),
   created_at: timestampSchema,
