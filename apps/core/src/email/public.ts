@@ -92,9 +92,19 @@ emailPublicApp.post('/edge/email/open', async (c) => {
 
 emailPublicApp.post('/edge/email/unsubscribe/info', async (c) => {
   const t = await tokenTenant(c, 'unsubscribe');
-  if (t === null) return c.json({ valid: false, email: null, alreadyUnsubscribed: false }, 200);
+  const invalid = { valid: false, email: null, alreadyUnsubscribed: false, trackingOptedOut: false };
+  if (t === null) return c.json(invalid, 200);
   const result = await callMailDb(c, t.tenantId, 'unsubscribe.info', { token: t.token });
-  return c.json(result.ok ? result.value : { valid: false, email: null, alreadyUnsubscribed: false }, 200);
+  return c.json(result.ok ? result.value : invalid, 200);
+});
+
+emailPublicApp.post('/edge/email/tracking', async (c) => {
+  const body: unknown = await c.req.raw.clone().json().catch(() => null);
+  const optOut = typeof body === 'object' && body !== null && (body as { optOut?: unknown }).optOut === true;
+  const t = await tokenTenant(c, 'unsubscribe');
+  if (t === null) return c.json({ ok: false }, 400);
+  const result = await callMailDb(c, t.tenantId, 'tracking.set', { token: t.token, optOut });
+  return c.json({ ok: result.ok && (result.value as { ok: boolean }).ok }, result.ok ? 200 : 400);
 });
 
 emailPublicApp.post('/edge/email/unsubscribe', async (c) => {

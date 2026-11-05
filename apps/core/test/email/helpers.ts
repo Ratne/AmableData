@@ -104,6 +104,10 @@ export function createMailWorld(options: { verified?: boolean } = {}): MailWorld
         runCrm('contacts.update', { id: contactId, data: { marketable_status: status } });
         return Promise.resolve();
       },
+      setOpenTrackingOptOut: (contactId: string, optOut: boolean) => {
+        runCrm('contacts.update', { id: contactId, data: { open_tracking_opt_out: optOut } });
+        return Promise.resolve();
+      },
       recordEvents: (events) => Promise.resolve(runCrm<{ recorded: number }>('mail.recordEvents', { events })),
     },
     users: {

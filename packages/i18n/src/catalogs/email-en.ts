@@ -135,6 +135,9 @@ export const emailEn = {
   'broadcasts.composer.noTemplate': 'Blank email',
   'broadcasts.composer.loadTemplate': 'Load',
   'broadcasts.composer.throttle': 'Max emails per hour (empty = no limit)',
+  'broadcasts.composer.trackOpens': 'Track opens',
+  'broadcasts.composer.trackOpensHint':
+    'Adds the open pixel. Link clicks stay tracked; contacts who turned tracking off never get the pixel.',
   'broadcasts.composer.estimate': 'Pre-send check',
   'broadcasts.composer.refresh': 'Refresh',
   'broadcasts.composer.eligible': '{count} will receive it',

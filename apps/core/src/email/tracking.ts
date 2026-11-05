@@ -82,11 +82,18 @@ export async function recordClick(
   return { url };
 }
 
+async function openTrackingOptedOut(deps: MailDeps, contactId: string): Promise<boolean> {
+  const [facts] = await deps.crm.recipientFacts([contactId]);
+  return facts?.open_tracking_opt_out === true;
+}
+
 export async function recordOpen(deps: MailDeps, input: { token: string }): Promise<{ ok: boolean }> {
   const payload = await verifyEmailToken(deps.tokenSecrets, input.token, 'open');
   if (payload === null || payload.t !== deps.tenantId) return { ok: false };
   const row = getMessageRow(deps, payload.m);
   if (row === undefined) return { ok: false };
+  // Older emails still carry the pixel: an opted-out contact's opens are dropped.
+  if (await openTrackingOptedOut(deps, payload.c)) return { ok: true };
   const now = deps.now();
   const unique = row.opened_at === null;
   const source = sourceOf(row.source);
@@ -106,6 +113,8 @@ export interface UnsubscribeInfo {
   readonly valid: boolean;
   readonly email: string | null;
   readonly alreadyUnsubscribed: boolean;
+  /** The recipient turned open tracking off (preferences page or CRM). */
+  readonly trackingOptedOut: boolean;
 }
 
 function maskEmail(email: string): string {
@@ -117,12 +126,33 @@ function maskEmail(email: string): string {
 export async function unsubscribeInfo(deps: MailDeps, input: { token: string }): Promise<UnsubscribeInfo> {
   const payload = await verifyEmailToken(deps.tokenSecrets, input.token, 'unsubscribe');
   if (payload === null || payload.t !== deps.tenantId) {
-    return { valid: false, email: null, alreadyUnsubscribed: false };
+    return { valid: false, email: null, alreadyUnsubscribed: false, trackingOptedOut: false };
   }
   const already =
     deps.db.all(`SELECT 1 AS x FROM mail_suppressions WHERE email = ?`, normalizeEmail(payload.e))
       .length > 0;
-  return { valid: true, email: maskEmail(payload.e), alreadyUnsubscribed: already };
+  return {
+    valid: true,
+    email: maskEmail(payload.e),
+    alreadyUnsubscribed: already,
+    trackingOptedOut: await openTrackingOptedOut(deps, payload.c),
+  };
+}
+
+/** Preferences page: the recipient turns open tracking off (or back on) for every email. */
+export async function setOpenTracking(
+  deps: MailDeps,
+  input: { token: string; optOut: boolean },
+): Promise<{ ok: boolean }> {
+  const payload = await verifyEmailToken(deps.tokenSecrets, input.token, 'unsubscribe');
+  if (payload === null || payload.t !== deps.tenantId) return { ok: false };
+  try {
+    await deps.crm.setOpenTrackingOptOut(payload.c, input.optOut);
+  } catch (error) {
+    console.warn(`[email] open tracking update failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false };
+  }
+  return { ok: true };
 }
 
 /** Idempotent: suppression + contact marked unsubscribed + `email.unsubscribed` (first time only). */

@@ -59,6 +59,17 @@ export function MarketingFields({
         }
       />
       <InlineChoice
+        label={t('crm.field.open_tracking')}
+        value={contact.open_tracking_opt_out ? 'off' : 'on'}
+        allowEmpty={false}
+        canEdit={canEdit}
+        choices={[
+          { value: 'on', label: t('crm.openTracking.on') },
+          { value: 'off', label: t('crm.openTracking.off') },
+        ]}
+        onSave={(value) => save({ open_tracking_opt_out: value === 'off' })}
+      />
+      <InlineChoice
         label={t('crm.field.lead_source_id')}
         value={contact.lead_source_id}
         canEdit={canEdit}

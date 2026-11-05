@@ -85,6 +85,8 @@ const contactFields = {
   utm: utmSchema.optional(),
   score_value: z.number().int().min(-1_000_000).max(1_000_000).optional(),
   marketable_status: marketableStatusSchema.optional(),
+  /** No open pixel in emails to this contact, and opens of older emails are ignored. */
+  open_tracking_opt_out: z.boolean().optional(),
   /** First entry is the primary email. Replaces the whole list on update. */
   emails: z.array(contactEmailSchema).max(5).optional(),
   phones: z.array(contactPhoneSchema).max(5).optional(),
@@ -132,6 +134,7 @@ export const contactSchema = z.object({
   }),
   score_value: z.number().int(),
   marketable_status: marketableStatusSchema,
+  open_tracking_opt_out: z.boolean(),
   emails: z.array(
     z.object({ email: z.string(), label: z.string().nullable(), is_primary: z.boolean() }),
   ),

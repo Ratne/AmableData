@@ -1,12 +1,21 @@
 import { Hono, type Context } from 'hono';
-import { pageLocale, pageText, renderLinkErrorPage, renderUnsubscribePage } from './pages';
+import {
+  pageLocale,
+  pageText,
+  renderLinkErrorPage,
+  renderPreferencesPage,
+  renderUnsubscribePage,
+  type PageLocale,
+  type PageMessage,
+} from './pages';
 
 /**
  * Email recipient endpoints on the customer's tracking domain:
  * - `GET /r/:token`  click redirect (302 to the signed destination + `_amb_c`);
  * - `GET /o/:token`  open pixel (1×1 GIF, recorded in the background);
- * - `GET /unsub/:token`  hosted unsubscribe page; `POST` confirms, including
- *   RFC 8058 one-click (`List-Unsubscribe=One-Click`).
+ * - `GET /unsub/:token`  the recipient's preferences page (unsubscribe, open
+ *   tracking); `POST` confirms the unsubscribe, including RFC 8058 one-click
+ *   (`List-Unsubscribe=One-Click`), or saves `tracking=off|on`.
  *
  * The edge holds no secret: tokens are verified by the core worker, reached
  * through the `CORE` service binding when present or `CORE_ORIGIN` over HTTPS
@@ -91,6 +100,27 @@ interface UnsubInfo {
   valid?: boolean;
   email?: string | null;
   alreadyUnsubscribed?: boolean;
+  trackingOptedOut?: boolean;
+}
+
+async function preferencesPage(
+  c: Context<EmailEnv>,
+  token: string,
+  locale: PageLocale,
+  notice?: PageMessage,
+): Promise<Response> {
+  const info = await callCore<UnsubInfo>(c.env, '/edge/email/unsubscribe/info', { token });
+  if (info === null) return page(c, renderUnsubscribePage(locale, { message: 'error' }), 502);
+  if (info.valid !== true) return page(c, renderUnsubscribePage(locale, { message: 'invalid' }), 404);
+  return page(
+    c,
+    renderPreferencesPage(locale, {
+      email: info.email ?? '',
+      unsubscribed: info.alreadyUnsubscribed === true,
+      trackingOptedOut: info.trackingOptedOut === true,
+      ...(notice === undefined ? {} : { notice }),
+    }),
+  );
 }
 
 emailEdgeRoutes.get('/unsub/:token', async (c) => {
@@ -98,11 +128,7 @@ emailEdgeRoutes.get('/unsub/:token', async (c) => {
   const locale = pageLocale(c.req.header('accept-language'));
   if (token === 'test') return page(c, renderUnsubscribePage(locale, { message: 'test' }));
   if (!TOKEN_RE.test(token)) return page(c, renderUnsubscribePage(locale, { message: 'invalid' }), 404);
-  const info = await callCore<UnsubInfo>(c.env, '/edge/email/unsubscribe/info', { token });
-  if (info === null) return page(c, renderUnsubscribePage(locale, { message: 'error' }), 502);
-  if (info.valid !== true) return page(c, renderUnsubscribePage(locale, { message: 'invalid' }), 404);
-  if (info.alreadyUnsubscribed === true) return page(c, renderUnsubscribePage(locale, { message: 'already' }));
-  return page(c, renderUnsubscribePage(locale, { message: 'confirm', email: info.email ?? '', form: true }));
+  return preferencesPage(c, token, locale);
 });
 
 emailEdgeRoutes.post('/unsub/:token', async (c) => {
@@ -115,6 +141,15 @@ emailEdgeRoutes.post('/unsub/:token', async (c) => {
   }
   if (!TOKEN_RE.test(token)) {
     return oneClick ? c.text('invalid', 400) : page(c, renderUnsubscribePage(locale, { message: 'invalid' }), 404);
+  }
+  const tracking = oneClick ? null : new URLSearchParams(raw).get('tracking');
+  if (tracking === 'off' || tracking === 'on') {
+    const saved = await callCore<{ ok?: boolean }>(c.env, '/edge/email/tracking', {
+      token,
+      optOut: tracking === 'off',
+    });
+    if (saved?.ok !== true) return page(c, renderUnsubscribePage(locale, { message: 'error' }), 502);
+    return preferencesPage(c, token, locale, 'saved');
   }
   const result = await callCore<{ ok?: boolean }>(c.env, '/edge/email/unsubscribe', {
     token,

@@ -77,4 +77,35 @@ describe('edge email routes', () => {
     expect(await form.text()).toContain('You have been unsubscribed');
     expect(calls.at(-1)?.body).toEqual({ token: TOKEN, via: 'link' });
   });
+
+  it('lets the recipient turn open tracking off and back on from the same page', async () => {
+    const info = { valid: true, email: 'ad•@example.com', alreadyUnsubscribed: false, trackingOptedOut: false };
+    const { env, calls } = fakeCore({
+      '/edge/email/unsubscribe/info': info,
+      '/edge/email/tracking': { ok: true },
+    });
+    const page = await emailEdgeRoutes.request(`/unsub/${TOKEN}`, {}, env, ctx);
+    const html = await page.text();
+    expect(html).toContain('Open tracking');
+    expect(html).toContain('name="tracking" value="off"');
+    expect(html).toContain('name="confirm" value="1"');
+
+    info.trackingOptedOut = true;
+    const saved = await emailEdgeRoutes.request(`/unsub/${TOKEN}`, { method: 'POST', body: 'tracking=off' }, env, ctx);
+    expect(saved.status).toBe(200);
+    const after = await saved.text();
+    expect(after).toContain('Your preference has been saved.');
+    expect(after).toContain('name="tracking" value="on"');
+    expect(calls.map((c) => c.path)).toEqual([
+      '/edge/email/unsubscribe/info',
+      '/edge/email/tracking',
+      '/edge/email/unsubscribe/info',
+    ]);
+    expect(calls[1]?.body).toEqual({ token: TOKEN, optOut: true });
+    // Saving the tracking preference never unsubscribes.
+    expect(calls.some((c) => c.path === '/edge/email/unsubscribe')).toBe(false);
+
+    await emailEdgeRoutes.request(`/unsub/${TOKEN}`, { method: 'POST', body: 'tracking=on' }, env, ctx);
+    expect(calls.at(-2)?.body).toEqual({ token: TOKEN, optOut: false });
+  });
 });

@@ -20,6 +20,7 @@ import { t0018Archive } from './0018_archive';
 import { t0019BookingWeights } from './0019_booking_weights';
 import { t0020BookingPolicies } from './0020_booking_policies';
 import { t0021BankTransfer } from './0021_bank_transfer';
+import { t0022OpenTracking } from './0022_open_tracking';
 
 /**
  * Ordered list of tenant-DO SQLite migrations.
@@ -47,4 +48,5 @@ export const tenantMigrations: readonly Migration[] = [
   t0019BookingWeights,
   t0020BookingPolicies,
   t0021BankTransfer,
+  t0022OpenTracking,
 ];

@@ -245,8 +245,10 @@ async function processOne(
   const gate = sendGate(deps, sending);
   if (!gate.canSend) return finish(deps, row, 'blocked', gate.blockReason);
 
+  let trackOpens = true;
   if (request.source.type === 'broadcast') {
     const broadcast = getBroadcastRow(deps, request.source.broadcastId);
+    trackOpens = broadcast.track_opens !== 0;
     if (broadcast.status === 'cancelled') return finish(deps, row, 'skipped', 'cancelled');
     if (broadcast.status === 'paused') {
       return { id: request.id, action: 'retry', delaySeconds: 300, reason: 'broadcast_paused' };
@@ -316,9 +318,10 @@ async function processOne(
       contactId: data.contact.id,
     };
     const tracked = await rewriteLinks(out.html, target);
+    const withPixel = trackOpens && !data.contact.open_tracking_opt_out;
     rendered = {
       subject: out.subject,
-      html: appendOpenPixel(tracked.html, await openPixelUrl(target)),
+      html: withPixel ? appendOpenPixel(tracked.html, await openPixelUrl(target)) : tracked.html,
       text: out.text,
     };
     links = tracked.links;

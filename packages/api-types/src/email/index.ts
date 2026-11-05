@@ -292,6 +292,8 @@ export const createBroadcastSchema = z.strictObject({
   reply_to: emailAddressSchema.nullable().optional(),
   /** Max messages enqueued per hour (null = as fast as the tenant rate limit allows). */
   throttle_per_hour: z.number().int().min(10).max(1_000_000).nullable().optional(),
+  /** false: sent without the open pixel (links stay tracked). Default true. */
+  track_opens: z.boolean().optional(),
 });
 export type CreateBroadcastInput = z.infer<typeof createBroadcastSchema>;
 
@@ -309,6 +311,7 @@ export const broadcastSchema = z.object({
   from_name: z.string().nullable(),
   reply_to: z.string().nullable(),
   throttle_per_hour: z.number().int().nullable(),
+  track_opens: z.boolean(),
   schedule: broadcastScheduleSchema.nullable(),
   progress: z.object({
     recipients: z.number().int(),

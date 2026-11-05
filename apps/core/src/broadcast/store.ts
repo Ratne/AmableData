@@ -13,6 +13,7 @@ export interface BroadcastRow {
   from_name: string | null;
   reply_to: string | null;
   throttle_per_hour: number | null;
+  track_opens: number;
   schedule: string | null;
   next_send_at: number | null;
   created_by: string | null;

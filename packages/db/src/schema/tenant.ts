@@ -74,6 +74,7 @@ export const crmContacts = sqliteTable('crm_contacts', {
   utmContent: text('utm_content'),
   scoreValue: integer('score_value').notNull(),
   marketableStatus: text('marketable_status').notNull(),
+  openTrackingOptOut: integer('open_tracking_opt_out').notNull(),
   socialAccounts: text('social_accounts').notNull(),
   primaryEmail: text('primary_email'),
   primaryPhone: text('primary_phone'),

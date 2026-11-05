@@ -12,6 +12,7 @@ import { cn, DashboardButton, DashboardConfirmDialog, PageBody, PageToolbar, toa
 import { Alert, AlertTitle } from '@amable/ui/ui/alert';
 import { Button } from '@amable/ui/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@amable/ui/ui/card';
+import { Checkbox } from '@amable/ui/ui/checkbox';
 import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { RadioGroup, RadioGroupItem } from '@amable/ui/ui/radio-group';
@@ -103,6 +104,7 @@ interface Draft {
   readonly audience: AudienceDraft;
   readonly doc: EmailDoc;
   readonly throttle: string;
+  readonly trackOpens: boolean;
 }
 
 function draftOf(broadcast: Broadcast): Draft {
@@ -114,6 +116,7 @@ function draftOf(broadcast: Broadcast): Draft {
     audience: audienceFromSegment(broadcast.segment),
     doc: (broadcast.body ?? { type: 'doc', content: [] }) as EmailDoc,
     throttle: broadcast.throttle_per_hour === null ? '' : String(broadcast.throttle_per_hour),
+    trackOpens: broadcast.track_opens,
   };
 }
 
@@ -127,6 +130,7 @@ function draftPatch(draft: Draft, fallbackName: string): UpdateBroadcastInput {
     body: draft.doc as { type: 'doc' },
     template_id: null,
     throttle_per_hour: draft.throttle === '' ? null : Math.max(10, Number(draft.throttle)),
+    track_opens: draft.trackOpens,
   };
 }
 
@@ -829,6 +833,20 @@ function ReviewStep({
                 disabled={!editable}
               />
             </div>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={draft.trackOpens}
+                onCheckedChange={(checked) => patch({ trackOpens: checked === true })}
+                disabled={!editable}
+                className="mt-0.5"
+              />
+              <span className="grid gap-0.5">
+                {t('broadcasts.composer.trackOpens')}
+                <span className="text-xs text-(--obsidian-dashboard-shell-text-subtle)">
+                  {t('broadcasts.composer.trackOpensHint')}
+                </span>
+              </span>
+            </label>
             {can('broadcasts:send') ? (
               <DashboardButton variant="primary" disabled={!editable || blocked || schedule.isPending} onClick={() => setConfirmOpen(true)}>
                 <Send className="size-4" />

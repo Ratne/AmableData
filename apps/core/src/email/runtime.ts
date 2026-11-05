@@ -141,6 +141,9 @@ export function crmReader(env: Env, tenantId: string): CrmReader {
     async setMarketableStatus(contactId: string, status: Contact['marketable_status']) {
       unwrap(await stub().crm('contacts.update', SYSTEM_ACTOR, { id: contactId, data: { marketable_status: status } }));
     },
+    async setOpenTrackingOptOut(contactId: string, optOut: boolean) {
+      unwrap(await stub().crm('contacts.update', SYSTEM_ACTOR, { id: contactId, data: { open_tracking_opt_out: optOut } }));
+    },
     async recordEvents(events) {
       return unwrap<{ recorded: number }>(await stub().crm('mail.recordEvents', SYSTEM_ACTOR, { events }));
     },

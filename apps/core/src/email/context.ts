@@ -22,6 +22,7 @@ export interface CrmReader {
   /** At most 500 ids per call; deleted contacts are omitted. */
   contactsForSend(ids: string[]): Promise<MailSendContact[]>;
   setMarketableStatus(contactId: string, status: Contact['marketable_status']): Promise<void>;
+  setOpenTrackingOptOut(contactId: string, optOut: boolean): Promise<void>;
   /** Email events into the CRM outbox + timeline (TenantDb `mail.recordEvents`, at most 200). */
   recordEvents(events: BridgedEmailEvent[]): Promise<{ recorded: number }>;
   /** A transactional email was skipped or failed for good: its module records it (e-signature audit trail). */

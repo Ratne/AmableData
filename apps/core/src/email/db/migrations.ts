@@ -203,4 +203,12 @@ export const mailMigrations: readonly Migration[] = [
       `CREATE INDEX mail_clicks_created ON mail_clicks (created_at)`,
     ],
   },
+  {
+    id: 3,
+    name: 'broadcast_track_opens',
+    statements: [
+      // 0: the broadcast is sent without the open pixel (links stay tracked).
+      `ALTER TABLE mail_broadcasts ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 1`,
+    ],
+  },
 ];

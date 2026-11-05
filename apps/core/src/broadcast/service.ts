@@ -103,6 +103,7 @@ function toSummaryFields(row: BroadcastRow, progress: Progress): Omit<Broadcast,
     from_name: row.from_name,
     reply_to: row.reply_to,
     throttle_per_hour: row.throttle_per_hour,
+    track_opens: row.track_opens !== 0,
     schedule: parseJson<BroadcastSchedule | null>(row.schedule, null),
     progress,
     next_send_at: toIso(row.next_send_at),
@@ -191,8 +192,8 @@ export function createBroadcast(
   const now = deps.now();
   deps.db.run(
     `INSERT INTO mail_broadcasts (id, name, status, segment, template_id, subject, body, from_name, reply_to,
-                                  throttle_per_hour, created_by, created_at, updated_at)
-     VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                  throttle_per_hour, track_opens, created_by, created_at, updated_at)
+     VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.name,
     input.segment === undefined || input.segment === null ? null : JSON.stringify(input.segment),
@@ -202,6 +203,7 @@ export function createBroadcast(
     input.from_name ?? null,
     input.reply_to ?? null,
     input.throttle_per_hour ?? null,
+    input.track_opens === false ? 0 : 1,
     input.createdBy,
     now,
     now,
@@ -220,7 +222,7 @@ export function updateBroadcast(
   const d = input.data;
   deps.db.run(
     `UPDATE mail_broadcasts SET name = ?, segment = ?, template_id = ?, subject = ?, body = ?, from_name = ?,
-            reply_to = ?, throttle_per_hour = ?, updated_at = ? WHERE id = ?`,
+            reply_to = ?, throttle_per_hour = ?, track_opens = ?, updated_at = ? WHERE id = ?`,
     d.name ?? row.name,
     d.segment === undefined ? row.segment : d.segment === null ? null : JSON.stringify(d.segment),
     d.template_id === undefined ? row.template_id : d.template_id,
@@ -229,6 +231,7 @@ export function updateBroadcast(
     d.from_name === undefined ? row.from_name : d.from_name,
     d.reply_to === undefined ? row.reply_to : d.reply_to,
     d.throttle_per_hour === undefined ? row.throttle_per_hour : d.throttle_per_hour,
+    d.track_opens === undefined ? row.track_opens : d.track_opens ? 1 : 0,
     deps.now(),
     input.id,
   );

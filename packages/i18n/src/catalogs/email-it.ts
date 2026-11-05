@@ -137,6 +137,9 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.composer.noTemplate': 'Email vuota',
   'broadcasts.composer.loadTemplate': 'Carica',
   'broadcasts.composer.throttle': 'Email massime all’ora (vuoto = nessun limite)',
+  'broadcasts.composer.trackOpens': 'Traccia le aperture',
+  'broadcasts.composer.trackOpensHint':
+    'Inserisce il pixel delle aperture. I click sui link restano tracciati; i contatti che hanno disattivato il tracciamento non ricevono mai il pixel.',
   'broadcasts.composer.estimate': 'Controllo pre-invio',
   'broadcasts.composer.refresh': 'Aggiorna',
   'broadcasts.composer.eligible': '{count} la riceveranno',

@@ -54,6 +54,7 @@ export interface ContactRow {
   utm_content: string | null;
   score_value: number;
   marketable_status: MarketableStatus;
+  open_tracking_opt_out: number;
   social_accounts: string;
   primary_email: string | null;
   primary_phone: string | null;
@@ -336,6 +337,7 @@ export function serializeContacts(ctx: CrmContext, rows: ContactRow[]): Contact[
     },
     score_value: row.score_value,
     marketable_status: row.marketable_status,
+    open_tracking_opt_out: row.open_tracking_opt_out === 1,
     emails: emails.get(row.id) ?? [],
     phones: phones.get(row.id) ?? [],
     addresses: addresses.get(row.id) ?? [],
@@ -401,13 +403,14 @@ export function createContact(
 
   const id = ctx.newId();
   const now = ctx.now();
-  const columns: string[] = ['id', 'created_by', 'created_at', 'updated_at', 'social_accounts'];
+  const columns: string[] = ['id', 'created_by', 'created_at', 'updated_at', 'social_accounts', 'open_tracking_opt_out'];
   const values: SqlValue[] = [
     id,
     ctx.actor.id,
     now,
     now,
     JSON.stringify(input.social_accounts ?? []),
+    input.open_tracking_opt_out === true ? 1 : 0,
   ];
   for (const field of SCALAR_FIELDS) {
     const value = input[field];
@@ -478,6 +481,14 @@ export function updateContact(
     sets.push(`${column} = ?`);
     values.push(value);
     changed.push(column);
+  }
+  if (data.open_tracking_opt_out !== undefined) {
+    const flag = data.open_tracking_opt_out ? 1 : 0;
+    if (flag !== current.open_tracking_opt_out) {
+      sets.push('open_tracking_opt_out = ?');
+      values.push(flag);
+      changed.push('open_tracking_opt_out');
+    }
   }
   if (data.social_accounts !== undefined) {
     const json = JSON.stringify(data.social_accounts);

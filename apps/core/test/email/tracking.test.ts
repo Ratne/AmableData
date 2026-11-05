@@ -2,7 +2,7 @@ import { CONTACT_TOKEN_PARAM, signEmailToken, verifyContactToken, verifyEmailTok
 import { describe, expect, it } from 'vitest';
 import { bridgeEmailEvents } from '../../src/email/bridge';
 import { rewriteLinks } from '../../src/email/render';
-import { configureSender, createMailWorld, ORIGIN, SECRET, sendRequest, TENANT_ID } from './helpers';
+import { configureSender, createMailWorld, ORIGIN, sampleDoc, SECRET, sendRequest, TENANT_ID } from './helpers';
 
 async function sendOne(world: ReturnType<typeof createMailWorld>, contactId: string) {
   await world.op('send.process', { batch: [{ request: sendRequest(contactId, { id: 'm1' }), queueAttempts: 1 }] });
@@ -93,7 +93,12 @@ describe('unsubscribe flow', () => {
     const contactId = world.contact({ email: 'ada@example.com' });
     const { unsub } = await sendOne(world, contactId);
     const info = await world.op('unsubscribe.info', { token: unsub });
-    expect(info).toEqual({ valid: true, email: 'ad•@example.com', alreadyUnsubscribed: false });
+    expect(info).toEqual({
+      valid: true,
+      email: 'ad•@example.com',
+      alreadyUnsubscribed: false,
+      trackingOptedOut: false,
+    });
 
     expect(await world.op('unsubscribe.confirm', { token: unsub, via: 'one_click' })).toEqual({ ok: true });
     expect(await world.op('unsubscribe.confirm', { token: unsub, via: 'link' })).toEqual({ ok: true });
@@ -108,5 +113,62 @@ describe('unsubscribe flow', () => {
     await world.op('send.process', { batch: [{ request: sendRequest(contactId, { id: 'm2' }), queueAttempts: 1 }] });
     expect(world.provider.sent).toHaveLength(1);
     expect(await world.op('unsubscribe.info', { token: 'nope.nope' })).toMatchObject({ valid: false });
+  });
+});
+
+describe('open tracking opt-out', () => {
+  it('sends without the pixel to an opted-out contact but keeps links tracked', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    const contactId = world.contact({});
+    world.crm.op('contacts.update', { id: contactId, data: { open_tracking_opt_out: true } });
+    const { clicks, open } = await sendOne(world, contactId);
+    expect(open).toBe('');
+    expect(clicks.length).toBeGreaterThan(0);
+  });
+
+  it('sends a broadcast with track_opens=false without the pixel', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    const contactId = world.contact({});
+    const broadcast = await world.op('broadcasts.create', {
+      name: 'No pixel',
+      subject: 'Hi',
+      body: sampleDoc() as never,
+      track_opens: false,
+      createdBy: 'user_owner',
+    });
+    expect(broadcast.track_opens).toBe(false);
+    await world.op('send.process', {
+      batch: [
+        {
+          request: sendRequest(contactId, { id: 'b1', source: { type: 'broadcast', broadcastId: broadcast.id } }),
+          queueAttempts: 1,
+        },
+      ],
+    });
+    const html = world.provider.sent.at(-1)?.html ?? '';
+    expect(html).not.toContain('/o/');
+    expect(html).toContain('/r/');
+  });
+
+  it('lets the recipient turn tracking off from the preferences page and drops later opens', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    const contactId = world.contact({});
+    const { open, unsub } = await sendOne(world, contactId);
+
+    expect(await world.op('tracking.set', { token: unsub, optOut: true })).toEqual({ ok: true });
+    expect(world.crm.op('contacts.get', { id: contactId }).open_tracking_opt_out).toBe(true);
+    expect((await world.op('unsubscribe.info', { token: unsub })).trackingOptedOut).toBe(true);
+
+    // The pixel of the email already delivered no longer records anything.
+    expect(await world.op('track.open', { token: open })).toEqual({ ok: true });
+    const row = world.deps.db.all<{ open_count: number }>(`SELECT open_count FROM mail_messages`)[0];
+    expect(row?.open_count).toBe(0);
+
+    expect(await world.op('tracking.set', { token: unsub, optOut: false })).toEqual({ ok: true });
+    expect(world.crm.op('contacts.get', { id: contactId }).open_tracking_opt_out).toBe(false);
+    expect(await world.op('tracking.set', { token: open, optOut: true })).toEqual({ ok: false });
   });
 });

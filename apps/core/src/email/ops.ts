@@ -85,6 +85,7 @@ export const mailOps = {
   'track.open': tracking.recordOpen,
   'unsubscribe.info': tracking.unsubscribeInfo,
   'unsubscribe.confirm': tracking.unsubscribe,
+  'tracking.set': tracking.setOpenTracking,
   'webhooks.provider': handleProviderWebhook,
   'events.pending': pendingEmailEvents,
   'events.ack': ackEmailEvents,

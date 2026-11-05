@@ -26,6 +26,7 @@ export interface MailRecipientFacts {
   email: string | null;
   marketable_status: Contact['marketable_status'];
   time_zone: string | null;
+  open_tracking_opt_out: boolean;
 }
 
 export interface MailSendContact {
@@ -100,12 +101,14 @@ function boundedIds(ids: readonly string[]): string[] {
 export function recipientFacts(ctx: CrmContext, input: { ids: string[] }): MailRecipientFacts[] {
   const ids = boundedIds(input.ids);
   return chunks(ids).flatMap((chunk) =>
-    ctx.db.all<MailRecipientFacts>(
-      `SELECT id, primary_email AS email, marketable_status, time_zone
-         FROM crm_contacts
-        WHERE id IN (${placeholders(chunk.length)}) AND deleted_at IS NULL`,
-      ...chunk,
-    ),
+    ctx.db
+      .all<Omit<MailRecipientFacts, 'open_tracking_opt_out'> & { open_tracking_opt_out: number }>(
+        `SELECT id, primary_email AS email, marketable_status, time_zone, open_tracking_opt_out
+           FROM crm_contacts
+          WHERE id IN (${placeholders(chunk.length)}) AND deleted_at IS NULL`,
+        ...chunk,
+      )
+      .map((row) => ({ ...row, open_tracking_opt_out: row.open_tracking_opt_out === 1 })),
   );
 }
 
