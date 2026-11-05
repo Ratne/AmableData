@@ -355,6 +355,7 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.managed.toggle': 'Stripe Managed Payments',
   'commerce.managed.intro':
     'Con Managed Payments Stripe diventa il venditore di riferimento (merchant of record): calcola, incassa e versa le imposte (IVA, GST…) di ogni pagamento dei checkout, e l\'acquirente paga sulla pagina Stripe Checkout.',
+  'commerce.managed.connectFirst': 'Salva prima le chiavi Stripe qui sopra, poi potrai attivare Managed Payments.',
   'commerce.managed.enableInStripe': 'Managed Payments va attivato anche nella Dashboard di Stripe, altrimenti Stripe rifiuta i pagamenti.',
   'commerce.managed.taxes': 'Le imposte le aggiunge e gestisce Stripe: le aliquote del CRM non vengono applicate ai pagamenti dei checkout, imposta invece i tax code dei prodotti.',
   'commerce.managed.upsells': 'Le offerte post-acquisto funzionano, ma ogni offerta accettata riapre Stripe Checkout (niente addebito con un clic sulla carta salvata).',

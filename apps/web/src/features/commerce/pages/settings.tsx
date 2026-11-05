@@ -187,8 +187,11 @@ function StripeCard({ editable }: { editable: boolean }) {
     <SectionCard title={t('commerce.stripe.title')}>
       {stripe.error ? <ErrorNotice error={stripe.error} /> : null}
       {stripe.data ? <StripeForm key={stripe.data.updated_at ?? 'new'} initial={stripe.data} /> : null}
-      {stripe.data?.configured ? (
-        <ManagedPaymentsForm key={`${String(stripe.data.managed_payments)}:${stripe.data.default_tax_code}`} initial={stripe.data} />
+      {stripe.data ? (
+        <ManagedPaymentsForm
+          key={`${String(stripe.data.configured)}:${String(stripe.data.managed_payments)}:${stripe.data.default_tax_code}`}
+          initial={stripe.data}
+        />
       ) : null}
     </SectionCard>
   );
@@ -220,10 +223,11 @@ function ManagedPaymentsForm({ initial }: { initial: StripeSettings }) {
   return (
     <form onSubmit={submit} className="mt-4 grid gap-3 border-t pt-4">
       <label className="flex items-center gap-2 text-sm font-medium">
-        <Switch checked={managed} onCheckedChange={setManaged} />
+        <Switch checked={managed} disabled={!initial.configured} onCheckedChange={setManaged} />
         {t('commerce.managed.toggle')}
       </label>
       <p className="text-sm text-muted-foreground">{t('commerce.managed.intro')}</p>
+      {initial.configured ? null : <p className="text-sm text-amber-700 dark:text-amber-300">{t('commerce.managed.connectFirst')}</p>}
       {managed ? (
         <>
           <ul className="list-disc space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 pl-7 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
@@ -243,11 +247,13 @@ function ManagedPaymentsForm({ initial }: { initial: StripeSettings }) {
           </FormField>
         </>
       ) : null}
-      <div>
-        <Button type="submit" variant="outline" disabled={!dirty || !taxCodeValid || save.isPending}>
-          <Save aria-hidden /> {t('common.save')}
-        </Button>
-      </div>
+      {initial.configured ? (
+        <div>
+          <Button type="submit" variant="outline" disabled={!dirty || !taxCodeValid || save.isPending}>
+            <Save aria-hidden /> {t('common.save')}
+          </Button>
+        </div>
+      ) : null}
     </form>
   );
 }

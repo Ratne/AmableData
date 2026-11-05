@@ -357,6 +357,7 @@ export const commerceEn = {
   'commerce.managed.toggle': 'Stripe Managed Payments',
   'commerce.managed.intro':
     'With Managed Payments Stripe becomes the merchant of record: it computes, collects and remits sales taxes (VAT, GST…) for every checkout payment, and buyers pay on the Stripe Checkout page.',
+  'commerce.managed.connectFirst': 'Save the Stripe keys above first, then you can turn Managed Payments on.',
   'commerce.managed.enableInStripe': 'Managed Payments must also be activated in your Stripe Dashboard, otherwise Stripe rejects the payments.',
   'commerce.managed.taxes': 'Stripe adds and handles the taxes: the CRM tax rates are not charged on checkout payments, set the product tax codes instead.',
   'commerce.managed.upsells': 'Post-purchase offers still work, but each accepted offer opens Stripe Checkout again (no one-click charge on the saved card).',
