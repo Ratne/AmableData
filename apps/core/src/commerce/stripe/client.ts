@@ -6,6 +6,8 @@
 
 export const STRIPE_API = 'https://api.stripe.com';
 export const STRIPE_API_VERSION = '2024-06-20';
+/** Managed Payments Checkout Sessions need at least `2025-03-31.basil`. */
+export const STRIPE_MANAGED_API_VERSION = '2025-09-30.clover';
 
 export type StripeFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -90,6 +92,25 @@ export interface StripeChargeSummary {
   amount_refunded: number;
 }
 
+export interface StripeCheckoutSession {
+  id: string;
+  object: 'checkout.session';
+  status: 'open' | 'complete' | 'expired';
+  payment_status: 'paid' | 'unpaid' | 'no_payment_required';
+  url: string | null;
+  payment_intent: string | null;
+  amount_total: number | null;
+  currency: string | null;
+  metadata: Record<string, string>;
+}
+
+/** One line of a Managed Payments Checkout Session: a digital product with its tax code. */
+export interface CheckoutLine {
+  name: string;
+  amount: number;
+  taxCode: string;
+}
+
 export interface StripeWebhookEndpoint {
   id: string;
   object: 'webhook_endpoint';
@@ -107,6 +128,9 @@ export const STRIPE_WEBHOOK_EVENTS = [
   'setup_intent.succeeded',
   'setup_intent.setup_failed',
   'charge.refunded',
+  'checkout.session.completed',
+  'checkout.session.async_payment_succeeded',
+  'checkout.session.async_payment_failed',
 ] as const;
 
 type Param = string | number | boolean | null | undefined | Param[] | { [key: string]: Param };
@@ -162,11 +186,12 @@ export class StripeClient {
     path: string,
     params: Record<string, Param> = {},
     idempotencyKey?: string,
+    version: string = STRIPE_API_VERSION,
   ): Promise<T> {
     const body = formEncode(params);
     const headers: Record<string, string> = {
       authorization: `Bearer ${this.secretKey}`,
-      'stripe-version': STRIPE_API_VERSION,
+      'stripe-version': version,
     };
     let url = `${STRIPE_API}${path}`;
     if (method === 'POST') {
@@ -203,6 +228,10 @@ export class StripeClient {
       api_version: STRIPE_API_VERSION,
       description: params.description,
     });
+  }
+
+  updateWebhookEndpoint(id: string, events: readonly string[]): Promise<StripeWebhookEndpoint> {
+    return this.request('POST', `/v1/webhook_endpoints/${encodeURIComponent(id)}`, { enabled_events: [...events] });
   }
 
   deleteWebhookEndpoint(id: string): Promise<{ id: string; deleted: boolean }> {
@@ -358,5 +387,62 @@ export class StripeClient {
 
   retrieveCharge(id: string): Promise<StripeChargeSummary> {
     return this.request('GET', `/v1/charges/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Hosted Stripe Checkout with Managed Payments: Stripe is the merchant of
+   * record, adds the taxes on top of the lines and picks the payment methods.
+   * One-time payments only; nothing is saved for later charges.
+   */
+  createManagedCheckoutSession(
+    params: {
+      lines: readonly CheckoutLine[];
+      currency: string;
+      email: string | null;
+      successUrl: string;
+      cancelUrl: string;
+      /** Unix seconds, 30 minutes to 24 hours from now. */
+      expiresAt: number;
+      metadata: Record<string, string>;
+    },
+    idempotencyKey: string,
+  ): Promise<StripeCheckoutSession> {
+    return this.request(
+      'POST',
+      '/v1/checkout/sessions',
+      {
+        mode: 'payment',
+        managed_payments: { enabled: true },
+        ...(params.email === null ? {} : { customer_email: params.email }),
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+        expires_at: params.expiresAt,
+        metadata: params.metadata,
+        line_items: params.lines.map((line) => ({
+          quantity: 1,
+          price_data: {
+            currency: params.currency.toLowerCase(),
+            unit_amount: line.amount,
+            product_data: { name: line.name, ...(line.taxCode === '' ? {} : { tax_code: line.taxCode }) },
+          },
+        })),
+      },
+      idempotencyKey,
+      STRIPE_MANAGED_API_VERSION,
+    );
+  }
+
+  retrieveCheckoutSession(id: string): Promise<StripeCheckoutSession> {
+    return this.request('GET', `/v1/checkout/sessions/${encodeURIComponent(id)}`, {}, undefined, STRIPE_MANAGED_API_VERSION);
+  }
+
+  expireCheckoutSession(id: string): Promise<StripeCheckoutSession> {
+    return this.request(
+      'POST',
+      `/v1/checkout/sessions/${encodeURIComponent(id)}/expire`,
+      {},
+      undefined,
+      STRIPE_MANAGED_API_VERSION,
+    );
   }
 }

@@ -18,7 +18,8 @@ import { CROSS_ORIGIN_BUNDLE, escapeHtml, jsonResponders, OPEN_CORS, readBounded
  * - `GET /c/:slug/:checkoutId`: hosted checkout page (noindex);
  * - `GET /c/:slug/offer?amb_cs=…`: hosted post-purchase offer page;
  * - `GET …/config`, `POST …/quote|session|address`: JSON API of the widget;
- * - `POST /c/:slug/session/{complete,offer,accept,confirm,decline}`: session steps (token in the body);
+ * - `POST /c/:slug/session/{complete,offer,accept,confirm,decline,flush}`: session steps (token in the body;
+ *   `flush` is the page-close beacon, text/plain accepted);
  * - `POST /c/:slug/stripe/webhook`: Stripe events of the tenant account (raw body, signed).
  * CORS is open: embeds live on any site; the session token travels in the body.
  */
@@ -107,8 +108,13 @@ function slugOf(c: Ctx): string | null {
   return SLUG_RE.test(slug) ? slug : null;
 }
 
-async function readJson(c: Ctx): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; response: Response }> {
-  if (!(c.req.header('content-type') ?? '').toLowerCase().includes('application/json')) {
+/** `beacon`: `navigator.sendBeacon` posts JSON as text/plain (no CORS preflight on page unload). */
+async function readJson(
+  c: Ctx,
+  beacon = false,
+): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; response: Response }> {
+  const type = (c.req.header('content-type') ?? '').toLowerCase();
+  if (!type.includes('application/json') && !(beacon && type.includes('text/plain'))) {
     return { ok: false, response: errorJson(415, 'unsupported_media_type', 'send JSON') };
   }
   const raw = await readBoundedText(c, MAX_BODY_BYTES);
@@ -161,7 +167,7 @@ checkoutEdgeRoutes.post('/c/:slug/stripe/webhook', async (c) => {
 
 // --------------------------------------------------------- session steps
 
-const SESSION_STEPS = ['complete', 'offer', 'accept', 'confirm', 'decline'] as const;
+const SESSION_STEPS = ['complete', 'offer', 'accept', 'confirm', 'decline', 'flush'] as const;
 
 for (const step of SESSION_STEPS) {
   checkoutEdgeRoutes.options(`/c/:slug/session/${step}`, () => new Response(null, { status: 204, headers: OPEN_CORS }));
@@ -171,11 +177,12 @@ checkoutEdgeRoutes.post('/c/:slug/session/:step', async (c) => {
   const slug = slugOf(c);
   const step = c.req.param('step') as (typeof SESSION_STEPS)[number];
   if (slug === null || !SESSION_STEPS.includes(step)) return errorJson(404, 'not_found', 'not found');
-  const body = await readJson(c);
+  const body = await readJson(c, step === 'flush');
   if (!body.ok) return body.response;
   const token = text(body.value['token'], 128);
   if (!TOKEN_RE.test(token)) return errorJson(422, 'validation_failed', 'invalid session token');
   const offerKey = text(body.value['offer_key'], 40);
+  const returnUrl = text(body.value['return_url'], 2000);
   const tenant = tenantRef(c, slug);
   const client = clientInfo(c);
   try {
@@ -186,7 +193,13 @@ checkoutEdgeRoutes.post('/c/:slug/session/:step', async (c) => {
         return okJson((await callCore<CheckoutGatewayOps, 'checkout.offer'>(c.env, 'checkout.offer', tenant, client, { token })).value);
       case 'accept':
         return okJson(
-          (await callCore<CheckoutGatewayOps, 'checkout.offerAccept'>(c.env, 'checkout.offerAccept', tenant, client, { token, offerKey })).value,
+          (
+            await callCore<CheckoutGatewayOps, 'checkout.offerAccept'>(c.env, 'checkout.offerAccept', tenant, client, {
+              token,
+              offerKey,
+              returnUrl,
+            })
+          ).value,
         );
       case 'confirm':
         return okJson(
@@ -196,6 +209,8 @@ checkoutEdgeRoutes.post('/c/:slug/session/:step', async (c) => {
         return okJson(
           (await callCore<CheckoutGatewayOps, 'checkout.offerDecline'>(c.env, 'checkout.offerDecline', tenant, client, { token, offerKey })).value,
         );
+      case 'flush':
+        return okJson((await callCore<CheckoutGatewayOps, 'checkout.flushSummary'>(c.env, 'checkout.flushSummary', tenant, client, { token })).value);
     }
   } catch (error) {
     return fromGatewayError(error);

@@ -114,6 +114,15 @@ export const checkoutEn = {
   'checkout.design.summaryBackground': 'Summary background',
 
   'checkout.settings.purchase': 'Purchase',
+  'checkout.payments.title': 'Payment methods',
+  'checkout.payments.card': 'Card (Stripe)',
+  'checkout.payments.bankTransfer': 'Bank transfer',
+  'checkout.payments.account': 'Bank account',
+  'checkout.payments.pickAccount': 'Pick a bank account',
+  'checkout.payments.bankHint':
+    'The order is placed "Awaiting payment" and the buyer gets these coordinates on the page and by email. Mark it paid by recording the payment on the order. Upsells accepted after the purchase are added to the same transfer.',
+  'checkout.payments.noAccounts': 'No bank account yet: add one in E-commerce settings.',
+  'checkout.payments.plansCardOnly': 'Subscriptions renew on a saved card: with a plan in the cart only the card is offered, and plan upsells are skipped for bank transfer buyers.',
   'checkout.settings.heading': 'Heading',
   'checkout.settings.button_label': 'Pay button',
   'checkout.settings.success_message': 'Success message',

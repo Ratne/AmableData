@@ -12,6 +12,7 @@ import {
   type CheckoutDefinition,
   type CheckoutStatus,
 } from '@amable/checkout';
+import { bankAccountById } from '../commerce/bank-accounts';
 import type { CrmContext } from '../crm/context';
 import type { SqlValue } from '../crm/db/sql';
 import { CrmError, invalid, invalidMany, notFound } from '../crm/errors';
@@ -80,6 +81,10 @@ function assertRefs(ctx: CrmContext, d: CheckoutDefinition): void {
   );
   if (currencies.size > 1) {
     throw invalid('definition.items', 'every item, bump and offer must be priced in the same currency');
+  }
+  const bank = d.payments.bank_transfer;
+  if (bank.enabled && bankAccountById(ctx, bank.account_id) === null) {
+    throw invalid('definition.payments.bank_transfer.account_id', `bank account ${bank.account_id} not found`);
   }
 }
 

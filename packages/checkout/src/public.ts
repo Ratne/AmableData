@@ -61,6 +61,32 @@ export interface PublicCheckoutConfig {
   readonly offers_enabled: boolean;
   /** Null when the workspace has not connected Stripe: the widget shows an error. */
   readonly stripe_publishable_key: string | null;
+  /**
+   * Payment methods offered. `card_flow`: `element` pays in the page (Stripe
+   * Payment Element); `redirect` sends the buyer to Stripe Checkout (Stripe
+   * Managed Payments, Stripe is the merchant of record and adds the taxes).
+   * Bank transfer is only offered for one-time purchases.
+   */
+  readonly payments: {
+    readonly card: boolean;
+    readonly bank_transfer: boolean;
+    readonly card_flow: 'element' | 'redirect';
+  };
+}
+
+/** Where and how much the buyer of a bank transfer purchase pays. */
+export interface BankTransferDetails {
+  readonly holder: string;
+  readonly iban: string;
+  readonly bic: string;
+  readonly bank_name: string;
+  readonly instructions: string;
+  /** Payment reference to write on the transfer: the order numbers. */
+  readonly reference: string;
+  readonly currency: string;
+  /** Every order still to pay of the purchase (main order and accepted offers). */
+  readonly orders: ReadonlyArray<{ readonly number: string; readonly total_minor: number }>;
+  readonly total_minor: number;
 }
 
 // --------------------------------------------------------------- selection
@@ -147,6 +173,9 @@ export const sessionPayloadSchema = z.object({
   tracking: z.record(z.string().max(64), z.string().max(500)).default({}),
   meta: submissionMetaSchema.default(() => submissionMetaSchema.parse({})),
   terms_accepted: z.boolean().default(false),
+  payment_method: z.enum(['card', 'bank_transfer']).default('card'),
+  /** Page the buyer comes back to from Stripe Checkout (redirect card flow); empty: `meta.page_url`. */
+  return_url: z.string().max(2000).default(''),
   /** Token of the session opened by a previous attempt (keeps the same intent). */
   session_token: z.string().max(128).default(''),
   hp: z.string().max(500).default(''),
@@ -157,8 +186,16 @@ export type SessionPayloadInput = z.input<typeof sessionPayloadSchema>;
 
 export interface SessionResult {
   readonly session_token: string;
-  /** `payment`/`setup`: confirm with Stripe.js; `none`: nothing to pay, call complete. */
-  readonly intent: { readonly kind: 'payment' | 'setup' | 'none'; readonly client_secret: string | null };
+  /**
+   * `payment`/`setup`: confirm with Stripe.js; `redirect`: go to `redirect_url`
+   * (Stripe Checkout), which comes back with the token; `none` (nothing to
+   * pay) and `bank_transfer` (order placed unpaid): call complete.
+   */
+  readonly intent: {
+    readonly kind: 'payment' | 'setup' | 'none' | 'redirect' | 'bank_transfer';
+    readonly client_secret: string | null;
+    readonly redirect_url: string | null;
+  };
   readonly quote: Quote;
 }
 
@@ -169,11 +206,13 @@ export interface NextStep {
 }
 
 export interface CompleteResult {
-  readonly status: 'paid' | 'processing' | 'failed';
+  /** `pending`: bank transfer purchase placed, waiting for the transfer (`bank_transfer` says where). */
+  readonly status: 'paid' | 'processing' | 'failed' | 'pending';
   readonly message: string | null;
   readonly next: NextStep | null;
   readonly order_number: string | null;
   readonly success_message: string;
+  readonly bank_transfer: BankTransferDetails | null;
 }
 
 // ------------------------------------------------------------------ offers
@@ -192,6 +231,10 @@ export interface OfferView {
   readonly recurring: PublicRecurring | null;
   readonly checkout_id: string;
   readonly locale: string;
+  /** `bank_transfer`: accepting adds the offer to the transfer to make, nothing is charged. */
+  readonly payment_method: 'card' | 'bank_transfer';
+  /** `redirect`: accepting goes through Stripe Checkout (Managed Payments). */
+  readonly card_flow: 'element' | 'redirect';
 }
 
 export type OfferState =
@@ -199,11 +242,16 @@ export type OfferState =
   | { readonly status: 'done'; readonly next: NextStep; readonly success_message: string };
 
 export interface OfferActionResult {
-  readonly status: 'paid' | 'requires_action' | 'failed' | 'declined';
+  /**
+   * `paid`: charged (or, bank transfer, added to the transfer to make);
+   * `redirect`: pay on Stripe Checkout at `redirect_url`, which comes back to the page.
+   */
+  readonly status: 'paid' | 'requires_action' | 'failed' | 'declined' | 'redirect';
   readonly client_secret: string | null;
   readonly publishable_key: string | null;
   readonly message: string | null;
   readonly next: NextStep | null;
+  readonly redirect_url: string | null;
 }
 
 export interface AddressSuggestion {

@@ -13,13 +13,14 @@ import {
 import { affectsChargeSchedule } from '../checkout/ops';
 import { runRenewalCharges } from '../checkout/renewals';
 import { nextSessionCleanup } from '../checkout/sessions';
+import { nextSummaryDue } from '../checkout/bank-transfer';
 import { affectsBillingSchedule } from '../commerce/ops';
 import { seedCommerce, type CommerceSeedSummary } from '../commerce/seed';
 import { nextBillingDue, nextChargeDue } from '../commerce/subscriptions';
 import { SYSTEM_ACTOR, type CrmActor, type SearchMode } from '../crm/context';
 import { createDoSqlDb } from '../crm/db/do-sql';
 import type { SqlDb } from '../crm/db/sql';
-import { runCrmOp, type CrmResult } from '../crm/ops';
+import { runCrmOp, type CrmOpOutput, type CrmResult } from '../crm/ops';
 import { ensureSearchIndex } from '../crm/search/index-store';
 import { seedCrm, type CrmSeedSummary } from '../crm/seed';
 import type { Env } from '../env';
@@ -104,6 +105,7 @@ export class TenantDb extends DurableObject<Env> {
       }
       const cleanup = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, 'checkout.expireSessions', {});
       if (!cleanup.ok) console.error('[checkout] session cleanup failed:', cleanup.error);
+      await this.sendCheckoutSummaries();
       try {
         await runRenewalCharges(this.env, (op, input) => {
           const out = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, op, input);
@@ -151,6 +153,27 @@ export class TenantDb extends DurableObject<Env> {
     });
   }
 
+  /** Bank transfer summaries due (end of the offer chain, idle buyer, page closed). */
+  private async sendCheckoutSummaries(): Promise<void> {
+    const due = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, 'checkout.dueSummaries', {});
+    if (!due.ok) {
+      console.error('[checkout] summary emails failed:', due.error);
+      return;
+    }
+    const failed: string[] = [];
+    for (const email of (due.value as CrmOpOutput<'checkout.dueSummaries'>).emails) {
+      try {
+        await this.env.EMAIL_SEND.send(email);
+      } catch (error) {
+        console.error('[checkout] summary email not queued', email.source, error);
+        if (email.source.type === 'transactional') failed.push(email.source.referenceId);
+      }
+    }
+    if (failed.length > 0) {
+      runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, 'checkout.summaryFailed', { sessionIds: failed });
+    }
+  }
+
   /** `esignDelay`: after a failed signature run, wait before retrying what is still due. */
   private armAlarm(esignDelay = 0): void {
     const now = Date.now();
@@ -158,7 +181,8 @@ export class TenantDb extends DurableObject<Env> {
     const charge = nextChargeDue(this.crmDb);
     const sessions = nextSessionCleanup(this.crmDb);
     const esign = nextEsignDue(this.crmDb);
-    const candidates = [billing, charge, sessions, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
+    const summaries = nextSummaryDue(this.crmDb);
+    const candidates = [billing, charge, sessions, summaries, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
       (t): t is number => t !== null,
     );
     if (candidates.length === 0) void this.ctx.storage.deleteAlarm();

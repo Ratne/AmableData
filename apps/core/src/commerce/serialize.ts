@@ -71,6 +71,7 @@ export function ordersToApi(ctx: CrmContext, rows: OrderRow[]): Order[] {
     analytics_visitor_id: row.analytics_visitor_id,
     checkout_id: row.checkout_id,
     parent_order_id: row.parent_order_id,
+    payment_method: row.payment_method,
     attribution: row.attribution === null ? null : parseJson<Record<string, string>>(row.attribution, {}),
     items: items.get(row.id) ?? [],
     invoice: invoices.get(row.id) ?? null,

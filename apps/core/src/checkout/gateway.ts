@@ -1,5 +1,7 @@
 import { randomToken, sha256Hex } from '@amable/auth';
 import {
+  OFFER_RETURN_PARAM,
+  SESSION_PARAM,
   selectionSchema,
   sessionPayloadSchema,
   type CheckoutGatewayOps,
@@ -10,10 +12,16 @@ import { z } from 'zod';
 import { suggestAddresses } from '../crm/api/address-lookup';
 import { GatewayError, type GatewayContext, type GatewayHandlers } from '../public/context';
 import type { StoredStripeAccount } from '../commerce/stripe/account';
-import { StripeApiError, type StripePaymentIntent, type StripeSetupIntent } from '../commerce/stripe/client';
+import {
+  StripeApiError,
+  type StripeCheckoutSession,
+  type StripePaymentIntent,
+  type StripeSetupIntent,
+} from '../commerce/stripe/client';
 import { commerceRuntime, openStripe, type OpenStripe } from '../commerce/stripe/runtime';
 import {
   asCharge,
+  asCheckoutSession,
   asPaymentIntent,
   asSetupIntent,
   parseStripeEvent,
@@ -30,6 +38,7 @@ const quoteSchema = z.strictObject({ checkoutId: id, selection: selectionSchema,
 const sessionSchema = z.strictObject({ checkoutId: id, payload: z.unknown() });
 const tokenSchema = z.strictObject({ token });
 const offerSchema = z.strictObject({ token, offerKey: z.string().min(1).max(40) });
+const offerAcceptSchema = offerSchema.extend({ returnUrl: z.string().max(2000).default('') });
 const addressSchema = z.strictObject({
   checkoutId: id,
   q: z.string().trim().min(3).max(200),
@@ -126,6 +135,29 @@ async function quote(ctx: GatewayContext, input: unknown): Promise<Output<'check
   });
 }
 
+/** Stripe Checkout Sessions stay payable as long as an open purchase can be resumed. */
+const CHECKOUT_SESSION_TTL_S = 2 * 3600;
+
+/** Page Stripe Checkout comes back to: the widget page (http(s) only). */
+function returnUrlOf(...candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    if (candidate === '') continue;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === 'https:' || url.protocol === 'http:') return url.toString();
+    } catch {
+      // try the next one
+    }
+  }
+  return null;
+}
+
+function withParams(base: string, params: Record<string, string>): string {
+  const url = new URL(base);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  return url.toString();
+}
+
 function intentMetadata(sessionId: string, checkoutId: string, orderId: string | null): Record<string, string> {
   return {
     amable_kind: 'checkout',
@@ -149,7 +181,12 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
   if (!domainAllowed(allowedDomains, payload.meta.page_url, ctx.client.referer, `/c/${ctx.tenant.slug}/${cfg.id}`)) {
     throw new GatewayError(403, 'domain_not_allowed', 'this checkout cannot be used on this website');
   }
-  const stripe = await stripeOf(ctx);
+  // A bank transfer purchase never reaches Stripe: the checkout may have no Stripe account.
+  const account = await ctx.crm('stripe.account', {});
+  if (account === null && payload.payment_method === 'card' && cfg.payments.card) {
+    throw new GatewayError(409, 'stripe_not_configured', 'payments are not configured');
+  }
+  const back = payload.payment_method === 'card' && account?.managed === true ? returnUrlOf(payload.return_url, payload.meta.page_url) : null;
   const reuse = payload.session_token === '' ? null : await sha256Hex(payload.session_token);
   const freshToken = randomToken(32);
   const prepared = await ctx.crm('checkout.prepare', {
@@ -165,7 +202,58 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
     existingTokenHash: reuse,
   });
   const activeToken = prepared.reused ? payload.session_token : freshToken;
+  if (prepared.intentKind === 'bank_transfer') {
+    await ctx.crm('checkout.settleBankTransfer', { sessionId: prepared.sessionId, tenantId: ctx.tenant.id });
+    return {
+      session_token: activeToken,
+      intent: { kind: 'bank_transfer', client_secret: null, redirect_url: null },
+      quote: prepared.quote,
+    };
+  }
+  if (account === null) {
+    // Nothing to pay (a free order chosen with bank transfer).
+    await ctx.crm('checkout.attachIntent', {
+      sessionId: prepared.sessionId,
+      contactId: prepared.contactId,
+      customerId: null,
+      intentKind: null,
+      intentId: null,
+    });
+    await ctx.crm('checkout.settleFree', { sessionId: prepared.sessionId });
+    return { session_token: activeToken, intent: { kind: 'none', client_secret: null, redirect_url: null }, quote: prepared.quote };
+  }
+  const stripe = await openStripe(await commerceRuntime(ctx.env), account);
   try {
+    if (prepared.intentKind === 'redirect') {
+      if (back === null) throw new GatewayError(422, 'validation_failed', 'invalid input', [{ path: 'return_url', message: 'required' }]);
+      if (prepared.previousIntentKind === 'checkout' && prepared.intentId !== null) {
+        await stripe.client.expireCheckoutSession(prepared.intentId).catch(() => undefined);
+      }
+      const hosted = await stripe.client.createManagedCheckoutSession(
+        {
+          lines: prepared.lines,
+          currency: prepared.currency,
+          email: prepared.email,
+          successUrl: withParams(back, { [SESSION_PARAM]: activeToken, redirect_status: 'succeeded' }),
+          cancelUrl: back,
+          expiresAt: Math.floor((await commerceRuntime(ctx.env)).now() / 1000) + CHECKOUT_SESSION_TTL_S,
+          metadata: intentMetadata(prepared.sessionId, checkoutId, prepared.orderId),
+        },
+        `checkout-hosted:${prepared.sessionId}:${String(prepared.amountMinor)}:${randomToken(6)}`,
+      );
+      await ctx.crm('checkout.attachIntent', {
+        sessionId: prepared.sessionId,
+        contactId: prepared.contactId,
+        customerId: null,
+        intentKind: 'checkout',
+        intentId: hosted.id,
+      });
+      return {
+        session_token: activeToken,
+        intent: { kind: 'redirect', client_secret: null, redirect_url: hosted.url },
+        quote: prepared.quote,
+      };
+    }
     let customerId = prepared.customerId;
     if (customerId === null) {
       const customer = await stripe.client.createCustomer(
@@ -231,7 +319,7 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
     if (prepared.intentKind === 'none') await ctx.crm('checkout.settleFree', { sessionId: prepared.sessionId });
     return {
       session_token: activeToken,
-      intent: { kind: prepared.intentKind, client_secret: clientSecret },
+      intent: { kind: prepared.intentKind, client_secret: clientSecret, redirect_url: null },
       quote: prepared.quote,
     };
   } catch (error) {
@@ -264,18 +352,41 @@ function setupFacts(intent: StripeSetupIntent): IntentFacts {
   };
 }
 
-/** The browser says Stripe.js confirmed: read the intent from Stripe (never trust the browser) and settle. */
+/** A Stripe Checkout Session as intent facts (`failed`: its async payment failed). */
+function checkoutFacts(session: StripeCheckoutSession, failed = false): IntentFacts {
+  const paid = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+  return {
+    intentId: session.id,
+    kind: 'checkout',
+    status: paid
+      ? 'succeeded'
+      : failed || session.status === 'expired'
+        ? 'canceled'
+        : session.status === 'complete'
+          ? 'processing'
+          : 'requires_payment_method',
+    amountReceived: paid ? (session.amount_total ?? 0) : 0,
+    customerId: null,
+    paymentMethodId: null,
+    failureMessage: failed ? 'the payment did not go through' : session.status === 'expired' ? 'the payment page expired' : null,
+    paymentIntentId: session.payment_intent,
+  };
+}
+
+/** The browser says Stripe.js confirmed (or Stripe Checkout came back): read Stripe (never trust the browser) and settle. */
 async function complete(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.complete'>> {
   const { token: raw } = parse(tokenSchema, input);
   const tokenHash = await sha256Hex(raw);
   const state = await ctx.crm('checkout.completion', { tokenHash });
-  if (state.status !== 'paid' && state.intentId !== null && state.intentKind !== null) {
+  if (state.status !== 'paid' && state.status !== 'pending' && state.intentId !== null && state.intentKind !== null) {
     const stripe = await stripeOf(ctx);
     try {
       const facts =
         state.intentKind === 'payment'
           ? paymentFacts(await stripe.client.retrievePaymentIntent(state.intentId))
-          : setupFacts(await stripe.client.retrieveSetupIntent(state.intentId));
+          : state.intentKind === 'checkout'
+            ? checkoutFacts(await stripe.client.retrieveCheckoutSession(state.intentId))
+            : setupFacts(await stripe.client.retrieveSetupIntent(state.intentId));
       await ctx.crm('checkout.settleIntent', facts);
     } catch (error) {
       if (error instanceof GatewayError) throw error;
@@ -295,7 +406,7 @@ async function offerOutcome(
   ctx: GatewayContext,
   sessionId: string,
   status: OfferActionResult['status'],
-  extra: { clientSecret?: string | null; publishableKey?: string | null; message?: string | null } = {},
+  extra: { clientSecret?: string | null; publishableKey?: string | null; message?: string | null; redirectUrl?: string | null } = {},
 ): Promise<OfferActionResult> {
   const done = status === 'paid' || status === 'declined';
   return {
@@ -304,7 +415,38 @@ async function offerOutcome(
     publishable_key: extra.publishableKey ?? null,
     message: extra.message ?? null,
     next: done ? await ctx.crm('checkout.offerNext', { sessionId }) : null,
+    redirect_url: extra.redirectUrl ?? null,
   };
+}
+
+/**
+ * Offer paid on Stripe Checkout (Managed Payments): still open, the buyer is
+ * sent back to it; paid, it is recorded; expired, the attempt failed.
+ */
+async function settleHostedOffer(
+  ctx: GatewayContext,
+  stripe: OpenStripe,
+  sessionId: string,
+  offerKey: string,
+  hostedId: string,
+): Promise<OfferActionResult> {
+  const hosted = await stripe.client.retrieveCheckoutSession(hostedId);
+  if (hosted.status === 'open') {
+    return offerOutcome(ctx, sessionId, 'redirect', { redirectUrl: hosted.url });
+  }
+  const facts = checkoutFacts(hosted);
+  const result = await ctx.crm('checkout.offerSettle', {
+    sessionId,
+    offerKey,
+    orderId: hosted.metadata['amable_order'] ?? null,
+    intentId: hosted.payment_intent ?? hosted.id,
+    // Paid later (async methods): the webhook records it on the offer order.
+    status: facts.status === 'canceled' ? 'failed' : 'succeeded',
+    amountReceived: facts.amountReceived,
+    message: facts.failureMessage,
+  });
+  if (result.state === 'failed') return offerOutcome(ctx, sessionId, 'failed', { message: facts.failureMessage });
+  return offerOutcome(ctx, sessionId, 'paid');
 }
 
 async function settleIntent(
@@ -346,13 +488,14 @@ async function settleIntent(
  * session, offer and attempt makes double clicks and retries harmless.
  */
 async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.offerAccept'>> {
-  const { token: raw, offerKey } = parse(offerSchema, input);
+  const { token: raw, offerKey, returnUrl } = parse(offerAcceptSchema, input);
   await limit(ctx, OFFER_RATE);
   const tokenHash = await sha256Hex(raw);
   const charge = await ctx.crm('checkout.offerPrepare', { tokenHash, offerKey });
   if (charge.action === 'none') {
     return offerOutcome(ctx, charge.sessionId, 'failed', { message: 'this offer is no longer available' });
   }
+  if (charge.action === 'accepted') return offerOutcome(ctx, charge.sessionId, 'paid');
   if (charge.action === 'free') {
     await ctx.crm('checkout.offerSettle', {
       sessionId: charge.sessionId,
@@ -368,8 +511,43 @@ async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<
   const stripe = await stripeOf(ctx);
   try {
     if (charge.action === 'check' && charge.pendingIntentId !== null) {
+      if (charge.pendingIntentId.startsWith('cs_')) {
+        return await settleHostedOffer(ctx, stripe, charge.sessionId, offerKey, charge.pendingIntentId);
+      }
       const intent = await stripe.client.retrievePaymentIntent(charge.pendingIntentId);
       return await settleIntent(ctx, stripe, { sessionId: charge.sessionId, orderId: null }, offerKey, intent);
+    }
+    if (charge.action === 'redirect') {
+      const back = returnUrlOf(returnUrl);
+      if (back === null) throw new GatewayError(422, 'validation_failed', 'invalid input', [{ path: 'returnUrl', message: 'required' }]);
+      const metadata = {
+        amable_kind: 'offer',
+        amable_session: charge.sessionId,
+        amable_offer: offerKey,
+        ...(charge.orderId === null ? {} : { amable_order: charge.orderId }),
+      };
+      const hosted = await stripe.client.createManagedCheckoutSession(
+        {
+          lines: charge.lines,
+          currency: charge.currency,
+          email: charge.receiptEmail,
+          successUrl: withParams(back, { [SESSION_PARAM]: raw, [OFFER_RETURN_PARAM]: offerKey }),
+          cancelUrl: withParams(back, { [SESSION_PARAM]: raw }),
+          expiresAt: Math.floor((await commerceRuntime(ctx.env)).now() / 1000) + CHECKOUT_SESSION_TTL_S,
+          metadata,
+        },
+        `offer-hosted:${charge.sessionId}:${offerKey}:${String(charge.attempt)}`,
+      );
+      await ctx.crm('checkout.offerSettle', {
+        sessionId: charge.sessionId,
+        offerKey,
+        orderId: charge.orderId,
+        intentId: hosted.id,
+        status: 'requires_action',
+        amountReceived: 0,
+        message: null,
+      });
+      return await offerOutcome(ctx, charge.sessionId, 'redirect', { redirectUrl: hosted.url });
     }
     if (charge.customerId === null || charge.paymentMethodId === null) {
       throw new GatewayError(409, 'no_payment_method', 'no saved payment method for this purchase');
@@ -428,6 +606,9 @@ async function offerConfirm(ctx: GatewayContext, input: unknown): Promise<Output
   }
   const stripe = await stripeOf(ctx);
   try {
+    if (charge.pendingIntentId.startsWith('cs_')) {
+      return await settleHostedOffer(ctx, stripe, charge.sessionId, offerKey, charge.pendingIntentId);
+    }
     const intent = await stripe.client.retrievePaymentIntent(charge.pendingIntentId);
     return await settleIntent(ctx, stripe, { sessionId: charge.sessionId, orderId: null }, offerKey, intent);
   } catch (error) {
@@ -447,7 +628,14 @@ async function offerDecline(ctx: GatewayContext, input: unknown): Promise<Output
     publishable_key: null,
     message: null,
     next: state.status === 'done' ? state.next : { kind: 'offer', url: null },
+    redirect_url: null,
   };
+}
+
+/** Beacon of the offer page being closed (bank transfer purchases): the summary email goes out now. */
+async function flushSummary(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.flushSummary'>> {
+  const { token: raw } = parse(tokenSchema, input);
+  return ctx.crm('checkout.flushSummary', { tokenHash: await sha256Hex(raw) });
 }
 
 async function address(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.address'>> {
@@ -486,6 +674,13 @@ async function stripeWebhook(ctx: GatewayContext, input: unknown): Promise<Outpu
   } else if (event.type.startsWith('setup_intent.')) {
     const intent = asSetupIntent(event);
     await ctx.crm('stripe.event', { type: 'intent', intent: setupFacts(intent), metadata: intent.metadata ?? {} });
+  } else if (event.type.startsWith('checkout.session.')) {
+    const hosted = asCheckoutSession(event);
+    await ctx.crm('stripe.event', {
+      type: 'intent',
+      intent: checkoutFacts(hosted, event.type === 'checkout.session.async_payment_failed'),
+      metadata: hosted.metadata ?? {},
+    });
   } else if (event.type === 'charge.refunded') {
     const charge = asCharge(event);
     await ctx.crm('stripe.event', {
@@ -509,6 +704,7 @@ export const checkoutGatewayHandlers: GatewayHandlers = {
   'checkout.offerAccept': offerAccept,
   'checkout.offerConfirm': offerConfirm,
   'checkout.offerDecline': offerDecline,
+  'checkout.flushSummary': flushSummary,
   'checkout.address': address,
   'checkout.stripeWebhook': stripeWebhook,
 };

@@ -2,6 +2,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import {
   stripeCheckResultSchema,
   stripeSettingsSchema,
+  updateManagedPaymentsSchema,
   updateStripeSettingsSchema,
   type StripeSettings,
 } from '@amable/api-types';
@@ -164,6 +165,38 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
           account_changed: settings.account_changed === true,
           webhook_managed: settings.webhook_managed,
         },
+      });
+      return c.json({ ...withUrl(c, settings), webhook_setup_error: webhookSetupError }, 200);
+    },
+  );
+  app.openapi(
+    crmRoute('settings:manage', {
+      method: 'patch',
+      path: '/commerce/stripe/managed-payments',
+      tags,
+      summary: 'Turn Stripe Managed Payments on or off (it must also be enabled in the Stripe account)',
+      request: { body: jsonBody(updateManagedPaymentsSchema) },
+      responses: { 200: json(stripeSettingsSchema, 'Stripe settings') },
+    }),
+    async (c) => {
+      const body = c.req.valid('json');
+      const settings = await callCrm(c, 'stripe.setManaged', {
+        ...(body.managed_payments === undefined ? {} : { managed: body.managed_payments }),
+        ...(body.default_tax_code === undefined ? {} : { defaultTaxCode: body.default_tax_code }),
+      });
+      // Endpoints created before Managed Payments do not receive the Checkout Session events.
+      let webhookSetupError: string | null = null;
+      const account = await callCrm(c, 'stripe.account', {});
+      if (settings.managed_payments && account !== null && account.webhook_endpoint_id !== null) {
+        try {
+          const stripe = await openStripe(await commerceRuntime(c.env), account);
+          await stripe.client.updateWebhookEndpoint(account.webhook_endpoint_id, STRIPE_WEBHOOK_EVENTS);
+        } catch (error) {
+          webhookSetupError = error instanceof Error ? error.message : 'webhook update failed';
+        }
+      }
+      await audit(c, 'commerce.stripe_managed_payments', {
+        details: { managed_payments: settings.managed_payments, default_tax_code: settings.default_tax_code },
       });
       return c.json({ ...withUrl(c, settings), webhook_setup_error: webhookSetupError }, 200);
     },

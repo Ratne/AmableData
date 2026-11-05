@@ -1,4 +1,5 @@
 import type { CrmContext } from '../crm/context';
+import * as bank from './bank-accounts';
 import * as catalog from './catalog';
 import * as invoices from './invoices';
 import * as orders from './orders';
@@ -14,6 +15,10 @@ import * as subscriptions from './subscriptions';
 export const commerceOps = {
   'commerce.settings.get': settings.getSettings,
   'commerce.settings.update': settings.updateSettings,
+  'bankAccounts.list': bank.listBankAccounts,
+  'bankAccounts.create': bank.createBankAccount,
+  'bankAccounts.update': bank.updateBankAccount,
+  'bankAccounts.delete': bank.deleteBankAccount,
   // catalog
   'productCategories.list': catalog.listCategories,
   'productCategories.get': catalog.getCategory,

@@ -157,6 +157,26 @@ export const checkoutCrmSchema = z.object({
   update_policy: z.enum(UPDATE_POLICIES).default('fill_empty'),
 });
 
+export const CHECKOUT_PAYMENT_METHODS = ['card', 'bank_transfer'] as const;
+export type CheckoutPaymentMethod = (typeof CHECKOUT_PAYMENT_METHODS)[number];
+
+/**
+ * Payment methods the buyer may choose. `card`: the workspace Stripe account.
+ * `bank_transfer`: the order is placed unpaid and the buyer gets the
+ * coordinates of `account_id` (a workspace bank account); one-time purchases
+ * only, since renewals need a saved card.
+ */
+export const checkoutPaymentsSchema = z.object({
+  card: z.boolean().default(true),
+  bank_transfer: z
+    .object({
+      enabled: z.boolean().default(false),
+      account_id: z.string().max(64).default(''),
+    })
+    .default({ enabled: false, account_id: '' }),
+});
+export type CheckoutPayments = z.infer<typeof checkoutPaymentsSchema>;
+
 /** Field keys of the built-in buyer fields: custom fields cannot reuse them. */
 export const RESERVED_FIELD_KEYS = [
   'email',
@@ -183,6 +203,7 @@ export const checkoutDefinitionSchema = z
     settings: checkoutSettingsSchema.default(() => checkoutSettingsSchema.parse({})),
     style: checkoutStyleSchema.default(() => checkoutStyleSchema.parse({})),
     crm: checkoutCrmSchema.default(() => checkoutCrmSchema.parse({})),
+    payments: checkoutPaymentsSchema.default(() => checkoutPaymentsSchema.parse({})),
   })
   .superRefine((d, ctx) => {
     const unique = (values: string[], path: (i: number) => (string | number)[], message: string): void => {
@@ -207,6 +228,19 @@ export const checkoutDefinitionSchema = z
         code: 'custom',
         path: ['items'],
         message: 'only one subscription plan can be bought at a time (use "pick one")',
+      });
+    }
+    if (!d.payments.card && !d.payments.bank_transfer.enabled) {
+      ctx.addIssue({ code: 'custom', path: ['payments', 'card'], message: 'enable at least one payment method' });
+    }
+    if (d.payments.bank_transfer.enabled && d.payments.bank_transfer.account_id === '') {
+      ctx.addIssue({ code: 'custom', path: ['payments', 'bank_transfer', 'account_id'], message: 'pick the bank account' });
+    }
+    if (!d.payments.card && d.items.some((i) => i.kind === 'plan')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['payments', 'card'],
+        message: 'subscription plans need the card payment (renewals are charged on the saved card)',
       });
     }
     const keys = new Set(d.offers.map((o) => o.key));

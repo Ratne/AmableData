@@ -284,6 +284,7 @@ const ORDER_FIELDS: Record<string, FieldSpec> = {
   paid_minor: col('paid_minor', 'number'),
   refunded_minor: col('refunded_minor', 'number'),
   promo_code: col('promo_code', 'text'),
+  payment_method: col('payment_method', 'enum'),
   subscription_id: col('subscription_id', 'id'),
   analytics_visitor_id: col('analytics_visitor_id', 'text'),
   /** Orders containing a product (EXISTS over the order lines). */

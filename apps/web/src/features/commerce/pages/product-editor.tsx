@@ -116,10 +116,12 @@ function ProductForm({
   const [currency, setCurrency] = useState(product?.currency ?? defaultCurrency);
   const [tax, setTax] = useState<number | null>(product?.tax_rate_bps ?? defaultTaxBps);
   const [active, setActive] = useState(product?.active ?? true);
+  const [taxCode, setTaxCode] = useState(product?.stripe_tax_code ?? '');
 
   const currencyValid = isCurrencyCode(currency);
   const skuValid = sku.trim() === '' || /^[\w.\-/]+$/.test(sku.trim());
-  const valid = name.trim() !== '' && price !== null && tax !== null && currencyValid && skuValid;
+  const taxCodeValid = /^(txcd_\d{8})?$/.test(taxCode.trim());
+  const valid = name.trim() !== '' && price !== null && tax !== null && currencyValid && skuValid && taxCodeValid;
 
   const save = useCommerceMutation({
     mutationFn: () => {
@@ -131,6 +133,7 @@ function ProductForm({
         price_minor: price ?? 0,
         currency,
         tax_rate_bps: tax ?? 0,
+        stripe_tax_code: taxCode.trim(),
         active,
       };
       return product ? api.products.update(product.id, input) : api.products.create(input);
@@ -219,6 +222,15 @@ function ProductForm({
             </FormField>
             <FormField label={t('commerce.field.taxRate')} hint={t('commerce.products.taxHint')}>
               {(id) => <PercentInput id={id} value={tax} onChange={setTax} />}
+            </FormField>
+            <FormField
+              label={t('commerce.field.stripeTaxCode')}
+              hint={t('commerce.products.stripeTaxCodeHint')}
+              error={taxCodeValid ? null : t('commerce.managed.taxCodeInvalid')}
+            >
+              {(id) => (
+                <Input id={id} className="font-mono" value={taxCode} placeholder="txcd_10000000" onChange={(e) => setTaxCode(e.target.value)} />
+              )}
             </FormField>
             <FormField label={t('commerce.field.status')}>
               {(id) => (

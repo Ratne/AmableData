@@ -1,4 +1,5 @@
 import type {
+  BankAccount,
   BillingRunResult,
   CancelOrderInput,
   CancelSubscriptionInput,
@@ -8,6 +9,7 @@ import type {
   CheckoutSummary,
   CommerceSettings,
   Contact,
+  CreateBankAccountInput,
   CreateCheckoutInput,
   CreateOrderInput,
   CreatePaymentInput,
@@ -33,8 +35,10 @@ import type {
   StripeSettings,
   Subscription,
   SubscriptionStatus,
+  UpdateBankAccountInput,
   UpdateCheckoutInput,
   UpdateCommerceSettingsInput,
+  UpdateManagedPaymentsInput,
   UpdateOrderInput,
   UpdatePlanInput,
   UpdateProductCategoryInput,
@@ -74,6 +78,15 @@ export function commerceClient(slug: string) {
       update: (input: UpdateStripeSettingsInput) => put<StripeSettings>('/commerce/stripe', input),
       check: () => post<StripeCheckResult>('/commerce/stripe/check'),
       disconnect: () => del<StripeSettings>('/commerce/stripe'),
+      managed: (input: UpdateManagedPaymentsInput) =>
+        patch<StripeSettings>('/commerce/stripe/managed-payments', input),
+    },
+    bankAccounts: {
+      list: () => get<{ data: BankAccount[] }>('/commerce/bank-accounts'),
+      create: (input: CreateBankAccountInput) => post<BankAccount>('/commerce/bank-accounts', input),
+      update: (accountId: string, input: UpdateBankAccountInput) =>
+        patch<BankAccount>(`/commerce/bank-accounts/${id(accountId)}`, input),
+      remove: (accountId: string) => del<{ id: string; deleted: true }>(`/commerce/bank-accounts/${id(accountId)}`),
     },
     checkouts: {
       list: (params: ListParams & { status?: 'draft' | 'active' | 'archived'; q?: string } = {}) =>

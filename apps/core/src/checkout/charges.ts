@@ -190,7 +190,7 @@ export function applyStripeEvent(ctx: CrmContext, input: StripeEventInput): { ha
         sessionId,
         offerKey,
         orderId: metadata['amable_order'] ?? null,
-        intentId: intent.intentId,
+        intentId: intent.paymentIntentId ?? intent.intentId,
         status: succeeded ? 'succeeded' : 'failed',
         amountReceived: intent.amountReceived,
         message: intent.failureMessage,

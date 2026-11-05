@@ -47,8 +47,14 @@ export type CheckoutGatewayOps = {
   };
   /** One click: charges the saved payment method for the offer. */
   'checkout.offerAccept': {
-    input: { token: string; offerKey: string };
+    /** `returnUrl`: the offer page, where Stripe Checkout comes back (redirect card flow). */
+    input: { token: string; offerKey: string; returnUrl?: string };
     output: OfferActionResult;
+  };
+  /** The buyer left the offer chain of a bank transfer purchase: send the summary email now. */
+  'checkout.flushSummary': {
+    input: { token: string };
+    output: { sent: boolean };
   };
   /** After 3-D Secure of an accepted offer. */
   'checkout.offerConfirm': {
@@ -82,9 +88,13 @@ export const CHECKOUT_GATEWAY_OPS = [
   'checkout.offerAccept',
   'checkout.offerConfirm',
   'checkout.offerDecline',
+  'checkout.flushSummary',
   'checkout.address',
   'checkout.stripeWebhook',
 ] as const satisfies ReadonlyArray<keyof CheckoutGatewayOps>;
 
 /** Query parameter carrying the session token across post-purchase pages. */
 export const SESSION_PARAM = 'amb_cs';
+
+/** Set on the offer page Stripe Checkout comes back to: the key of the offer just paid there. */
+export const OFFER_RETURN_PARAM = 'amb_offer';

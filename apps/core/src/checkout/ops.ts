@@ -1,5 +1,6 @@
 import type { CrmContext } from '../crm/context';
 import * as stripe from '../commerce/stripe/account';
+import * as bank from './bank-transfer';
 import * as charges from './charges';
 import * as checkouts from './checkouts';
 import * as offers from './offers';
@@ -24,6 +25,10 @@ export const checkoutOps = {
   'checkout.attachIntent': sessions.attachCheckoutIntent,
   'checkout.settleIntent': sessions.settleCheckoutIntent,
   'checkout.settleFree': sessions.settleFreeSession,
+  'checkout.settleBankTransfer': sessions.settleBankTransfer,
+  'checkout.flushSummary': bank.flushSummary,
+  'checkout.dueSummaries': bank.dueSummaries,
+  'checkout.summaryFailed': bank.summaryFailed,
   'checkout.completion': sessions.checkoutCompletion,
   'checkout.expireSessions': sessions.expireCheckoutSessions,
   'checkout.offerState': offers.offerState,
@@ -36,6 +41,7 @@ export const checkoutOps = {
   'stripe.settings': stripe.stripeSettings,
   'stripe.saveAccount': stripe.saveStripeAccount,
   'stripe.clearAccount': stripe.clearStripeAccount,
+  'stripe.setManaged': stripe.setManagedPayments,
   'stripe.event': charges.applyStripeEvent,
   'stripe.refundPlan': charges.stripeRefundPlan,
   'stripe.refundSync': charges.syncStripeRefund,

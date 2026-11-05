@@ -181,6 +181,9 @@ export function OrderDetailPage() {
               filters={
                 <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   <OrderStatusPill status={o.status} />
+                  {o.payment_method === 'bank_transfer' ? (
+                    <Pill tone="neutral">{t('commerce.paymentMethod.bank_transfer')}</Pill>
+                  ) : null}
                   <span>{t(`commerce.source.${o.source}`)}</span>
                   <span>·</span>
                   <span>{date(o.order_date)}</span>

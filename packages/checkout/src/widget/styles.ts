@@ -77,6 +77,13 @@ export function buildCheckoutStyles(s: CheckoutStyle): string {
 :where(.ac-offer-price) { font-size: 1.6em; font-weight: 800; color: ${s.primary_color}; }
 :where(.ac-offer .af-button) { width: 100%; max-width: 420px; font-size: 1.05em; padding: 16px; }
 :where(.ac-decline) { all: unset; cursor: pointer; text-decoration: underline; opacity: .7; font-size: .9em; }
+:where(.ac-methods) { display: flex; gap: 10px; flex-wrap: wrap; }
+:where(.ac-methods .ac-item) { flex: 1 1 160px; }
+:where(.ac-bank) {
+  display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 16px; width: 100%; box-sizing: border-box;
+  border: 1px solid ${s.border_color}; border-radius: ${s.radius}; background: ${s.summary_background};
+}
+:where(.ac-bank-value) { font-weight: 600; word-break: break-all; text-align: right; }
 ${custom}
 `;
 }

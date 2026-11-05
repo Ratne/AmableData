@@ -56,6 +56,26 @@ export interface CheckoutStrings {
   offerExpired: string;
   oneClickNote: string;
   redirecting: string;
+  methodCard: string;
+  methodBankTransfer: string;
+  bankTransferNote: string;
+  placeOrder: string;
+  bankPending: string;
+  bankHolder: string;
+  bankIban: string;
+  bankBic: string;
+  bankName: string;
+  bankReference: string;
+  bankAmount: string;
+  bankEmailNote: string;
+  offerBankNote: string;
+  redirectNote: string;
+  copy: string;
+  copied: string;
+  summarySubject: string;
+  summaryIntro: string;
+  summaryOrders: string;
+  summaryOutro: string;
 }
 
 const en: CheckoutStrings = {
@@ -120,6 +140,26 @@ const en: CheckoutStrings = {
   offerExpired: 'This offer is no longer available.',
   oneClickNote: 'Charged to the payment method you just used. No need to enter it again.',
   redirecting: 'Redirecting…',
+  methodCard: 'Card',
+  methodBankTransfer: 'Bank transfer',
+  bankTransferNote: 'You will get the bank details after placing the order. It is shipped once the transfer arrives.',
+  placeOrder: 'Place order — {amount}',
+  bankPending: 'Thank you! Your order is placed: complete it with a bank transfer.',
+  bankHolder: 'Account holder',
+  bankIban: 'IBAN',
+  bankBic: 'BIC / SWIFT',
+  bankName: 'Bank',
+  bankReference: 'Payment reference',
+  bankAmount: 'Amount',
+  bankEmailNote: 'We also sent these details to your email.',
+  offerBankNote: 'Nothing is charged now: it is added to the bank transfer to make.',
+  redirectNote: 'You will complete the payment on Stripe.',
+  copy: 'Copy',
+  copied: 'Copied',
+  summarySubject: 'Bank transfer details for order {reference}',
+  summaryIntro: 'Thank you for your order. To complete it, please make a bank transfer with these details.',
+  summaryOrders: 'Orders',
+  summaryOutro: 'The order is confirmed as soon as the transfer arrives.',
 };
 
 const it: CheckoutStrings = {
@@ -184,6 +224,26 @@ const it: CheckoutStrings = {
   offerExpired: 'Questa offerta non è più disponibile.',
   oneClickNote: 'Addebitato sul metodo di pagamento appena usato, senza reinserirlo.',
   redirecting: 'Reindirizzamento…',
+  methodCard: 'Carta',
+  methodBankTransfer: 'Bonifico bancario',
+  bankTransferNote: 'Riceverai le coordinate bancarie dopo aver confermato l’ordine. L’ordine viene evaso all’arrivo del bonifico.',
+  placeOrder: 'Conferma ordine — {amount}',
+  bankPending: 'Grazie! Il tuo ordine è confermato: completalo con un bonifico.',
+  bankHolder: 'Intestatario',
+  bankIban: 'IBAN',
+  bankBic: 'BIC / SWIFT',
+  bankName: 'Banca',
+  bankReference: 'Causale',
+  bankAmount: 'Importo',
+  bankEmailNote: 'Ti abbiamo inviato queste coordinate anche via email.',
+  offerBankNote: 'Nessun addebito ora: viene aggiunto al bonifico da effettuare.',
+  redirectNote: 'Completerai il pagamento su Stripe.',
+  copy: 'Copia',
+  copied: 'Copiato',
+  summarySubject: 'Coordinate per il bonifico dell’ordine {reference}',
+  summaryIntro: 'Grazie per il tuo ordine. Per completarlo effettua un bonifico con queste coordinate.',
+  summaryOrders: 'Ordini',
+  summaryOutro: 'L’ordine viene confermato appena riceviamo il bonifico.',
 };
 
 export type CheckoutLocale = 'en' | 'it';

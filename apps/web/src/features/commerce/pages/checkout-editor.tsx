@@ -369,6 +369,7 @@ function Editor({ checkout }: { checkout: Checkout }) {
               </SectionCard>
             </TabsContent>
             <TabsContent value="settings" className="grid gap-4 pt-3">
+              <PaymentsSection definition={definition} edit={edit} disabled={!writable} />
               <SectionCard title={t('checkout.settings.purchase')}>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex items-center gap-2 text-sm sm:col-span-2">
@@ -539,6 +540,67 @@ function EmbedPanel({ checkoutId, dirty }: { checkoutId: string; dirty: boolean 
           <code className="block overflow-x-auto rounded-lg bg-muted p-3 text-xs">{data?.hosted_url ?? '…'}</code>
         </div>
         <p className="text-xs text-muted-foreground">{t('checkout.embed.landingHint')}</p>
+      </div>
+    </SectionCard>
+  );
+}
+
+function PaymentsSection({
+  definition,
+  edit,
+  disabled,
+}: {
+  definition: CheckoutDefinition;
+  edit: (next: CheckoutDefinition) => void;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+  const { slug, api } = useCommerce();
+  const accounts = useQuery({ queryKey: commerceKeys.bankAccounts(slug), queryFn: () => api.bankAccounts.list() });
+  const payments = definition.payments;
+  const bank = payments.bank_transfer;
+  const setPayments = (patch: Partial<CheckoutDefinition['payments']>) => edit({ ...definition, payments: { ...payments, ...patch } });
+  const setBank = (patch: Partial<CheckoutDefinition['payments']['bank_transfer']>) => setPayments({ bank_transfer: { ...bank, ...patch } });
+  const list = accounts.data?.data ?? [];
+  const hasPlan = definition.items.some((i) => i.kind === 'plan');
+  return (
+    <SectionCard title={t('checkout.payments.title')}>
+      <div className="grid gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          <Switch checked={payments.card} disabled={disabled} onCheckedChange={(card) => setPayments({ card })} />
+          {t('checkout.payments.card')}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <Switch
+            checked={bank.enabled}
+            disabled={disabled}
+            onCheckedChange={(enabled) => setBank({ enabled, account_id: bank.account_id || (list[0]?.id ?? '') })}
+          />
+          {t('checkout.payments.bankTransfer')}
+        </label>
+        {bank.enabled ? (
+          <>
+            {accounts.error ? <ErrorNotice error={accounts.error} /> : null}
+            {accounts.data && list.length === 0 ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">{t('checkout.payments.noAccounts')}</p>
+            ) : (
+              <FormField label={t('checkout.payments.account')} hint={t('checkout.payments.bankHint')}>
+                {(id) => (
+                  <ChoiceSelect
+                    id={id}
+                    value={bank.account_id}
+                    disabled={disabled}
+                    onChange={(account_id) => setBank({ account_id })}
+                    choices={list.map((a) => ({ value: a.id, label: `${a.label} · ${a.iban.slice(-4)}` }))}
+                    placeholder={t('checkout.payments.pickAccount')}
+                    className="w-full"
+                  />
+                )}
+              </FormField>
+            )}
+            {hasPlan ? <p className="text-xs text-muted-foreground">{t('checkout.payments.plansCardOnly')}</p> : null}
+          </>
+        ) : null}
       </div>
     </SectionCard>
   );

@@ -112,6 +112,15 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.design.summaryBackground': 'Sfondo del riepilogo',
 
   'checkout.settings.purchase': 'Acquisto',
+  'checkout.payments.title': 'Metodi di pagamento',
+  'checkout.payments.card': 'Carta (Stripe)',
+  'checkout.payments.bankTransfer': 'Bonifico bancario',
+  'checkout.payments.account': 'Conto bancario',
+  'checkout.payments.pickAccount': 'Scegli un conto',
+  'checkout.payments.bankHint':
+    'L\'ordine viene creato "In attesa di pagamento" e l\'acquirente riceve queste coordinate nella pagina e via email. Diventa pagato quando registri il pagamento sull\'ordine. Gli upsell accettati dopo l\'acquisto si sommano allo stesso bonifico.',
+  'checkout.payments.noAccounts': 'Nessun conto bancario: aggiungine uno nelle impostazioni E-commerce.',
+  'checkout.payments.plansCardOnly': 'Gli abbonamenti si rinnovano su una carta salvata: con un piano nel carrello viene offerta solo la carta e gli upsell di piani vengono saltati per chi paga con bonifico.',
   'checkout.settings.heading': 'Titolo',
   'checkout.settings.button_label': 'Pulsante di pagamento',
   'checkout.settings.success_message': 'Messaggio di conferma',

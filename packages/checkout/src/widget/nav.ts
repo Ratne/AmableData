@@ -39,14 +39,27 @@ export function withParam(url: string, key: string, value: string): string {
  */
 export function followNext(api: CheckoutApi, next: NextStep, token: string): 'navigating' | 'show_success' {
   if (next.kind === 'offer') {
-    location.assign(withParam(next.url ?? api.offerPage(), SESSION_PARAM, token));
+    navigate(withParam(next.url ?? api.offerPage(), SESSION_PARAM, token));
     return 'navigating';
   }
   if (next.url !== null) {
-    location.assign(next.url);
+    navigate(next.url);
     return 'navigating';
   }
   return 'show_success';
+}
+
+let leaving = false;
+
+/** Navigation started by the widget itself: not the buyer closing the page. */
+export function navigate(url: string): void {
+  leaving = true;
+  location.assign(url);
+}
+
+/** True once the widget sent the buyer elsewhere (the page-close beacon stays quiet). */
+export function widgetNavigated(): boolean {
+  return leaving;
 }
 
 export function sessionTokenFromUrl(): string {

@@ -40,7 +40,7 @@ export type EmailSendSource =
  * per-minute rate limit and tenant suspension, and are never sent to addresses
  * that hard-bounced or complained (or were suppressed manually).
  */
-export const TRANSACTIONAL_EMAIL_PURPOSES = ['booking', 'esign'] as const;
+export const TRANSACTIONAL_EMAIL_PURPOSES = ['booking', 'esign', 'checkout'] as const;
 export type TransactionalEmailPurpose = (typeof TRANSACTIONAL_EMAIL_PURPOSES)[number];
 
 /** Content of a send: a stored template or an inline Tiptap document (rendered by the pipeline). */

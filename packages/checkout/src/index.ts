@@ -10,4 +10,4 @@ export * from './public';
 export * from './strings';
 export * from './countries';
 export type { CheckoutGatewayOps } from './gateway';
-export { CHECKOUT_GATEWAY_OPS, SESSION_PARAM } from './gateway';
+export { CHECKOUT_GATEWAY_OPS, OFFER_RETURN_PARAM, SESSION_PARAM } from './gateway';

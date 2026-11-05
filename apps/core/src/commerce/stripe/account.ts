@@ -17,6 +17,10 @@ export interface StoredStripeAccount {
   webhook_hint: string | null;
   /** Endpoint the CRM created in the Stripe account (null: secret entered by hand). */
   webhook_endpoint_id: string | null;
+  /** Stripe Managed Payments: card payments go through Stripe Checkout, Stripe handles the taxes. */
+  managed: boolean;
+  /** Stripe tax code of products without their own (empty: the Stripe account default). */
+  default_tax_code: string;
   updated_at: number;
 }
 
@@ -45,8 +49,15 @@ export function readStripeAccount(ctx: CrmContext): StoredStripeAccount | null {
     webhook_enc: parsed.webhook_enc ?? null,
     webhook_hint: parsed.webhook_hint ?? null,
     webhook_endpoint_id: parsed.webhook_endpoint_id ?? null,
+    managed: parsed.managed === true,
+    default_tax_code: typeof parsed.default_tax_code === 'string' ? parsed.default_tax_code : '',
     updated_at: parsed.updated_at ?? 0,
   };
+}
+
+/** Managed Payments is on: card payments are redirects to Stripe Checkout, no saved cards. */
+export function managedPayments(ctx: CrmContext): boolean {
+  return readStripeAccount(ctx)?.managed === true;
 }
 
 export function stripeAccount(ctx: CrmContext, _input: Record<string, never> = {}): StoredStripeAccount | null {
@@ -77,6 +88,8 @@ export function stripeSettings(ctx: CrmContext, _input: Record<string, never> = 
       webhook_managed: false,
       updated_at: null,
       saved_payment_methods: savedPaymentMethods(ctx),
+      managed_payments: false,
+      default_tax_code: '',
     };
   }
   return {
@@ -88,6 +101,8 @@ export function stripeSettings(ctx: CrmContext, _input: Record<string, never> = 
     webhook_managed: account.webhook_endpoint_id !== null,
     updated_at: toIso(account.updated_at),
     saved_payment_methods: savedPaymentMethods(ctx),
+    managed_payments: account.managed,
+    default_tax_code: account.default_tax_code,
   };
 }
 
@@ -187,6 +202,8 @@ export function saveStripeAccount(
     webhook_enc: webhook?.enc ?? null,
     webhook_hint: webhook?.hint ?? null,
     webhook_endpoint_id: webhook?.endpointId ?? null,
+    managed: current?.managed ?? false,
+    default_tax_code: current?.default_tax_code ?? '',
     updated_at: ctx.now(),
   };
   ctx.db.run(
@@ -195,6 +212,22 @@ export function saveStripeAccount(
     JSON.stringify(value),
   );
   return { ...stripeSettings(ctx), account_changed: changed };
+}
+
+export function setManagedPayments(
+  ctx: CrmContext,
+  input: { managed?: boolean; defaultTaxCode?: string },
+): Omit<StripeSettings, 'webhook_url'> {
+  const current = readStripeAccount(ctx);
+  if (current === null) throw invalid('managed_payments', 'connect Stripe first');
+  const value: StoredStripeAccount = {
+    ...current,
+    managed: input.managed ?? current.managed,
+    default_tax_code: input.defaultTaxCode ?? current.default_tax_code,
+    updated_at: ctx.now(),
+  };
+  ctx.db.run(`UPDATE tenant_meta SET value = ? WHERE key = ?`, JSON.stringify(value), META_KEY);
+  return stripeSettings(ctx);
 }
 
 export function clearStripeAccount(ctx: CrmContext, _input: Record<string, never> = {}): { deleted: true } {

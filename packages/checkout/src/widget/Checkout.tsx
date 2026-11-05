@@ -5,10 +5,19 @@ import { EMAIL_RE, validateSubmission, visibleFieldKeys } from '@amable/forms/va
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { countryOptions } from '../countries';
 import type { ContactFieldMode } from '../schema';
-import type { AddressSuggestion, PublicBump, PublicCheckoutConfig, PublicCheckoutItem, Quote, QuoteLine } from '../public';
+import type {
+  AddressSuggestion,
+  BankTransferDetails,
+  PublicBump,
+  PublicCheckoutConfig,
+  PublicCheckoutItem,
+  Quote,
+  QuoteLine,
+} from '../public';
 import { everyLabel, fill, formatMoney, type CheckoutLocale, type CheckoutStrings } from '../strings';
 import type { CheckoutApi } from './api';
-import { followNext, sessionTokenFromUrl, storedToken, storeToken, withParam } from './nav';
+import { BankDetails } from './BankDetails';
+import { followNext, navigate, sessionTokenFromUrl, storedToken, storeToken, withParam } from './nav';
 import { appearanceOf, loadStripe, type StripeElements, type StripeJs } from './stripe';
 import { PAYMENT_SLOT } from './styles';
 
@@ -45,7 +54,9 @@ type Buyer = Record<
   string
 >;
 
-type Done = { message: string; order: string | null };
+type Done = { message: string; order: string | null; bank: BankTransferDetails | null };
+
+type Method = 'card' | 'bank_transfer';
 
 function initialSelection(config: PublicCheckoutConfig): Selection {
   const items =
@@ -119,6 +130,15 @@ function localQuote(config: PublicCheckoutConfig, selection: Selection): Quote {
   };
 }
 
+/** This page without the parameters a previous payment return left on it. */
+function cleanReturnUrl(): string {
+  const url = new URL(location.href);
+  for (const key of ['amb_cs', 'redirect_status', 'payment_intent', 'payment_intent_client_secret', 'setup_intent', 'setup_intent_client_secret']) {
+    url.searchParams.delete(key);
+  }
+  return url.toString();
+}
+
 function modeLabel(mode: ContactFieldMode, label: string): string {
   return mode === 'required' ? `${label} *` : label;
 }
@@ -145,8 +165,16 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
   const mountedAt = useRef(Date.now());
   const hp = useRef<HTMLInputElement>(null);
 
+  const [chosen, setChosen] = useState<Method>(config.payments.card ? 'card' : 'bank_transfer');
   const hasPlan = config.items.some((i) => i.recurring !== null && selection.items.includes(i.id));
   const intentMode: 'payment' | 'setup' | 'none' = quote.total_minor > 0 ? 'payment' : hasPlan ? 'setup' : 'none';
+  // Subscriptions renew on the saved card: never by bank transfer.
+  const bankOffered = config.payments.bank_transfer && !hasPlan;
+  const method: Method = chosen === 'bank_transfer' && !bankOffered ? 'card' : chosen;
+  const redirectCard = config.payments.card_flow === 'redirect';
+  /** The Payment Element is only there for in-page card payments. */
+  const elementMode = method === 'card' && !redirectCard ? intentMode : 'none';
+  const needsStripe = method === 'card' && intentMode !== 'none';
   const saveCard = hasPlan || config.offers_enabled;
   const visible = visibleFieldKeys(config.fields, values);
   const selectionKey = JSON.stringify(selection);
@@ -168,7 +196,13 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
         setAlert(result.ok && result.value.message !== null ? result.value.message : strings.paymentFailed);
         return;
       }
-      finish(token, result.value.next, result.value.status === 'processing' ? strings.processing : result.value.success_message, result.value.order_number);
+      finish(
+        token,
+        result.value.next,
+        result.value.status === 'processing' ? strings.processing : result.value.success_message,
+        result.value.order_number,
+        result.value.bank_transfer,
+      );
     });
   }, []);
 
@@ -186,11 +220,11 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
 
   // Payment Element: created once Stripe.js is there, updated when the amount or the mode change.
   useEffect(() => {
-    if (preview || config.stripe_publishable_key === null || intentMode === 'none') return;
+    if (preview || config.stripe_publishable_key === null || elementMode === 'none') return;
     const options = {
-      mode: intentMode,
+      mode: elementMode,
       currency: config.currency.toLowerCase(),
-      ...(intentMode === 'payment'
+      ...(elementMode === 'payment'
         ? { amount: quote.total_minor, setupFutureUsage: saveCard ? ('off_session' as const) : null }
         : {}),
     };
@@ -211,19 +245,26 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
     return () => {
       cancelled = true;
     };
-  }, [intentMode, quote.total_minor, saveCard]);
+  }, [elementMode, quote.total_minor, saveCard]);
 
   useEffect(() => {
-    paymentHost.style.display = intentMode === 'none' ? 'none' : '';
-  }, [intentMode]);
+    paymentHost.style.display = elementMode === 'none' ? 'none' : '';
+  }, [elementMode]);
 
-  const finish = (token: string, next: Parameters<typeof followNext>[1] | null, message: string, order: string | null) => {
+  const finish = (
+    token: string,
+    next: Parameters<typeof followNext>[1] | null,
+    message: string,
+    order: string | null,
+    bank: BankTransferDetails | null = null,
+  ) => {
     storeToken(config.id, null);
     if (next !== null && followNext(api, next, token) === 'navigating') {
-      setDone({ message: strings.redirecting, order: null });
+      setDone({ message: strings.redirecting, order: null, bank: null });
       return;
     }
-    setDone({ message: message !== '' ? message : config.settings.success_message || strings.success, order });
+    const paidMessage = message !== '' ? message : config.settings.success_message || strings.success;
+    setDone({ message: bank !== null ? strings.bankPending : paidMessage, order, bank });
   };
 
   const setBuyerField = (key: keyof Buyer, value: string) => {
@@ -289,14 +330,14 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       setAlert(strings.previewNotice);
       return;
     }
-    if (config.stripe_publishable_key === null) {
+    if (needsStripe && config.stripe_publishable_key === null) {
       setAlert(strings.stripeMissing);
       return;
     }
     setBusy(true);
     try {
       const s = stripe.current;
-      if (intentMode !== 'none') {
+      if (elementMode !== 'none') {
         if (s === null) {
           setAlert(strings.loadError);
           return;
@@ -330,6 +371,8 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
         tracking: collectTracking(),
         meta: collectMeta(host),
         terms_accepted: terms,
+        payment_method: method,
+        return_url: cleanReturnUrl(),
         session_token: storedToken(config.id),
         hp: hp.current?.value ?? '',
         elapsed_ms: Math.min(Date.now() - mountedAt.current, 86_400_000),
@@ -353,7 +396,12 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       const { session_token: token, intent } = result.value;
       storeToken(config.id, token);
       setQuote(result.value.quote);
-      if (intent.kind !== 'none' && s !== null && intent.client_secret !== null) {
+      if (intent.kind === 'redirect' && intent.redirect_url !== null) {
+        setDone({ message: strings.redirecting, order: null, bank: null });
+        navigate(intent.redirect_url);
+        return;
+      }
+      if ((intent.kind === 'payment' || intent.kind === 'setup') && s !== null && intent.client_secret !== null) {
         const confirmParams = {
           return_url: withParam(location.href, 'amb_cs', token),
           payment_method_data: {
@@ -379,7 +427,7 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
         setAlert(c.message ?? strings.paymentFailed);
         return;
       }
-      finish(token, c.next, c.status === 'processing' ? strings.processing : c.success_message, c.order_number);
+      finish(token, c.next, c.status === 'processing' ? strings.processing : c.success_message, c.order_number, c.bank_transfer);
     } finally {
       setBusy(false);
     }
@@ -394,6 +442,7 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
           <div>{done.message}</div>
           {done.order !== null ? <div class="ac-muted">{fill(strings.orderNumber, { number: done.order })}</div> : null}
         </div>
+        {done.bank !== null ? <BankDetails details={done.bank} strings={strings} locale={locale} /> : null}
       </div>
     );
   }
@@ -438,7 +487,13 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       ? config.settings.button_label
       : intentMode === 'setup'
         ? strings.start
-        : fill(strings.pay, { amount: money(quote.total_minor) });
+        : method === 'bank_transfer'
+          ? fill(strings.placeOrder, { amount: money(quote.total_minor) })
+          : fill(strings.pay, { amount: money(quote.total_minor) });
+  const methods: Array<[Method, string]> = [
+    ...(config.payments.card ? ([['card', strings.methodCard]] as Array<[Method, string]>) : []),
+    ...(bankOffered ? ([['bank_transfer', strings.methodBankTransfer]] as Array<[Method, string]>) : []),
+  ];
 
   return (
     <div class="ac-root">
@@ -540,9 +595,21 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
           {bumpsAt('above_payment')}
           <section class="ac-section" style={intentMode === 'none' ? 'display:none' : undefined}>
             <div class="ac-section-title">{strings.paymentTitle}</div>
-            {config.stripe_publishable_key === null && !preview ? <div class="af-alert">{strings.stripeMissing}</div> : null}
+            {methods.length > 1 ? (
+              <div class="ac-methods" role="radiogroup">
+                {methods.map(([key, label]) => (
+                  <label key={key} class={`ac-item${method === key ? ' ac-item-on' : ''}`}>
+                    <input type="radio" name="ac-method" checked={method === key} onChange={() => setChosen(key)} />
+                    <span class="ac-item-name">{label}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            {needsStripe && config.stripe_publishable_key === null && !preview ? <div class="af-alert">{strings.stripeMissing}</div> : null}
             {preview ? <div class="af-notice">{strings.previewNotice}</div> : null}
-            <div class="ac-payment">
+            {method === 'bank_transfer' ? <div class="ac-muted">{strings.bankTransferNote}</div> : null}
+            {method === 'card' && redirectCard ? <div class="ac-muted">{strings.redirectNote}</div> : null}
+            <div class="ac-payment" style={elementMode === 'none' ? 'display:none' : undefined}>
               <slot name={PAYMENT_SLOT} />
             </div>
           </section>
@@ -566,7 +633,7 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
             </div>
           ) : null}
           <div class="af-actions">
-            <button type="submit" class="af-button" disabled={busy || (intentMode !== 'none' && !stripeReady && !preview)}>
+            <button type="submit" class="af-button" disabled={busy || (elementMode !== 'none' && !stripeReady && !preview)}>
               {busy ? strings.paying : buttonLabel}
             </button>
           </div>

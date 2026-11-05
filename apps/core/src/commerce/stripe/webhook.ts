@@ -1,4 +1,4 @@
-import type { StripePaymentIntent, StripeSetupIntent } from './client';
+import type { StripeCheckoutSession, StripePaymentIntent, StripeSetupIntent } from './client';
 
 /** Maximum age of a signed webhook (replay window). */
 export const WEBHOOK_TOLERANCE_MS = 300_000;
@@ -85,3 +85,5 @@ export const asSetupIntent = (event: StripeEvent): StripeSetupIntent =>
   event.data.object as unknown as StripeSetupIntent;
 export const asCharge = (event: StripeEvent): StripeCharge =>
   event.data.object as unknown as StripeCharge;
+export const asCheckoutSession = (event: StripeEvent): StripeCheckoutSession =>
+  event.data.object as unknown as StripeCheckoutSession;

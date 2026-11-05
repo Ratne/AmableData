@@ -98,6 +98,12 @@ export type ListPlansQuery = z.infer<typeof listPlansQuerySchema>;
 
 // --------------------------------------------------------------- products
 
+/** Stripe product tax code (`txcd_` and 8 digits); empty: none. */
+export const stripeTaxCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^(txcd_\d{8})?$/, 'expected a Stripe tax code (txcd_ followed by 8 digits)');
+
 export const createProductSchema = z.strictObject({
   name: z.string().trim().min(1).max(255),
   description: optText(10_000),
@@ -115,6 +121,8 @@ export const createProductSchema = z.strictObject({
   currency: currencySchema.optional(),
   /** Default tax rate of order lines using this product. */
   tax_rate_bps: taxRateBpsSchema.optional(),
+  /** What Stripe taxes the product as under Managed Payments (empty: the Stripe settings default). */
+  stripe_tax_code: stripeTaxCodeSchema.optional(),
   active: z.boolean().optional(),
   /** Subscription plans created together with the product. */
   plans: z.array(createPlanSchema).max(20).optional(),
@@ -132,6 +140,7 @@ export const productSchema = z.object({
   price_minor: z.number().int(),
   currency: z.string(),
   tax_rate_bps: z.number().int(),
+  stripe_tax_code: z.string(),
   active: z.boolean(),
   plans: z.array(planSchema),
   created_at: timestampSchema,
@@ -324,6 +333,11 @@ export const orderSchema = z.object({
   /** Checkout the order was bought through (with `parent_order_id` for post-purchase offers). */
   checkout_id: idSchema.nullable(),
   parent_order_id: idSchema.nullable(),
+  /**
+   * How the buyer chose to pay at the checkout: `bank_transfer` orders stay
+   * unpaid until the transfer is recorded by hand. Null outside checkouts.
+   */
+  payment_method: z.enum(['card', 'bank_transfer']).nullable(),
   /** utm_* and click ids of the purchase (checkout orders). */
   attribution: z.record(z.string(), z.string()).nullable(),
   items: z.array(orderItemSchema),
@@ -688,6 +702,14 @@ export const stripeSettingsSchema = z.object({
   /** Live subscriptions renewed automatically on a card saved in this Stripe account. */
   saved_payment_methods: z.number().int(),
   /**
+   * Stripe Managed Payments (Stripe is the merchant of record: it adds,
+   * collects and remits the taxes). Card payments of checkouts go through
+   * Stripe Checkout; it must also be enabled in the Stripe account.
+   */
+  managed_payments: z.boolean(),
+  /** Stripe tax code of products without their own (`txcd_…`); empty: the Stripe account default. */
+  default_tax_code: z.string(),
+  /**
    * Only on save: the keys belong to another Stripe account or mode, so the
    * saved customers and cards of the previous one were disconnected.
    */
@@ -721,12 +743,62 @@ export const updateStripeSettingsSchema = z.strictObject({
 });
 export type UpdateStripeSettingsInput = z.infer<typeof updateStripeSettingsSchema>;
 
+export const updateManagedPaymentsSchema = z.strictObject({
+  managed_payments: z.boolean().optional(),
+  default_tax_code: stripeTaxCodeSchema.optional(),
+});
+export type UpdateManagedPaymentsInput = z.infer<typeof updateManagedPaymentsSchema>;
+
 export const stripeCheckResultSchema = z.object({
   ok: z.boolean(),
   /** Stripe error message when the key is rejected. */
   message: z.string().nullable(),
 });
 export type StripeCheckResult = z.infer<typeof stripeCheckResultSchema>;
+
+// ---------------------------------------------------------- bank accounts
+
+/** IBAN without spaces, upper-case: 2 letters, 2 check digits, up to 30 alphanumerics. */
+export const ibanSchema = z
+  .string()
+  .transform((v) => v.replace(/\s+/g, '').toUpperCase())
+  .pipe(z.string().regex(/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/, 'expected an IBAN'));
+
+/**
+ * Bank account of the workspace shown to buyers who pay a checkout by bank
+ * transfer (coordinates on the confirmation page and in the summary email).
+ */
+export const createBankAccountSchema = z.strictObject({
+  /** Internal name, to tell the accounts apart in the checkout editor. */
+  label: z.string().trim().min(1).max(100),
+  holder: z.string().trim().min(1).max(200),
+  iban: ibanSchema,
+  bic: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^([A-Z0-9]{8}|[A-Z0-9]{11})?$/, 'expected a BIC (8 or 11 characters)')
+    .optional(),
+  bank_name: z.string().trim().max(200).optional(),
+  /** Extra text for the buyer (deadline, what to write in the reference…). */
+  instructions: z.string().trim().max(2000).optional(),
+});
+export const updateBankAccountSchema = createBankAccountSchema.partial();
+export type CreateBankAccountInput = z.infer<typeof createBankAccountSchema>;
+export type UpdateBankAccountInput = z.infer<typeof updateBankAccountSchema>;
+
+export const bankAccountSchema = z.object({
+  id: idSchema,
+  label: z.string(),
+  holder: z.string(),
+  iban: z.string(),
+  bic: z.string(),
+  bank_name: z.string(),
+  instructions: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+export type BankAccount = z.infer<typeof bankAccountSchema>;
 
 export const billingRunResultSchema = z.object({
   processed: z.number().int(),

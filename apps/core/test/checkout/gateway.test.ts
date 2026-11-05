@@ -149,7 +149,7 @@ describe('checkout gateway', () => {
       checkoutId: c.id,
       payload: { buyer: { email: 'buyer@example.com', given_name: 'Mary', family_name: 'Shelley' }, tracking: { utm_source: 'ads' } },
     })) as { session_token: string; intent: { kind: string; client_secret: string } };
-    expect(session.intent).toEqual({ kind: 'payment', client_secret: 'pi_1_secret' });
+    expect(session.intent).toEqual({ kind: 'payment', client_secret: 'pi_1_secret', redirect_url: null });
     const created = stripe.requests.find((r) => r.path === '/v1/payment_intents');
     expect(created?.body.get('setup_future_usage')).toBe('off_session');
     expect(created?.body.get('metadata[amable_kind]')).toBe('checkout');

@@ -25,6 +25,7 @@ import { getOrderRow, itemsOf, orderFacts, type OrderRow } from './rows';
 import { ordersToApi } from './serialize';
 import { getSettings, nextCounter } from './settings';
 import { isRenewalOrder, onSubscriptionOrderPaid } from './sub-hooks';
+import { onCheckoutOrderPaid } from '../checkout/paid-hooks';
 
 const DAY_MS = 86_400_000;
 
@@ -267,6 +268,7 @@ export function applyStatus(ctx: CrmContext, orderId: string): OrderRow {
       },
     );
     onSubscriptionOrderPaid(ctx, row);
+    onCheckoutOrderPaid(ctx, row);
   }
   indexOrder(ctx, row.id);
   return row;

@@ -26,6 +26,7 @@ import {
   ErrorNotice,
   ListFooter,
   OrderStatusPill,
+  Pill,
   SearchInput,
   useDebounced,
 } from '../components/common';
@@ -44,6 +45,7 @@ interface OrderRow {
   readonly orderDate: string;
   readonly source: (typeof ORDER_SOURCES)[number];
   readonly itemCount: number;
+  readonly bankTransfer: boolean;
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -62,6 +64,7 @@ const COLUMNS = [
   'order_date',
   'source',
   'item_count',
+  'payment_method',
 ];
 
 function toRow(row: Record<string, unknown>): OrderRow {
@@ -79,6 +82,7 @@ function toRow(row: Record<string, unknown>): OrderRow {
     orderDate: str(row['order_date']),
     source: ORDER_SOURCES.find((s) => s === row['source']) ?? 'manual',
     itemCount: num(row['item_count']),
+    bankTransfer: row['payment_method'] === 'bank_transfer',
   };
 }
 
@@ -184,7 +188,12 @@ export function OrdersPage() {
     {
       id: 'status',
       header: t('commerce.field.status'),
-      cell: (row) => <OrderStatusPill status={row.status} />,
+      cell: (row) => (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <OrderStatusPill status={row.status} />
+          {row.bankTransfer ? <Pill tone="neutral">{t('commerce.paymentMethod.bank_transfer')}</Pill> : null}
+        </span>
+      ),
       sortable: true,
       sortValue: (row) => row.status,
     },

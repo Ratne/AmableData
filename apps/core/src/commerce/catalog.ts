@@ -304,6 +304,7 @@ export interface ProductRow {
   price_minor: number;
   currency: string;
   tax_rate_bps: number;
+  stripe_tax_code: string | null;
   active: number;
   created_at: number;
   updated_at: number;
@@ -323,6 +324,7 @@ function productsToApi(ctx: CrmContext, rows: ProductRow[]): Product[] {
     price_minor: row.price_minor,
     currency: row.currency,
     tax_rate_bps: row.tax_rate_bps,
+    stripe_tax_code: row.stripe_tax_code ?? '',
     active: row.active === 1,
     plans: plans.get(row.id) ?? [],
     created_at: toIso(row.created_at),
@@ -415,8 +417,8 @@ export function createProduct(ctx: CrmContext, input: CreateProductInput): Produ
   const settings = getSettings(ctx);
   ctx.db.run(
     `INSERT INTO crm_products (id, name, description, sku, category_id, price_minor, currency, tax_rate_bps,
-       active, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       stripe_tax_code, active, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.name,
     input.description ?? null,
@@ -425,6 +427,7 @@ export function createProduct(ctx: CrmContext, input: CreateProductInput): Produ
     input.price_minor,
     input.currency ?? settings.default_currency,
     input.tax_rate_bps ?? settings.default_tax_rate_bps,
+    input.stripe_tax_code === undefined || input.stripe_tax_code === '' ? null : input.stripe_tax_code,
     input.active === false ? 0 : 1,
     ctx.actor.id,
     now,
@@ -453,7 +456,7 @@ export function updateProduct(
   }
   ctx.db.run(
     `UPDATE crm_products SET name = ?, description = ?, sku = ?, category_id = ?, price_minor = ?, currency = ?,
-       tax_rate_bps = ?, active = ?, updated_at = ? WHERE id = ?`,
+       tax_rate_bps = ?, stripe_tax_code = ?, active = ?, updated_at = ? WHERE id = ?`,
     d.name ?? row.name,
     d.description === undefined ? row.description : d.description,
     d.sku === undefined ? row.sku : d.sku,
@@ -461,6 +464,7 @@ export function updateProduct(
     d.price_minor ?? row.price_minor,
     d.currency ?? row.currency,
     d.tax_rate_bps ?? row.tax_rate_bps,
+    d.stripe_tax_code === undefined ? row.stripe_tax_code : d.stripe_tax_code === '' ? null : d.stripe_tax_code,
     d.active === undefined ? row.active : d.active ? 1 : 0,
     ctx.now(),
     row.id,

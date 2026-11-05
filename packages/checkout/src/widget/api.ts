@@ -83,8 +83,23 @@ export class CheckoutApi {
     return call(this.url('session/offer'), { token });
   }
 
-  offerAction(action: 'accept' | 'confirm' | 'decline', token: string, offerKey: string): Promise<ApiResult<OfferActionResult>> {
-    return call(this.url(`session/${action}`), { token, offer_key: offerKey });
+  /** `returnUrl`: where Stripe Checkout comes back after paying the offer (Managed Payments). */
+  offerAction(
+    action: 'accept' | 'confirm' | 'decline',
+    token: string,
+    offerKey: string,
+    returnUrl = '',
+  ): Promise<ApiResult<OfferActionResult>> {
+    return call(this.url(`session/${action}`), { token, offer_key: offerKey, return_url: returnUrl });
+  }
+
+  /** The offer page is being closed: the bank transfer summary email goes out now. */
+  flush(token: string): void {
+    try {
+      navigator.sendBeacon(this.url('session/flush'), JSON.stringify({ token }));
+    } catch {
+      // best effort: the email still goes out after the idle time
+    }
   }
 
   /** Hosted post-purchase offer page (offers without their own page). */

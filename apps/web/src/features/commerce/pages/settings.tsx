@@ -3,10 +3,12 @@ import type { CommerceSettings, StripeCheckResult, StripeSettings } from '@amabl
 import { DashboardButton, DashboardConfirmDialog, PageBody, PageToolbar, toast, usePageChrome } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
+import { Switch } from '@amable/ui/ui/switch';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, PlugZap, Save, Unplug } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
+import { BankAccountsCard } from '../components/bank-accounts-card';
 import { CurrencySelect } from '../components/currency-select';
 import {
   commerceKeys,
@@ -170,6 +172,7 @@ function SettingsForm({ initial }: { initial: CommerceSettings }) {
         </SectionCard>
         </form>
         <StripeCard editable={editable} />
+        {editable ? <BankAccountsCard /> : null}
       </PageBody>
     </>
   );
@@ -184,7 +187,68 @@ function StripeCard({ editable }: { editable: boolean }) {
     <SectionCard title={t('commerce.stripe.title')}>
       {stripe.error ? <ErrorNotice error={stripe.error} /> : null}
       {stripe.data ? <StripeForm key={stripe.data.updated_at ?? 'new'} initial={stripe.data} /> : null}
+      {stripe.data?.configured ? (
+        <ManagedPaymentsForm key={`${String(stripe.data.managed_payments)}:${stripe.data.default_tax_code}`} initial={stripe.data} />
+      ) : null}
     </SectionCard>
+  );
+}
+
+const TAX_CODE = /^(txcd_\d{8})?$/;
+
+/** Stripe Managed Payments: Stripe is the merchant of record and handles the taxes. */
+function ManagedPaymentsForm({ initial }: { initial: StripeSettings }) {
+  const { t } = useI18n();
+  const { slug, api } = useCommerce();
+  const queryClient = useQueryClient();
+  const [managed, setManaged] = useState(initial.managed_payments);
+  const [taxCode, setTaxCode] = useState(initial.default_tax_code);
+  const taxCodeValid = TAX_CODE.test(taxCode.trim());
+  const dirty = managed !== initial.managed_payments || taxCode.trim() !== initial.default_tax_code;
+  const save = useCommerceMutation({
+    mutationFn: () => api.stripe.managed({ managed_payments: managed, default_tax_code: taxCode.trim() }),
+    success: t('commerce.stripe.saved'),
+    onSuccess: (next: StripeSettings) => {
+      if (next.webhook_setup_error) toast.warning(t('commerce.stripe.webhookAutoFailed', { message: next.webhook_setup_error }));
+      queryClient.setQueryData(commerceKeys.stripe(slug), next);
+    },
+  });
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (taxCodeValid && dirty) save.mutate(undefined);
+  };
+  return (
+    <form onSubmit={submit} className="mt-4 grid gap-3 border-t pt-4">
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <Switch checked={managed} onCheckedChange={setManaged} />
+        {t('commerce.managed.toggle')}
+      </label>
+      <p className="text-sm text-muted-foreground">{t('commerce.managed.intro')}</p>
+      {managed ? (
+        <>
+          <ul className="list-disc space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 pl-7 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            <li>{t('commerce.managed.enableInStripe')}</li>
+            <li>{t('commerce.managed.taxes')}</li>
+            <li>{t('commerce.managed.upsells')}</li>
+            <li>{t('commerce.managed.noSubscriptions')}</li>
+          </ul>
+          <FormField
+            label={t('commerce.managed.taxCode')}
+            hint={t('commerce.managed.taxCodeHint')}
+            error={taxCodeValid ? null : t('commerce.managed.taxCodeInvalid')}
+          >
+            {(id) => (
+              <Input id={id} className="font-mono" value={taxCode} placeholder="txcd_10000000" onChange={(e) => setTaxCode(e.target.value)} />
+            )}
+          </FormField>
+        </>
+      ) : null}
+      <div>
+        <Button type="submit" variant="outline" disabled={!dirty || !taxCodeValid || save.isPending}>
+          <Save aria-hidden /> {t('common.save')}
+        </Button>
+      </div>
+    </form>
   );
 }
 

@@ -127,6 +127,11 @@ export function previewCheckoutConfig(
     settings,
     style: definition.style,
     offers_enabled: firstOffer !== '',
+    payments: {
+      card: definition.payments.card,
+      bank_transfer: definition.payments.bank_transfer.enabled && definition.payments.bank_transfer.account_id !== '',
+      card_flow: 'element',
+    },
     stripe_publishable_key: null,
   };
 }

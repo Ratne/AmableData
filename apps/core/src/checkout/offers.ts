@@ -6,8 +6,11 @@ import { recordPayment } from '../commerce/payments';
 import { getOrderRow } from '../commerce/rows';
 import { startCheckoutSubscription } from '../commerce/subscriptions';
 import { getCheckoutRow, storedCheckoutDefinition } from './checkouts';
+import type { CheckoutLine } from '../commerce/stripe/client';
+import { scheduleSummary } from './bank-transfer';
 import { entryLines, recurringOf, resolveOffer, type ResolvedEntry } from './pricing';
 import {
+  checkoutLinesOf,
   nextOfferKey,
   nextStepOf,
   offersOf,
@@ -16,6 +19,7 @@ import {
   trackingOf,
   type OfferRecord,
   type SessionRow,
+  withoutSavedCard,
 } from './sessions';
 
 /** Charge attempts per offer (a declined card, a failed 3-D Secure). */
@@ -50,6 +54,7 @@ function finish(ctx: CrmContext, session: SessionRow): void {
     now,
     session.id,
   );
+  scheduleSummary(ctx, session.id, 'now', false);
 }
 
 function amountOf(entry: ResolvedEntry, locale: CheckoutLocale): number {
@@ -80,12 +85,20 @@ export function offerState(ctx: CrmContext, input: { tokenHash: string }): Offer
       recurring: recurringOf(entry),
       checkout_id: session.checkout_id,
       locale: localeOf(session),
+      payment_method: session.payment_method,
+      card_flow: session.intent_kind === 'checkout' ? 'redirect' : 'element',
     },
   };
 }
 
+/**
+ * `accepted`: bank transfer purchase, the offer order was placed unpaid
+ * (nothing to charge); `redirect`: Managed Payments, the worker opens a
+ * Stripe Checkout Session for `lines`.
+ */
 export interface OfferCharge {
-  action: 'charge' | 'check' | 'free' | 'none';
+  action: 'charge' | 'check' | 'free' | 'none' | 'accepted' | 'redirect';
+  lines: CheckoutLine[];
   sessionId: string;
   orderId: string | null;
   amountMinor: number;
@@ -120,6 +133,7 @@ export function prepareOfferCharge(ctx: CrmContext, input: { tokenHash: string; 
     pendingIntentId: session.pending_intent_id,
     description: '',
     receiptEmail: emailOf(ctx, session.contact_id),
+    lines: [],
   };
   if (!live(session, now) || session.current_offer !== input.offerKey) {
     return { ...base, action: 'none', orderId: null, amountMinor: 0 };
@@ -180,14 +194,25 @@ export function prepareOfferCharge(ctx: CrmContext, input: { tokenHash: string; 
     now,
     session.id,
   );
-  return {
-    ...base,
-    action: amount > 0 ? 'charge' : 'free',
-    orderId,
-    amountMinor: amount,
-    attempt: session.offer_attempts + 1,
-    description: number === '' ? offer.title : `${offer.title} — ${number}`,
-  };
+  const description = number === '' ? offer.title : `${offer.title} — ${number}`;
+  const result = { ...base, orderId, amountMinor: amount, attempt: session.offer_attempts + 1, description };
+  if (amount > 0 && orderId !== null && session.payment_method === 'bank_transfer') {
+    acceptBankOffer(ctx, session, offer, orderId);
+    return { ...result, action: 'accepted' };
+  }
+  if (amount > 0 && orderId !== null && session.intent_kind === 'checkout') {
+    return { ...result, action: 'redirect', lines: checkoutLinesOf(ctx, orderId, description) };
+  }
+  return { ...result, action: amount > 0 ? 'charge' : 'free' };
+}
+
+/** Bank transfer purchase: the offer order joins the transfer to make, nothing is charged. */
+function acceptBankOffer(ctx: CrmContext, session: SessionRow, offer: Offer, orderId: string): void {
+  ctx.db.run(`UPDATE crm_orders SET payment_method = 'bank_transfer' WHERE id = ? AND status = 'draft'`, orderId);
+  finalizeDraftRow(ctx, getOrderRow(ctx, orderId));
+  const d = storedCheckoutDefinition(getCheckoutRow(ctx, session.checkout_id));
+  const outcome: OfferRecord = { key: offer.key, outcome: 'accepted', order_id: orderId, at: ctx.now() };
+  record(ctx, session, outcome, nextAfter(d, session, offer, true, [...offersOf(session), outcome]));
 }
 
 function record(ctx: CrmContext, session: SessionRow, entry: OfferRecord, next: string | null): void {
@@ -202,10 +227,18 @@ function record(ctx: CrmContext, session: SessionRow, entry: OfferRecord, next: 
     ctx.now(),
     session.id,
   );
+  // An offer accepted after the summary went out adds to the transfer: one corrected summary follows.
+  scheduleSummary(ctx, session.id, next === null ? 'now' : 'idle', entry.outcome === 'accepted');
 }
 
-function nextAfter(d: CheckoutDefinition, offer: Offer, accepted: boolean, history: OfferRecord[]): string | null {
-  return nextOfferKey(d, accepted ? offer.on_accept : offer.on_decline, history);
+function nextAfter(
+  d: CheckoutDefinition,
+  session: SessionRow,
+  offer: Offer,
+  accepted: boolean,
+  history: OfferRecord[],
+): string | null {
+  return nextOfferKey(d, accepted ? offer.on_accept : offer.on_decline, history, withoutSavedCard(session));
 }
 
 /**
@@ -263,7 +296,7 @@ export function settleOfferCharge(
   if (entry !== null) startOfferSubscription(ctx, session, entry, input.orderId);
   const history = offersOf(session);
   const outcome: OfferRecord = { key: offer.key, outcome: 'accepted', order_id: input.orderId, at: now };
-  record(ctx, session, outcome, nextAfter(d, offer, true, [...history, outcome]));
+  record(ctx, session, outcome, nextAfter(d, session, offer, true, [...history, outcome]));
   return { state: 'accepted' };
 }
 
@@ -287,6 +320,7 @@ function recordOfferPayment(ctx: CrmContext, orderId: string, intentId: string |
   if (amount <= 0) return false;
   // A draft discarded while its charge was pending (declined offer, failed retry) comes back: it was paid.
   restoreDraft(ctx, orderId);
+  ctx.db.run(`UPDATE crm_orders SET payment_method = 'card' WHERE id = ? AND status = 'draft'`, orderId);
   const order = finalizeDraftRow(ctx, getOrderRow(ctx, orderId));
   const balance = order.total_minor - order.paid_minor;
   if (balance <= 0) return false;
@@ -315,7 +349,7 @@ export function declineOffer(ctx: CrmContext, input: { tokenHash: string; offerK
   for (const order of pending) deleteOrder(ctx, { id: order.id });
   const history = offersOf(session);
   const outcome: OfferRecord = { key: offer.key, outcome: 'declined', order_id: null, at: ctx.now() };
-  record(ctx, session, outcome, nextAfter(d, offer, false, [...history, outcome]));
+  record(ctx, session, outcome, nextAfter(d, session, offer, false, [...history, outcome]));
   return { declined: true };
 }
 

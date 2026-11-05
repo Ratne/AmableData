@@ -31,6 +31,7 @@ export interface OrderRow {
   checkout_id: string | null;
   checkout_session_id: string | null;
   parent_order_id: string | null;
+  payment_method: 'card' | 'bank_transfer' | null;
   attribution: string | null;
   auto_charge_attempts: number;
   next_charge_at: number | null;
