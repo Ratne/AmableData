@@ -26,6 +26,12 @@ export const BACKUP_MAX_PER_TICK = 5;
 export const BACKUP_TICK_BUDGET_MS = 25_000;
 /** A crashed tick releases the scheduler after this long. */
 export const BACKUP_LEASE_MS = 10 * 60 * 1000;
+/** Uncompressed slices of a backup in progress live here until the finalize tick. */
+export const BACKUP_STAGING_PREFIX = 'backups/_staging/';
+/** Pages (D1 queries / DO dump calls) per slice: subrequest headroom within one tick. */
+export const BACKUP_SLICE_MAX_PAGES = 400;
+/** A backup suspended longer than this is abandoned and restarted from scratch. */
+export const BACKUP_ABANDON_MS = 24 * 60 * 60 * 1000;
 
 export type BackupKind = 'scheduled' | 'manual';
 export type BackupDbName = 'tenant_db' | 'mail_db' | 'engine' | 'd1';
@@ -55,7 +61,8 @@ export interface BackupRowLine {
   row: BackupRow;
 }
 
-const ID_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-(scheduled|manual)-[0-9A-Za-z]{6,32}$/;
+const ID_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-(scheduled|manual)-[0-9A-Za-z]{6,32}$/;
 
 export interface BackupObjectInfo {
   id: string;

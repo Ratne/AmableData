@@ -26,7 +26,9 @@ function schema(db: DatabaseSync): void {
 }
 
 function seed(db: DatabaseSync): void {
-  db.prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', '3'), ('tenant_id', 't1')`).run();
+  db.prepare(
+    `INSERT INTO meta (key, value) VALUES ('schema_version', '3'), ('tenant_id', 't1')`,
+  ).run();
   db.prepare(`INSERT INTO do_migrations VALUES (1, 'init', 0)`).run();
   const parent = db.prepare(`INSERT INTO parent (id, name, data) VALUES (?, ?, ?)`);
   const child = db.prepare(`INSERT INTO child (id, parent_id, note) VALUES (?, ?, ?)`);
@@ -83,7 +85,9 @@ describe('sql dump', () => {
     expect(pages).toBeGreaterThan(28);
     const parentIds = lines.filter((l) => l.table === 'parent').map((l) => l.row['id']);
     expect(new Set(parentIds).size).toBe(1234);
-    const pairKeys = lines.filter((l) => l.table === 'pairs').map((l) => `${String(l.row['a'])}|${String(l.row['b'])}`);
+    const pairKeys = lines
+      .filter((l) => l.table === 'pairs')
+      .map((l) => `${String(l.row['a'])}|${String(l.row['b'])}`);
     expect(new Set(pairKeys).size).toBe(250);
     expect(lines.find((l) => l.table === 'parent' && l.row['id'] === 7)?.row['data']).toEqual({
       $b64: 'AP8H',
@@ -110,7 +114,7 @@ describe('sql dump', () => {
     target.prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', '3')`).run();
     const port = nodeBackupSql(target);
     const backup = createSqlBackup(port, { metaTable: 'meta' });
-    for (let i = 0; i < lines.length; ) {
+    for (let i = 0; i < lines.length;) {
       const table = lines[i]?.table as string;
       const batch: BackupRow[] = [];
       while (i < lines.length && lines[i]?.table === table && batch.length < 200) {
@@ -139,9 +143,9 @@ describe('sql dump', () => {
     expect(db.prepare(`SELECT COUNT(*) AS n FROM parent`).get()).toEqual({ n: 0 });
     expect(db.prepare(`SELECT COUNT(*) AS n FROM do_migrations`).get()).toEqual({ n: 1 });
     expect(() => backup.restore('sqlite_master', [{ name: 'x' }])).toThrow(/does not exist/);
-    expect(() => backup.restore('parent', [{ id: 1, 'name"; DROP TABLE parent; --': 'x' }])).toThrow(
-      /column/,
-    );
+    expect(() =>
+      backup.restore('parent', [{ id: 1, 'name"; DROP TABLE parent; --': 'x' }]),
+    ).toThrow(/column/);
     backup.restore('meta', [{ key: 'schema_version', value: '999' }]);
     expect(db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()).toEqual({
       value: '3',
@@ -165,7 +169,8 @@ describe('gzip jsonl on R2', () => {
     expect(r2.partSizes).toEqual([]);
     const object = await r2.get('backups/x.jsonl.gz');
     const read: unknown[] = [];
-    for await (const line of readJsonlGzip(object?.body as ReadableStream<Uint8Array>)) read.push(line);
+    for await (const line of readJsonlGzip(object?.body as ReadableStream<Uint8Array>))
+      read.push(line);
     expect(read).toEqual(lines);
   });
 
@@ -187,7 +192,8 @@ describe('gzip jsonl on R2', () => {
     expect(sizes.slice(0, -1).every((s) => s === 4096)).toBe(true);
     const object = await r2.get('backups/big.jsonl.gz');
     const read: unknown[] = [];
-    for await (const line of readJsonlGzip(object?.body as ReadableStream<Uint8Array>)) read.push(line);
+    for await (const line of readJsonlGzip(object?.body as ReadableStream<Uint8Array>))
+      read.push(line);
     expect(read).toEqual(lines);
   });
 });

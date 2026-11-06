@@ -89,7 +89,11 @@ export async function world(options: { licensed?: boolean } = {}): Promise<World
   const h = await createHarness();
   const keys = await generateSigningKeyPair();
   if (options.licensed !== false) {
-    Object.assign(h.env, { LICENSE_KEY, CONTROL_PLANE_URL: CP_URL, CONTROL_PLANE_PUBLIC_KEY: keys.publicKey });
+    Object.assign(h.env, {
+      LICENSE_KEY,
+      CONTROL_PLANE_URL: CP_URL,
+      CONTROL_PLANE_PUBLIC_KEY: keys.publicKey,
+    });
   }
   const cp = fakeCp();
   const acme = await seedTenant(h, 'acme');
@@ -135,7 +139,12 @@ export async function assistToken(
 }
 
 /** Multipart request with the client's cookies (TestClient only sends JSON). */
-export async function multipart(h: Harness, client: TestClient, path: string, form: FormData): Promise<TestResponse> {
+export async function multipart(
+  h: Harness,
+  client: TestClient,
+  path: string,
+  form: FormData,
+): Promise<TestResponse> {
   const res = await app.request(
     `${ORIGIN}${path}`,
     {

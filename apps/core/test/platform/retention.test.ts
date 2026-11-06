@@ -52,4 +52,17 @@ describe('installation retention', () => {
     expect(await runRetention(h.env, now)).toBe(1);
     expect(await count('platform_usage')).toBe(2);
   });
+
+  it('drops audit rows older than a year, keeps newer ones', async () => {
+    const now = h.clock.now;
+    const audit = (id: string, createdAt: number) =>
+      h.env.DB.prepare(`INSERT INTO audit_log (id, action, created_at) VALUES (?, 'x', ?)`).bind(
+        id,
+        createdAt,
+      );
+    await audit('a_old', now - 366 * DAY).run();
+    await audit('a_new', now - 300 * DAY).run();
+    expect(await runRetention(h.env, now)).toBe(1);
+    expect(await count('audit_log')).toBe(1);
+  });
 });

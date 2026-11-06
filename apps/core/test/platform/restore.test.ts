@@ -1,4 +1,9 @@
-import { generateSigningKeyPair, importSigningKey, signPlatformRequest, CP_SIGNATURE_HEADER } from '@amable/core/platform';
+import {
+  generateSigningKeyPair,
+  importSigningKey,
+  signPlatformRequest,
+  CP_SIGNATURE_HEADER,
+} from '@amable/core/platform';
 import { describe, expect, it } from 'vitest';
 import { app } from '../../src/app';
 import { POINT_IN_TIME_WINDOW_MS } from '../../src/platform/restore';
@@ -13,7 +18,9 @@ function namespace(binding: string, calls: string[], failArm: ReadonlySet<string
     get: (tenantId: string) => ({
       pointInTimeArm: (at: number) => {
         calls.push(`${binding}:${tenantId}:arm:${String(at)}`);
-        return failArm.has(tenantId) ? Promise.reject(new Error('no history')) : Promise.resolve('bookmark');
+        return failArm.has(tenantId)
+          ? Promise.reject(new Error('no history'))
+          : Promise.resolve('bookmark');
       },
       pointInTimeApply: () => {
         calls.push(`${binding}:${tenantId}:apply`);
@@ -39,10 +46,19 @@ async function setup(): Promise<{ h: Harness; calls: string[]; privateKey: strin
 async function restore(h: Harness, privateKey: string, at: number) {
   const body = JSON.stringify({ at });
   const key = await importSigningKey(privateKey);
-  const signature = await signPlatformRequest(key, { method: 'POST', path: PATH, body, nowMs: h.clock.now });
+  const signature = await signPlatformRequest(key, {
+    method: 'POST',
+    path: PATH,
+    body,
+    nowMs: h.clock.now,
+  });
   const res = await app.request(
     `${ORIGIN}${PATH}`,
-    { method: 'POST', body, headers: { [CP_SIGNATURE_HEADER]: signature, 'content-type': 'application/json' } },
+    {
+      method: 'POST',
+      body,
+      headers: { [CP_SIGNATURE_HEADER]: signature, 'content-type': 'application/json' },
+    },
     h.env,
   );
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
@@ -64,18 +80,26 @@ describe('point-in-time restore of the tenant objects', () => {
     });
     const arms = calls.filter((c) => c.includes(':arm:'));
     expect(arms).toHaveLength(6);
-    expect(calls.indexOf(arms[5] as string)).toBeLessThan(calls.findIndex((c) => c.endsWith(':apply')));
+    expect(calls.indexOf(arms[5] as string)).toBeLessThan(
+      calls.findIndex((c) => c.endsWith(':apply')),
+    );
     expect(calls.filter((c) => c.endsWith(':apply'))).not.toContain('mail_db:t_beta:apply');
   });
 
   it('refuses instants outside the 30-day history and unsigned calls', async () => {
     const { h, calls, privateKey } = await setup();
     await seedTenant(h, 'alpha');
-    expect((await restore(h, privateKey, h.clock.now + 1)).body).toEqual({ error: 'restore_point_out_of_range' });
+    expect((await restore(h, privateKey, h.clock.now + 1)).body).toEqual({
+      error: 'restore_point_out_of_range',
+    });
     expect((await restore(h, privateKey, h.clock.now - POINT_IN_TIME_WINDOW_MS - 1)).body).toEqual({
       error: 'restore_point_out_of_range',
     });
-    const unsigned = await app.request(`${ORIGIN}${PATH}`, { method: 'POST', body: '{"at":1}' }, h.env);
+    const unsigned = await app.request(
+      `${ORIGIN}${PATH}`,
+      { method: 'POST', body: '{"at":1}' },
+      h.env,
+    );
     expect(unsigned.status).toBe(401);
     expect(calls).toEqual([]);
   });

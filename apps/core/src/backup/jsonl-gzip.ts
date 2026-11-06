@@ -11,7 +11,9 @@ const MAX_LINE_CHARS = 32 * 1024 * 1024;
 
 export interface JsonlGzipWriter {
   write(line: unknown): Promise<void>;
-  /** Flushes, completes the upload and returns the compressed size. */
+  /** Copies already-serialized JSONL bytes into the stream (staged backup parts). */
+  writeRaw(body: ReadableStream<Uint8Array>): Promise<void>;
+  /** Flushes, completes the upload and returns the stored size. */
   close(): Promise<number>;
   abort(): Promise<void>;
 }
@@ -21,12 +23,31 @@ export function createR2JsonlGzipWriter(
   key: string,
   options: { customMetadata?: Record<string, string>; partSize?: number } = {},
 ): JsonlGzipWriter {
+  return createWriter(bucket, key, options, true);
+}
+
+/** Uncompressed variant, for the staging objects of sliced backups. */
+export function createR2JsonlPlainWriter(
+  bucket: R2Bucket,
+  key: string,
+  options: { customMetadata?: Record<string, string>; partSize?: number } = {},
+): JsonlGzipWriter {
+  return createWriter(bucket, key, options, false);
+}
+
+function createWriter(
+  bucket: R2Bucket,
+  key: string,
+  options: { customMetadata?: Record<string, string>; partSize?: number },
+  compress: boolean,
+): JsonlGzipWriter {
   const partSize = options.partSize ?? DEFAULT_PART_SIZE;
   const putOptions = {
-    httpMetadata: { contentType: 'application/gzip' },
+    httpMetadata: { contentType: compress ? 'application/gzip' : 'application/jsonl' },
     customMetadata: options.customMetadata ?? {},
   };
-  const gzip = new CompressionStream('gzip');
+  const gzip: { readable: ReadableStream<Uint8Array>; writable: WritableStream<Uint8Array> } =
+    compress ? new CompressionStream('gzip') : new TransformStream<Uint8Array, Uint8Array>();
   const writer = gzip.writable.getWriter();
   const encoder = new TextEncoder();
   let pending = '';
@@ -92,6 +113,19 @@ export function createR2JsonlGzipWriter(
     async write(line: unknown): Promise<void> {
       pending += `${JSON.stringify(line)}\n`;
       if (pending.length >= LINE_BATCH_CHARS) await flushText();
+    },
+    async writeRaw(body: ReadableStream<Uint8Array>): Promise<void> {
+      await flushText();
+      const reader = body.getReader();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
     },
     async close(): Promise<number> {
       await flushText();

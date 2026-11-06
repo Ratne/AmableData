@@ -81,14 +81,20 @@ describe('platform quota guard — decisions', () => {
     // 1 unreported email already beyond the included quota (1,000 µ$): 1,000 µ$ left = 1 email.
     expect(await check(h, 1, automation)).toEqual({ action: 'allow' });
     const second = await check(h, 2, automation);
-    expect(second).toMatchObject({ action: 'pause', reason: 'insufficient_balance: cost=2000, balance=1000' });
+    expect(second).toMatchObject({
+      action: 'pause',
+      reason: 'insufficient_balance: cost=2000, balance=1000',
+    });
   });
 
   it('suspended services: broadcasts denied, automations paused', async () => {
     const { h, cp: fake } = await setup();
     fake.serviceState = 'suspended';
     expect(await check(h, 1, broadcast)).toEqual({ action: 'deny', reason: 'services_suspended' });
-    expect(await check(h, 1, automation)).toMatchObject({ action: 'pause', reason: 'services_suspended' });
+    expect(await check(h, 1, automation)).toMatchObject({
+      action: 'pause',
+      reason: 'services_suspended',
+    });
   });
 
   it('pauses automation sends at the hourly and daily caps until the next window', async () => {
@@ -109,7 +115,9 @@ describe('platform quota guard — decisions', () => {
     await guard.recordUsage?.({ tenantId: 't_2', channel: 'email', count: 1, source: automation });
     const daily = await check(h, 1, automation);
     expect(daily).toMatchObject({ action: 'pause', reason: 'daily_cap_reached: cap=3' });
-    expect(daily.action === 'pause' && daily.retryAfterMs).toBe(Date.UTC(2026, 9, 16) - h.clock.now);
+    expect(daily.action === 'pause' && daily.retryAfterMs).toBe(
+      Date.UTC(2026, 9, 16) - h.clock.now,
+    );
   });
 
   it('decideQuota is pure and treats a zero overage as allowed even with a negative balance', () => {
@@ -127,8 +135,12 @@ describe('platform quota guard — decisions', () => {
       ttlSeconds: 30,
     };
     const usage = { unreported: 0, thisHour: 0, today: 0 };
-    expect(decideQuota(snapshot, usage, { count: 100, source: broadcast }, START)).toEqual({ action: 'allow' });
-    expect(decideQuota(snapshot, usage, { count: 101, source: broadcast }, START).action).toBe('deny');
+    expect(decideQuota(snapshot, usage, { count: 100, source: broadcast }, START)).toEqual({
+      action: 'allow',
+    });
+    expect(decideQuota(snapshot, usage, { count: 101, source: broadcast }, START).action).toBe(
+      'deny',
+    );
   });
 
   it('unmetered email (dedicated capacity): no wallet check, suspension and caps still apply', () => {
@@ -147,9 +159,21 @@ describe('platform quota guard — decisions', () => {
       emailMetered: false,
     };
     const usage = { unreported: 500, thisHour: 0, today: 0 };
-    expect(decideQuota(snapshot, usage, { count: 50_000, source: broadcast }, START)).toEqual({ action: 'allow' });
-    expect(decideQuota({ ...snapshot, serviceState: 'suspended' }, usage, { count: 1, source: broadcast }, START).action).toBe('deny');
-    expect(decideQuota(snapshot, { ...usage, thisHour: 10 }, { count: 1, source: automation }, START).action).toBe('pause');
+    expect(decideQuota(snapshot, usage, { count: 50_000, source: broadcast }, START)).toEqual({
+      action: 'allow',
+    });
+    expect(
+      decideQuota(
+        { ...snapshot, serviceState: 'suspended' },
+        usage,
+        { count: 1, source: broadcast },
+        START,
+      ).action,
+    ).toBe('deny');
+    expect(
+      decideQuota(snapshot, { ...usage, thisHour: 10 }, { count: 1, source: automation }, START)
+        .action,
+    ).toBe('pause');
   });
 
   it('exposes the plan rate as the hourly cap per minute, none without a cap', async () => {

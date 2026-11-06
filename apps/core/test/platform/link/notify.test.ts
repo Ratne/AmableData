@@ -7,7 +7,13 @@ import {
 import { LICENSE_KEY } from './helpers';
 
 const ENDPOINT = 'https://cp.test/v1/installation/notify';
-const email = { to: 'ada@example.com', subject: 'Your code', html: '<p>123456</p>', text: '123456', locale: 'it' };
+const email = {
+  to: 'ada@example.com',
+  subject: 'Your code',
+  html: '<p>123456</p>',
+  text: '123456',
+  locale: 'it',
+};
 
 function recording(response: () => Response | Promise<Response>) {
   const calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -20,7 +26,11 @@ function recording(response: () => Response | Promise<Response>) {
 
 async function failure(status: number, body: unknown = { error: 'x' }): Promise<NotifyError> {
   const { fetch } = recording(() => new Response(JSON.stringify(body), { status }));
-  const provider = new NotifySystemEmailProvider({ endpoint: ENDPOINT, licenseKey: LICENSE_KEY, fetch });
+  const provider = new NotifySystemEmailProvider({
+    endpoint: ENDPOINT,
+    licenseKey: LICENSE_KEY,
+    fetch,
+  });
   const error: unknown = await provider.send(email).catch((e: unknown) => e);
   if (!(error instanceof NotifyError)) throw new Error('expected a NotifyError');
   return error;
@@ -28,8 +38,14 @@ async function failure(status: number, body: unknown = { error: 'x' }): Promise<
 
 describe('notify system email provider', () => {
   it('posts a NotifyRequest with the license as Bearer, once', async () => {
-    const { calls, fetch } = recording(() => new Response(JSON.stringify({ accepted: true, id: 'n1' }), { status: 202 }));
-    const provider = new NotifySystemEmailProvider({ endpoint: ENDPOINT, licenseKey: LICENSE_KEY, fetch });
+    const { calls, fetch } = recording(
+      () => new Response(JSON.stringify({ accepted: true, id: 'n1' }), { status: 202 }),
+    );
+    const provider = new NotifySystemEmailProvider({
+      endpoint: ENDPOINT,
+      licenseKey: LICENSE_KEY,
+      fetch,
+    });
     await provider.send(email);
     expect(calls).toHaveLength(1);
     const [call] = calls;
@@ -42,7 +58,11 @@ describe('notify system email provider', () => {
   });
 
   it('maps control plane answers to typed errors', async () => {
-    expect(await failure(401)).toMatchObject({ code: 'invalid_license', status: 401, retryable: false });
+    expect(await failure(401)).toMatchObject({
+      code: 'invalid_license',
+      status: 401,
+      retryable: false,
+    });
     expect(await failure(402)).toMatchObject({ code: 'services_suspended', retryable: false });
     expect(await failure(429)).toMatchObject({ code: 'rate_limited', retryable: true });
     expect(await failure(503)).toMatchObject({ code: 'server_error', retryable: true });
@@ -57,7 +77,10 @@ describe('notify system email provider', () => {
       licenseKey: LICENSE_KEY,
       fetch: () => Promise.reject(new TypeError('fetch failed')),
     });
-    await expect(provider.send(email)).rejects.toMatchObject({ code: 'unreachable', retryable: true });
+    await expect(provider.send(email)).rejects.toMatchObject({
+      code: 'unreachable',
+      retryable: true,
+    });
   });
 
   it('fails clearly without a license (open source must configure its own provider)', async () => {

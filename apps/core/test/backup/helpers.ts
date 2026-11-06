@@ -11,7 +11,11 @@ import {
 } from '../../src/backup/sql-dump';
 import { mailMigrations } from '../../src/email/db/migrations';
 import type { Env } from '../../src/env';
-import { MAIL_ARCHIVE_STREAMS, TENANT_ARCHIVE_STREAMS, type ArchiveDb } from '../../src/archive/model';
+import {
+  MAIL_ARCHIVE_STREAMS,
+  TENANT_ARCHIVE_STREAMS,
+  type ArchiveDb,
+} from '../../src/archive/model';
 import type { ArchiveDoStub } from '../../src/archive/scheduler';
 import { runArchiveOp, type ArchiveHost } from '../../src/archive/store';
 import { createNodeSqlDb, createTestTenant, type TestTenant } from '../crm/helpers';
@@ -23,8 +27,8 @@ export function nodeBackupSql(db: DatabaseSync): BackupSql & { maxParams: number
     maxParams: 0,
     query(sql: string, ...params: BackupSqlValue[]): BackupSqlRow[] {
       port.maxParams = Math.max(port.maxParams, params.length);
-      const bound = params.map(
-        (p): SQLInputValue => (p instanceof ArrayBuffer ? new Uint8Array(p) : p),
+      const bound = params.map((p): SQLInputValue =>
+        p instanceof ArrayBuffer ? new Uint8Array(p) : p,
       );
       return db.prepare(sql).all(...bound) as BackupSqlRow[];
     },
@@ -115,14 +119,31 @@ export class FakeDos {
   }
 
   /** The `archive(op, input)` RPC of the tenant's TenantDb or MailDb. */
-  archiveStub(tenantId: string, name: ArchiveDb, now: () => number = () => Date.now()): ArchiveDoStub {
+  archiveStub(
+    tenantId: string,
+    name: ArchiveDb,
+    now: () => number = () => Date.now(),
+  ): ArchiveDoStub {
     const dos = this.get(tenantId);
     const host: ArchiveHost =
       name === 'tenant_db'
-        ? { db: dos.crm.db, streams: TENANT_ARCHIVE_STREAMS, outbox: 'crm_outbox', settingsTable: 'tenant_meta', now }
-        : { db: createNodeSqlDb(dos.mail), streams: MAIL_ARCHIVE_STREAMS, outbox: 'mail_outbox', settingsTable: null, now };
+        ? {
+            db: dos.crm.db,
+            streams: TENANT_ARCHIVE_STREAMS,
+            outbox: 'crm_outbox',
+            settingsTable: 'tenant_meta',
+            now,
+          }
+        : {
+            db: createNodeSqlDb(dos.mail),
+            streams: MAIL_ARCHIVE_STREAMS,
+            outbox: 'mail_outbox',
+            settingsTable: null,
+            now,
+          };
     return {
-      archive: (op, input) => Promise.resolve(structuredClone(runArchiveOp(host, op, structuredClone(input)))),
+      archive: (op, input) =>
+        Promise.resolve(structuredClone(runArchiveOp(host, op, structuredClone(input)))),
     };
   }
 
@@ -152,7 +173,8 @@ async function toBytes(value: unknown): Promise<Uint8Array> {
   if (typeof value === 'string') return new TextEncoder().encode(value);
   if (value instanceof Uint8Array) return value.slice();
   if (value instanceof ArrayBuffer) return new Uint8Array(value.slice(0));
-  if (value instanceof ReadableStream) return new Uint8Array(await new Response(value).arrayBuffer());
+  if (value instanceof ReadableStream)
+    return new Uint8Array(await new Response(value).arrayBuffer());
   throw new Error('fake R2: unsupported body');
 }
 
@@ -264,6 +286,7 @@ export function testDeps(
   db: D1Database,
   clock: { now: number },
   partSize?: number,
+  slicePages?: number,
 ): BackupDeps {
   let n = 0;
   return {
@@ -276,5 +299,6 @@ export function testDeps(
       return `r${String(n).padStart(8, '0')}`;
     },
     ...(partSize === undefined ? {} : { partSize }),
+    ...(slicePages === undefined ? {} : { slicePages }),
   };
 }

@@ -28,7 +28,11 @@ async function setup(): Promise<{ h: Harness; owner: TestClient }> {
 }
 
 /** Licensed installation whose first quota snapshot has been received (billing page load). */
-async function licensed(h: Harness, owner: TestClient, serviceState: FakeControlPlane['serviceState']) {
+async function licensed(
+  h: Harness,
+  owner: TestClient,
+  serviceState: FakeControlPlane['serviceState'],
+) {
   license(h.env);
   cp = fakeControlPlane(() => h.clock.now);
   cp.serviceState = serviceState;

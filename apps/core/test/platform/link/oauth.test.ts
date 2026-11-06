@@ -25,7 +25,10 @@ describe('control plane OAuth broker client', () => {
           scopes: [OAUTH_SCOPES.sheets],
           returnUrl: 'https://crm.example.com/back',
         });
-        return json({ authorizeUrl: 'https://cp.test/v1/oauth/fake/authorize?state=s1', state: 's1' });
+        return json({
+          authorizeUrl: 'https://cp.test/v1/oauth/fake/authorize?state=s1',
+          state: 's1',
+        });
       },
       'POST /v1/installation/oauth/finish': (body) => {
         expect(body).toEqual({ tenantId: 't_1', state: 's1', code: 'c1' });
@@ -38,7 +41,11 @@ describe('control plane OAuth broker client', () => {
       'POST /v1/installation/oauth/token': (body) => {
         const { accountId } = body as { accountId: string };
         if (revoked.has(accountId)) return json({ error: 'not_connected' }, 404);
-        return json({ accessToken: 'at-1', expiresAt: 1_000, scopes: [OAUTH_SCOPES.sheets, 'email'] });
+        return json({
+          accessToken: 'at-1',
+          expiresAt: 1_000,
+          scopes: [OAUTH_SCOPES.sheets, 'email'],
+        });
       },
       'POST /v1/installation/oauth/revoke': (body) => {
         revoked.add((body as { accountId: string }).accountId);
@@ -53,7 +60,10 @@ describe('control plane OAuth broker client', () => {
       scopes: [OAUTH_SCOPES.sheets],
       returnUrl: 'https://crm.example.com/back',
     });
-    expect(start).toEqual({ authorizeUrl: 'https://cp.test/v1/oauth/fake/authorize?state=s1', state: 's1' });
+    expect(start).toEqual({
+      authorizeUrl: 'https://cp.test/v1/oauth/fake/authorize?state=s1',
+      state: 's1',
+    });
     const finished = await provider.finishConnect({ tenantId: 't_1', state: 's1', code: 'c1' });
     expect(finished).toEqual({
       account: { tenantId: 't_1', provider: 'google', accountId: 'acc_1' },
@@ -74,27 +84,35 @@ describe('control plane OAuth broker client', () => {
     cp = fakeControlPlane(() => 0);
     cp.routes = {
       'POST /v1/installation/oauth/finish': () =>
-        json({ account: { tenantId: 't_2', provider: 'google', accountId: 'a' }, email: null, scopes: [] }),
+        json({
+          account: { tenantId: 't_2', provider: 'google', accountId: 'a' },
+          email: null,
+          scopes: [],
+        }),
     };
     const provider = platformOAuthProvider(licensedEnv());
-    await expect(provider.finishConnect({ tenantId: 't_1', state: 's', code: 'c' })).rejects.toThrow(
-      /oauth_account_mismatch/,
-    );
+    await expect(
+      provider.finishConnect({ tenantId: 't_1', state: 's', code: 'c' }),
+    ).rejects.toThrow(/oauth_account_mismatch/);
   });
 
   it('surfaces broker errors other than not_connected', async () => {
     cp = fakeControlPlane(() => 0);
-    cp.routes = { 'POST /v1/installation/oauth/token': () => json({ error: 'services_suspended' }, 402) };
+    cp.routes = {
+      'POST /v1/installation/oauth/token': () => json({ error: 'services_suspended' }, 402),
+    };
     const provider = platformOAuthProvider(licensedEnv());
-    await expect(provider.getAccessToken({ tenantId: 't', provider: 'google', accountId: 'a' })).rejects.toThrow(
-      /402 services_suspended/,
-    );
+    await expect(
+      provider.getAccessToken({ tenantId: 't', provider: 'google', accountId: 'a' }),
+    ).rejects.toThrow(/402 services_suspended/);
   });
 
   it('falls back to the dev stub in dev and to unavailable otherwise', () => {
     const dev = platformOAuthProvider({ ENVIRONMENT: 'dev' } as unknown as Env);
     expect(dev.available).toBe(true);
     expect(dev).not.toBeInstanceOf(ControlPlaneOAuthTokenProvider);
-    expect(platformOAuthProvider({ ENVIRONMENT: 'production' } as unknown as Env)).toBe(unavailableOAuthProvider);
+    expect(platformOAuthProvider({ ENVIRONMENT: 'production' } as unknown as Env)).toBe(
+      unavailableOAuthProvider,
+    );
   });
 });

@@ -66,7 +66,12 @@ function tenantEngine(h: Harness, tenantId: string) {
       call: (op: string, input: unknown): Promise<CrmResult<unknown>> =>
         Promise.resolve(
           structuredClone(
-            runCrmOp({ db: tenant.db, searchMode: tenant.mode, now: () => clock.now }, ENGINE_ACTOR, op, structuredClone(input)),
+            runCrmOp(
+              { db: tenant.db, searchMode: tenant.mode, now: () => clock.now },
+              ENGINE_ACTOR,
+              op,
+              structuredClone(input),
+            ),
           ),
         ),
     },
@@ -141,7 +146,10 @@ describe('signed resume-email: end-to-end pause → top-up → resume', () => {
       settings: {},
     });
     await op('automations.publish', { id: created.id });
-    const ada = t.tenant.op('contacts.create', { given_name: 'Ada', emails: [{ email: 'ada@example.com' }] }).id;
+    const ada = t.tenant.op('contacts.create', {
+      given_name: 'Ada',
+      emails: [{ email: 'ada@example.com' }],
+    }).id;
     t.tenant.op('contacts.applyTags', { id: ada, data: { tag_ids: [go] } });
     await t.flush();
     expect(t.emails).toHaveLength(0);
@@ -158,7 +166,10 @@ describe('signed resume-email: end-to-end pause → top-up → resume', () => {
 
     await t.flush();
     expect(t.emails).toHaveLength(1);
-    expect(t.emails[0]).toMatchObject({ contactId: ada, source: { type: 'automation', stepId: 'mail' } });
+    expect(t.emails[0]).toMatchObject({
+      contactId: ada,
+      source: { type: 'automation', stepId: 'mail' },
+    });
     // The guard decided from the pushed snapshot (stored in D1), without asking the control plane.
     expect(cp.calls.filter((c) => c.path === '/v1/installation/quota')).toHaveLength(1);
   });
@@ -172,7 +183,10 @@ describe('signed control plane routes', () => {
     const calls: string[] = [];
     Object.assign(h.env, { ENGINE: engineNamespace(new Map(), calls) });
     cp = fakeControlPlane(() => h.clock.now);
-    const body = JSON.stringify({ reason: 'manual', quota: cp.snapshot() } satisfies ResumeEmailRequest);
+    const body = JSON.stringify({
+      reason: 'manual',
+      quota: cp.snapshot(),
+    } satisfies ResumeEmailRequest);
     return { h, keys, body, calls };
   }
 
@@ -182,17 +196,32 @@ describe('signed control plane routes', () => {
     expect(unsigned.status).toBe(401);
     expect(unsigned.body).toEqual({ error: 'invalid_signature' });
 
-    const expired = await post(h, PATH, body, await signed(keys.privateKey, body, h.clock.now - 10 * 60_000));
+    const expired = await post(
+      h,
+      PATH,
+      body,
+      await signed(keys.privateKey, body, h.clock.now - 10 * 60_000),
+    );
     expect(expired.status).toBe(401);
 
     const other = await generateSigningKeyPair();
     const foreign = await post(h, PATH, body, await signed(other.privateKey, body, h.clock.now));
     expect(foreign.status).toBe(401);
 
-    const tampered = await post(h, PATH, body.replace('manual', 'top_up'), await signed(keys.privateKey, body, h.clock.now));
+    const tampered = await post(
+      h,
+      PATH,
+      body.replace('manual', 'top_up'),
+      await signed(keys.privateKey, body, h.clock.now),
+    );
     expect(tampered.status).toBe(401);
 
-    const wrongPath = await post(h, PATH, body, await signed(keys.privateKey, body, h.clock.now, '/api/platform/v1/status'));
+    const wrongPath = await post(
+      h,
+      PATH,
+      body,
+      await signed(keys.privateKey, body, h.clock.now, '/api/platform/v1/status'),
+    );
     expect(wrongPath.status).toBe(401);
     expect(calls).toHaveLength(0);
   });
@@ -221,18 +250,31 @@ describe('signed control plane routes', () => {
     const res = await post(h, PATH, body, headers);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true, tenants: 0, resumed: 0 });
-    const row = h.shim.sqlite.prepare(`SELECT value FROM installation_meta WHERE key = 'platform:quota'`).get() as
-      | { value: string }
-      | undefined;
-    expect(JSON.parse(row?.value ?? 'null')).toMatchObject({ storedAt: h.clock.now, snapshot: { serviceState: 'active' } });
+    const row = h.shim.sqlite
+      .prepare(`SELECT value FROM installation_meta WHERE key = 'platform:quota'`)
+      .get() as { value: string } | undefined;
+    expect(JSON.parse(row?.value ?? 'null')).toMatchObject({
+      storedAt: h.clock.now,
+      snapshot: { serviceState: 'active' },
+    });
   });
 
   it('answers a signed status probe', async () => {
     const { h, keys } = await setup();
     license(h.env);
-    const res = await post(h, '/api/platform/v1/status', '{}', await signed(keys.privateKey, '{}', h.clock.now, '/api/platform/v1/status'));
+    const res = await post(
+      h,
+      '/api/platform/v1/status',
+      '{}',
+      await signed(keys.privateKey, '{}', h.clock.now, '/api/platform/v1/status'),
+    );
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: true, licensed: true, version: 'dev', schemaVersion: latestSchemaVersion(installationMigrations) });
+    expect(res.body).toMatchObject({
+      ok: true,
+      licensed: true,
+      version: 'dev',
+      schemaVersion: latestSchemaVersion(installationMigrations),
+    });
   });
 
   it('bootstraps the first workspace and owner invitation once, never after a sign-up', async () => {
@@ -240,7 +282,11 @@ describe('signed control plane routes', () => {
     license(h.env);
     const path = '/api/platform/v1/bootstrap-owner';
     const call = async () => {
-      const body = JSON.stringify({ email: 'Owner@Example.com', workspaceName: 'ZZZ Srl', locale: 'it' });
+      const body = JSON.stringify({
+        email: 'Owner@Example.com',
+        workspaceName: 'ZZZ Srl',
+        locale: 'it',
+      });
       return post(h, path, body, await signed(keys.privateKey, body, h.clock.now, path));
     };
     const unsigned = await post(h, path, '{}', { 'content-type': 'application/json' });
@@ -249,18 +295,24 @@ describe('signed control plane routes', () => {
     const first = await call();
     expect(first.status).toBe(200);
     expect(first.body).toMatchObject({ ok: true, status: 'invited', workspace: 'ZZZ Srl' });
-    expect(String((first.body as { url: string }).url)).toMatch(new RegExp(`^${ORIGIN}/invite#token=`));
+    expect(String((first.body as { url: string }).url)).toMatch(
+      new RegExp(`^${ORIGIN}/invite#token=`),
+    );
     const second = await call();
     expect((second.body as { url: string }).url).not.toBe((first.body as { url: string }).url);
     const tenants = h.shim.sqlite.prepare(`SELECT slug, name FROM tenants`).all();
     expect(tenants).toEqual([{ slug: 'zzz-srl', name: 'ZZZ Srl' }]);
     const pending = h.shim.sqlite
-      .prepare(`SELECT email, role, locale FROM invites WHERE accepted_at IS NULL AND revoked_at IS NULL`)
+      .prepare(
+        `SELECT email, role, locale FROM invites WHERE accepted_at IS NULL AND revoked_at IS NULL`,
+      )
       .all();
     expect(pending).toEqual([{ email: 'owner@example.com', role: 'owner', locale: 'it' }]);
 
     h.shim.sqlite
-      .prepare(`INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'someone@example.com', 0, 0)`)
+      .prepare(
+        `INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'someone@example.com', 0, 0)`,
+      )
       .run();
     expect((await call()).body).toEqual({ ok: true, status: 'has_users' });
   });

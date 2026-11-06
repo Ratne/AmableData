@@ -21,26 +21,60 @@ async function setup(): Promise<{ h: Harness; cp: FakeControlPlane }> {
 }
 
 function usageRows(h: Harness) {
-  return h.shim.sqlite.prepare(`SELECT tenant_id, hour_start, count, reported_at FROM platform_usage ORDER BY hour_start, tenant_id`).all();
+  return h.shim.sqlite
+    .prepare(
+      `SELECT tenant_id, hour_start, count, reported_at FROM platform_usage ORDER BY hour_start, tenant_id`,
+    )
+    .all();
 }
 
 const usageCalls = (fake: FakeControlPlane) =>
-  fake.calls.filter((c) => c.path === '/v1/installation/usage').map((c) => c.body as UsageReportRequest);
+  fake.calls
+    .filter((c) => c.path === '/v1/installation/usage')
+    .map((c) => c.body as UsageReportRequest);
 
 describe('usage metering and idempotent block reports', () => {
   it('meters per tenant and UTC hour, reporting only closed hours with deterministic block ids', async () => {
     const { h, cp: fake } = await setup();
-    await recordPlatformUsage(h.env.DB, { tenantId: 't_a', channel: 'email', count: 3 }, START + 60_000);
-    await recordPlatformUsage(h.env.DB, { tenantId: 't_a', channel: 'email', count: 1 }, START + 30 * 60_000);
-    await recordPlatformUsage(h.env.DB, { tenantId: 't_b', channel: 'email', count: 2 }, START + 10 * 60_000);
-    await recordPlatformUsage(h.env.DB, { tenantId: 't_a', channel: 'email', count: 5 }, START + HOUR + 60_000);
+    await recordPlatformUsage(
+      h.env.DB,
+      { tenantId: 't_a', channel: 'email', count: 3 },
+      START + 60_000,
+    );
+    await recordPlatformUsage(
+      h.env.DB,
+      { tenantId: 't_a', channel: 'email', count: 1 },
+      START + 30 * 60_000,
+    );
+    await recordPlatformUsage(
+      h.env.DB,
+      { tenantId: 't_b', channel: 'email', count: 2 },
+      START + 10 * 60_000,
+    );
+    await recordPlatformUsage(
+      h.env.DB,
+      { tenantId: 't_a', channel: 'email', count: 5 },
+      START + HOUR + 60_000,
+    );
 
     const now = START + HOUR + 10 * 60_000;
     expect(await flushUsage(h.env, now)).toEqual({ reported: 2, pending: 0 });
     const [report] = usageCalls(fake);
     expect(report?.blocks).toEqual([
-      { blockId: usageBlockId('t_a', START), tenantId: 't_a', channel: 'email', count: 4, periodStart: '2026-10-15T12:00:00.000Z' },
-      { blockId: usageBlockId('t_b', START), tenantId: 't_b', channel: 'email', count: 2, periodStart: '2026-10-15T12:00:00.000Z' },
+      {
+        blockId: usageBlockId('t_a', START),
+        tenantId: 't_a',
+        channel: 'email',
+        count: 4,
+        periodStart: '2026-10-15T12:00:00.000Z',
+      },
+      {
+        blockId: usageBlockId('t_b', START),
+        tenantId: 't_b',
+        channel: 'email',
+        count: 2,
+        periodStart: '2026-10-15T12:00:00.000Z',
+      },
     ]);
     expect(usageBlockId('t_a', START)).toBe('t_a:email:2026-10-15T12:00:00.000Z');
     expect(usageRows(h)).toEqual([
@@ -62,7 +96,9 @@ describe('usage metering and idempotent block reports', () => {
     const now = START + 2 * HOUR;
     fake.failUsageOnce = 503;
     await expect(flushUsage(h.env, now)).rejects.toThrow();
-    expect(usageRows(h).every((r) => (r as { reported_at: unknown }).reported_at === null)).toBe(true);
+    expect(usageRows(h).every((r) => (r as { reported_at: unknown }).reported_at === null)).toBe(
+      true,
+    );
 
     // Only t_a accepted: t_b stays pending.
     fake.acceptOnly = (id) => id.startsWith('t_a:');
@@ -80,7 +116,11 @@ describe('usage metering and idempotent block reports', () => {
   it('reports at most 100 blocks per call', async () => {
     const { h, cp: fake } = await setup();
     for (let i = 0; i < 120; i += 1) {
-      await recordPlatformUsage(h.env.DB, { tenantId: `t_${String(i)}`, channel: 'email', count: 1 }, START);
+      await recordPlatformUsage(
+        h.env.DB,
+        { tenantId: `t_${String(i)}`, channel: 'email', count: 1 },
+        START,
+      );
     }
     expect(await flushUsage(h.env, START + HOUR)).toEqual({ reported: 100, pending: 0 });
     expect(await flushUsage(h.env, START + HOUR)).toEqual({ reported: 20, pending: 0 });
@@ -112,7 +152,10 @@ describe('heartbeat', () => {
       pendingErrors: 1,
       sentAt: '2026-10-15T12:00:00.000Z',
     });
-    expect(await readMeta(h.env.DB, 'platform:reporting')).toEqual({ sampleRate: 0.5, maxBatch: 25 });
+    expect(await readMeta(h.env.DB, 'platform:reporting')).toEqual({
+      sampleRate: 0.5,
+      maxBatch: 25,
+    });
     expect(await readMeta(h.env.DB, 'platform:heartbeat')).toEqual({
       at: START,
       serviceState: 'active',
@@ -126,31 +169,62 @@ describe('heartbeat', () => {
     const { h, cp: fake } = await setup();
     await seedTenant(h, 'acme');
     await h.env.DB.batch([
-      h.env.DB.prepare(`INSERT INTO installation_meta (key, value) VALUES ('postshiba_tenant:t_acme', 'TnA')`),
+      h.env.DB.prepare(
+        `INSERT INTO installation_meta (key, value) VALUES ('postshiba_tenant:t_acme', 'TnA')`,
+      ),
       h.env.DB.prepare(
         `INSERT INTO domains (id, tenant_id, hostname, kind, status, records, created_at) VALUES
           ('d1', 't_acme', 'mail.acme.com', 'sending', 'verified', '[]', 0),
           ('d2', 't_acme', 'news.acme.com', 'sending', 'verified', '[]', 0)`,
       ),
     ]);
-    const records = [{ type: 'CNAME', name: 'ps._domainkey.mail.acme.com', value: 'new.customers.postshiba.com' }];
+    const records = [
+      { type: 'CNAME', name: 'ps._domainkey.mail.acme.com', value: 'new.customers.postshiba.com' },
+    ];
     const heartbeat = (dnsChanges: unknown[]) => {
       fake.routes['POST /v1/installation/heartbeat'] = () =>
         new Response(
-          JSON.stringify({ ok: true, installationId: 'inst', serviceState: 'active', channel: 'stable', targetVersion: null, quota: fake.snapshot(), reporting: { sampleRate: 1, maxBatch: 10 }, dnsChanges }),
+          JSON.stringify({
+            ok: true,
+            installationId: 'inst',
+            serviceState: 'active',
+            channel: 'stable',
+            targetVersion: null,
+            quota: fake.snapshot(),
+            reporting: { sampleRate: 1, maxBatch: 10 },
+            dnsChanges,
+          }),
           { headers: { 'content-type': 'application/json' } },
         );
     };
     const rows = () =>
-      h.env.DB.prepare(`SELECT id, records, dns_changed_at FROM domains ORDER BY id`).all<{ id: string; records: string; dns_changed_at: number | null }>();
+      h.env.DB.prepare(`SELECT id, records, dns_changed_at FROM domains ORDER BY id`).all<{
+        id: string;
+        records: string;
+        dns_changed_at: number | null;
+      }>();
 
     heartbeat([
-      { providerTenantId: 'TnA', hostname: 'mail.acme.com', records, detectedAt: '2026-10-15T11:00:00.000Z' },
-      { providerTenantId: 'Other', hostname: 'news.acme.com', records, detectedAt: '2026-10-15T11:00:00.000Z' },
+      {
+        providerTenantId: 'TnA',
+        hostname: 'mail.acme.com',
+        records,
+        detectedAt: '2026-10-15T11:00:00.000Z',
+      },
+      {
+        providerTenantId: 'Other',
+        hostname: 'news.acme.com',
+        records,
+        detectedAt: '2026-10-15T11:00:00.000Z',
+      },
     ]);
     await runPlatformCron(h.env, START);
     expect((await rows()).results).toEqual([
-      { id: 'd1', records: JSON.stringify(records), dns_changed_at: Date.parse('2026-10-15T11:00:00.000Z') },
+      {
+        id: 'd1',
+        records: JSON.stringify(records),
+        dns_changed_at: Date.parse('2026-10-15T11:00:00.000Z'),
+      },
       { id: 'd2', records: '[]', dns_changed_at: null },
     ]);
 
@@ -169,7 +243,10 @@ describe('heartbeat', () => {
     await recordPlatformUsage(h.env.DB, { tenantId: 't_a', channel: 'email', count: 1 }, START);
     fake.down = true;
     await expect(runPlatformCron(h.env, START + 2 * HOUR)).resolves.toBeUndefined();
-    expect(fake.calls.map((c) => c.path)).toEqual(['/v1/installation/usage', '/v1/installation/heartbeat']);
+    expect(fake.calls.map((c) => c.path)).toEqual([
+      '/v1/installation/usage',
+      '/v1/installation/heartbeat',
+    ]);
   });
 
   it('is a no-op without a license', async () => {

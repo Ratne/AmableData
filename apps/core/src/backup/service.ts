@@ -8,8 +8,11 @@ import {
   BACKUP_MAX_PER_TICK,
   BACKUP_RETENTION_MANUAL,
   BACKUP_RETENTION_SCHEDULED,
+  BACKUP_SLICE_MAX_PAGES,
+  BACKUP_STAGING_PREFIX,
   BACKUP_STATE_KEY,
   BACKUP_TICK_BUDGET_MS,
+  BACKUP_ABANDON_MS,
   INSTALLATION_BACKUP_PREFIX,
   TENANT_DO_NAMES,
   backupId,
@@ -24,7 +27,7 @@ import {
   type BackupRowLine,
   type TenantDoName,
 } from './format';
-import { createR2JsonlGzipWriter, readJsonlGzip, type JsonlGzipWriter } from './jsonl-gzip';
+import { createR2JsonlGzipWriter, createR2JsonlPlainWriter, readJsonlGzip } from './jsonl-gzip';
 import {
   encodeValue,
   quoteIdent,
@@ -50,6 +53,8 @@ export interface BackupDeps {
   now(): number;
   rand(): string;
   partSize?: number;
+  /** Pages per staged slice (tests shrink it); default BACKUP_SLICE_MAX_PAGES. */
+  slicePages?: number;
 }
 
 export interface BackupTenant {
@@ -162,37 +167,37 @@ async function d1Tables(db: D1Database): Promise<{ name: string; sql: string }[]
     .map((t) => ({ name: t.name, sql: t.sql ?? '' }));
 }
 
-async function* d1Rows(
+async function d1Page(
   db: D1Database,
   table: { name: string; sql: string },
   filter: { column: string; value: string } | null,
-): AsyncGenerator<BackupRow> {
+  after: number,
+): Promise<{ rows: BackupRow[]; after: number }> {
   const name = quoteIdent(table.name);
   const where = filter === null ? '' : `${quoteIdent(filter.column)} = ? AND `;
   const base: BackupSqlValue[] = filter === null ? [] : [filter.value];
   const withoutRowid = /\bWITHOUT\s+ROWID\b/i.test(table.sql);
-  let after = 0;
-  for (;;) {
-    const statement = withoutRowid
-      ? db
-          .prepare(`SELECT * FROM ${name} WHERE ${where}1 = 1 ORDER BY 1 LIMIT ? OFFSET ?`)
-          .bind(...base, D1_PAGE, after)
-      : db
-          .prepare(
-            `SELECT rowid AS ${ROWID}, * FROM ${name} WHERE ${where}rowid > ? ORDER BY rowid LIMIT ?`,
-          )
-          .bind(...base, after, D1_PAGE);
-    const { results } = await statement.all<Record<string, unknown>>();
-    for (const raw of results) {
-      const row: BackupRow = {};
-      for (const [column, value] of Object.entries(raw)) {
-        if (column !== ROWID) row[column] = encodeD1Value(value);
-      }
-      after = withoutRowid ? after + 1 : Number(raw[ROWID]);
-      yield row;
+  const statement = withoutRowid
+    ? db
+        .prepare(`SELECT * FROM ${name} WHERE ${where}1 = 1 ORDER BY 1 LIMIT ? OFFSET ?`)
+        .bind(...base, D1_PAGE, after)
+    : db
+        .prepare(
+          `SELECT rowid AS ${ROWID}, * FROM ${name} WHERE ${where}rowid > ? ORDER BY rowid LIMIT ?`,
+        )
+        .bind(...base, after, D1_PAGE);
+  const { results } = await statement.all<Record<string, unknown>>();
+  const rows: BackupRow[] = [];
+  let next = after;
+  for (const raw of results) {
+    const row: BackupRow = {};
+    for (const [column, value] of Object.entries(raw)) {
+      if (column !== ROWID) row[column] = encodeD1Value(value);
     }
-    if (results.length < D1_PAGE) return;
+    next = withoutRowid ? next + 1 : Number(raw[ROWID]);
+    rows.push(row);
   }
+  return { rows, after: next };
 }
 
 async function installationSchemaVersion(db: D1Database): Promise<number> {
@@ -202,58 +207,229 @@ async function installationSchemaVersion(db: D1Database): Promise<number> {
   return Number(row?.value ?? 0);
 }
 
-// --- Creating backups ------------------------------------------------------------------------
+// --- Creating backups (staged slices) ---------------------------------------------------------
 
-interface WriteContext {
-  writer: JsonlGzipWriter;
+/**
+ * Backups are written in slices so one scheduled backup can span cron ticks
+ * without exceeding a tick's subrequest or time budget: every slice streams
+ * rows into an uncompressed staging object, and once the data is exhausted one
+ * finalize pass concatenates the slices through a single gzip stream into the
+ * usual `<id>.jsonl.gz` (workerd's DecompressionStream rejects multi-member
+ * gzip, so a suspended backup cannot keep one compressed stream open). Manual
+ * backups run the same machinery in one call, without a deadline.
+ */
+
+/** Where the next slice starts: the DO streams first (tenant backups), then the D1 tables. */
+type SliceCursor =
+  | { phase: 'do'; index: number; cursor: DumpCursor | null }
+  | { phase: 'd1'; table: string | null; after: number };
+
+/** A backup in progress; serialized into the scheduler state while suspended. */
+interface StagedBackup {
+  scope: string;
+  tenant: BackupTenant | null;
+  id: string;
+  kind: BackupKind;
+  header: BackupHeaderLine;
   rows: number;
+  /** Staging objects written so far (their keys are 1-based). */
+  staged: number;
+  /** null: data exhausted, only the finalize pass is left. */
+  cursor: SliceCursor | null;
+  startedAt: number;
 }
 
-async function writeRow(ctx: WriteContext, line: BackupRowLine): Promise<void> {
-  await ctx.writer.write(line);
-  ctx.rows += 1;
+function stagingKey(id: string, index: number): string {
+  return `${BACKUP_STAGING_PREFIX}${id}.${String(index).padStart(4, '0')}.jsonl`;
 }
 
-async function writeBackup(
+async function deleteStaging(deps: BackupDeps, id: string): Promise<void> {
+  const page = await deps.bucket.list({ prefix: `${BACKUP_STAGING_PREFIX}${id}.` });
+  if (page.objects.length > 0) await deps.bucket.delete(page.objects.map((object) => object.key));
+}
+
+async function newStagedBackup(
   deps: BackupDeps,
-  prefix: string,
+  tenant: BackupTenant | null,
   kind: BackupKind,
-  header: Omit<BackupHeaderLine, 'type' | 'format' | 'version' | 'kind' | 'createdAt'>,
-  body: (ctx: WriteContext) => Promise<void>,
-): Promise<BackupObjectInfo> {
+): Promise<StagedBackup> {
   const at = deps.now();
-  const id = backupId(at, kind, deps.rand());
-  const key = backupKey(prefix, id);
-  const writer = createR2JsonlGzipWriter(deps.bucket, key, {
-    customMetadata: {
-      format: String(BACKUP_FORMAT_VERSION),
-      scope: header.scope,
-      kind,
-      tenantId: header.tenantId ?? '',
-    },
-    ...(deps.partSize === undefined ? {} : { partSize: deps.partSize }),
-  });
-  const ctx: WriteContext = { writer, rows: 0 };
-  try {
-    const line: BackupHeaderLine = {
+  const schemas: Partial<Record<BackupDbName, number>> = {
+    d1: await installationSchemaVersion(deps.db),
+  };
+  if (tenant !== null) {
+    for (const name of TENANT_DO_NAMES) {
+      schemas[name] = (await deps.stub(tenant.id, name).backupInfo()).schemaVersion;
+    }
+  }
+  return {
+    scope: tenant === null ? INSTALLATION_SCOPE : tenant.id,
+    tenant,
+    id: backupId(at, kind, deps.rand()),
+    kind,
+    header: {
       type: 'header',
       format: BACKUP_FORMAT,
       version: BACKUP_FORMAT_VERSION,
+      scope: tenant === null ? 'installation' : 'tenant',
       kind,
+      tenantId: tenant?.id ?? null,
+      tenantSlug: tenant?.slug ?? null,
       createdAt: new Date(at).toISOString(),
-      ...header,
-    };
-    await writer.write(line);
-    await body(ctx);
-    await writer.write({ type: 'end', rows: ctx.rows });
-    const size = await writer.close();
-    const info = parseBackupKey(prefix, key, size);
-    if (info === null) throw new Error('backup: unparsable key');
-    return info;
+      schemas,
+    },
+    rows: 0,
+    staged: 0,
+    cursor:
+      tenant === null
+        ? { phase: 'd1', table: null, after: 0 }
+        : { phase: 'do', index: 0, cursor: null },
+    startedAt: at,
+  };
+}
+
+/** D1 filter of a table in a tenant backup; null = the table is not part of it. */
+function tenantD1Filter(
+  tenant: BackupTenant,
+  table: { name: string; sql: string },
+): { column: string; value: string } | null {
+  if (TENANT_D1_EXCLUDE.includes(table.name)) return null;
+  if (table.name === 'tenants') return { column: 'id', value: tenant.id };
+  return /\btenant_id\b/.test(table.sql) ? { column: 'tenant_id', value: tenant.id } : null;
+}
+
+/**
+ * One staging object: rows from the cursor on, until the data ends or
+ * `shouldPause`. The job advances only after the object is stored, so a failed
+ * or crashed slice is simply rewritten onto the same key.
+ */
+async function writeSlice(
+  deps: BackupDeps,
+  job: StagedBackup,
+  shouldPause: () => boolean,
+): Promise<void> {
+  const writer = createR2JsonlPlainWriter(
+    deps.bucket,
+    stagingKey(job.id, job.staged + 1),
+    deps.partSize === undefined ? {} : { partSize: deps.partSize },
+  );
+  let cursor = job.cursor;
+  let rowsAdded = 0;
+  try {
+    if (job.staged === 0) await writer.write(job.header);
+    let pause = false;
+    while (!pause && cursor !== null && cursor.phase === 'do') {
+      const tenant = job.tenant;
+      const name = TENANT_DO_NAMES[cursor.index];
+      if (tenant === null || name === undefined) throw new Error('backup: bad do-phase cursor');
+      const page = await deps.stub(tenant.id, name).backupDump(cursor.cursor);
+      for (const { table, row } of page.rows) {
+        const line: BackupRowLine = { db: name, table, row };
+        await writer.write(line);
+        rowsAdded += 1;
+      }
+      cursor =
+        page.next !== null
+          ? { phase: 'do', index: cursor.index, cursor: page.next }
+          : cursor.index + 1 < TENANT_DO_NAMES.length
+            ? { phase: 'do', index: cursor.index + 1, cursor: null }
+            : { phase: 'd1', table: null, after: 0 };
+      pause = shouldPause();
+    }
+    if (!pause && cursor !== null && cursor.phase === 'd1') {
+      const start = cursor;
+      let suspended: SliceCursor | null = null;
+      outer: for (const table of await d1Tables(deps.db)) {
+        if (start.table !== null && table.name < start.table) continue;
+        const filter = job.tenant === null ? null : tenantD1Filter(job.tenant, table);
+        if (job.tenant !== null && filter === null) continue;
+        let after = start.table === table.name ? start.after : 0;
+        for (;;) {
+          const page = await d1Page(deps.db, table, filter, after);
+          for (const row of page.rows) {
+            const line: BackupRowLine = { db: 'd1', table: table.name, row };
+            await writer.write(line);
+            rowsAdded += 1;
+          }
+          after = page.after;
+          // Table finished: move on without pausing, or the slice could suspend
+          // on an unchanged cursor (the resume would re-read the same empty
+          // page) and never advance.
+          if (page.rows.length < D1_PAGE) break;
+          if (shouldPause()) {
+            // Resuming re-reads from `after`: the cursor advanced with this page.
+            suspended = { phase: 'd1', table: table.name, after };
+            break outer;
+          }
+        }
+      }
+      cursor = suspended;
+    }
   } catch (error) {
     await writer.abort();
     throw error;
   }
+  await writer.close();
+  job.cursor = cursor;
+  job.rows += rowsAdded;
+  job.staged += 1;
+}
+
+/** Concatenates the staging objects through one gzip stream into the final backup object. */
+async function finalizeStaged(deps: BackupDeps, job: StagedBackup): Promise<BackupObjectInfo> {
+  const prefix =
+    job.tenant === null ? INSTALLATION_BACKUP_PREFIX : tenantBackupPrefix(job.tenant.id);
+  const key = backupKey(prefix, job.id);
+  const writer = createR2JsonlGzipWriter(deps.bucket, key, {
+    customMetadata: {
+      format: String(BACKUP_FORMAT_VERSION),
+      scope: job.header.scope,
+      kind: job.kind,
+      tenantId: job.header.tenantId ?? '',
+    },
+    ...(deps.partSize === undefined ? {} : { partSize: deps.partSize }),
+  });
+  try {
+    for (let index = 1; index <= job.staged; index += 1) {
+      const object = await deps.bucket.get(stagingKey(job.id, index));
+      if (object === null) throw new Error(`backup: staging slice ${String(index)} is missing`);
+      await writer.writeRaw(object.body);
+    }
+    await writer.write({ type: 'end', rows: job.rows });
+  } catch (error) {
+    await writer.abort();
+    throw error;
+  }
+  const size = await writer.close();
+  const info = parseBackupKey(prefix, key, size);
+  if (info === null) throw new Error('backup: unparsable key');
+  await deleteStaging(deps, job.id);
+  return info;
+}
+
+/**
+ * Runs slices (stopping at `deadline` when given) and finalizes; 'suspended'
+ * means out of budget, with all progress stored in `job` and its staging
+ * objects. `onSlice` persists the job after every stored slice.
+ */
+async function runStaged(
+  deps: BackupDeps,
+  job: StagedBackup,
+  deadline: number | null,
+  onSlice?: () => Promise<void>,
+): Promise<BackupObjectInfo | 'suspended'> {
+  const slicePages = deps.slicePages ?? BACKUP_SLICE_MAX_PAGES;
+  while (job.cursor !== null) {
+    if (deadline !== null && deps.now() >= deadline) return 'suspended';
+    let pages = 0;
+    await writeSlice(deps, job, () => {
+      pages += 1;
+      return pages >= slicePages || (deadline !== null && deps.now() >= deadline);
+    });
+    await onSlice?.();
+  }
+  if (deadline !== null && deps.now() >= deadline) return 'suspended';
+  return finalizeStaged(deps, job);
 }
 
 export async function createTenantBackup(
@@ -262,66 +438,15 @@ export async function createTenantBackup(
   kind: BackupKind,
   options: { prune?: boolean } = {},
 ): Promise<BackupObjectInfo> {
-  const stubs = TENANT_DO_NAMES.map((name) => ({ name, stub: deps.stub(tenant.id, name) }));
-  const schemas: Partial<Record<BackupDbName, number>> = {
-    d1: await installationSchemaVersion(deps.db),
-  };
-  for (const { name, stub } of stubs) schemas[name] = (await stub.backupInfo()).schemaVersion;
-  const prefix = tenantBackupPrefix(tenant.id);
-  const info = await writeBackup(
-    deps,
-    prefix,
-    kind,
-    { scope: 'tenant', tenantId: tenant.id, tenantSlug: tenant.slug, schemas },
-    async (ctx) => {
-      for (const { name, stub } of stubs) {
-        let cursor: DumpCursor | null = null;
-        do {
-          const page: DumpPage = await stub.backupDump(cursor);
-          for (const { table, row } of page.rows) await writeRow(ctx, { db: name, table, row });
-          cursor = page.next;
-        } while (cursor !== null);
-      }
-      for (const table of await d1Tables(deps.db)) {
-        if (TENANT_D1_EXCLUDE.includes(table.name)) continue;
-        const filter =
-          table.name === 'tenants'
-            ? { column: 'id', value: tenant.id }
-            : /\btenant_id\b/.test(table.sql)
-              ? { column: 'tenant_id', value: tenant.id }
-              : null;
-        if (filter === null) continue;
-        for await (const row of d1Rows(deps.db, table, filter)) {
-          await writeRow(ctx, { db: 'd1', table: table.name, row });
-        }
-      }
-    },
-  );
-  if (options.prune ?? true) await pruneBackups(deps, prefix, [info.key]);
-  return info;
-}
-
-async function createInstallationBackup(deps: BackupDeps): Promise<BackupObjectInfo> {
-  const info = await writeBackup(
-    deps,
-    INSTALLATION_BACKUP_PREFIX,
-    'scheduled',
-    {
-      scope: 'installation',
-      tenantId: null,
-      tenantSlug: null,
-      schemas: { d1: await installationSchemaVersion(deps.db) },
-    },
-    async (ctx) => {
-      for (const table of await d1Tables(deps.db)) {
-        for await (const row of d1Rows(deps.db, table, null)) {
-          await writeRow(ctx, { db: 'd1', table: table.name, row });
-        }
-      }
-    },
-  );
-  await pruneBackups(deps, INSTALLATION_BACKUP_PREFIX, [info.key]);
-  return info;
+  const job = await newStagedBackup(deps, tenant, kind);
+  try {
+    const info = (await runStaged(deps, job, null)) as BackupObjectInfo;
+    if (options.prune ?? true) await pruneBackups(deps, tenantBackupPrefix(tenant.id), [info.key]);
+    return info;
+  } catch (error) {
+    await deleteStaging(deps, job.id);
+    throw error;
+  }
 }
 
 /** Opens a tenant backup by id; null when it does not exist under that tenant. */
@@ -342,6 +467,8 @@ interface BackupState {
   /** Failed scopes are retried no earlier than this. */
   retryAt: Record<string, number>;
   leaseUntil: number | null;
+  /** A suspended scheduled backup; it resumes before anything new starts. */
+  inProgress: StagedBackup | null;
 }
 
 const INSTALLATION_SCOPE = '_installation';
@@ -355,12 +482,19 @@ async function readState(deps: BackupDeps): Promise<{ state: BackupState; etag: 
     tenants: {},
     retryAt: {},
     leaseUntil: null,
+    inProgress: null,
   };
   if (object === null) return { state: empty, etag: null };
   try {
     const parsed = (await object.json()) as Partial<BackupState>;
     return {
-      state: { ...empty, ...parsed, tenants: parsed.tenants ?? {}, retryAt: parsed.retryAt ?? {} },
+      state: {
+        ...empty,
+        ...parsed,
+        tenants: parsed.tenants ?? {},
+        retryAt: parsed.retryAt ?? {},
+        inProgress: parsed.inProgress ?? null,
+      },
       etag: object.etag,
     };
   } catch {
@@ -388,8 +522,10 @@ export interface ScheduledBackupSummary {
 
 /**
  * Called by every cron tick: backs up the installation D1 and each tenant whose
- * last scheduled backup is older than BACKUP_INTERVAL_MS, oldest first, a few per
- * tick. An R2 lease (conditional put) keeps overlapping ticks from doubling work.
+ * last scheduled backup is older than BACKUP_INTERVAL_MS, oldest first, a few
+ * per tick. A backup that outgrows the tick budget suspends into staged slices
+ * and resumes on the next ticks before anything new starts. An R2 lease
+ * (conditional put) keeps overlapping ticks from doubling work.
  */
 export async function runScheduledBackups(
   deps: BackupDeps,
@@ -398,6 +534,7 @@ export async function runScheduledBackups(
   const started = deps.now();
   const maxBackups = options.maxBackups ?? BACKUP_MAX_PER_TICK;
   const budget = options.budgetMs ?? BACKUP_TICK_BUDGET_MS;
+  const deadline = started + budget;
   const { state, etag } = await readState(deps);
   if (state.leaseUntil !== null && state.leaseUntil > started) {
     return { status: 'locked', done: [], failed: [] };
@@ -406,21 +543,42 @@ export async function runScheduledBackups(
   const { results: tenants } = await deps.db
     .prepare(`SELECT id, slug FROM tenants ORDER BY id`)
     .all<BackupTenant>();
+  const known = new Set(tenants.map((t) => t.id));
+
+  // In-progress work that can no longer complete safely is abandoned: too old,
+  // written against another schema version, or its tenant is gone.
+  if (state.inProgress !== null) {
+    const job = state.inProgress;
+    const orphaned = job.scope !== INSTALLATION_SCOPE && !known.has(job.scope);
+    const drifted = job.header.schemas.d1 !== (await installationSchemaVersion(deps.db));
+    if (started - job.startedAt >= BACKUP_ABANDON_MS || drifted || orphaned) {
+      await deleteStaging(deps, job.id);
+      state.inProgress = null;
+    }
+  }
+
   const due = (scope: string, last: number | null | undefined): boolean =>
     (last === null || last === undefined || started - last >= BACKUP_INTERVAL_MS) &&
     (state.retryAt[scope] ?? 0) <= started;
   const queue: { scope: string; tenant: BackupTenant | null; last: number }[] = [];
-  if (due(INSTALLATION_SCOPE, state.installation)) {
+  if (
+    state.inProgress?.scope !== INSTALLATION_SCOPE &&
+    due(INSTALLATION_SCOPE, state.installation)
+  ) {
     queue.push({ scope: INSTALLATION_SCOPE, tenant: null, last: state.installation ?? 0 });
   }
   for (const tenant of tenants) {
+    if (state.inProgress?.scope === tenant.id) continue;
     const last = state.tenants[tenant.id];
     if (due(tenant.id, last)) queue.push({ scope: tenant.id, tenant, last: last ?? 0 });
   }
-  if (queue.length === 0) return { status: 'idle', done: [], failed: [] };
+  const resume =
+    state.inProgress !== null && (state.retryAt[state.inProgress.scope] ?? 0) <= started
+      ? state.inProgress
+      : null;
+  if (resume === null && queue.length === 0) return { status: 'idle', done: [], failed: [] };
   queue.sort((a, b) => a.last - b.last);
 
-  const known = new Set(tenants.map((t) => t.id));
   for (const id of Object.keys(state.tenants)) if (!known.has(id)) delete state.tenants[id];
   for (const id of Object.keys(state.retryAt)) {
     if (id !== INSTALLATION_SCOPE && !known.has(id)) delete state.retryAt[id];
@@ -430,28 +588,47 @@ export async function runScheduledBackups(
 
   const done: string[] = [];
   const failed: string[] = [];
+  /** Runs one job to completion or suspension; true = completed. */
+  const runJob = async (job: StagedBackup): Promise<boolean> => {
+    state.inProgress = job;
+    try {
+      const out = await runStaged(deps, job, deadline, () =>
+        writeState(deps, state).then(() => undefined),
+      );
+      if (out === 'suspended') return false;
+      state.inProgress = null;
+      if (job.scope === INSTALLATION_SCOPE) state.installation = deps.now();
+      else state.tenants[job.scope] = deps.now();
+      delete state.retryAt[job.scope];
+      done.push(job.scope);
+      const prefix =
+        job.tenant === null ? INSTALLATION_BACKUP_PREFIX : tenantBackupPrefix(job.tenant.id);
+      await pruneBackups(deps, prefix, [out.key]);
+      return true;
+    } catch (error) {
+      console.error(
+        `[backup] scheduled backup failed (${job.scope === INSTALLATION_SCOPE ? 'installation' : job.scope}):`,
+        error instanceof Error ? error.message : error,
+      );
+      // The job stays in progress: the retry resumes from the last stored slice.
+      state.retryAt[job.scope] = deps.now() + RETRY_AFTER_FAILURE_MS;
+      failed.push(job.scope);
+      return false;
+    }
+  };
+
   try {
-    for (const item of queue.slice(0, maxBackups)) {
-      if (deps.now() - started > budget) break;
-      try {
-        if (item.tenant === null) {
-          await createInstallationBackup(deps);
-          state.installation = deps.now();
-        } else {
-          await createTenantBackup(deps, item.tenant, 'scheduled');
-          state.tenants[item.scope] = deps.now();
-        }
-        delete state.retryAt[item.scope];
-        done.push(item.scope);
-      } catch (error) {
-        console.error(
-          `[backup] scheduled backup failed (${item.tenant === null ? 'installation' : item.scope}):`,
-          error instanceof Error ? error.message : error,
-        );
-        state.retryAt[item.scope] = deps.now() + RETRY_AFTER_FAILURE_MS;
-        failed.push(item.scope);
-      }
+    if (resume !== null) {
+      await runJob(resume);
       await writeState(deps, state);
+    }
+    if (state.inProgress === null) {
+      for (const item of queue.slice(0, Math.max(0, maxBackups - done.length))) {
+        if (deps.now() - started > budget) break;
+        const completed = await runJob(await newStagedBackup(deps, item.tenant, 'scheduled'));
+        await writeState(deps, state);
+        if (!completed) break; // suspended or failed: the slot is taken, stop starting new ones
+      }
     }
   } finally {
     state.leaseUntil = null;
@@ -507,7 +684,8 @@ export async function validateTenantBackup(
   const object = await getTenantBackup(deps, tenant.id, id);
   if (object === null) throw new BackupError('backup_not_found');
   const infos = new Map<TenantDoName, BackupDbInfo>();
-  for (const name of TENANT_DO_NAMES) infos.set(name, await deps.stub(tenant.id, name).backupInfo());
+  for (const name of TENANT_DO_NAMES)
+    infos.set(name, await deps.stub(tenant.id, name).backupInfo());
 
   let header: BackupHeaderLine | null = null;
   let rows = 0;

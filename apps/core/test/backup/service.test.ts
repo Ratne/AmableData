@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   BACKUP_INTERVAL_MS,
+  BACKUP_STAGING_PREFIX,
   BACKUP_RETENTION_MANUAL,
   BACKUP_RETENTION_SCHEDULED,
   BACKUP_STATE_KEY,
@@ -45,7 +46,8 @@ function seedDos(tenantId: string, contacts = 150): void {
   const insert = t.mail.prepare(
     `INSERT INTO mail_templates (id, name, body, body_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
   );
-  for (let i = 0; i < 120; i += 1) insert.run(`tpl_${i}`, `Template ${i}`, `<p>${i}</p>`, `h${i}`, i, i);
+  for (let i = 0; i < 120; i += 1)
+    insert.run(`tpl_${i}`, `Template ${i}`, `<p>${i}</p>`, `h${i}`, i, i);
   t.mail.prepare(`INSERT INTO mail_meta (key, value) VALUES ('tenant_id', ?)`).run(tenantId);
   t.engine.prepare(`INSERT INTO engine_meta (key, value) VALUES ('tenant_id', ?)`).run(tenantId);
 }
@@ -111,7 +113,8 @@ describe('tenant backups', () => {
     ]);
     const rows = all.slice(1, -1);
     expect(all[all.length - 1]).toEqual({ type: 'end', rows: rows.length });
-    const of = (db: string, table: string) => rows.filter((r) => r['db'] === db && r['table'] === table);
+    const of = (db: string, table: string) =>
+      rows.filter((r) => r['db'] === db && r['table'] === table);
     expect(of('tenant_db', 'crm_contacts')).toHaveLength(150);
     expect(of('mail_db', 'mail_templates')).toHaveLength(120);
     expect(of('d1', 'tenants')).toHaveLength(1);
@@ -183,7 +186,10 @@ describe('tenant backups', () => {
     expect(counts(other.id).contacts).toBe(3);
 
     const truncatedId = '2026-10-15T03-00-00-000Z-manual-trunc0001';
-    const writer = createR2JsonlGzipWriter(r2.asBucket(), `${tenantBackupPrefix(acme.id)}${truncatedId}.jsonl.gz`);
+    const writer = createR2JsonlGzipWriter(
+      r2.asBucket(),
+      `${tenantBackupPrefix(acme.id)}${truncatedId}.jsonl.gz`,
+    );
     const all = await lines(backup.key);
     for (const line of all.slice(0, -1)) await writer.write(line);
     await writer.close();
@@ -191,7 +197,10 @@ describe('tenant backups', () => {
       code: 'backup_invalid',
     });
 
-    dos.get(acme.id).mail.prepare(`UPDATE mail_meta SET value = '999' WHERE key = 'schema_version'`).run();
+    dos
+      .get(acme.id)
+      .mail.prepare(`UPDATE mail_meta SET value = '999' WHERE key = 'schema_version'`)
+      .run();
     await expect(restoreTenantBackup(deps, acme, backup.id)).rejects.toMatchObject({
       code: 'backup_schema_mismatch',
     });
@@ -217,7 +226,9 @@ describe('scheduled backups', () => {
     expect((await runScheduledBackups(deps)).status).toBe('idle');
 
     expect(await listBackups(deps, INSTALLATION_BACKUP_PREFIX)).toHaveLength(1);
-    const install = await lines((await listBackups(deps, INSTALLATION_BACKUP_PREFIX))[0]?.key ?? '');
+    const install = await lines(
+      (await listBackups(deps, INSTALLATION_BACKUP_PREFIX))[0]?.key ?? '',
+    );
     expect(install.some((l) => l['table'] === 'users' || l['table'] === 'tenants')).toBe(true);
     expect((await listBackups(deps, tenantBackupPrefix(beta.id)))[0]?.kind).toBe('scheduled');
 
@@ -226,6 +237,113 @@ describe('scheduled backups', () => {
     expect(next.done).toEqual(['_installation', acme.id]);
     clock.now += 5 * 60_000;
     expect((await runScheduledBackups(deps)).done).toEqual([beta.id]);
+  });
+
+  it('suspends on the tick budget and resumes across ticks into complete files', async () => {
+    seedDos(acme.id, 150);
+    // One page per slice, and a clock that moves 25 ms per look at it: a 60 ms
+    // budget forces every tick to suspend after a couple of slices.
+    const base = testDeps(r2, dos, h.env.DB, clock, 16 * 1024, 1);
+    const ticking: BackupDeps = {
+      ...base,
+      now: () => {
+        clock.now += 25;
+        return clock.now;
+      },
+    };
+    let ticks = 0;
+    let suspendedTicks = 0;
+    let sawStaging = false;
+    const doneScopes = new Set<string>();
+    while (!doneScopes.has(acme.id) || !doneScopes.has('_installation')) {
+      ticks += 1;
+      expect(ticks).toBeLessThan(500);
+      const summary = await runScheduledBackups(ticking, { maxBackups: 1, budgetMs: 60 });
+      expect(summary.failed).toEqual([]);
+      expect(summary.status).toBe('ran');
+      for (const scope of summary.done) doneScopes.add(scope);
+      if (summary.done.length === 0) {
+        suspendedTicks += 1;
+        // A tick can suspend even before its first slice; count the ones with stored slices.
+        const staged = await r2.list({ prefix: BACKUP_STAGING_PREFIX });
+        if (staged.objects.length > 0) sawStaging = true;
+      }
+      clock.now += 5 * 60_000;
+    }
+    expect(suspendedTicks).toBeGreaterThan(0);
+    expect(sawStaging).toBe(true);
+
+    const backup = (await listBackups(ticking, tenantBackupPrefix(acme.id)))[0];
+    const all = await lines(backup?.key ?? '');
+    expect(all[0]).toMatchObject({ type: 'header', scope: 'tenant', tenantId: acme.id });
+    expect(all[all.length - 1]).toEqual({ type: 'end', rows: all.length - 2 });
+    expect(all.filter((l) => l['table'] === 'crm_contacts')).toHaveLength(150);
+    expect(all.filter((l) => l['table'] === 'mail_templates')).toHaveLength(120);
+    const install = (await listBackups(ticking, INSTALLATION_BACKUP_PREFIX))[0];
+    const installLines = await lines(install?.key ?? '');
+    expect(installLines[installLines.length - 1]).toMatchObject({ type: 'end' });
+    expect(installLines.some((l) => l['table'] === 'tenants')).toBe(true);
+
+    expect((await r2.list({ prefix: BACKUP_STAGING_PREFIX })).objects).toHaveLength(0);
+    const state = JSON.parse(new TextDecoder().decode(r2.objects.get(BACKUP_STATE_KEY)?.bytes)) as {
+      inProgress: unknown;
+    };
+    expect(state.inProgress).toBeNull();
+  });
+
+  it('keeps the stored slices after a failure and resumes after the retry window', async () => {
+    seedDos(acme.id, 150);
+    const base = testDeps(r2, dos, h.env.DB, clock, 16 * 1024, 1);
+    let failures = 1;
+    const deps2: BackupDeps = {
+      ...base,
+      stub: (tenantId, name) => {
+        const stub = base.stub(tenantId, name);
+        if (name !== 'mail_db') return stub;
+        return {
+          ...stub,
+          backupDump: (cursor) => {
+            if (failures > 0) {
+              failures -= 1;
+              return Promise.reject(new Error('mail DO unreachable'));
+            }
+            return stub.backupDump(cursor);
+          },
+        };
+      },
+    };
+    // The installation is fresh: only acme is due.
+    await r2.put(
+      BACKUP_STATE_KEY,
+      JSON.stringify({
+        version: 1,
+        installation: clock.now,
+        tenants: {},
+        retryAt: {},
+        leaseUntil: null,
+      }),
+    );
+    const first = await runScheduledBackups(deps2);
+    expect(first).toMatchObject({ status: 'ran', done: [], failed: [acme.id] });
+    const afterFailure = JSON.parse(
+      new TextDecoder().decode(r2.objects.get(BACKUP_STATE_KEY)?.bytes),
+    ) as { inProgress: { scope: string; staged: number } | null };
+    expect(afterFailure.inProgress?.scope).toBe(acme.id);
+    expect(afterFailure.inProgress?.staged).toBeGreaterThan(0);
+
+    // Inside the retry window nothing is due.
+    clock.now += 60_000;
+    expect((await runScheduledBackups(deps2)).status).toBe('idle');
+
+    clock.now += 60 * 60_000;
+    const second = await runScheduledBackups(deps2);
+    expect(second).toMatchObject({ status: 'ran', done: [acme.id], failed: [] });
+    const backup = (await listBackups(deps2, tenantBackupPrefix(acme.id)))[0];
+    const all = await lines(backup?.key ?? '');
+    expect(all[all.length - 1]).toEqual({ type: 'end', rows: all.length - 2 });
+    expect(all.filter((l) => l['table'] === 'crm_contacts')).toHaveLength(150);
+    expect(all.filter((l) => l['table'] === 'mail_templates')).toHaveLength(120);
+    expect((await r2.list({ prefix: BACKUP_STAGING_PREFIX })).objects).toHaveLength(0);
   });
 
   it('skips while another tick holds the lease and drops deleted tenants from the state', async () => {
@@ -297,7 +415,9 @@ describe('backup routes', () => {
     const wrong = await owner.post(`/api/t/acme/backups/${backup.id}/restore`, { confirm: 'nope' });
     expect(wrong.status).toBe(422);
     dos.get(acme.id).crm.op('contacts.create', { given_name: 'Later', family_name: 'Lovelace' });
-    const restored = await owner.post(`/api/t/acme/backups/${backup.id}/restore`, { confirm: 'acme' });
+    const restored = await owner.post(`/api/t/acme/backups/${backup.id}/restore`, {
+      confirm: 'acme',
+    });
     expect(restored.status).toBe(200);
     expect(counts(acme.id).contacts).toBe(3);
 

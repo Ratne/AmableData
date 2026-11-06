@@ -53,7 +53,9 @@ backupRoutes.get('/', async (c) => {
 });
 
 // Data & archiving: retention windows of the event archive, archive totals, database sizes.
-backupRoutes.get('/archive', async (c) => c.json(await archiveSettings(c.env, getTenant(c).tenant.id)));
+backupRoutes.get('/archive', async (c) =>
+  c.json(await archiveSettings(c.env, getTenant(c).tenant.id)),
+);
 
 backupRoutes.put('/archive', requireStepUp(), async (c) => {
   const input = await parseJson(c, updateArchiveRetentionSchema);
@@ -77,7 +79,9 @@ backupRoutes.post('/', requireStepUp(), async (c) => {
   const backup = await createTenantBackup(deps, tenant, 'manual');
   await audit(c, 'tenant.backup_created', { target: backup.id, details: { size: backup.size } });
   return c.json(
-    { backup: { id: backup.id, kind: backup.kind, createdAt: backup.createdAt, size: backup.size } },
+    {
+      backup: { id: backup.id, kind: backup.kind, createdAt: backup.createdAt, size: backup.size },
+    },
     201,
   );
 });
@@ -119,7 +123,10 @@ backupRoutes.post('/:id/restore', requireStepUp(), async (c) => {
     return c.json({ ok: true, ...summary });
   } catch (error) {
     if (error instanceof BackupError) {
-      await audit(c, 'tenant.backup_restore_rejected', { target: id, details: { code: error.code } });
+      await audit(c, 'tenant.backup_restore_rejected', {
+        target: id,
+        details: { code: error.code },
+      });
       return jsonError(c, BACKUP_ERROR_STATUS[error.code] ?? 422, error.code);
     }
     throw error;

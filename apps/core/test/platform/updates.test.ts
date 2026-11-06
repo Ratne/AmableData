@@ -7,18 +7,32 @@ import {
   UPDATE_CHECK_INTERVAL_MS,
   updateNotice,
 } from '../../src/platform/updates';
-import { addMember, createHarness, login, seedTenant, seedUser, START, type Harness } from '../helpers/harness';
+import {
+  addMember,
+  createHarness,
+  login,
+  seedTenant,
+  seedUser,
+  START,
+  type Harness,
+} from '../helpers/harness';
 
 function githubAnswering(body: unknown, status = 200) {
   const calls: string[] = [];
   const fetcher = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
-    return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
   }) as typeof fetch;
   return { calls, fetcher };
 }
 
-const RELEASE = { tag_name: '2026.11.2', html_url: 'https://github.com/Ratne/AmableData/releases/tag/2026.11.2' };
+const RELEASE = {
+  tag_name: '2026.11.2',
+  html_url: 'https://github.com/Ratne/AmableData/releases/tag/2026.11.2',
+};
 
 async function selfHosted(version = '2026.10.1'): Promise<Harness> {
   const h = await createHarness();
@@ -51,7 +65,11 @@ describe('update check', () => {
     await runUpdateCheck(h.env, START, github.fetcher);
     await runUpdateCheck(h.env, START + UPDATE_CHECK_INTERVAL_MS - 1, github.fetcher);
     expect(github.calls).toEqual([RELEASES_API_URL]);
-    expect(await updateNotice(h.env)).toEqual({ current: '2026.10.1', latest: '2026.11.2', url: RELEASE.html_url });
+    expect(await updateNotice(h.env)).toEqual({
+      current: '2026.10.1',
+      latest: '2026.11.2',
+      url: RELEASE.html_url,
+    });
     await runUpdateCheck(h.env, START + UPDATE_CHECK_INTERVAL_MS, github.fetcher);
     expect(github.calls).toHaveLength(2);
   });
@@ -61,7 +79,10 @@ describe('update check', () => {
     await runUpdateCheck(upToDate.env, START, githubAnswering(RELEASE).fetcher);
     expect(await updateNotice(upToDate.env)).toBeNull();
 
-    for (const vars of [{ APP_VERSION: 'dev' }, { APP_VERSION: '2026.10.1', UPDATE_CHECK: 'off' }]) {
+    for (const vars of [
+      { APP_VERSION: 'dev' },
+      { APP_VERSION: '2026.10.1', UPDATE_CHECK: 'off' },
+    ]) {
       const h = await createHarness();
       Object.assign(h.env, vars);
       const github = githubAnswering(RELEASE);
@@ -73,9 +94,19 @@ describe('update check', () => {
 
   it('keeps the previous answer when GitHub fails and never links outside the releases page', async () => {
     const h = await selfHosted();
-    await runUpdateCheck(h.env, START, githubAnswering({ ...RELEASE, html_url: 'https://evil.example/x' }).fetcher);
-    expect((await updateNotice(h.env))?.url).toBe('https://github.com/Ratne/AmableData/releases/tag/2026.11.2');
-    await runUpdateCheck(h.env, START + UPDATE_CHECK_INTERVAL_MS, githubAnswering({ message: 'rate limited' }, 403).fetcher);
+    await runUpdateCheck(
+      h.env,
+      START,
+      githubAnswering({ ...RELEASE, html_url: 'https://evil.example/x' }).fetcher,
+    );
+    expect((await updateNotice(h.env))?.url).toBe(
+      'https://github.com/Ratne/AmableData/releases/tag/2026.11.2',
+    );
+    await runUpdateCheck(
+      h.env,
+      START + UPDATE_CHECK_INTERVAL_MS,
+      githubAnswering({ message: 'rate limited' }, 403).fetcher,
+    );
     expect((await updateNotice(h.env))?.latest).toBe('2026.11.2');
   });
 
