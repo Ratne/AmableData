@@ -1,8 +1,8 @@
-import { canonicalFontFamily, GOOGLE_FONTS } from '@amable/builder';
+import { canonicalFontFamily, GOOGLE_FONTS, isWebSafeFontFamily } from '@amable/builder';
 import { Input } from '@amable/ui/ui/input';
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useI18n } from '../../../i18n';
-import { loadGoogleFont } from '../lib/google-fonts';
+import { isGoogleFontAvailable, loadGoogleFont } from '../lib/google-fonts';
 
 /**
  * Free-text font family input backed by a datalist of Google Fonts: any
@@ -23,6 +23,26 @@ export function FontPicker({
   const { t } = useI18n();
   const listId = useId();
   useEffect(() => loadGoogleFont(value), [value]);
+  // The Google catalog changes without notice ("Impact" was dropped
+  // overnight): verify the chosen family and warn here, instead of letting
+  // the published page reveal the problem.
+  const [status, setStatus] = useState<'missing' | 'websafe' | null>(null);
+  useEffect(() => {
+    setStatus(null);
+    if (!value || value.startsWith('var(')) return;
+    let alive = true;
+    // Debounced: no requests (or flickering warnings) while typing.
+    const timer = setTimeout(() => {
+      void isGoogleFontAvailable(value).then((ok) => {
+        if (!alive || ok) return;
+        setStatus(isWebSafeFontFamily(value) ? 'websafe' : 'missing');
+      });
+    }, 600);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [value]);
   return (
     <>
       <Input
@@ -46,6 +66,11 @@ export function FontPicker({
           <option key={f} value={f} />
         ))}
       </datalist>
+      {status && (
+        <p className={status === 'missing' ? 'mt-1 text-xs text-amber-600' : 'mt-1 text-xs text-muted-foreground'}>
+          {t(status === 'missing' ? 'landing.editor.fontMissing' : 'landing.editor.fontWebsafe')}
+        </p>
+      )}
     </>
   );
 }

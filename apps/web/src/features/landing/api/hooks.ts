@@ -22,6 +22,7 @@ export const landingKeys = {
   page: (slug: string, id: string) => ['landing', slug, 'page', id] as const,
   versions: (slug: string, id: string) => ['landing', slug, 'page', id, 'versions'] as const,
   savedSections: (slug: string) => ['landing', slug, 'savedSections'] as const,
+  clipboard: (slug: string) => ['landing', slug, 'clipboard'] as const,
   media: (slug: string) => ['landing', slug, 'media'] as const,
   lookup: (slug: string, what: string) => ['landing', slug, 'lookup', what] as const,
 };

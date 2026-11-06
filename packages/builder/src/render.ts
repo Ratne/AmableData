@@ -1157,8 +1157,15 @@ function googleFontsLink(fams: string[]): string {
   // The css2 API is case-sensitive on family names: one wrong name fails the
   // WHOLE stylesheet with a 400. Canonicalize and dedupe.
   const canon = [...new Set(fams.map((f) => canonicalFontFamily(f)))];
-  const spec = canon
-    .map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700`)
-    .join("&");
-  return `<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/><link rel="stylesheet" href="https://fonts.googleapis.com/css2?${esc(spec)}&amp;display=swap"/>`;
+  // One <link> PER FAMILY, never a combined request: when a family no longer
+  // exists on Google (it happened with "Impact", dropped from the catalog
+  // overnight) only its own stylesheet fails and the browser falls back for
+  // that font, instead of losing EVERY font on the page.
+  const links = canon
+    .map((f) => {
+      const spec = `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700`;
+      return `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${esc(spec)}&amp;display=swap"/>`;
+    })
+    .join("");
+  return `<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>${links}`;
 }

@@ -1,28 +1,24 @@
-import { elementNodeSchema, type ElementNode } from '@amable/builder';
+import { cloneNodeWithNewIds, elementNodeSchema, type ElementNode } from '@amable/builder';
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Editor clipboards ("copy block", "copy style") persisted in localStorage so
- * they work across pages, tabs and reloads. Payloads are re-validated on read:
- * corrupt or outdated entries simply count as an empty clipboard.
- *
- * The block clipboard (v2) holds one or more nodes — a whole page can be
- * copied — plus a human label and the source page, surfaced in menus and
- * toasts so users always see WHAT they are about to paste.
+ * Builder clipboard helpers. Copied BLOCKS live on the server (personal,
+ * 24h, see `use-canvas-clipboard.ts` and the clipboard tray); only the small
+ * "copy style" payload stays in localStorage, re-validated on read.
  */
 
 const STYLE_KEY = 'amable-canvas-style-clipboard';
-const BLOCK_KEY = 'amable-canvas-block-clipboard';
 
-export interface BlockClip {
-  readonly version: 2;
+/** One entry of the personal clipboard, as the editor uses it. */
+export interface ClipEntry {
+  readonly id: string;
   readonly nodes: readonly ElementNode[];
   /** Human label ("Container · 14 elements" / "Whole page …"). */
   readonly label: string;
   /** True when every root block of a page was copied at once. */
   readonly wholePage: boolean;
   readonly sourcePageName: string;
-  readonly copiedAt: number;
+  readonly createdAt: number;
 }
 
 export interface StyleClip {
@@ -46,6 +42,73 @@ export function clipAge(copiedAt: number, now = Date.now()): string {
   return `${String(Math.round(hours / 24))} g`;
 }
 
+/** Parses one entry of `GET /builderClipboard`; null when malformed. */
+export function parseClipEntry(raw: unknown): ClipEntry | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r['id'] !== 'string' || !Array.isArray(r['nodes'])) return null;
+  const nodes: ElementNode[] = [];
+  for (const candidate of r['nodes']) {
+    const parsed = elementNodeSchema.safeParse(candidate);
+    if (!parsed.success) return null;
+    nodes.push(parsed.data);
+  }
+  if (nodes.length === 0) return null;
+  const created = typeof r['created_at'] === 'string' ? Date.parse(r['created_at']) : NaN;
+  return {
+    id: r['id'],
+    nodes,
+    label: typeof r['label'] === 'string' && r['label'] ? r['label'] : `${String(nodes.length)} blocchi`,
+    wholePage: r['whole_page'] === true,
+    sourcePageName: typeof r['source_page_name'] === 'string' ? r['source_page_name'] : '',
+    createdAt: Number.isFinite(created) ? created : 0,
+  };
+}
+
+export function parseClipEntries(raw: unknown): ClipEntry[] {
+  return Array.isArray(raw) ? raw.map(parseClipEntry).filter((e): e is ClipEntry => e !== null) : [];
+}
+
+/**
+ * Inserts fresh copies (new ids) of `nodes` at `parentId`/`index`, returning
+ * the new body and the inserted ids. Popups always go to the end of the root
+ * (they only live there); an unknown parent falls back to the root end.
+ */
+export function insertClonesAt(
+  body: readonly ElementNode[],
+  nodes: readonly ElementNode[],
+  parentId: string | null,
+  index: number,
+): { body: ElementNode[]; ids: string[] } {
+  const copies = nodes.map(cloneNodeWithNewIds);
+  const popups = copies.filter((n) => n.type === 'popup');
+  const regular = copies.filter((n) => n.type !== 'popup');
+  const spliceInto = (list: readonly ElementNode[]): ElementNode[] => {
+    const at = Math.max(0, Math.min(index, list.length));
+    return [...list.slice(0, at), ...regular, ...list.slice(at)];
+  };
+
+  let next: ElementNode[] = [...body];
+  if (regular.length > 0) {
+    if (parentId === null) next = spliceInto(body);
+    else {
+      let placed = false;
+      const walk = (list: readonly ElementNode[]): ElementNode[] =>
+        list.map((n) => {
+          if (n.id === parentId) {
+            placed = true;
+            return { ...n, children: spliceInto(n.children) };
+          }
+          return n.children.length > 0 ? { ...n, children: walk(n.children) } : n;
+        });
+      next = walk(body);
+      if (!placed) next = [...next, ...regular];
+    }
+  }
+  if (popups.length > 0) next = [...next, ...popups];
+  return { body: next, ids: copies.map((n) => n.id) };
+}
+
 function readRaw(key: string): Record<string, unknown> | null {
   try {
     const raw = localStorage.getItem(key);
@@ -56,11 +119,7 @@ function readRaw(key: string): Record<string, unknown> | null {
   }
 }
 
-/**
- * Writes a clipboard entry. Returns false when the browser refuses (quota or
- * private mode); the stale entry is dropped so a later paste can never pick up
- * an OLD payload while the user believes the new copy succeeded.
- */
+/** Writes a clipboard entry; false when the browser refuses (quota or private mode). */
 function write(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -75,56 +134,21 @@ function write(key: string, value: unknown): boolean {
   }
 }
 
-/** Parses a raw payload: v2 (multi-node) or the legacy v1 `{type, node}`. */
-export function parseBlockClip(raw: Record<string, unknown> | null): BlockClip | null {
-  if (!raw) return null;
-  if (raw['version'] === 2 && Array.isArray(raw['nodes'])) {
-    const nodes: ElementNode[] = [];
-    for (const candidate of raw['nodes']) {
-      const parsed = elementNodeSchema.safeParse(candidate);
-      if (!parsed.success) return null;
-      nodes.push(parsed.data);
-    }
-    if (nodes.length === 0) return null;
-    return {
-      version: 2,
-      nodes,
-      label: typeof raw['label'] === 'string' && raw['label'] ? raw['label'] : `${String(nodes.length)} blocchi`,
-      wholePage: raw['wholePage'] === true,
-      sourcePageName: typeof raw['sourcePageName'] === 'string' ? raw['sourcePageName'] : '',
-      copiedAt: typeof raw['copiedAt'] === 'number' ? raw['copiedAt'] : 0,
-    };
-  }
-  if (typeof raw['type'] === 'string' && raw['node']) {
-    const parsed = elementNodeSchema.safeParse(raw['node']);
-    if (!parsed.success) return null;
-    return { version: 2, nodes: [parsed.data], label: raw['type'], wholePage: false, sourcePageName: '', copiedAt: 0 };
-  }
-  return null;
-}
-
-export function readBlockClip(): BlockClip | null {
-  return parseBlockClip(readRaw(BLOCK_KEY));
-}
-
 export function readStyleClip(): StyleClip | null {
   const raw = readRaw(STYLE_KEY);
   if (!raw || typeof raw['type'] !== 'string' || !Array.isArray(raw['styles'])) return null;
   return { type: raw['type'], styles: raw['styles'] as ElementNode['styles'] };
 }
 
-export function useBlockClipboard() {
-  const [block, setBlock] = useState<BlockClip | null>(() => readBlockClip());
+/** "Copy style" clipboard (localStorage, cross-page and cross-tab). */
+export function useStyleClipboard() {
   const [style, setStyle] = useState<StyleClip | null>(() => readStyleClip());
 
-  const refresh = useCallback(() => {
-    setBlock(readBlockClip());
-    setStyle(readStyleClip());
-  }, []);
+  const refresh = useCallback(() => setStyle(readStyleClip()), []);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === BLOCK_KEY || event.key === STYLE_KEY) refresh();
+      if (event.key === null || event.key === STYLE_KEY) refresh();
     };
     window.addEventListener('storage', onStorage);
     window.addEventListener('focus', refresh);
@@ -134,21 +158,6 @@ export function useBlockClipboard() {
     };
   }, [refresh]);
 
-  /** Copies one or more nodes; false = storage refused (caller shows the error). */
-  const copyNodes = useCallback((nodes: readonly ElementNode[], meta: { label: string; wholePage: boolean; sourcePageName: string }): boolean => {
-    const clip: BlockClip = {
-      version: 2,
-      nodes: JSON.parse(JSON.stringify(nodes)) as ElementNode[],
-      label: meta.label,
-      wholePage: meta.wholePage,
-      sourcePageName: meta.sourcePageName,
-      copiedAt: Date.now(),
-    };
-    const ok = write(BLOCK_KEY, clip);
-    setBlock(ok ? clip : null);
-    return ok;
-  }, []);
-
   const copyStyle = useCallback((node: ElementNode): boolean => {
     const clip: StyleClip = { type: node.type, styles: JSON.parse(JSON.stringify(node.styles)) as ElementNode['styles'] };
     const ok = write(STYLE_KEY, clip);
@@ -156,5 +165,5 @@ export function useBlockClipboard() {
     return ok;
   }, []);
 
-  return { block, style, refresh, copyNodes, copyStyle };
+  return { style, refresh, copyStyle };
 }

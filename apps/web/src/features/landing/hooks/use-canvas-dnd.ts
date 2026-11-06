@@ -2,9 +2,12 @@ import { findNode, isContainerType, locateNode, type ElementNode } from '@amable
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 export interface CanvasDrag {
-  readonly kind: 'new' | 'move';
+  /** `insert`: ready-made nodes (a clipboard entry) dropped as fresh copies. */
+  readonly kind: 'new' | 'move' | 'insert';
   readonly type?: string;
   readonly nodeId?: string;
+  readonly nodes?: readonly ElementNode[];
+  readonly label?: string;
 }
 
 export type DropIndicator =
@@ -59,6 +62,7 @@ export function useCanvasDnd(opts: {
   labelOf: (type: string) => string;
   addNode: (type: string, parentId: string | null, index?: number) => string;
   moveNode: (id: string, parentId: string | null, index: number) => void;
+  insertNodes?: (nodes: readonly ElementNode[], parentId: string | null, index: number) => void;
   onAdded?: (id: string) => void;
   disabled?: boolean;
 }) {
@@ -95,7 +99,11 @@ export function useCanvasDnd(opts: {
     }
 
     const chipLabel =
-      drag.kind === 'move' && drag.nodeId ? labelOf(findNode(getBody(), drag.nodeId)?.type ?? '') : labelOf(drag.type ?? '');
+      drag.kind === 'insert'
+        ? (drag.label ?? '')
+        : drag.kind === 'move' && drag.nodeId
+          ? labelOf(findNode(getBody(), drag.nodeId)?.type ?? '')
+          : labelOf(drag.type ?? '');
 
     let rafPending = false;
     let lastMove: PointerEvent | null = null;
@@ -273,9 +281,11 @@ export function useCanvasDnd(opts: {
         sourceEl = null;
       }
       if (!d || !drop) return;
-      const { addNode, moveNode, onAdded } = optsRef.current;
+      const { addNode, moveNode, insertNodes, onAdded } = optsRef.current;
       if (d.kind === 'new' && d.type) {
         onAdded?.(addNode(d.type, drop.parentId, drop.index));
+      } else if (d.kind === 'insert' && d.nodes && d.nodes.length > 0) {
+        insertNodes?.(d.nodes, drop.parentId, drop.index);
       } else if (d.kind === 'move' && d.nodeId) {
         // Indices were computed on the tree that still contains the dragged
         // node: compensate for its removal when moving within the same parent.

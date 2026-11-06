@@ -24,6 +24,7 @@ import {
   ChevronDown,
   ChevronsDownUp,
   ChevronUp,
+  CopyPlus,
   Link2,
   MoveVertical,
   Plus,
@@ -486,6 +487,13 @@ function RepeaterField(props: FieldProps) {
     if (item) next.splice(j, 0, item);
     onChange(next);
   };
+  /** Deep-clone the row and insert the copy right below it. */
+  const duplicate = (i: number) => {
+    const copy = JSON.parse(JSON.stringify(rows[i] ?? {})) as Record<string, unknown>;
+    const next = [...rows];
+    next.splice(i + 1, 0, copy);
+    onChange(next);
+  };
   return (
     <div className="flex flex-col gap-2">
       {rows.map((row, i) => {
@@ -502,6 +510,16 @@ function RepeaterField(props: FieldProps) {
                 </button>
                 <button type="button" aria-label={t('landing.editor.moveDown')} disabled={disabled} onClick={() => move(i, 1)} className="text-muted-foreground hover:text-foreground">
                   <ChevronDown className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t('landing.editor.duplicateRow')}
+                  title={t('landing.editor.duplicateRow')}
+                  disabled={disabled}
+                  onClick={() => duplicate(i)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <CopyPlus className="size-3.5" />
                 </button>
                 <button
                   type="button"

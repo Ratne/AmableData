@@ -208,6 +208,32 @@ export const updateSavedSectionSchema = z.strictObject({
 });
 export type UpdateSavedSectionInput = z.infer<typeof updateSavedSectionSchema>;
 
+// ------------------------------------------------------ canvas clipboard
+
+/** Max entries kept per user; entries also expire after 24 hours. */
+export const CLIPBOARD_MAX_ITEMS = 20;
+export const CLIPBOARD_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const clipboardItemSchema = z.object({
+  id: idSchema,
+  label: z.string(),
+  /** True when every root block of a page was copied. */
+  whole_page: z.boolean(),
+  source_page_name: z.string(),
+  /** Builder `ElementNode`s as copied (ids are regenerated on paste). */
+  nodes: z.array(z.record(z.string(), z.unknown())),
+  created_at: timestampSchema,
+});
+export type ClipboardItem = z.infer<typeof clipboardItemSchema>;
+
+export const createClipboardItemSchema = z.strictObject({
+  label: z.string().trim().min(1).max(200),
+  whole_page: z.boolean().optional(),
+  source_page_name: z.string().max(300).optional(),
+  nodes: z.array(z.record(z.string(), z.unknown())).min(1).max(500),
+});
+export type CreateClipboardItemInput = z.infer<typeof createClipboardItemSchema>;
+
 // ------------------------------------------------------------------ media
 
 export const MEDIA_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'] as const;

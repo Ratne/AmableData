@@ -1,6 +1,8 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi';
 import {
   MEDIA_MAX_BYTES,
+  clipboardItemSchema,
+  createClipboardItemSchema,
   createPageSchema,
   createSavedSectionSchema,
   deletedResponseSchema,
@@ -58,6 +60,7 @@ type Ctx = Context<AppEnv>;
 
 const pagesTag = ['Landing pages'];
 const sectionsTag = ['Saved sections'];
+const clipboardTag = ['Builder clipboard'];
 const mediaTag = ['Media'];
 
 const pageIdParam = z.object({ id: idSchema });
@@ -532,6 +535,50 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
       responses: { 200: json(deletedResponseSchema, 'Deleted') },
     }),
     async (c) => c.json(await callCrm(c, 'pages.deleteSavedSection', { id: c.req.valid('param').id }), 200),
+  );
+
+  // ---------------------------------------------- personal clipboard
+  router.openapi(
+    crmRoute('pages:read', {
+      method: 'get',
+      path: '/builderClipboard',
+      tags: clipboardTag,
+      summary: "The caller's builder clipboard (last 24 hours, newest first)",
+      responses: { 200: json(z.object({ data: z.array(clipboardItemSchema) }), 'Clipboard entries') },
+    }),
+    async (c) => c.json(await callCrm(c, 'pages.clipboard.list', {} as never), 200),
+  );
+  router.openapi(
+    crmRoute('pages:write', {
+      method: 'post',
+      path: '/builderClipboard',
+      tags: clipboardTag,
+      summary: 'Copy blocks to the caller clipboard',
+      request: { body: jsonBody(createClipboardItemSchema) },
+      responses: { 201: json(clipboardItemSchema, 'The clipboard entry') },
+    }),
+    async (c) => c.json(await callCrm(c, 'pages.clipboard.create', c.req.valid('json')), 201),
+  );
+  router.openapi(
+    crmRoute('pages:write', {
+      method: 'delete',
+      path: '/builderClipboard',
+      tags: clipboardTag,
+      summary: 'Empty the caller clipboard',
+      responses: { 200: json(z.object({ deleted: z.number().int() }), 'Emptied') },
+    }),
+    async (c) => c.json(await callCrm(c, 'pages.clipboard.clear', {} as never), 200),
+  );
+  router.openapi(
+    crmRoute('pages:write', {
+      method: 'delete',
+      path: '/builderClipboard/{id}',
+      tags: clipboardTag,
+      summary: 'Remove one clipboard entry',
+      request: { params: pageIdParam },
+      responses: { 200: json(deletedResponseSchema, 'Deleted') },
+    }),
+    async (c) => c.json(await callCrm(c, 'pages.clipboard.delete', { id: c.req.valid('param').id }), 200),
   );
 
   // --------------------------------------------------------------- media

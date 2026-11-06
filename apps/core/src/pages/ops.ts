@@ -4,6 +4,7 @@ import type {
   UpdateFolderInput,
 } from '@amable/api-types';
 import type { CrmContext } from '../crm/context';
+import * as clipboard from './clipboard';
 import * as library from './library';
 import * as pages from './pages';
 
@@ -33,6 +34,11 @@ export const pagesOps = {
   'pages.createSavedSection': library.createSavedSection,
   'pages.updateSavedSection': library.updateSavedSection,
   'pages.deleteSavedSection': library.deleteSavedSection,
+  // personal clipboard
+  'pages.clipboard.list': clipboard.listClipboard,
+  'pages.clipboard.create': clipboard.createClipboardItem,
+  'pages.clipboard.delete': clipboard.deleteClipboardItem,
+  'pages.clipboard.clear': clipboard.clearClipboard,
   // media
   'pages.listMedia': library.listMedia,
   'pages.createMedia': library.createMedia,

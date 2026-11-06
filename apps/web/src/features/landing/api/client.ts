@@ -1,5 +1,6 @@
 import { elementNodeSchema, type ElementNode, type PageDocument } from '@amable/builder';
 import { stepUpFetch } from '../../../lib/step-up';
+import { parseClipEntries, parseClipEntry, type ClipEntry } from '../hooks/use-block-clipboard';
 import { TenantApiError, tenantRest } from '../../../lib/tenant-api';
 
 export { TenantApiError as LandingApiError } from '../../../lib/tenant-api';
@@ -130,6 +131,22 @@ export function landingClient(slug: string) {
       update: (sectionId: string, input: { name?: string; category?: string | null }) =>
         patch<SavedSection>(`/savedSections/${id(sectionId)}`, input),
       remove: (sectionId: string) => del<unknown>(`/savedSections/${id(sectionId)}`),
+    },
+    /** Personal builder clipboard (per user, last 24 hours, newest first). */
+    clipboard: {
+      list: async (): Promise<ClipEntry[]> => parseClipEntries(listOf(await get<unknown>('/builderClipboard'))),
+      create: async (input: {
+        label: string;
+        nodes: readonly ElementNode[];
+        whole_page: boolean;
+        source_page_name: string;
+      }): Promise<ClipEntry> => {
+        const entry = parseClipEntry(await post<unknown>('/builderClipboard', input));
+        if (!entry) throw new TenantApiError(500, 'invalid_response', null, []);
+        return entry;
+      },
+      remove: (entryId: string) => del<unknown>(`/builderClipboard/${id(entryId)}`),
+      clear: () => del<unknown>('/builderClipboard'),
     },
     media: {
       list: (cursor?: string) => get<CursorPage<MediaFile>>('/media', { limit: 60, cursor }),

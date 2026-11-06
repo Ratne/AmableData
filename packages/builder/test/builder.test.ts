@@ -85,6 +85,21 @@ describe('builder schema', () => {
     ]);
   });
 
+  it('emits one Google Fonts <link> per family so a dead family cannot break the others', () => {
+    const d = builderDocumentSchema.parse({
+      editorKind: 'canvas',
+      tokens: { fontHeading: 'Impact', fontBody: 'Inter' },
+      body: [],
+    });
+    const { html } = renderBuilderPage(d, {});
+    // Both families requested, each in its own stylesheet (no combined URL:
+    // the css2 API fails the WHOLE combined request when one family is gone).
+    expect(html).toContain('family=Impact:wght@400;500;600;700&amp;display=swap');
+    expect(html).toContain('family=Inter:wght@400;500;600;700&amp;display=swap');
+    expect(html).not.toMatch(/family=[^"]*&amp;family=/);
+    expect(html.match(/fonts\.googleapis\.com\/css2/g)).toHaveLength(2);
+  });
+
   it('renders the rich descriptions as HTML', () => {
     const d = doc([
       node('ib', 'icon-box', { title: 'T', description: '<p>riga <strong>bold</strong></p>' }),

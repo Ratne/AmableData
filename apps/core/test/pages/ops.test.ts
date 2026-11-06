@@ -140,6 +140,32 @@ describe('pages ops', () => {
     expect(t.op('pages.list', { limit: 50, q: 'Page 3' }).data).toHaveLength(1);
   });
 
+  it('keeps a personal builder clipboard: per user, newest first, 24h, capped', () => {
+    const other = { type: 'user' as const, id: 'usr_other', canReadSensitive: true };
+    const node = { id: 'root', type: 'container', children: [{ id: 'h', type: 'heading' }] };
+    const first = t.op('pages.clipboard.create', { label: 'Hero', nodes: [node], source_page_name: 'Home' });
+    expect(first).toMatchObject({ label: 'Hero', whole_page: false, source_page_name: 'Home' });
+    expect(first.nodes[0]?.['id']).toBe('root');
+    const page = t.op('pages.clipboard.create', { label: 'Page', nodes: [node, { id: 'x', type: 'text' }], whole_page: true });
+    expect(t.op('pages.clipboard.list', {} as never).data.map((i) => i.id)).toEqual([page.id, first.id]);
+    expect(t.op('pages.clipboard.list', {} as never, other).data).toHaveLength(0);
+    t.op('pages.clipboard.delete', { id: first.id }, other);
+    expect(t.op('pages.clipboard.list', {} as never).data).toHaveLength(2);
+    expect(errorCode(() => t.op('pages.clipboard.create', { label: 'Bad', nodes: [{ id: 'x', type: 'nope' }] }))).toBe(
+      'validation_failed',
+    );
+
+    for (let i = 0; i < 25; i++) t.op('pages.clipboard.create', { label: `N${i}`, nodes: [node] });
+    const list = t.op('pages.clipboard.list', {} as never).data;
+    expect(list).toHaveLength(20);
+    expect(list[0]?.label).toBe('N24');
+
+    t.clock.now += 24 * 60 * 60 * 1000 + 1;
+    expect(t.op('pages.clipboard.list', {} as never).data).toHaveLength(0);
+    t.op('pages.clipboard.create', { label: 'Again', nodes: [node] });
+    expect(t.op('pages.clipboard.clear', {} as never)).toEqual({ deleted: 1 });
+  });
+
   it('stores saved sections with fresh ids and media metadata', () => {
     const section = t.op('pages.createSavedSection', {
       name: 'Hero',

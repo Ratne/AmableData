@@ -29,3 +29,65 @@ export function loadGoogleFont(family: string | undefined): void {
   link.href = href;
   document.head.appendChild(link);
 }
+
+/**
+ * Availability check against Google Fonts. The catalog changes without notice
+ * ("Impact" vanished overnight): the picker uses this to warn right away when
+ * a chosen family is not (or no longer) served by Google, instead of letting
+ * the published page reveal it. Cached in memory + localStorage (7 days).
+ */
+const AVAILABILITY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const availabilityCache = new Map<string, boolean | Promise<boolean>>();
+
+function readStoredAvailability(family: string): boolean | null {
+  try {
+    const raw = localStorage.getItem(`gf-check:${family}`);
+    if (!raw) return null;
+    const { ok, t } = JSON.parse(raw) as { ok: boolean; t: number };
+    if (Date.now() - t > AVAILABILITY_TTL_MS) return null;
+    return ok;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredAvailability(family: string, ok: boolean): void {
+  try {
+    localStorage.setItem(`gf-check:${family}`, JSON.stringify({ ok, t: Date.now() }));
+  } catch {
+    /* storage full/denied: the in-memory cache still covers the session */
+  }
+}
+
+/**
+ * True when the family is served by Google Fonts (the css2 URL the page would
+ * request answers 200). Generic names/tokens pass as available; a network
+ * error does NOT mark the font as missing (no false alarms while offline).
+ */
+export async function isGoogleFontAvailable(family: string): Promise<boolean> {
+  const canon = canonicalFontFamily(family.trim());
+  if (!canon || canon.startsWith('var(') || GENERIC.test(canon)) return true;
+  const cached = availabilityCache.get(canon);
+  if (typeof cached === 'boolean') return cached;
+  if (cached) return cached;
+  const stored = readStoredAvailability(canon);
+  if (stored !== null) {
+    availabilityCache.set(canon, stored);
+    return stored;
+  }
+  const href = googleFontHref([canon]);
+  if (!href) return true;
+  const promise = fetch(href)
+    .then((res) => {
+      const ok = res.ok;
+      availabilityCache.set(canon, ok);
+      writeStoredAvailability(canon, ok);
+      return ok;
+    })
+    .catch(() => {
+      availabilityCache.delete(canon);
+      return true;
+    });
+  availabilityCache.set(canon, promise);
+  return promise;
+}

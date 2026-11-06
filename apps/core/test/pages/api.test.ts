@@ -113,6 +113,15 @@ describe('pages REST v2', () => {
       WRITERS,
       201,
     );
+    expectByRole(await forEachRole(async (c) => (await c.get(`${BASE}/builderClipboard`)).status), READERS, 200);
+    expectByRole(
+      await forEachRole(
+        async (c, role) =>
+          (await c.post(`${BASE}/builderClipboard`, { label: role, nodes: [{ id: 'n', type: 'spacer' }] })).status,
+      ),
+      WRITERS,
+      201,
+    );
     expectByRole(await forEachRole(async (c) => (await c.get(`${BASE}/media`)).status), READERS, 200);
     expectByRole(
       await forEachRole(async (c) => (await raw(c, 'PUT', `${BASE}/media?filename=a.png`, PNG)).status),

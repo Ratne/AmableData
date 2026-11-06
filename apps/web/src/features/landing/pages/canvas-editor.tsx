@@ -52,7 +52,9 @@ import { PopupsDialog } from '../editor/popups-dialog';
 import { PreviewDialog } from '../editor/preview-dialog';
 import { SavedSectionsPicker, SaveSectionDialog } from '../editor/saved-sections';
 import { TokensPanel } from '../editor/tokens-panel';
-import { clipAge, countNodes, readBlockClip, readStyleClip, useBlockClipboard, type BlockClip } from '../hooks/use-block-clipboard';
+import { ClipboardTray } from '../editor/clipboard-tray';
+import { clipAge, countNodes, insertClonesAt, readStyleClip, useStyleClipboard, type ClipEntry } from '../hooks/use-block-clipboard';
+import { useCanvasClipboard } from '../hooks/use-canvas-clipboard';
 import { useBuilderDocument } from '../hooks/use-builder-document';
 import { useCanvasDnd } from '../hooks/use-canvas-dnd';
 import { useBuilderLabel } from '../lib/builder-i18n';
@@ -170,7 +172,12 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const clipboard = useBlockClipboard();
+  const styleClipboard = useStyleClipboard();
+  const clipboard = useCanvasClipboard();
+  const latestClip = clipboard.latest;
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [trayHighlight, setTrayHighlight] = useState<string | null>(null);
+  const trayTimer = useRef<number | null>(null);
 
   const doc = b.doc;
   const selected = selectedId ? findNode(doc.body, selectedId) : null;
@@ -231,6 +238,10 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
     labelOf: titleOf,
     addNode: b.addNode,
     moveNode: b.moveNode,
+    insertNodes: (nodes, parentId, index) => {
+      if (insertClipNodes(nodes, parentId, index) && nodes.length > 1)
+        toast.success(t('landing.clipboard.inserted', { count: nodes.length }));
+    },
     onAdded: select,
     disabled: !editable,
   });
@@ -271,21 +282,39 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
   };
 
   /** Menu entry description: label + source page + age. */
-  const describeClip = (clip: BlockClip): string => {
+  const describeClip = (clip: ClipEntry): string => {
     const from = clip.sourcePageName ? ` — ${t('landing.editor.fromPage', { name: clip.sourcePageName })}` : '';
-    const age = clipAge(clip.copiedAt);
+    const age = clipAge(clip.createdAt);
     return `${clip.label}${from}${age ? `, ${age}` : ''}`;
+  };
+
+  /** Shows the tray for a few seconds with the entry just copied on top. */
+  const flashTray = (entryId: string) => {
+    setTrayHighlight(entryId);
+    setTrayOpen(true);
+    if (trayTimer.current) window.clearTimeout(trayTimer.current);
+    trayTimer.current = window.setTimeout(() => {
+      setTrayOpen(false);
+      setTrayHighlight(null);
+    }, 3500);
+  };
+
+  /** Saves on the server; the "copied" toast only appears once it is stored. */
+  const storeClip = async (nodes: readonly ElementNode[], label: string, wholePage: boolean) => {
+    const toastId = toast.loading(t('landing.clipboard.copying', { name: label }));
+    try {
+      const entry = await clipboard.add({ label, nodes, wholePage, sourcePageName: meta.title });
+      toast.success(t('landing.editor.copied', { name: label }), { id: toastId });
+      flashTray(entry.id);
+    } catch {
+      toast.error(t('landing.editor.copyFailed'), { id: toastId });
+    }
   };
 
   const copyBlock = (id: string) => {
     const node = findNode(doc.body, id);
     if (!node) return;
-    const label = clipLabelOf(node);
-    if (!clipboard.copyNodes([node], { label, wholePage: false, sourcePageName: meta.title })) {
-      toast.error(t('landing.editor.copyFailed'));
-      return;
-    }
-    toast.success(t('landing.editor.copied', { name: label }));
+    void storeClip([node], clipLabelOf(node), false);
   };
 
   /** Copies every root block of the page (popups included), in order. */
@@ -295,54 +324,70 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
       return;
     }
     const label = t('landing.editor.pageLabel', { name: meta.title || t('landing.untitled'), count: doc.body.length });
-    if (!clipboard.copyNodes(doc.body, { label, wholePage: true, sourcePageName: meta.title })) {
-      toast.error(t('landing.editor.copyFailed'));
-      return;
-    }
-    toast.success(t('landing.editor.copied', { name: label }));
+    void storeClip(doc.body, label, true);
   };
 
-  /** Pastes after the target (inside when it is an empty container or `inside`), else at the end of the scope. */
-  const pasteBlock = (targetId: string | null, mode: 'after' | 'inside' = 'after') => {
+  /** Inserts fresh copies at parentId/index in ONE operation (a single undo reverts it). */
+  const insertClipNodes = (nodes: readonly ElementNode[], parentId: string | null, index: number): boolean => {
+    if (!editable) return false;
+    const current = doc;
+    if (nodes.length === 1) {
+      const first = nodes[0];
+      if (!first) return false;
+      const copy = cloneNodeWithNewIds(first);
+      if (copy.type === 'popup') b.insertNode(copy, null, current.body.length);
+      else b.insertNode(copy, parentId, index);
+      select(copy.id);
+      return true;
+    }
+    const res = insertClonesAt(current.body, nodes, parentId, index);
+    b.replaceDocument({ ...current, body: res.body });
+    select(res.ids[0] ?? null);
+    return true;
+  };
+
+  /**
+   * Pastes a clipboard entry (default: the newest). After the target (inside
+   * when it is an empty container or `inside`), else at the end of the scope.
+   * A whole page always goes to the end of the page.
+   */
+  const pasteBlock = async (targetId: string | null, mode: 'after' | 'inside' = 'after', entry?: ClipEntry) => {
     if (!editable) return;
-    const clip = readBlockClip();
-    clipboard.refresh();
+    let clip = entry ?? null;
+    if (!clip) {
+      const fresh = await clipboard.refresh();
+      clip = fresh ? (fresh[0] ?? null) : latestClip;
+    }
     if (!clip) {
       toast.error(t('landing.editor.clipboardEmpty'));
       return;
     }
+    const current = doc;
     if (clip.nodes.length > 1) {
-      // Whole page: append every block at the end in ONE operation, so a
-      // single undo reverts the whole paste.
-      const copies = clip.nodes.map(cloneNodeWithNewIds);
-      if (editingPopupId) {
-        setEditingPopupId(null);
-      }
-      b.replaceDocument({ ...doc, body: [...doc.body, ...copies] });
-      select(copies[0]?.id ?? null);
-      toast.success(t('landing.editor.pastedMany', { count: copies.length }), { description: describeClip(clip) });
+      if (editingPopupId) setEditingPopupId(null);
+      if (insertClipNodes(clip.nodes, null, current.body.length))
+        toast.success(t('landing.editor.pastedMany', { count: clip.nodes.length }), { description: describeClip(clip) });
       return;
     }
-    const first = clip.nodes[0];
-    if (!first) return;
-    const copy = cloneNodeWithNewIds(first);
-    const target = targetId ? findNode(doc.body, targetId) : null;
+    const target = targetId ? findNode(current.body, targetId) : null;
     const inside = target && isContainerType(target.type) && (mode === 'inside' || target.children.length === 0);
-    if (copy.type === 'popup') b.insertNode(copy, null, doc.body.length);
-    else if (target && inside) b.insertNode(copy, target.id, target.children.length);
+    let ok: boolean;
+    if (target && inside) ok = insertClipNodes(clip.nodes, target.id, target.children.length);
     else if (target) {
-      const loc = locateNode(doc.body, target.id);
+      const loc = locateNode(current.body, target.id);
       if (!loc) return;
-      b.insertNode(copy, loc.parentId, loc.index + 1);
-    } else b.insertNode(copy, editingPopupId, editingPopupId ? undefined : doc.body.length);
-    select(copy.id);
-    toast.success(t('landing.editor.pasted', { name: clip.label }), { description: describeClip(clip) });
+      ok = insertClipNodes(clip.nodes, loc.parentId, loc.index + 1);
+    } else {
+      const popup = editingPopupId ? findNode(current.body, editingPopupId) : null;
+      ok = insertClipNodes(clip.nodes, editingPopupId, popup ? popup.children.length : current.body.length);
+    }
+    if (ok) toast.success(t('landing.editor.pasted', { name: clip.label }), { description: describeClip(clip) });
   };
 
   const copyStyle = (id: string) => {
     const node = findNode(doc.body, id);
     if (!node) return;
-    if (!clipboard.copyStyle(node)) {
+    if (!styleClipboard.copyStyle(node)) {
       toast.error(t('landing.editor.copyFailed'));
       return;
     }
@@ -405,7 +450,8 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
   };
 
   const openCtxMenu = (id: string, x: number, y: number, prevSelectedId?: string | null) => {
-    clipboard.refresh();
+    void clipboard.refresh();
+    styleClipboard.refresh();
     setCtxMenu({ id, x, y, prevSelectedId });
   };
 
@@ -489,18 +535,18 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
           return prev ? [{ id: 'copySel', label: t('landing.editor.copySelected', { name: clipLabelOf(prev) }), run: () => copyBlock(prev.id) }] : [];
         })(),
         { id: 'copyPage', label: t('landing.editor.copyPage'), run: copyPage },
-        ...(clipboard.block
-          ? clipboard.block.nodes.length > 1
-            ? [{ id: 'pasteEnd', label: t('landing.editor.pasteAtEnd', { count: clipboard.block.nodes.length }), sub: describeClip(clipboard.block), run: () => pasteBlock(null) }]
+        ...(latestClip
+          ? latestClip.nodes.length > 1
+            ? [{ id: 'pasteEnd', label: t('landing.editor.pasteAtEnd', { count: latestClip.nodes.length }), sub: describeClip(latestClip), run: () => pasteBlock(null) }]
             : [
-                { id: 'paste', label: t('landing.editor.pasteAfter', { name: clipboard.block.label }), sub: describeClip(clipboard.block), run: () => pasteBlock(ctxNode.id) },
+                { id: 'paste', label: t('landing.editor.pasteAfter', { name: latestClip.label }), sub: describeClip(latestClip), run: () => pasteBlock(ctxNode.id) },
                 ...(isContainerType(ctxNode.type)
-                  ? [{ id: 'pasteIn', label: t('landing.editor.pasteInside', { name: clipboard.block.label }), sub: describeClip(clipboard.block), run: () => pasteBlock(ctxNode.id, 'inside') }]
+                  ? [{ id: 'pasteIn', label: t('landing.editor.pasteInside', { name: latestClip.label }), sub: describeClip(latestClip), run: () => pasteBlock(ctxNode.id, 'inside') }]
                   : []),
               ]
           : []),
         { id: 'copyStyle', label: t('landing.editor.copyStyle'), run: () => copyStyle(ctxNode.id) },
-        ...(clipboard.style ? [{ id: 'pasteStyle', label: t('landing.editor.pasteStyle'), run: () => pasteStyle(ctxNode.id) }] : []),
+        ...(styleClipboard.style ? [{ id: 'pasteStyle', label: t('landing.editor.pasteStyle'), run: () => pasteStyle(ctxNode.id) }] : []),
         { id: 'save', label: t('landing.sections.save'), run: () => setSavingSection(ctxNode) },
         { id: 'lock', label: ctxNode.locked ? t('landing.editor.unlock') : t('landing.editor.lock'), run: () => b.toggleLock(ctxNode.id) },
         { id: 'delete', label: t('landing.editor.delete'), run: () => requestDelete(ctxNode.id), danger: true },
@@ -571,19 +617,42 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
         <Button type="button" variant="ghost" size="icon" aria-label={t('landing.editor.copyPage')} title={t('landing.editor.copyPage')} onClick={copyPage}>
           <ClipboardCopy aria-hidden />
         </Button>
-        {clipboard.block ? (
+        {latestClip ? (
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            aria-label={t('landing.editor.pasteAtEnd', { count: clipboard.block.nodes.length })}
-            title={`${t('landing.editor.pasteAtEnd', { count: clipboard.block.nodes.length })} — ${describeClip(clipboard.block)}`}
+            aria-label={t('landing.editor.pasteAtEnd', { count: latestClip.nodes.length })}
+            title={`${t('landing.editor.pasteAtEnd', { count: latestClip.nodes.length })} — ${describeClip(latestClip)}`}
             disabled={!editable}
-            onClick={() => pasteBlock(null)}
+            onClick={() => void pasteBlock(null)}
           >
             <ClipboardPaste aria-hidden />
           </Button>
         ) : null}
+        <ClipboardTray
+          items={clipboard.items}
+          open={trayOpen}
+          onOpenChange={(open) => {
+            if (trayTimer.current) window.clearTimeout(trayTimer.current);
+            setTrayOpen(open);
+            if (!open) setTrayHighlight(null);
+            else void clipboard.refresh();
+          }}
+          highlightId={trayHighlight}
+          disabled={!editable}
+          onPaste={(entry) => {
+            setTrayOpen(false);
+            void pasteBlock(selectedId, 'after', entry);
+          }}
+          onStartDrag={(entry) => {
+            if (trayTimer.current) window.clearTimeout(trayTimer.current);
+            setTrayOpen(false);
+            dnd.startDrag({ kind: 'insert', nodes: entry.nodes, label: entry.label });
+          }}
+          onRemove={(id) => void clipboard.remove(id)}
+          onClear={() => void clipboard.clear()}
+        />
         <Button type="button" variant={editingPopupId ? 'secondary' : 'outline'} size="sm" onClick={() => setShowPopups(true)}>
           <SquareStack aria-hidden /> {t('landing.popups.button', { count: popupList.length })}
         </Button>

@@ -47,6 +47,26 @@ export const GOOGLE_FONTS: string[] = [
   "Titan One", "Chewy", "Shrikhand", "Secular One", "Changa", "Changa One",
 ];
 
+/**
+ * "Web-safe" families preinstalled by operating systems (Impact, Arial, ...):
+ * they are NOT guaranteed to exist on Google Fonts (Impact vanished from the
+ * catalog overnight and later came back). When one of them is missing on
+ * Google the page still renders fine (OS font), but the picker should warn
+ * that rendering may vary across devices.
+ */
+export const WEB_SAFE_FONTS: string[] = [
+  "Arial", "Arial Black", "Helvetica", "Helvetica Neue", "Impact", "Georgia",
+  "Times", "Times New Roman", "Courier", "Courier New", "Verdana", "Tahoma",
+  "Trebuchet MS", "Garamond", "Palatino", "Comic Sans MS", "Segoe UI",
+];
+
+const WEB_SAFE_LOWER = new Set(WEB_SAFE_FONTS.map((f) => f.toLowerCase()));
+
+/** True when the family is a web-safe system font (case-insensitive match). */
+export function isWebSafeFontFamily(name: string): boolean {
+  return WEB_SAFE_LOWER.has(name.trim().toLowerCase());
+}
+
 const BY_LOWER = new Map(GOOGLE_FONTS.map((f) => [f.toLowerCase(), f]));
 
 /**
