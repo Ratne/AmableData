@@ -19,12 +19,14 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
     "check:names": "node scripts/check-forbidden-names.mjs",
+    "check:dead": "knip",
     "self-host:setup": "node scripts/self-host-setup.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "knip": "^6.44.1",
     "prettier": "^3.9.10",
     "typescript": "~7.0.2",
     "vitest": "^5.1.0"

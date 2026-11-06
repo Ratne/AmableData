@@ -1,0 +1,62 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["wrangler"],
+  "ignoreWorkspaces": ["examples/apps/*"],
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs", "scripts/test/**/*.mjs"]
+    },
+    "apps/core": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/edge": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["test/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["tailwindcss"]
+    },
+    "packages/*": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/booking": {
+      "entry": ["src/widget/main.tsx", "test/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/checkout": {
+      "entry": ["src/widget/main.tsx", "test/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/esign": {
+      "entry": ["src/widget/main.tsx", "test/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/forms": {
+      "entry": ["src/widget/main.tsx", "test/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/tracker": {
+      "entry": ["src/entries/*.ts", "test/**/*.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/ui": {
+      "entry": ["scripts/*.mjs"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/app-cli": {
+      "entry": ["bin/*.mjs", "template/**/*.ts", "test/**/*.ts"],
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["@amable/app-bridge"]
+    },
+    "packages/editor": {
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/i18n": {
+      "project": ["src/**/*.ts"]
+    }
+  }
+}
