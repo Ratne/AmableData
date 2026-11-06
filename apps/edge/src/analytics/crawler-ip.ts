@@ -177,10 +177,38 @@ export function inCidr(ip: string, cidr: string): boolean {
   return addr.value >> shift === net.value >> shift;
 }
 
+interface ParsedCidr {
+  v: 4 | 6;
+  shift: bigint;
+  net: bigint;
+}
+
+const parsedRanges = new Map<string, readonly ParsedCidr[]>();
+
+/** The operator's ranges, parsed once per isolate. */
+function rangesOf(operator: string): readonly ParsedCidr[] {
+  let parsed = parsedRanges.get(operator);
+  if (parsed === undefined) {
+    parsed = (RANGES[operator] ?? []).flatMap((cidr): ParsedCidr[] => {
+      const [base, bitsText] = cidr.split('/');
+      const net = base === undefined ? null : parseIp(base);
+      if (net === null) return [];
+      const width = net.v === 4 ? 32 : 128;
+      const bits = bitsText === undefined ? width : Number(bitsText);
+      if (!Number.isInteger(bits) || bits < 0 || bits > width) return [];
+      const shift = BigInt(width - bits);
+      return [{ v: net.v, shift, net: net.value >> shift }];
+    });
+    parsedRanges.set(operator, parsed);
+  }
+  return parsed;
+}
+
 /** Checks a claimed bot against its operator's published ranges. */
 export function verifyCrawlerIp(botName: string, ip: string | null | undefined): Verification {
   const operator = BOT_OPERATOR[botName];
   if (operator === undefined || ip === null || ip === undefined || ip === '' || ip === '0.0.0.0') return 'unknown';
-  if (parseIp(ip) === null) return 'unknown';
-  return (RANGES[operator] ?? []).some((cidr) => inCidr(ip, cidr)) ? 'verified' : 'spoofed';
+  const addr = parseIp(ip);
+  if (addr === null) return 'unknown';
+  return rangesOf(operator).some((r) => r.v === addr.v && addr.value >> r.shift === r.net) ? 'verified' : 'spoofed';
 }

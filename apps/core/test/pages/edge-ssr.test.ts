@@ -180,9 +180,16 @@ describe('publish → edge SSR', () => {
     expect((await edge('https://t.acme.example/p/acme/nope')).status).toBe(404);
     expect((await edge('https://unknown.example/')).status).toBe(404);
     db.op('pages.unpublish', { id: hostPageId });
-    const gone = await edge('https://shop.example/');
-    expect(gone.status).toBe(404);
-    expect(await gone.text()).toContain('404');
+    // The edge memoizes resolutions per isolate for 10 s.
+    const later = Date.now() + 11_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later);
+    try {
+      const gone = await edge('https://shop.example/');
+      expect(gone.status).toBe(404);
+      expect(await gone.text()).toContain('404');
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('streams media files from R2 through the core raw op', async () => {

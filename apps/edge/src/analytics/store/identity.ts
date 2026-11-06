@@ -380,9 +380,18 @@ const MERGE_SETTINGS_KEY = 'identity_merge';
 export function getMergeSettings(db: SqlDb): IdentityMergeSettings {
   const row = first<{ value: string }>(db, `SELECT value FROM sync_state WHERE key = ?`, MERGE_SETTINGS_KEY);
   if (row === undefined) return { ...DEFAULT_MERGE_SETTINGS };
-  const parsed = identityMergeSettingsPatchSchema.safeParse(JSON.parse(row.value));
-  return { ...DEFAULT_MERGE_SETTINGS, ...(parsed.success ? parsed.data : {}) };
+  // Read once per ingested event: parse each stored value only once.
+  if (lastMergeSettings?.raw !== row.value) {
+    const parsed = identityMergeSettingsPatchSchema.safeParse(JSON.parse(row.value));
+    lastMergeSettings = {
+      raw: row.value,
+      settings: { ...DEFAULT_MERGE_SETTINGS, ...(parsed.success ? parsed.data : {}) },
+    };
+  }
+  return { ...lastMergeSettings.settings };
 }
+
+let lastMergeSettings: { raw: string; settings: IdentityMergeSettings } | null = null;
 
 export function setMergeSettings(
   db: SqlDb,

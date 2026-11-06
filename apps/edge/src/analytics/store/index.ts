@@ -124,7 +124,7 @@ import type { BotHit, EnrichedEvent } from '../types';
 import { ingestBatch, type IngestResult } from './ingest';
 import { breakdown, overview, resolveRange, timeseries, type ResolvedRange } from './query';
 import { runRetention, type ArchiveSink, type RetentionResult } from './retention';
-import { refreshRollups } from './rollups';
+import { refreshDailyRollups, refreshRollups } from './rollups';
 import { cohortReport } from './reports-cohort';
 import { journeyReport, trackingQuality, trackingQualityQuerySchema, type TrackingQualityQuery } from './reports-journey';
 import { ltvReport } from './reports-ltv';
@@ -313,6 +313,7 @@ export class AnalyticsStore {
     const r = this.range(input);
     if (!r.ok) return r;
     const { site } = r.value;
+    if (interval === 'day') refreshDailyRollups(this.db, site.site.timezone, site.site.currency);
     return {
       ok: true,
       value: timeseries(this.db, r.value.range, interval, site.site.timezone, site.site.currency),
@@ -1069,6 +1070,8 @@ export class AnalyticsStore {
   async retention(sink: ArchiveSink | null): Promise<(RetentionResult & { anonymous_touches: number }) | null> {
     const site = getSiteRecord(this.db);
     if (site === null) return null;
+    // The purge keeps the rollups: rebuild the pending days while their raw rows still exist.
+    refreshDailyRollups(this.db, site.site.timezone, site.site.currency);
     const result = await runRetention(this.db, sink, site.site.id, site.site.retention_days, this.now());
     identity.flagMergedTouchesIdentified(this.db);
     return { ...result, anonymous_touches: touches.purgeAnonymousTouches(this.db, this.now()) };

@@ -59,9 +59,10 @@ export function aggregateRange(
 }
 
 /**
- * Recomputes the hourly rollups of every dirty hour and the daily rollups (site
- * time zone) of the days touching them. Called after each ingest batch, so the
- * dashboard reads precomputed rows. Returns the number of hours refreshed.
+ * Recomputes the hourly rollups of every dirty hour and marks the days (site
+ * time zone) touching them dirty. Called after each ingest batch; the daily rows
+ * are rebuilt by {@link refreshDailyRollups} when read, so a busy day is not
+ * re-aggregated on every batch. Returns the number of hours refreshed.
  */
 export function refreshRollups(db: SqlDb, timeZone: string, currency: string): number {
   return db.transaction(() => {
@@ -90,6 +91,16 @@ export function refreshRollups(db: SqlDb, timeZone: string, currency: string): n
       days.add(dayKey(h, timeZone));
       days.add(dayKey(h + HOUR_MS - 1, timeZone));
     }
+    for (const day of days) db.run(`INSERT OR IGNORE INTO rollup_dirty (grain, key) VALUES ('day', ?)`, day);
+    db.run(`DELETE FROM rollup_dirty WHERE grain = 'hour'`);
+    return hours.length;
+  });
+}
+
+/** Rebuilds the daily rollups of the dirty days; returns how many. */
+export function refreshDailyRollups(db: SqlDb, timeZone: string, currency: string): number {
+  return db.transaction(() => {
+    const days = db.all<{ key: string }>(`SELECT key FROM rollup_dirty WHERE grain = 'day'`).map((r) => r.key);
     for (const day of days) {
       const start = dayStart(day, timeZone);
       const t = aggregateRange(db, start, dayStart(nextDay(day), timeZone), currency);
@@ -110,8 +121,8 @@ export function refreshRollups(db: SqlDb, timeZone: string, currency: string): n
         t.revenue_minor,
       );
     }
-    db.run(`DELETE FROM rollup_dirty WHERE grain = 'hour'`);
-    return hours.length;
+    if (days.length > 0) db.run(`DELETE FROM rollup_dirty WHERE grain = 'day'`);
+    return days.length;
   });
 }
 

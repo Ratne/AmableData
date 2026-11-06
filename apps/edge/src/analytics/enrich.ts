@@ -75,15 +75,21 @@ function pathOf(u: URL): string {
   return `${u.pathname || '/'}${hash}`.slice(0, 1024);
 }
 
+const digitsByCurrency = new Map<string, number>();
+
 function fractionDigits(currency: string): number {
-  try {
-    return (
-      new Intl.NumberFormat('en-US', { style: 'currency', currency }).resolvedOptions()
-        .maximumFractionDigits ?? 2
-    );
-  } catch {
-    return 2;
+  let digits = digitsByCurrency.get(currency);
+  if (digits === undefined) {
+    try {
+      digits =
+        new Intl.NumberFormat('en-US', { style: 'currency', currency }).resolvedOptions()
+          .maximumFractionDigits ?? 2;
+    } catch {
+      digits = 2;
+    }
+    if (digitsByCurrency.size < 500) digitsByCurrency.set(currency, digits);
   }
+  return digits;
 }
 
 /** Major units (e.g. 19.99 EUR) to minor units (1999). */

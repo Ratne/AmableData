@@ -202,6 +202,7 @@ analyticsRoutes.post('/e/server', async (c) => {
   if (payload.type === 'crawler' || payload.type === 'pageview') {
     const ctx = requestContext(c, { ip: payload.ip ?? '0.0.0.0', userAgent: payload.user_agent });
     const bot = detectBot(payload.user_agent);
+    const verification = bot === null ? null : verifyCrawlerIp(bot.name, payload.ip);
     if (bot !== null) {
       messages.push({
         kind: 'bot',
@@ -210,14 +211,13 @@ analyticsRoutes.post('/e/server', async (c) => {
           ts: ctx.now,
           ...bot,
           path: pathOfUrl(payload.url),
-          verification: verifyCrawlerIp(bot.name, payload.ip),
+          verification: verification ?? 'unknown',
         },
       });
     } else if (payload.type === 'pageview') {
       messages.push({ kind: 'event', event: await enrichServerEvent(payload, site, ctx) });
     }
     await dispatch(c.env, messages);
-    const verification = bot === null ? null : verifyCrawlerIp(bot.name, payload.ip);
     return reply(c, 202, { ok: true, bot: bot === null ? null : { ...bot, verification } });
   }
 

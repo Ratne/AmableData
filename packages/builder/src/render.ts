@@ -1142,13 +1142,23 @@ export function builderPageCsp(page: RenderedPage, scriptHashes: readonly string
 /** All Google Font families used by the document: tokens + per-widget typography. */
 function collectFonts(doc: BuilderDocument): string[] {
   const fams = new Set(tokenFontFamilies(doc.tokens));
-  const json = JSON.stringify(doc.body);
-  for (const m of json.matchAll(/"fontFamily":"([^"]+)"/g)) {
-    const fam = m[1];
-    if (fam && !fam.startsWith("var(") && !/system-ui|sans-serif|serif|monospace|inherit/.test(fam)) {
-      fams.add(fam);
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+      return;
     }
-  }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, item] of Object.entries(value)) {
+      if (key === "fontFamily" && typeof item === "string") {
+        if (item && !item.startsWith("var(") && !/system-ui|sans-serif|serif|monospace|inherit/.test(item)) {
+          fams.add(item);
+        }
+      } else {
+        walk(item);
+      }
+    }
+  };
+  walk(doc.body);
   return [...fams].filter(Boolean);
 }
 

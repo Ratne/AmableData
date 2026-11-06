@@ -77,11 +77,11 @@ export async function trackerSiteId(
   if (explicit !== null) return explicit;
   try {
     const ids = await tenantSitesStub(env.ANALYTICS, tenantId).indexList();
-    for (const id of ids) {
-      const record = await siteStub(env.ANALYTICS, id).getSite();
-      if (record !== null && !record.deleted && record.site.hostnames.some((h) => hostMatches(h, host))) return id;
-    }
-    return ids[0] ?? null;
+    const records = await Promise.all(ids.map((id) => siteStub(env.ANALYTICS, id).getSite()));
+    const index = records.findIndex(
+      (record) => record !== null && !record.deleted && record.site.hostnames.some((h) => hostMatches(h, host)),
+    );
+    return ids[index] ?? ids[0] ?? null;
   } catch (error) {
     console.error('[pages] analytics site lookup failed', error);
     return null;
@@ -102,13 +102,37 @@ interface ServeOptions {
   url: string;
 }
 
+type ResolvedPage = { tenant: GatewayTenantInfo; value: PublishedPage };
+
+/**
+ * Per-isolate memo of `pages.resolve`: a burst of pageviews makes one core call.
+ * A new publish shows up within RESOLVE_TTL_MS.
+ */
+const RESOLVE_TTL_MS = 10_000;
+const RESOLVE_MAX_ENTRIES = 500;
+const resolveMemo = new Map<string, { expires: number; value: ResolvedPage }>();
+
+async function resolvePage(c: Ctx, options: ServeOptions): Promise<ResolvedPage> {
+  const key = JSON.stringify([options.ref, options.host, options.path]);
+  const now = Date.now();
+  const memo = resolveMemo.get(key);
+  if (memo !== undefined && memo.expires > now) return memo.value;
+  const value = await callCore<PagesGatewayOps, 'pages.resolve'>(c.env, 'pages.resolve', options.ref, clientInfo(c), {
+    host: options.host,
+    path: options.path,
+  });
+  if (resolveMemo.size >= RESOLVE_MAX_ENTRIES) {
+    for (const [k, entry] of resolveMemo) if (entry.expires <= now) resolveMemo.delete(k);
+    if (resolveMemo.size >= RESOLVE_MAX_ENTRIES) resolveMemo.clear();
+  }
+  resolveMemo.set(key, { expires: now + RESOLVE_TTL_MS, value });
+  return value;
+}
+
 async function servePage(c: Ctx, options: ServeOptions): Promise<Response> {
-  let resolved: { tenant: GatewayTenantInfo; value: PublishedPage };
+  let resolved: ResolvedPage;
   try {
-    resolved = await callCore<PagesGatewayOps, 'pages.resolve'>(c.env, 'pages.resolve', options.ref, clientInfo(c), {
-      host: options.host,
-      path: options.path,
-    });
+    resolved = await resolvePage(c, options);
   } catch (error) {
     return unavailable(error);
   }

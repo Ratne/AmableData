@@ -53,7 +53,7 @@ export function markDirty(db: SqlDb, ts: number): void {
 function upsertVisitor(db: SqlDb, e: EnrichedEvent): { session_count: number } {
   const browserHit = !e.server;
   const firstSeen = Math.min(e.firstSeen ?? e.ts, e.ts);
-  db.run(
+  const row = db.all<{ session_count: number }>(
     `INSERT INTO visitors (id, first_seen, last_seen, session_count, cookieless, first_channel, first_source,
        first_referrer_host, country, device, browser, os)
      VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -66,7 +66,8 @@ function upsertVisitor(db: SqlDb, e: EnrichedEvent): { session_count: number } {
        country = COALESCE(excluded.country, country),
        device = COALESCE(excluded.device, device),
        browser = COALESCE(excluded.browser, browser),
-       os = COALESCE(excluded.os, os)`,
+       os = COALESCE(excluded.os, os)
+     RETURNING session_count`,
     e.vid,
     firstSeen,
     e.ts,
@@ -78,16 +79,8 @@ function upsertVisitor(db: SqlDb, e: EnrichedEvent): { session_count: number } {
     e.device,
     e.browser,
     e.os,
-  );
-  return (
-    first<{ session_count: number }>(
-      db,
-      `SELECT session_count FROM visitors WHERE id = ?`,
-      e.vid,
-    ) ?? {
-      session_count: 0,
-    }
-  );
+  )[0];
+  return row ?? { session_count: 0 };
 }
 
 const SESSION_COLUMNS = `id, visitor_id, session_number, started_at, last_seen, entry_path, exit_path, pageviews, goals, revenue_minor`;

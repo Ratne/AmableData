@@ -256,17 +256,21 @@ async function entrance(c: Ctx, deps: Deps): Promise<Response> {
     const entryId = step.path[0]!;
     const cost = entranceCostMinor(q.get('c'), ctx.source, ctx.graph, ctx.currency);
     const { destination } = step;
-    await saveStep(siteStub(c.env.ANALYTICS, site.siteId), {
-      touches: [
-        touchOf(base, 'entrance', newHitId(), entryId, {
-          costMinor: cost,
-          pageId: entryId === destination.nodeId ? (destination.pageId ?? null) : null,
-        }),
-        touchOf(base, 'view', hitId, destination.nodeId, { pageId: destination.pageId ?? null, order: 1 }),
-      ],
-      session: sessionInput(visitorId, funnelId, step, base),
-      tags: tagChange(visitorId, ctx.tags, step),
-    });
+    // Recorded off the redirect: the RPC leaves before the browser can follow it.
+    background(
+      c,
+      saveStep(siteStub(c.env.ANALYTICS, site.siteId), {
+        touches: [
+          touchOf(base, 'entrance', newHitId(), entryId, {
+            costMinor: cost,
+            pageId: entryId === destination.nodeId ? (destination.pageId ?? null) : null,
+          }),
+          touchOf(base, 'view', hitId, destination.nodeId, { pageId: destination.pageId ?? null, order: 1 }),
+        ],
+        session: sessionInput(visitorId, funnelId, step, base),
+        tags: tagChange(visitorId, ctx.tags, step),
+      }),
+    );
     deliverEffects(c, step, deps);
   }
   return redirect(c, site, target, visitorId);
@@ -413,14 +417,18 @@ async function action(c: Ctx, deps: Deps, defaults: ActionDefaults | null): Prom
     // Without a known session the visitor was never seen on the origin page.
     const kind = session === null && origin.method === 'default' ? 'action' : 'click';
     const { destination } = step;
-    await saveStep(siteStub(c.env.ANALYTICS, site.siteId), {
-      touches: [
-        touchOf(base, kind, newHitId(), fromNode.id, { pageId: fromPageId, action: n }),
-        touchOf(base, 'view', hitId, destination.nodeId, { pageId: destination.pageId ?? null, order: 1 }),
-      ],
-      session: sessionInput(visitorId, graph.id, step, base),
-      tags: tagChange(visitorId, ctx.tags, step),
-    });
+    // Recorded off the redirect: the RPC leaves before the browser can follow it.
+    background(
+      c,
+      saveStep(siteStub(c.env.ANALYTICS, site.siteId), {
+        touches: [
+          touchOf(base, kind, newHitId(), fromNode.id, { pageId: fromPageId, action: n }),
+          touchOf(base, 'view', hitId, destination.nodeId, { pageId: destination.pageId ?? null, order: 1 }),
+        ],
+        session: sessionInput(visitorId, graph.id, step, base),
+        tags: tagChange(visitorId, ctx.tags, step),
+      }),
+    );
     deliverEffects(c, step, deps);
   }
   return redirect(c, site, target, visitorId);

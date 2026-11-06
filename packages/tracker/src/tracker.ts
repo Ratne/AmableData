@@ -325,9 +325,25 @@ export function createTracker(
   const decorateActions = (): void => {
     for (const a of Array.from(doc.querySelectorAll<HTMLAnchorElement>('a[href]'))) decorate(a);
   };
+  // Only the mutated subtrees: a full rescan on every DOM change is costly on busy SPAs.
+  const decorateMutations = (records: MutationRecord[]): void => {
+    for (const record of records) {
+      if (record.type === 'attributes') {
+        const el = record.target as Element;
+        if (el.tagName === 'A' && el.hasAttribute('href')) decorate(el as HTMLAnchorElement);
+        continue;
+      }
+      for (const node of Array.from(record.addedNodes)) {
+        if (node.nodeType !== 1) continue;
+        const el = node as Element;
+        if (el.tagName === 'A' && el.hasAttribute('href')) decorate(el as HTMLAnchorElement);
+        for (const a of Array.from(el.querySelectorAll<HTMLAnchorElement>('a[href]'))) decorate(a);
+      }
+    }
+  };
   const MO = (win as unknown as { MutationObserver?: typeof MutationObserver }).MutationObserver;
   if (MO !== undefined) {
-    new MO(decorateActions).observe(doc.documentElement, {
+    new MO(decorateMutations).observe(doc.documentElement, {
       childList: true,
       subtree: true,
       attributes: true,

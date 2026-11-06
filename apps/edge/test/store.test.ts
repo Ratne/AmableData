@@ -328,7 +328,7 @@ describe('rollups and queries', () => {
   }
 
   it('maintains hourly and daily rollups', () => {
-    const { db } = seed();
+    const { db, store } = seed();
     const hourly = db.all(
       `SELECT bucket, visitors, sessions, pageviews, bounces, goals FROM rollup_hourly ORDER BY bucket`,
     );
@@ -336,6 +336,10 @@ describe('rollups and queries', () => {
       { bucket: T0, visitors: 2, sessions: 2, pageviews: 3, bounces: 1, goals: 1 },
       { bucket: T0 + 2 * HOUR, visitors: 1, sessions: 1, pageviews: 2, bounces: 0, goals: 0 },
     ]);
+    // Daily rows are rebuilt when a daily series is read, not on every ingest batch.
+    expect(db.all(`SELECT * FROM rollup_daily`)).toEqual([]);
+    expect(db.all(`SELECT grain, key FROM rollup_dirty`)).toEqual([{ grain: 'day', key: '2026-10-15' }]);
+    store.timeseries({ from: '2026-10-15', to: '2026-10-16' }, 'day');
     expect(db.all(`SELECT day, visitors, sessions, pageviews FROM rollup_daily`)).toEqual([
       { day: '2026-10-15', visitors: 3, sessions: 3, pageviews: 5 },
     ]);
@@ -498,6 +502,7 @@ describe('rollups and queries', () => {
       ],
       [],
     );
+    store.timeseries({ from: '2026-10-14', to: '2026-10-16' }, 'day');
     expect(db.all(`SELECT day, visitors FROM rollup_daily ORDER BY day`)).toEqual([
       { day: '2026-10-14', visitors: 1 },
       { day: '2026-10-15', visitors: 1 },
