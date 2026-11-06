@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TRACKER_BUNDLES } from '@amable/tracker/bundles';
-import { sha256Hex } from '../src/analytics/cookieless';
 import {
   clearSiteConfigCache,
   consumeAnalyticsBatch,
@@ -11,6 +10,7 @@ import { newSiteSecret } from '../src/analytics/rpc';
 import type { AnalyticsMessage } from '../src/analytics/types';
 import type { Env } from '../src/env';
 import { edgeEnv, FakeAnalyticsNamespace, FakeQueue, SITE_ID, siteInit, T0 } from './helpers';
+import { sha256Hex } from '@amable/auth';
 
 const CHROME =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';

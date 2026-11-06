@@ -1,5 +1,6 @@
 import { EmailProviderError, type DnsRecord, type EmailMarketingProvider } from '@amable/core';
 import { ZoneAutomationError, type ZoneAutomation } from './zone';
+import { toIso } from '../crm/util';
 
 export type DomainKind = 'sending' | 'tracking' | 'app' | 'shortlink';
 export type DomainStatus = 'pending' | 'verified' | 'failed';
@@ -83,8 +84,6 @@ async function providerCall<T>(work: () => Promise<T>): Promise<T> {
 const HOSTNAME_RE = /^(?=.{4,253}$)(?!-)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
 const PATH_RE = /^\/[a-z0-9][a-z0-9\-_/]{0,62}$/;
 
-const iso = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString());
-
 function parseList<T>(raw: string): T[] {
   const parsed: unknown = JSON.parse(raw);
   return Array.isArray(parsed) ? (parsed as T[]) : [];
@@ -126,11 +125,11 @@ export class DomainService {
       paths,
       routes: row.kind === 'app' ? siteRoutes(row.hostname, paths) : [],
       zone_id: row.zone_id,
-      dns_applied_at: iso(row.dns_applied_at),
-      verified_at: iso(row.verified_at),
-      checked_at: iso(row.checked_at),
+      dns_applied_at: toIso(row.dns_applied_at),
+      verified_at: toIso(row.verified_at),
+      checked_at: toIso(row.checked_at),
       last_error: row.last_error,
-      dns_changed_at: iso(row.dns_changed_at),
+      dns_changed_at: toIso(row.dns_changed_at),
       created_at: new Date(row.created_at).toISOString(),
     };
   }

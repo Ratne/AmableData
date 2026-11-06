@@ -1,6 +1,7 @@
 import type { BroadcastStats } from '@amable/api-types';
-import { chunked, parseJson } from '../email/context';
+import { parseJson } from '../email/context';
 import type { SqlDb } from '../crm/db/sql';
+import { chunks } from '../crm/db/sql';
 
 /**
  * Broadcast totals frozen in `mail_broadcast_stats` before the archive moves
@@ -97,7 +98,7 @@ interface FrozenRow extends Omit<BroadcastTotals, 'recipients'> {
 /** Frozen stats of the broadcasts in `ids` that have them. */
 export function frozenStats(db: SqlDb, ids: readonly string[]): Map<string, FrozenBroadcastStats> {
   const out = new Map<string, FrozenBroadcastStats>();
-  for (const chunk of chunked([...ids])) {
+  for (const chunk of chunks([...ids])) {
     for (const row of db.all<FrozenRow>(
       `SELECT * FROM mail_broadcast_stats WHERE broadcast_id IN (${chunk.map(() => '?').join(', ')})`,
       ...chunk,
@@ -159,7 +160,7 @@ export function freezeBroadcastStats(db: SqlDb, ids: readonly string[], now: num
       now,
     );
   }
-  for (const chunk of chunked(unique)) {
+  for (const chunk of chunks(unique)) {
     db.run(
       `DELETE FROM mail_broadcast_recipients WHERE broadcast_id IN (
          SELECT id FROM mail_broadcasts WHERE status IN ('sent', 'cancelled')

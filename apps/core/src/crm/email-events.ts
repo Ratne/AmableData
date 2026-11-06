@@ -1,6 +1,6 @@
 import { EMAIL_EVENT_TYPES, type EmailEventType } from '@amable/core';
 import type { CrmContext } from './context';
-import { placeholders } from './db/sql';
+import { chunks, placeholders } from './db/sql';
 import { CrmError } from './errors';
 
 /**
@@ -24,15 +24,7 @@ export interface BridgedEmailEvent {
 }
 
 export const EMAIL_BRIDGE_MAX_EVENTS = 200;
-/** Durable Object SQLite binds at most 100 parameters per statement. */
-const IN_CHUNK = 90;
 const EMAIL_TYPES = new Set<string>(EMAIL_EVENT_TYPES);
-
-function chunks<T>(items: readonly T[]): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += IN_CHUNK) out.push(items.slice(i, i + IN_CHUNK));
-  return out;
-}
 
 export function recordEmailEvents(
   ctx: CrmContext,

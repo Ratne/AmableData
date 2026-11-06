@@ -142,3 +142,8 @@ export interface Env {
   /** Extra trusted catalog keys, `<key_id>:<base64 raw Ed25519>` comma separated (required with APP_CATALOG_URL). */
   APP_CATALOG_PUBLIC_KEY?: string;
 }
+
+/** Public origin of the edge worker (pages, booking, signing, tracker), without a trailing slash. */
+export function edgeOrigin(env: Pick<Env, 'EDGE_ORIGIN'>): string {
+  return (env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
+}

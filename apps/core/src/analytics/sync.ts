@@ -20,6 +20,7 @@ import {
   type OutboxEvent,
 } from '@amable/core';
 import { lookbackBound } from './crm-ops';
+import { sha256Hex } from '@amable/auth';
 
 /**
  * CRM ↔ web analytics synchronisation of one tenant, run by the cron trigger,
@@ -93,11 +94,6 @@ interface OutboxPage {
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 interface ActiveSite {
   id: string;

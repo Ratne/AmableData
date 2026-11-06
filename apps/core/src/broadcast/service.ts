@@ -14,10 +14,8 @@ import type {
 import type { EmailSendContent, EmailSendRequest, QuotaDecision } from '@amable/core';
 import type { MailRecipientFacts } from '../crm/mail-reads';
 import {
-  chunked,
   decodeCursor,
   encodeCursor,
-  isoOf,
   MailError,
   normalizeEmail,
   parseJson,
@@ -36,7 +34,7 @@ import {
 import { fromAddress, getSetting, sendGate, suspension, tenantTimeZone, warmupState, sentToday } from '../email/settings';
 import { suppressedSet } from '../email/suppressions';
 import { frozenStats, liveLinks, liveTotals } from './frozen';
-import { placeholders } from '../crm/db/sql';
+import { chunks, placeholders } from '../crm/db/sql';
 import { getBroadcastRow, type BroadcastRow } from './store';
 import { bucketize, scheduleRecipients } from './tz';
 
@@ -51,8 +49,6 @@ import { bucketize, scheduleRecipients } from './tz';
 const UNMARKETABLE = new Set(['unsubscribed', 'bounced', 'complained', 'non_marketable']);
 const UNTHROTTLED_PER_TICK = 1_000;
 const QUEUE_BATCH = 100;
-/** SQLite in Durable Objects binds at most 100 parameters per statement. */
-const MAX_IN_PARAMS = 90;
 
 // ------------------------------------------------------------------ shapes
 
@@ -62,7 +58,7 @@ const NO_PROGRESS: Progress = { recipients: 0, pending: 0, enqueued: 0, cancelle
 /** Recipient counters of the broadcasts in `ids` (one grouped query per chunk). */
 function progressOf(deps: MailDeps, ids: readonly string[]): Map<string, Progress> {
   const progress = new Map<string, Progress>();
-  for (const chunk of chunked([...ids])) {
+  for (const chunk of chunks([...ids])) {
     for (const row of deps.db.all<{
       broadcast_id: string;
       total: number;
@@ -111,8 +107,8 @@ function toSummaryFields(row: BroadcastRow, progress: Progress): Omit<Broadcast,
     progress,
     next_send_at: toIso(row.next_send_at),
     created_by: row.created_by,
-    created_at: isoOf(row.created_at),
-    updated_at: isoOf(row.updated_at),
+    created_at: toIso(row.created_at),
+    updated_at: toIso(row.updated_at),
     started_at: toIso(row.started_at),
     completed_at: toIso(row.completed_at),
   };
@@ -150,7 +146,7 @@ export function listBroadcasts(deps: MailDeps, input: ListBroadcastsQuery): Page
   const page = rows.slice(0, input.limit);
   const ids = page.map((r) => r.id);
   const stats = new Map<string, { sent: number; opened: number; clicked: number }>();
-  for (const chunk of chunked(ids)) {
+  for (const chunk of chunks(ids)) {
     for (const s of deps.db.all<{ broadcast_id: string; sent: number; opened: number; clicked: number }>(
       `SELECT broadcast_id,
               COALESCE(SUM(CASE WHEN sent_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS sent,
@@ -539,7 +535,7 @@ async function tickOne(deps: MailDeps, b: BroadcastRow, now: number): Promise<nu
     now,
     allowance,
   );
-  const requestedAt = isoOf(now);
+  const requestedAt = toIso(now);
   for (let i = 0; i < due.length; i += QUEUE_BATCH) {
     const chunk = due.slice(i, i + QUEUE_BATCH);
     const requests: EmailSendRequest[] = chunk.map((r) => ({
@@ -555,8 +551,7 @@ async function tickOne(deps: MailDeps, b: BroadcastRow, now: number): Promise<nu
     }));
     await deps.queue.send(requests);
     deps.db.transaction(() => {
-      for (let j = 0; j < chunk.length; j += MAX_IN_PARAMS) {
-        const ids = chunk.slice(j, j + MAX_IN_PARAMS).map((r) => r.contact_id);
+      for (const ids of chunks(chunk.map((r) => r.contact_id))) {
         deps.db.run(
           `UPDATE mail_broadcast_recipients SET status = 'enqueued'
             WHERE broadcast_id = ? AND contact_id IN (${placeholders(ids.length)})`,

@@ -1,10 +1,10 @@
 import { randomToken } from '@amable/auth';
 import type { Interval } from '@amable/booking';
-import type { Env } from '../env';
 import type { BookingOutcome, ExternalBusy } from './bookings';
 import type { CalendarDoRef, CalendarEventData, ReminderJob } from './calendar-core';
 import type { CalendarRef } from './calendars';
 import { emailRequest, type BookingMessageVars, type MessageKind } from './messages';
+import { edgeOrigin, type Env } from '../env';
 
 /**
  * Worker-side steps around the booking ops: external busy time from the
@@ -12,10 +12,6 @@ import { emailRequest, type BookingMessageVars, type MessageKind } from './messa
  * missing `BOOKING_CALENDAR` binding degrades to "no external busy, no
  * reminders" (the booking itself never depends on it).
  */
-
-export function edgeOrigin(env: Env): string {
-  return (env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
-}
 
 export function manageUrl(env: Env, tenantSlug: string, token: string): string {
   return `${edgeOrigin(env)}/b/${tenantSlug}/manage/${token}`;

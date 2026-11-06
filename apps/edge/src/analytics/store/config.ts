@@ -13,7 +13,7 @@ import type {
   UpdateSegmentInput,
 } from '@amable/api-types';
 import { first, type SqlDb } from '../db/sql';
-import { DAY_MS } from '../time';
+import { DAY_MS, toIso } from '../time';
 
 /**
  * Saved objects of a site: funnels, segments, goal alerts, share links and
@@ -30,8 +30,6 @@ export function newObjectId(prefix: string): string {
   for (const b of bytes) out += BASE32[b % 32];
   return `${prefix}_${out}`;
 }
-
-const iso = (ts: number | null): string | null => (ts === null ? null : new Date(ts).toISOString());
 
 function parseArray<T>(raw: string): T[] {
   try {
@@ -208,7 +206,7 @@ function toAlert(db: SqlDb, row: AlertRow, now: number): StoredAlert {
     email_recipients: parseArray<string>(row.email_recipients),
     webhook_url: row.webhook_url,
     webhook_secret: row.webhook_secret,
-    last_triggered_at: iso(row.last_triggered_at),
+    last_triggered_at: toIso(row.last_triggered_at),
     deliveries_24h: deliveries,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
@@ -370,8 +368,8 @@ function toSiteKey(row: SiteKeyRow): SiteKey {
     prefix: row.prefix,
     scopes: parseArray<SiteKeyScope>(row.scopes),
     created_at: new Date(row.created_at).toISOString(),
-    last_used_at: iso(row.last_used_at),
-    revoked_at: iso(row.revoked_at),
+    last_used_at: toIso(row.last_used_at),
+    revoked_at: toIso(row.revoked_at),
   };
 }
 

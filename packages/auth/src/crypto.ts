@@ -12,8 +12,14 @@ export function randomToken(bytes = 32): string {
   return toBase64Url(randomBytes(bytes));
 }
 
-export async function sha256Hex(value: string | Uint8Array<ArrayBuffer>): Promise<string> {
-  const data = typeof value === 'string' ? utf8(value) : value;
+/** Lowercase hex of `bytes` random bytes (`2 * bytes` characters). */
+export function randomHex(bytes = 32): string {
+  return toHex(randomBytes(bytes));
+}
+
+export async function sha256Hex(value: string | Uint8Array): Promise<string> {
+  // Workers never hand out SharedArrayBuffer-backed views.
+  const data = typeof value === 'string' ? utf8(value) : (value as Uint8Array<ArrayBuffer>);
   return toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', data)));
 }
 

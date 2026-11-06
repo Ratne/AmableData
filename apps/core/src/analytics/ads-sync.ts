@@ -49,6 +49,7 @@ import {
   type AdPlatformClients,
   type AdPlatformSecretsEnv,
 } from './integrations';
+import { randomToken } from '@amable/auth';
 
 /**
  * Ad platform connections of a site: OAuth grants, spend and entity sync.
@@ -332,11 +333,6 @@ export async function adConnectionId(platform: AdPlatform, accountId: string): P
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${platform}|${accountId}`));
   const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
   return `adc_${hex.slice(0, 20)}`;
-}
-
-function randomId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function must<T>(result: AnalyticsResult<T>): T {
@@ -730,7 +726,7 @@ export async function startAdsConnect(
   const client = ports.clients.client(input.platform);
   if (client === null) throw new AdsSyncError('unavailable', 'integration_unavailable');
   // The slug lets the fixed redirect page find the workspace that started the flow.
-  const state = `${input.tenantSlug}.${randomId()}`;
+  const state = `${input.tenantSlug}.${randomToken(24)}`;
   await ports.grants.putState(state, {
     tenantId: input.tenantId,
     siteId: input.siteId,
@@ -836,7 +832,7 @@ export async function authorizeAdsConnect(
   const accounts = listed.slice(0, MAX_ACCOUNTS_LISTED);
   if (accounts.length === 0) throw new AdsSyncError('no_accounts', 'no ad account available for this authorization');
 
-  const grantId = `ag_${randomId()}`;
+  const grantId = `ag_${randomToken(24)}`;
   await ports.grants.putGrant(
     { tenantId: input.tenantId, siteId: input.siteId, grantId },
     {

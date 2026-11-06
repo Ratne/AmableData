@@ -1,9 +1,9 @@
 import { CrmError } from './errors';
 
 export function toIso(ms: number): string;
-export function toIso(ms: number | null): string | null;
-export function toIso(ms: number | null): string | null {
-  return ms === null ? null : new Date(ms).toISOString();
+export function toIso(ms: number | null | undefined): string | null;
+export function toIso(ms: number | null | undefined): string | null {
+  return ms === null || ms === undefined ? null : new Date(ms).toISOString();
 }
 
 /** Parses an ISO 8601 date-time (already Zod-validated) into epoch ms. */

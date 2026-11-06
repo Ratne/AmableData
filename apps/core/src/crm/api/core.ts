@@ -17,6 +17,7 @@ import {
 import type { CrmActor } from '../context';
 import { CrmError, type CrmErrorShape } from '../errors';
 import type { CrmOpInput, CrmOpName, CrmOpOutput, CrmResult } from '../ops';
+import { sha256Hex } from '@amable/auth';
 
 /** Error raised by the REST layer from a DO error result. */
 export class CrmHttpError extends Error {
@@ -145,11 +146,6 @@ export async function callCrm<K extends CrmOpName>(
 const IDEMPOTENCY_KEY_RE = /^[\x21-\x7e]{1,255}$/;
 /** Responses worth replaying: success and deterministic client errors. */
 const NON_REPLAYABLE = new Set([401, 403, 429]);
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 /**
  * `Idempotency-Key` support for every POST: the first request runs and its

@@ -13,6 +13,7 @@ import {
 import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
 import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../edit-lock/routes';
 import { audit, getTenant, type AppEnv } from '../middleware';
+import { edgeOrigin } from '../env';
 
 const tags = ['Checkouts'];
 const params = z.object({ id: idSchema });
@@ -111,7 +112,7 @@ export function registerCheckoutRoutes(app: OpenAPIHono<AppEnv>): void {
     async (c) => {
       const checkout = await callCrm(c, 'checkouts.get', { id: c.req.valid('param').id });
       const { id: tenantId, slug } = getTenant(c).tenant;
-      const edge = (c.env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
+      const edge = edgeOrigin(c.env);
       const script = `${edge}/checkout.js`;
       // A site domain serving the whole hostname brands the hosted link (path-only sites do not route /c/).
       const site = await c.env.DB.prepare(

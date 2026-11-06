@@ -51,10 +51,11 @@ import {
   readArchiveEntry,
   readPageManifest,
   retargetString,
-  sha256Hex,
   streamPageExport,
   type PageManifest,
 } from './transfer';
+import { edgeOrigin } from '../env';
+import { sha256Hex } from '@amable/auth';
 
 type Ctx = Context<AppEnv>;
 
@@ -66,10 +67,6 @@ const mediaTag = ['Media'];
 const pageIdParam = z.object({ id: idSchema });
 const versionParam = z.object({ id: idSchema, versionId: idSchema });
 
-export function edgeOrigin(c: Ctx): string {
-  return (c.env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
-}
-
 /** `https://<host><path>` once a domain is connected, else the edge fallback `/p/<slug><path>`. */
 export function publicUrl(edge: string, slug: string, page: Pick<PageRecord, 'host' | 'path'>): string {
   if (page.host !== null) return `https://${page.host}${page.path}`;
@@ -77,7 +74,7 @@ export function publicUrl(edge: string, slug: string, page: Pick<PageRecord, 'ho
 }
 
 function withUrl<T extends PageRecord>(c: Ctx, page: T): T & { public_url: string } {
-  return { ...page, public_url: publicUrl(edgeOrigin(c), getTenant(c).tenant.slug, page) };
+  return { ...page, public_url: publicUrl(edgeOrigin(c.env), getTenant(c).tenant.slug, page) };
 }
 
 function serializeMedia(c: Ctx, row: MediaRow): MediaFile {
@@ -87,7 +84,7 @@ function serializeMedia(c: Ctx, row: MediaRow): MediaFile {
     filename: row.filename,
     content_type: row.content_type,
     size: row.size,
-    url: `${edgeOrigin(c)}/m/${slug}/${row.file}`,
+    url: `${edgeOrigin(c.env)}/m/${slug}/${row.file}`,
     preview_url: `/api/v2/t/${slug}/media/${row.id}/content`,
     created_at: new Date(row.created_at).toISOString(),
   };
@@ -243,7 +240,7 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
           format: PAGE_EXPORT_FORMAT,
           version: PAGE_EXPORT_VERSION,
           exported_at: new Date().toISOString(),
-          source: { slug: getTenant(c).tenant.slug, edge_origin: edgeOrigin(c), page_id: page.id },
+          source: { slug: getTenant(c).tenant.slug, edge_origin: edgeOrigin(c.env), page_id: page.id },
           page: { title: page.title, path: page.path, document: page.draft, seo: page.seo, settings: page.settings },
         },
         media,
@@ -328,7 +325,7 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
         const retarget = (s: string) =>
           retargetString(s, {
             from: { edge: manifest.source.edge_origin, slug: manifest.source.slug, pageId: manifest.source.page_id },
-            to: { edge: edgeOrigin(c), slug, pageId: id },
+            to: { edge: edgeOrigin(c.env), slug, pageId: id },
             files,
           });
         const result = await callCrm(c, 'pages.import', {
@@ -408,7 +405,7 @@ export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {
     async (c) => {
       const page = await callCrm(c, 'pages.get', { id: c.req.valid('param').id });
       const slug = getTenant(c).tenant.slug;
-      return c.json({ html: renderDraft(page, slug, edgeOrigin(c)) }, 200);
+      return c.json({ html: renderDraft(page, slug, edgeOrigin(c.env)) }, 200);
     },
   );
 

@@ -6,7 +6,6 @@ import {
 } from '@amable/tracker/bundles';
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env';
-import { sha256Hex } from './cookieless';
 import { verifyCrawlerIp } from './crawler-ip';
 import { detectBot } from './crawlers';
 import {
@@ -19,6 +18,7 @@ import {
 import { dispatch, loadSiteConfig } from './pipeline';
 import { siteIdOfSecret } from './rpc';
 import type { AnalyticsMessage, BotHit } from './types';
+import { sha256Hex } from '@amable/auth';
 
 type AppContext = Context<{ Bindings: Env }>;
 

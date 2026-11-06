@@ -1,3 +1,4 @@
+import { randomHex, sha256Hex } from '@amable/auth';
 /**
  * Cookieless visitor ids: SHA-256 of (daily salt, site, IP, user agent).
  *
@@ -14,21 +15,7 @@ export function saltDay(ts: number): string {
 }
 
 export function randomSalt(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return toHex(bytes);
-}
-
-export function toHex(bytes: Uint8Array): string {
-  let out = '';
-  for (const b of bytes) out += b.toString(16).padStart(2, '0');
-  return out;
-}
-
-export async function sha256Hex(text: string): Promise<string> {
-  return toHex(
-    new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))),
-  );
+  return randomHex(32);
 }
 
 /** Visitor id of a cookieless hit: `h` + 32 hex chars (fits the tracker id format). */

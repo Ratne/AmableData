@@ -4,7 +4,8 @@ import type {
   EmailOutboxEvent,
   EventActor,
 } from '@amable/core';
-import { chunked, isoOf, parseJson, type MailDeps } from './context';
+import { type MailDeps, parseJson, toIso } from './context';
+import { chunks } from '../crm/db/sql';
 
 const SYSTEM: EventActor = { type: 'system', id: null };
 
@@ -47,7 +48,7 @@ export function pendingEmailEvents(
       WHERE acked_at IS NULL ORDER BY id LIMIT ?`,
     limit,
   );
-  for (const ids of chunked(rows.map((r) => r.id))) {
+  for (const ids of chunks(rows.map((r) => r.id))) {
     deps.db.run(
       `UPDATE mail_outbox SET attempts = attempts + 1 WHERE id IN (${ids.map(() => '?').join(', ')})`,
       ...ids,
@@ -58,7 +59,7 @@ export function pendingEmailEvents(
       ({
         id: row.id,
         type: row.type,
-        occurredAt: isoOf(row.occurred_at),
+        occurredAt: toIso(row.occurred_at),
         actor: { type: row.actor_type, id: row.actor_id },
         payload: parseJson<Record<string, unknown>>(row.payload, {}),
       }) as unknown as EmailOutboxEvent,
@@ -68,7 +69,7 @@ export function pendingEmailEvents(
 export function ackEmailEvents(deps: MailDeps, input: { ids: string[] }): { acked: number } {
   if (input.ids.length === 0) return { acked: 0 };
   const ids = input.ids.slice(0, 500);
-  for (const chunk of chunked(ids)) {
+  for (const chunk of chunks(ids)) {
     deps.db.run(
       `UPDATE mail_outbox SET acked_at = ? WHERE acked_at IS NULL AND id IN (${chunk.map(() => '?').join(', ')})`,
       deps.now(),

@@ -28,6 +28,7 @@ import {
   parseTimeOfDay,
   zonedToUtc,
 } from './time';
+import { toIso } from '../crm/util';
 
 /** Per-step persisted state (timers remember their deadline, email steps their pause). */
 export interface StepState {
@@ -141,10 +142,6 @@ async function resolveUser(ctx: StepContext, ref: UserRef | undefined): Promise<
   return ref.user_id;
 }
 
-function iso(ms: number): string {
-  return new Date(ms).toISOString();
-}
-
 // ------------------------------------------------------------------ timers
 
 function waitOrDone(ctx: StepContext, until: number, message: string): StepOutcome {
@@ -254,8 +251,8 @@ async function runSendEmail(ctx: StepContext, step: StepOf<'send_email'>): Promi
       replyTo: step.reply_to ?? null,
     },
     source,
-    requestedAt: iso(ctx.now),
-    notAfter: iso(ctx.now + 24 * 60 * 60_000),
+    requestedAt: toIso(ctx.now),
+    notAfter: toIso(ctx.now + 24 * 60 * 60_000),
   };
   try {
     await ports.email.send(request);
@@ -477,7 +474,7 @@ async function runHttp(ctx: StepContext, step: StepOf<'http_request'>): Promise<
             enrollment_id: ctx.enrollmentId,
             contact_id: ctx.contactId,
             ...(payloadKind === 'contact' ? { contact: await ctx.contact() } : {}),
-            sent_at: iso(ctx.now),
+            sent_at: toIso(ctx.now),
           });
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(step.headers ?? {})) {
@@ -630,7 +627,7 @@ export async function executeStep(ctx: StepContext): Promise<StepOutcome> {
         contact_id: ctx.contactId,
         assigned_to: assignee,
         ...(step.description === undefined ? {} : { description: step.description }),
-        ...(step.due_in === undefined ? {} : { due_at: iso(ctx.now + durationMs(step.due_in)) }),
+        ...(step.due_in === undefined ? {} : { due_at: toIso(ctx.now + durationMs(step.due_in)) }),
         ...(step.priority === undefined ? {} : { priority: step.priority }),
         ...(step.task_type === undefined ? {} : { type: step.task_type }),
       });
@@ -641,8 +638,8 @@ export async function executeStep(ctx: StepContext): Promise<StepOutcome> {
       const start = ctx.now + durationMs(step.start_in);
       const appointment = await once(ctx, 'appointments.create', {
         title: step.title,
-        start_at: iso(start),
-        end_at: iso(start + step.duration_minutes * 60_000),
+        start_at: toIso(start),
+        end_at: toIso(start + step.duration_minutes * 60_000),
         contact_id: ctx.contactId,
         owner_id: owner,
         ...(step.location === undefined ? {} : { location: step.location }),

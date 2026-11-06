@@ -10,6 +10,7 @@ import { siteStub, tenantSitesStub } from '../analytics/rpc';
 import { CHECKOUT_PERMISSIONS } from '../checkout/routes';
 import type { Env } from '../env';
 import { callCore, callCoreRaw, clientInfo, GatewayCallError, tenantRef } from '../gateway';
+import { escapeHtml } from '../public/http';
 
 /**
  * Published landing pages on the edge:
@@ -27,10 +28,6 @@ type Ctx = Context<{ Bindings: Env }>;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,99}$/i;
 const FILE_RE = /^[A-Za-z0-9]{10,40}\.[a-z0-9]{2,5}$/;
 const HTML_CACHE_SECONDS = 300;
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 function notFoundPage(): Response {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="robots" content="noindex"/><title>Page not found</title><style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;color:#334155;background:#f8fafc}main{text-align:center}h1{font-size:4rem;margin:0;color:#0f172a}</style></head><body><main><h1>404</h1><p>This page does not exist.</p></main></body></html>`;

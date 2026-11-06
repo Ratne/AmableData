@@ -37,7 +37,8 @@ import { crmRoute, json, jsonBody } from '../crm/api/core';
 import { CrmError } from '../crm/errors';
 import { audit, getTenant, HttpError, type AppEnv } from '../middleware';
 import { computeHeatmap } from './heatmap';
-import { edgeOrigin, namespace, siteForQuery, siteRecord, snippetFor, unwrap } from './service';
+import { namespace, siteForQuery, siteRecord, snippetFor, unwrap } from './service';
+import { edgeOrigin } from '../env';
 
 type Ctx = Context<AppEnv>;
 
@@ -347,7 +348,7 @@ export function registerFunnelRoutes(api: OpenAPIHono<AppEnv>): void {
       if (q.domain !== undefined && !(await activeTrackingDomain(c, q.site_id, q.domain))) {
         throw new HttpError(422, 'tracking_domain_not_active');
       }
-      const origin = q.domain === undefined ? edgeOrigin(c) : `https://${q.domain}`;
+      const origin = q.domain === undefined ? edgeOrigin(c.env) : `https://${q.domain}`;
       const base = q.domain === undefined ? `${origin}/s/${q.site_id}` : origin;
       const entryNode = node.kind === 'traffic' ? undefined : node.id;
       const entrance_url = buildEntranceUrl(base, graph.id, source, {

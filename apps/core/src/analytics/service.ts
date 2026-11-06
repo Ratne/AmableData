@@ -28,6 +28,8 @@ import { actorOf } from '../crm/api/core';
 import { CrmError } from '../crm/errors';
 import type { CrmResult } from '../crm/ops';
 import { getTenant, HttpError, jsonError, tenantDb, type AppEnv } from '../middleware';
+import { edgeOrigin } from '../env';
+import { sha256Hex } from '@amable/auth';
 
 type Ctx = Context<AppEnv>;
 
@@ -58,16 +60,6 @@ export function namespace(c: Ctx): AnalyticsNamespace {
   const ns = c.env.ANALYTICS;
   if (ns === undefined) throw new HttpError(503, 'analytics_unavailable');
   return ns;
-}
-
-export async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-/** Public origin of the edge worker (tracking subdomain of the customer zone). */
-export function edgeOrigin(c: Ctx): string {
-  return (c.env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
 }
 
 export function snippetFor(site: Pick<Site, 'id' | 'cookieless'>, origin: string): SiteSnippet {
@@ -128,7 +120,7 @@ export async function createSite(c: Ctx, input: CreateSiteInput): Promise<SiteWi
     secretHash: await sha256Hex(secret),
   });
   await tenantSitesStub(ns, tenantId).indexAdd(siteId);
-  return { site: record.site, secret, snippet: snippetFor(record.site, edgeOrigin(c)) };
+  return { site: record.site, secret, snippet: snippetFor(record.site, edgeOrigin(c.env)) };
 }
 
 export async function updateSite(c: Ctx, siteId: string, patch: UpdateSiteInput): Promise<Site> {
@@ -156,7 +148,7 @@ export async function rollSecret(c: Ctx, siteId: string): Promise<string> {
 }
 
 export async function siteSnippet(c: Ctx, siteId: string): Promise<SiteSnippet> {
-  return snippetFor((await siteRecord(c, siteId)).site, edgeOrigin(c));
+  return snippetFor((await siteRecord(c, siteId)).site, edgeOrigin(c.env));
 }
 
 // --------------------------------------------------------------------- queries

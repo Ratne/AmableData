@@ -1,6 +1,6 @@
 import type { SendSingleEmailInput } from '@amable/api-types';
 import type { EmailSendRequest } from '@amable/core';
-import { MailError, isoOf, type MailDeps } from './context';
+import { type MailDeps, MailError, toIso } from './context';
 import { getTemplate } from './library';
 
 /** One email to one contact (sales "single email"), through the same queue and checks as automations. */
@@ -30,7 +30,7 @@ export async function queueSingleEmail(
       replyTo: null,
     },
     source: { type: 'single', userId: input.userId },
-    requestedAt: isoOf(deps.now()),
+    requestedAt: toIso(deps.now()),
     notAfter: null,
   };
   await deps.queue.send([request]);

@@ -9,17 +9,10 @@ import type {
   UpdateSnippetInput,
 } from '@amable/api-types';
 import type { CompiledEmail } from '@amable/email-render';
-import {
-  decodeCursor,
-  encodeCursor,
-  MailError,
-  notFound,
-  parseJson,
-  isoOf,
-  type MailDeps,
-} from './context';
-import { compileDocument, rendererFor, sha256Hex, type CompiledContent } from './render';
+import { decodeCursor, encodeCursor, type MailDeps, MailError, notFound, parseJson, toIso } from './context';
+import { compileDocument, rendererFor, type CompiledContent } from './render';
 import { getSetting, tenantTimeZone } from './settings';
+import { sha256Hex } from '@amable/auth';
 
 /** Templates (Tiptap JSON + compiled HTML cache) and Dynamic Content snippets. */
 
@@ -60,8 +53,8 @@ function summary(row: TemplateRow): EmailTemplateSummary {
     from_name: row.from_name,
     reply_to: row.reply_to,
     compiled: row.compiled_hash !== null && row.compiled_hash === row.body_hash,
-    created_at: isoOf(row.created_at),
-    updated_at: isoOf(row.updated_at),
+    created_at: toIso(row.created_at),
+    updated_at: toIso(row.updated_at),
   };
 }
 
@@ -255,8 +248,8 @@ const toSnippet = (row: SnippetRow): Snippet => ({
   key: row.key,
   name: row.name,
   body: row.body,
-  created_at: isoOf(row.created_at),
-  updated_at: isoOf(row.updated_at),
+  created_at: toIso(row.created_at),
+  updated_at: toIso(row.updated_at),
 });
 
 export function listSnippets(deps: MailDeps): { data: Snippet[] } {

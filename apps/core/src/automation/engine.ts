@@ -32,9 +32,9 @@ import type {
 import { EMPTY_GRAPH, LOG_KINDS } from '@amable/api-types';
 import type { AutomationInboundEvent } from '@amable/core';
 import { mapLimited } from '../concurrency';
-import { first, placeholders, type SqlDb, type SqlValue } from '../crm/db/sql';
+import { chunks, first, placeholders, type SqlDb, type SqlValue } from '../crm/db/sql';
 import { CrmError, invalidMany, notFound } from '../crm/errors';
-import { decodeCursor, encodeCursor, parseJson } from '../crm/util';
+import { decodeCursor, encodeCursor, parseJson, toIso } from '../crm/util';
 import { createFolderStore, type FolderStore } from '../folders/store';
 import { countContactEnrollments, listContactEnrollments } from './contact-enrollments';
 import { compileGraph, edgesFrom, isDecision, isSequence, type CompiledGraph } from './graph';
@@ -75,6 +75,7 @@ import {
 } from './store';
 import { addDays, formatDate, isLeap, isValidTimeZone, parseTimeOfDay, wallClock } from './time';
 import { validateGraph, type AppActionCatalog, type EsignTemplateCatalog } from './validate';
+import { randomHex } from '@amable/auth';
 
 /** Who performs an engine API operation (user id from the verified context). */
 /** Catalogs of other modules used by publish validation (fetched by the API worker). */
@@ -110,19 +111,8 @@ export function backoffMs(attempt: number): number {
   return Math.min(30_000 * 4 ** Math.max(attempt - 1, 0), 6 * 60 * 60_000);
 }
 
-function iso(ms: number): string;
-function iso(ms: number | null): string | null;
-function iso(ms: number | null): string | null {
-  return ms === null ? null : new Date(ms).toISOString();
-}
-
 /** SecretBox ciphertext format (`v1.<iv>.<ciphertext>`); plaintext secrets are hex. */
 const SEALED_PREFIX = 'v1.';
-
-function randomSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 interface VersionInfo {
   id: string;
@@ -647,7 +637,7 @@ export class AutomationEngine implements StepHost {
       this.handleEvent({
         id: eventId,
         type: 'automation.api_goal',
-        occurredAt: iso(this.now()),
+        occurredAt: toIso(this.now()),
         payload: { contactId: input.data.contact_id, callName: input.callName },
       }),
     );
@@ -683,7 +673,7 @@ export class AutomationEngine implements StepHost {
     id: string;
   }): Promise<{ automation_id: string; secret: string }> {
     this.automationOrThrow(input.id);
-    const secret = randomSecret();
+    const secret = randomHex(32);
     this.db.run(
       `UPDATE eng_automations SET signing_secret = ?, updated_at = ? WHERE id = ?`,
       await this.sealSecret(input.id, secret),
@@ -713,7 +703,7 @@ export class AutomationEngine implements StepHost {
       return box.decrypt(stored, `automation:${automationId}`);
     }
     if (stored !== '' && box === null) return stored;
-    const secret = stored === '' ? randomSecret() : stored;
+    const secret = stored === '' ? randomHex(32) : stored;
     const sealed = await this.sealSecret(automationId, secret);
     // Compare-and-set: a concurrent first use may have stored its own secret meanwhile.
     this.db.run(
@@ -1350,7 +1340,7 @@ export class AutomationEngine implements StepHost {
           const result = this.handleEvent({
             id: `anniv:${goal.automationId}:${goal.nodeId}:${goal.triggerIndex}:${contactId}:${goal.today}`,
             type: 'automation.date_anniversary',
-            occurredAt: iso(now),
+            occurredAt: toIso(now),
             payload: { contactId, automationId: goal.automationId, nodeId: goal.nodeId },
           });
           fired += result.matched.length;
@@ -1593,7 +1583,7 @@ export class AutomationEngine implements StepHost {
         setJob(this.db, this.ports.newId(), 'token', token.id, outcome.until);
         if (firstWait) {
           this.log(enrollment, 'step_waiting', nodeId, step.id, outcome.message, {
-            until: iso(outcome.until),
+            until: toIso(outcome.until),
           });
         }
         return false;
@@ -1609,7 +1599,7 @@ export class AutomationEngine implements StepHost {
         setJob(this.db, this.ports.newId(), 'token', token.id, outcome.until);
         if (!wasPaused)
           this.log(enrollment, 'paused', nodeId, step.id, outcome.message, {
-            retry_at: iso(outcome.until),
+            retry_at: toIso(outcome.until),
           });
         return false;
       }
@@ -1673,7 +1663,7 @@ export class AutomationEngine implements StepHost {
         token.node_id,
         step?.id ?? null,
         `attempt ${attempts} failed: ${message}`,
-        { retry_at: iso(retryAt) },
+        { retry_at: toIso(retryAt) },
       );
       return;
     }
@@ -1825,11 +1815,11 @@ export class AutomationEngine implements StepHost {
       published_version:
         version === undefined
           ? null
-          : { id: version.id, number: version.number, published_at: iso(version.published_at) },
+          : { id: version.id, number: version.number, published_at: toIso(version.published_at) },
       active_enrollments: active,
       created_by: row.created_by,
-      created_at: iso(row.created_at),
-      updated_at: iso(row.updated_at),
+      created_at: toIso(row.created_at),
+      updated_at: toIso(row.updated_at),
     };
   }
 
@@ -1840,7 +1830,7 @@ export class AutomationEngine implements StepHost {
       number: row.number,
       settings: parseSettings(row.settings),
       published_by: row.published_by,
-      published_at: iso(row.published_at),
+      published_at: toIso(row.published_at),
     };
   }
 
@@ -1862,8 +1852,8 @@ export class AutomationEngine implements StepHost {
       status: row.status,
       source: row.source,
       entry_node_id: row.entry_node_id,
-      started_at: iso(row.started_at),
-      ended_at: iso(row.ended_at),
+      started_at: toIso(row.started_at),
+      ended_at: toIso(row.ended_at),
       positions: tokens
         .filter((t) => t.enrollment_id === row.id)
         .map((t) => {
@@ -1874,7 +1864,7 @@ export class AutomationEngine implements StepHost {
             step_id: isSequence(node) ? (node.steps[t.step_index]?.id ?? null) : null,
             step_index: t.step_index,
             status: t.status,
-            due_at: iso(t.due_at),
+            due_at: toIso(t.due_at),
             attempts: t.attempts,
             last_error: t.last_error,
           };
@@ -1908,13 +1898,6 @@ function toLogEntry(row: LogRow): ExecutionLogEntry {
     data: parseJson<Record<string, unknown>>(row.data, {}),
     at: new Date(row.at).toISOString(),
   };
-}
-
-/** Splits ids for `IN (…)` lists: Durable Object SQLite binds at most 100 parameters. */
-function chunks<T>(items: readonly T[], size = 90): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
 }
 
 function describe(error: unknown): string {

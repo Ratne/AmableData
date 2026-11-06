@@ -7,8 +7,7 @@ import {
 } from '@amable/api-types';
 import { first, type SqlDb } from '../db/sql';
 import { ONLINE_WINDOW_MS } from './query';
-
-const iso = (ts: number): string => new Date(ts).toISOString();
+import { toIso } from '../time';
 
 /** Strips identities for public (share link) viewers. */
 export function anonymizeEvent(e: RealtimeEvent): RealtimeEvent {
@@ -74,8 +73,8 @@ export function realtimeSnapshot(db: SqlDb, siteId: string, currency: string, no
       device: v.device,
       browser: v.browser,
       os: v.os,
-      started_at: iso(v.started_at),
-      last_seen: iso(v.last_seen),
+      started_at: toIso(v.started_at),
+      last_seen: toIso(v.last_seen),
       pageviews: v.pageviews,
       revenue_minor: v.revenue_minor,
       name: v.name ?? v.email,
@@ -121,7 +120,7 @@ export function realtimeSnapshot(db: SqlDb, siteId: string, currency: string, no
     .map(
       (e): RealtimeEvent => ({
         type: e.type,
-        ts: iso(e.ts),
+        ts: toIso(e.ts),
         visitor_id: e.visitor_id,
         path: e.path,
         name: e.name,

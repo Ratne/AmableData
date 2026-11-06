@@ -93,25 +93,31 @@ function serializeDelivery(row: DeliveryRow): FormDelivery {
   };
 }
 
-/** Decrypts in the worker: the DO only ever holds the ciphertext. */
+/** Decrypts in the worker: the DO only ever holds the ciphertext. A failure becomes the submission error. */
+async function openSubmission(
+  c: Ctx,
+  submission: { id: string; ciphertext: string; error: string | null },
+): Promise<{ values: Record<string, unknown>; tracking: Record<string, string>; error: string | null }> {
+  if (submission.ciphertext === '') return { values: {}, tracking: {}, error: submission.error };
+  try {
+    const content = await decryptSubmission(
+      c.get('services').secretBox,
+      getTenant(c).tenant.id,
+      submission.id,
+      submission.ciphertext,
+    );
+    return { values: content.values, tracking: content.tracking, error: submission.error };
+  } catch {
+    return { values: {}, tracking: {}, error: submission.error ?? 'submission could not be decrypted' };
+  }
+}
+
 async function serializeSubmission(
   c: Ctx,
   submission: SubmissionRow,
   deliveries: DeliveryRow[],
 ): Promise<FormSubmission> {
-  const tenantId = getTenant(c).tenant.id;
-  let values: Record<string, unknown> = {};
-  let tracking: Record<string, string> = {};
-  let error = submission.error;
-  if (submission.ciphertext !== '') {
-    try {
-      const content = await decryptSubmission(c.get('services').secretBox, tenantId, submission.id, submission.ciphertext);
-      values = content.values;
-      tracking = content.tracking;
-    } catch {
-      error = error ?? 'submission could not be decrypted';
-    }
-  }
+  const { values, tracking, error } = await openSubmission(c, submission);
   return {
     id: submission.id,
     form_id: submission.form_id,
@@ -177,23 +183,7 @@ async function serializeContactSubmissionDetail(
   found: ContactSubmissionDetailRow,
 ): Promise<ContactSubmissionDetail> {
   const { submission, fields } = found;
-  let values: Record<string, unknown> = {};
-  let tracking: Record<string, string> = {};
-  let error = submission.error;
-  if (submission.ciphertext !== '') {
-    try {
-      const content = await decryptSubmission(
-        c.get('services').secretBox,
-        getTenant(c).tenant.id,
-        submission.id,
-        submission.ciphertext,
-      );
-      values = content.values;
-      tracking = content.tracking;
-    } catch {
-      error = error ?? 'submission could not be decrypted';
-    }
-  }
+  const { values, tracking, error } = await openSubmission(c, submission);
   const mask = !getTenant(c).can('contacts:read_sensitive');
   const sensitive = new Set(found.sensitiveKeys);
   const byKey = new Map(fields.map((f) => [f.key, f]));

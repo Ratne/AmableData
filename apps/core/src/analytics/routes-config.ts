@@ -42,6 +42,7 @@ import {
   unwrap,
 } from './service';
 import { signShareToken } from './share';
+import { randomHex } from '@amable/auth';
 
 const tags = ['Analytics'];
 const ok = z.object({ id: z.string(), deleted: z.literal(true) });
@@ -56,9 +57,7 @@ async function siteOf(c: Ctx) {
 }
 
 function randomSecret(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return `whsec_${[...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  return `whsec_${randomHex(32)}`;
 }
 
 async function shareOut(c: Ctx, siteId: string, row: ShareRow): Promise<Share> {

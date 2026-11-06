@@ -8,14 +8,12 @@ import type {
   VisitorSummary,
 } from '@amable/api-types';
 import { first, type SqlDb, type SqlValue } from '../db/sql';
-import { dayKey } from '../time';
+import { dayKey, toIso } from '../time';
 import { keyTouches, personKey, touchesOf, visitorIdsOf } from './attribution';
 import { journeyIdentityExtras, type JourneyFunnelTouch } from './identity';
 import { timeToConversion } from './insights';
 import { loadModel, predictVisitors } from './prediction';
 import { filterSql, type ResolvedRange } from './query';
-
-const iso = (ts: number): string => new Date(ts).toISOString();
 
 type ParamValue = string | number | boolean;
 
@@ -66,8 +64,8 @@ function toSummary(row: VisitorRow, prediction: Prediction | null): VisitorSumma
     name: row.name,
     email: row.email,
     user_id: row.user_id,
-    first_seen: iso(row.first_seen),
-    last_seen: iso(row.last_seen),
+    first_seen: toIso(row.first_seen),
+    last_seen: toIso(row.last_seen),
     sessions: row.sessions,
     pageviews: row.pageviews,
     goals: row.goals,
@@ -187,7 +185,7 @@ function sessionsOf(db: SqlDb, ids: readonly string[], limit: number): VisitorSe
     sids,
   )) {
     const list = pages.get(pv.session_id) ?? [];
-    list.push({ ts: iso(pv.ts), path: pv.path, hostname: pv.hostname });
+    list.push({ ts: toIso(pv.ts), path: pv.path, hostname: pv.hostname });
     pages.set(pv.session_id, list);
   }
   const goals = new Map<string, VisitorSession['goals']>();
@@ -196,14 +194,14 @@ function sessionsOf(db: SqlDb, ids: readonly string[], limit: number): VisitorSe
     sids,
   )) {
     const list = goals.get(g.session_id) ?? [];
-    list.push({ ts: iso(g.ts), name: g.name, path: g.path, params: parseParams(g.params) });
+    list.push({ ts: toIso(g.ts), name: g.name, path: g.path, params: parseParams(g.params) });
     goals.set(g.session_id, list);
   }
   return rows.map((r) => ({
     id: r.id,
     visitor_id: r.visitor_id,
-    started_at: iso(r.started_at),
-    last_seen: iso(r.last_seen),
+    started_at: toIso(r.started_at),
+    last_seen: toIso(r.last_seen),
     duration_ms: r.duration_ms,
     channel: r.channel,
     source: r.source,
@@ -247,7 +245,7 @@ const PAYMENT_SELECT = `p.transaction_id AS transaction_id, p.ts AS ts, p.amount
 function toPurchase(row: PaymentRow, timeZone: string): AnalyticsPurchase {
   return {
     transaction_id: row.transaction_id,
-    ts: iso(row.ts),
+    ts: toIso(row.ts),
     label: dayKey(row.ts, timeZone),
     amount_minor: row.amount_minor,
     refunded_minor: row.refunded_minor,
@@ -303,7 +301,7 @@ function goalTotals(db: SqlDb, ids: readonly string[]): VisitorProfile['complete
        WHERE visitor_id IN (SELECT value FROM json_each(?)) GROUP BY name ORDER BY n DESC, name`,
       JSON.stringify(ids),
     )
-    .map((g) => ({ name: g.name, count: g.n, first_at: iso(g.first_at), last_at: iso(g.last_at) }));
+    .map((g) => ({ name: g.name, count: g.n, first_at: toIso(g.first_at), last_at: toIso(g.last_at) }));
 }
 
 function pageTotals(db: SqlDb, ids: readonly string[], limit: number): VisitorProfile['visited_pages'] {
@@ -314,7 +312,7 @@ function pageTotals(db: SqlDb, ids: readonly string[], limit: number): VisitorPr
       JSON.stringify(ids),
       limit,
     )
-    .map((p) => ({ path: p.path, count: p.n, last_at: iso(p.last_at) }));
+    .map((p) => ({ path: p.path, count: p.n, last_at: toIso(p.last_at) }));
 }
 
 function firstPurchaseOf(db: SqlDb, ids: readonly string[], contactId: string | null): number | null {
@@ -472,7 +470,7 @@ export function contactActivity(
   )) {
     items.push({
       kind: 'goal',
-      ts: iso(g.ts),
+      ts: toIso(g.ts),
       site_id: siteId,
       title: g.name,
       detail: null,
@@ -505,7 +503,7 @@ export function contactActivity(
   )) {
     items.push({
       kind: 'identified',
-      ts: iso(v.linked_at ?? 0),
+      ts: toIso(v.linked_at ?? 0),
       site_id: siteId,
       title: v.link_source ?? 'identify',
       detail: v.id,

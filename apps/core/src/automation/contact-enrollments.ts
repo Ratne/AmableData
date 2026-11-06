@@ -5,25 +5,10 @@ import type {
   ListContactEnrollmentsQuery,
   Page,
 } from '@amable/api-types';
-import { placeholders, type SqlDb } from '../crm/db/sql';
-import { decodeCursor, encodeCursor } from '../crm/util';
+import { chunks, placeholders, type SqlDb } from '../crm/db/sql';
+import { decodeCursor, encodeCursor, toIso } from '../crm/util';
 import type { CompiledGraph } from './graph';
 import type { AutomationStatusValue, EnrollmentRow, TokenStatus } from './store';
-
-/** Durable Object SQLite binds at most 100 parameters per statement. */
-const IN_CHUNK = 90;
-
-function chunks<T>(items: readonly T[]): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += IN_CHUNK) out.push(items.slice(i, i + IN_CHUNK));
-  return out;
-}
-
-function iso(ms: number): string;
-function iso(ms: number | null): string | null;
-function iso(ms: number | null): string | null {
-  return ms === null ? null : new Date(ms).toISOString();
-}
 
 function labelOf(node: GraphNode | undefined): string | null {
   if (node === undefined || node.type === 'note') return null;
@@ -153,7 +138,7 @@ export function listContactEnrollments(
             step_type: step?.type ?? null,
             step_index: t.step_index,
             status: t.status,
-            due_at: iso(t.due_at),
+            due_at: toIso(t.due_at),
             last_error: t.last_error,
           };
         });
@@ -166,15 +151,15 @@ export function listContactEnrollments(
         version_number: versionNumbers.get(row.version_id) ?? null,
         status: row.status,
         source: row.source,
-        started_at: iso(row.started_at),
-        ended_at: iso(row.ended_at),
+        started_at: toIso(row.started_at),
+        ended_at: toIso(row.ended_at),
         outcome: outcomes.get(row.id) ?? null,
         goals_reached: goalHits
           .filter((g) => g.enrollment_id === row.id)
           .map((g) => ({
             node_id: g.node_id,
             node_label: labelOf(graph?.nodes.get(g.node_id)),
-            at: iso(g.at),
+            at: toIso(g.at),
           })),
         positions,
       };

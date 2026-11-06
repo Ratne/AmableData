@@ -26,9 +26,10 @@ import { createCrmRouter } from '../crm/api/core';
 import { CrmError } from '../crm/errors';
 import { HttpError, type AppEnv } from '../middleware';
 import { shareSecret } from './runtime';
-import { edgeUnreachableAs503, parseFilters, sha256Hex, unwrap } from './service';
+import { edgeUnreachableAs503, parseFilters, unwrap } from './service';
 import { verifyShareToken } from './share';
 import { forwardRealtimeSocket } from './ws';
+import { sha256Hex } from '@amable/auth';
 
 /**
  * Analytics surfaces without a user session:

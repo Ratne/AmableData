@@ -1,9 +1,9 @@
 import type { Context, Hono } from 'hono';
 import { requireAuth, requireTenant, type AppEnv } from '../middleware';
-import { edgeOrigin } from '../pages/api';
 import { catalog } from './catalog';
 import type { Fetcher } from './dispatch';
 import { buildTools, UnauthorizedError, type McpTool, type ToolContext } from './tools';
+import { edgeOrigin } from '../env';
 
 /** Newest first; an unknown client version gets the newest one. */
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
@@ -202,7 +202,7 @@ export function mountMcpServer(app: Hono<AppEnv>, fetcher: (c: Context<AppEnv>) 
         requestId: c.req.header('x-request-id') ?? null,
       },
       caller: auth !== undefined && tenant !== undefined ? { auth, tenant } : null,
-      edgeOrigin: edgeOrigin(c),
+      edgeOrigin: edgeOrigin(c.env),
     };
 
     const responses: JsonRpcResponse[] = [];

@@ -41,12 +41,12 @@ import {
   afterChange,
   calendarStub,
   doRef,
-  edgeOrigin,
   externalBusy,
   newManageToken,
   touchCalendars,
 } from './flow';
 import { bookingRuntime } from './runtime';
+import { edgeOrigin } from '../env';
 
 type Ctx = Context<AppEnv>;
 

@@ -9,8 +9,10 @@ import {
   type TiptapDocument,
 } from '@amable/email-render';
 import type { MailSendContact } from '../crm/mail-reads';
-import { chunked, MailError, type MailDeps, type TenantUser } from './context';
+import { MailError, type MailDeps, type TenantUser } from './context';
 import { tenantTimeZone } from './settings';
+import { chunks } from '../crm/db/sql';
+import { sha256Hex } from '@amable/auth';
 
 /**
  * Rendering pipeline of a marketing email:
@@ -27,11 +29,6 @@ export interface CompiledContent {
   readonly renderer: RecipientRenderer;
   /** Snippet keys referenced as `snippets.<key>` (rendered per recipient). */
   readonly snippetKeys: readonly string[];
-}
-
-export async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 const SNIPPET_RE = /snippets\.([a-z][a-z0-9_]{0,62})/g;
@@ -203,7 +200,7 @@ export async function renderSnippets(
   context: Record<string, unknown>,
 ): Promise<Record<string, string>> {
   if (keys.length === 0) return {};
-  const rows = chunked(keys).flatMap((chunk) =>
+  const rows = chunks(keys).flatMap((chunk) =>
     deps.db.all<{ key: string; body: string }>(
       `SELECT key, body FROM mail_snippets WHERE key IN (${chunk.map(() => '?').join(', ')})`,
       ...chunk,

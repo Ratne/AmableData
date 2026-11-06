@@ -1,7 +1,8 @@
 import type { EmailOutboxEvent } from '@amable/core';
 import type { BridgedEmailEvent } from '../crm/email-events';
-import { chunked, type MailDeps } from './context';
+import type { MailDeps } from './context';
 import { ackEmailEvents, pendingEmailEvents } from './outbox';
+import { chunks } from '../crm/db/sql';
 
 /**
  * Drains the MailDb outbox into the CRM event bus (TenantDb `mail.recordEvents`):
@@ -26,7 +27,7 @@ function forwarded(event: EmailOutboxEvent): boolean {
 
 function subjects(deps: MailDeps, messageIds: readonly string[]): Map<string, string> {
   const out = new Map<string, string>();
-  for (const ids of chunked([...new Set(messageIds)].filter((id) => id !== ''))) {
+  for (const ids of chunks([...new Set(messageIds)].filter((id) => id !== ''))) {
     for (const row of deps.db.all<{ id: string; subject: string | null }>(
       `SELECT id, subject FROM mail_messages WHERE id IN (${ids.map(() => '?').join(', ')})`,
       ...ids,

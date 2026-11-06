@@ -1,7 +1,7 @@
 import { hmacSha256, hmacSha256Hex, sha256Hex, toBase64Url } from '@amable/auth';
-import { edgeOrigin } from '../booking/flow';
 import { tokenSecrets } from '../email/runtime';
 import type { Env } from '../env';
+import { edgeOrigin } from '../env';
 
 /**
  * Signing links carry a token derived from the signer's random nonce and the

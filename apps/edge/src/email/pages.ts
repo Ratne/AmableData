@@ -1,3 +1,4 @@
+import { escapeHtml } from '../public/http';
 /** Minimal hosted recipient pages (no scripts, no external assets), English and Italian. */
 
 export type PageLocale = 'en' | 'it';
@@ -48,15 +49,6 @@ export type PageMessage = keyof (typeof STRINGS)['en'];
 export function pageLocale(acceptLanguage: string | undefined): PageLocale {
   const first = (acceptLanguage ?? '').split(',')[0]?.trim().toLowerCase() ?? '';
   return first.startsWith('it') ? 'it' : 'en';
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export function pageText(locale: PageLocale, key: PageMessage, email = ''): string {

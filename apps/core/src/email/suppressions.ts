@@ -7,15 +7,14 @@ import type {
   SuppressionReason,
 } from '@amable/api-types';
 import {
-  chunked,
   decodeCursor,
   encodeCursor,
-  isoOf,
   normalizeEmail,
   notFound,
   toIso,
   type MailDeps,
 } from './context';
+import { chunks } from '../crm/db/sql';
 
 /** Suppression list (never mail these addresses again) and message lookups. */
 
@@ -32,7 +31,7 @@ const toSuppression = (row: SuppressionRow): Suppression => ({
   reason: row.reason,
   source: row.source,
   contact_id: row.contact_id,
-  created_at: isoOf(row.created_at),
+  created_at: toIso(row.created_at),
 });
 
 /** Adds (or keeps) a suppression. The first reason wins, except that a complaint/bounce upgrades a manual entry. */
@@ -57,7 +56,7 @@ export function suppress(
 export function suppressedSet(deps: MailDeps, emails: readonly string[]): Set<string> {
   const normalized = [...new Set(emails.map(normalizeEmail))];
   const out = new Set<string>();
-  for (const chunk of chunked(normalized)) {
+  for (const chunk of chunks(normalized)) {
     for (const row of deps.db.all<{ email: string }>(
       `SELECT email FROM mail_suppressions WHERE email IN (${chunk.map(() => '?').join(', ')})`,
       ...chunk,
@@ -183,7 +182,7 @@ export const toMessage = (row: MessageRow): EmailMessage => ({
   clicked_at: toIso(row.clicked_at),
   bounced_at: toIso(row.bounced_at),
   unsubscribed_at: toIso(row.unsubscribed_at),
-  created_at: isoOf(row.created_at),
+  created_at: toIso(row.created_at),
 });
 
 export function getMessageRow(deps: MailDeps, id: string): MessageRow | undefined {

@@ -11,8 +11,8 @@ import {
 } from '@amable/app-edge/analytics';
 import { seeded } from './integrations';
 import { contactTokenSecrets } from './runtime';
-import { sha256Hex } from './service';
 import type { Env } from '../env';
+import { sha256Hex } from '@amable/auth';
 
 /**
  * Local development only (`/api/dev/analytics/traffic`, ENVIRONMENT=dev):

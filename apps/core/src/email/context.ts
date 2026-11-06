@@ -8,6 +8,8 @@ import type { SqlDb } from '../crm/db/sql';
 import type { BridgedEmailEvent } from '../crm/email-events';
 import type { MailRecipientFacts, MailSendContact } from '../crm/mail-reads';
 
+export { toIso } from '../crm/util';
+
 /**
  * Dependencies of the email domain. The MailDb DO builds them from its env
  * (TenantDb RPC, D1, queue, provider); tests build them over node:sqlite with
@@ -119,14 +121,6 @@ export class MailError extends Error {
 export const notFound = (what: string, id: string): MailError =>
   new MailError('not_found', 404, `${what} ${id} not found`);
 
-export function toIso(ms: number | null | undefined): string | null {
-  return ms === null || ms === undefined ? null : new Date(ms).toISOString();
-}
-
-export function isoOf(ms: number): string {
-  return new Date(ms).toISOString();
-}
-
 export function parseJson<T>(text: string | null, fallback: T): T {
   if (text === null) return fallback;
   try {
@@ -134,15 +128,6 @@ export function parseJson<T>(text: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-/** Durable Object SQLite binds at most 100 parameters per statement: IN lists go in chunks. */
-export const SQL_IN_CHUNK = 90;
-
-export function chunked<T>(items: readonly T[], size: number = SQL_IN_CHUNK): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
 }
 
 export function normalizeEmail(email: string): string {

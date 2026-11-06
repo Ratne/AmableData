@@ -3,6 +3,7 @@ import { isHtmlDocument, type ElementNode, type PageDocument } from '@amable/bui
 import { strToU8, unzipSync, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import { z } from 'zod';
 import type { MediaRow } from './library';
+import { sha256Hex } from '@amable/auth';
 
 /**
  * Landing page transfer between installations: one `.zip` with `page.json`
@@ -175,11 +176,6 @@ export interface PageExportInput {
   manifest: Omit<PageManifest, 'media' | 'media_skipped'>;
   media: MediaRow[];
   maxMediaBytes?: number;
-}
-
-export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**

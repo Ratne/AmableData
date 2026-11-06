@@ -148,3 +148,9 @@ export function buckets(
   }
   return out;
 }
+
+export function toIso(ms: number): string;
+export function toIso(ms: number | null): string | null;
+export function toIso(ms: number | null): string | null {
+  return ms === null ? null : new Date(ms).toISOString();
+}

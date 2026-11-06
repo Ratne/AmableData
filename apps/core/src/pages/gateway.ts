@@ -1,13 +1,13 @@
 import type { GatewayClientInfo, GatewayResponse, GatewayTenantInfo } from '@amable/api-types';
 import type { PublishedPage } from '@amable/builder';
 import { z } from 'zod';
-import type { Env } from '../env';
 import {
   createGatewayContext,
   GatewayError,
   type GatewayHandlers,
   type GatewayRawHandlers,
 } from '../public/context';
+import { edgeOrigin, type Env } from '../env';
 
 /** Public ops reachable from the edge worker: published pages, sitemap, media files. */
 
@@ -106,7 +106,7 @@ export async function handlePagePublicUrlOp(
     const url =
       page.host !== null
         ? `https://${page.host}${path}`
-        : `${(env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '')}/p/${tenant.slug}${path === '/' ? '' : path}`;
+        : `${edgeOrigin(env)}/p/${tenant.slug}${path === '/' ? '' : path}`;
     return { status: 200, body: { ok: true, tenant, value: { url } } };
   } catch (error) {
     if (error instanceof GatewayError) return fail(error.status === 404 ? error : new GatewayError(404, 'not_found', 'page not found'));

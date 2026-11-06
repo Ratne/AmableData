@@ -18,6 +18,7 @@ export interface AuthenticatedUserRef {
 export * from './encoding';
 export {
   randomBytes,
+  randomHex,
   randomToken,
   sha256Hex,
   hmacSha256,

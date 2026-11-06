@@ -25,6 +25,15 @@ export function first<T extends object>(
   return db.all<T>(query, ...params)[0];
 }
 
+/** Durable Object SQLite binds at most 100 parameters per statement: IN lists go in chunks. */
+export const SQL_IN_CHUNK = 90;
+
+export function chunks<T>(items: readonly T[], size: number = SQL_IN_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /** `?, ?, ?` for an IN list of `n` values. */
 export function placeholders(n: number): string {
   return Array.from({ length: n }, () => '?').join(', ');

@@ -10,6 +10,7 @@ import {
 } from '@amable/auth/security';
 import { AUTOMATION_EVENT_TYPES, EVENT_TYPES } from '@amable/core';
 import { recordAppMetric } from '../apps/metrics';
+import { toIso } from '../crm/util';
 
 /** Retired names still accepted on input and stored subscriptions, mapped to the event actually sent. */
 const WEBHOOK_TYPE_ALIASES: Readonly<Record<string, string>> = { 'booking.created': 'appointment.booked' };
@@ -151,8 +152,6 @@ export class WebhookError extends Error {
   }
 }
 
-const iso = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString());
-
 function parseTypes(raw: string): string[] {
   const parsed: unknown = JSON.parse(raw);
   return Array.isArray(parsed) ? normalizeTypes(parsed.filter((t): t is string => typeof t === 'string')) : [];
@@ -170,8 +169,8 @@ function toEndpoint(row: EndpointRow): WebhookEndpoint {
     secret_hint: row.secret_hint,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
-    last_success_at: iso(row.last_success_at),
-    last_failure_at: iso(row.last_failure_at),
+    last_success_at: toIso(row.last_success_at),
+    last_failure_at: toIso(row.last_failure_at),
   };
 }
 
@@ -183,13 +182,13 @@ function toDelivery(row: DeliveryRow): WebhookDelivery {
     event_type: row.event_type,
     status: row.status,
     attempts: row.attempts,
-    next_attempt_at: iso(row.next_attempt_at),
+    next_attempt_at: toIso(row.next_attempt_at),
     last_status: row.last_status,
     last_error: row.last_error,
     duration_ms: row.duration_ms,
     replay_of: row.replay_of,
     created_at: new Date(row.created_at).toISOString(),
-    completed_at: iso(row.completed_at),
+    completed_at: toIso(row.completed_at),
   };
 }
 

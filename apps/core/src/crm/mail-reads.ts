@@ -1,7 +1,7 @@
 import type { BroadcastAudience, BroadcastSegment, Contact, SearchQuery } from '@amable/api-types';
 import { contactsByIds } from './contacts';
 import type { CrmContext } from './context';
-import { placeholders } from './db/sql';
+import { chunks, placeholders } from './db/sql';
 import { savedSearchMemberIds } from './saved-searches';
 import { matchingIds } from './search/query-builder';
 
@@ -12,15 +12,6 @@ import { matchingIds } from './search/query-builder';
  */
 
 const MAX_IDS = 500;
-/** Durable Object SQLite binds at most 100 parameters per statement. */
-const IN_CHUNK = 90;
-
-function chunks<T>(items: readonly T[]): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += IN_CHUNK) out.push(items.slice(i, i + IN_CHUNK));
-  return out;
-}
-
 export interface MailRecipientFacts {
   id: string;
   email: string | null;

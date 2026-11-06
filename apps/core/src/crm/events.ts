@@ -2,7 +2,7 @@ import type { Activity } from '@amable/api-types';
 import type { EventActor, OutboxEvent, OutboxEventPayloads, OutboxEventType } from '@amable/core';
 import type { CrmContext } from './context';
 import { notFound } from './errors';
-import { placeholders } from './db/sql';
+import { chunks, placeholders } from './db/sql';
 import { decodeCursor, encodeCursor, parseJson, toIso } from './util';
 
 /**
@@ -118,15 +118,6 @@ export function ackEvents(ctx: CrmContext, input: { ids: string[] }): { acked: n
     );
   }
   return { acked: input.ids.length };
-}
-
-/** SQLite in Durable Objects binds at most 100 parameters per statement. */
-const MAX_IN_PARAMS = 90;
-
-function chunks<T>(items: readonly T[]): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += MAX_IN_PARAMS) out.push(items.slice(i, i + MAX_IN_PARAMS));
-  return out;
 }
 
 // ----------------------------------------------------------------- timeline

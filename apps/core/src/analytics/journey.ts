@@ -7,6 +7,7 @@ import {
 } from '@amable/app-edge/analytics';
 import { mapLimited } from '../concurrency';
 import type { CrmJourneyFacts } from './crm-ops';
+import { toIso } from '../crm/util';
 
 /**
  * Journey of a CRM contact across every site of the tenant (all visitors
@@ -17,12 +18,10 @@ import type { CrmJourneyFacts } from './crm-ops';
 
 const DIRECT = 'Direct';
 const SITE_CONCURRENCY = 6;
-const iso = (ts: number): string => new Date(ts).toISOString();
-
 type RawTouch = ContactActivity['touches'][number];
 
 function toTouch(t: RawTouch): Touch {
-  return { ts: iso(t.ts), channel: t.channel, source: t.source, referrer_host: t.referrer_host, campaign: t.campaign };
+  return { ts: toIso(t.ts), channel: t.channel, source: t.source, referrer_host: t.referrer_host, campaign: t.campaign };
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
@@ -162,7 +161,7 @@ export async function contactJourney(
     .slice(-limit)
     .map((t) => ({
       id: t.id,
-      ts: iso(t.ts),
+      ts: toIso(t.ts),
       site_id: t.site_id,
       visitor_id: t.visitor_id,
       kind: t.kind,
@@ -189,14 +188,14 @@ export async function contactJourney(
     visitors: links.map((l) => ({
       site_id: l.siteId,
       visitor_id: l.visitorId,
-      linked_at: iso(l.linkedAt),
+      linked_at: toIso(l.linkedAt),
       source: l.source,
     })),
     first_visit:
       firstVisit?.first_visit == null
         ? null
         : {
-            ts: iso(firstVisit.first_visit.ts),
+            ts: toIso(firstVisit.first_visit.ts),
             site_id: firstVisit.site_id,
             channel: firstVisit.first_visit.channel,
             source: firstVisit.first_visit.source,
@@ -226,8 +225,8 @@ export async function contactJourney(
     first_touch: firstTouch === undefined ? null : toTouch(firstTouch),
     last_non_direct_touch: lastNonDirect === undefined ? null : toTouch(lastNonDirect),
     time_to_conversion: {
-      first_seen: startTs === null ? null : iso(startTs),
-      first_purchase_at: firstPurchase === undefined ? null : iso(firstPurchase),
+      first_seen: startTs === null ? null : toIso(startTs),
+      first_purchase_at: firstPurchase === undefined ? null : toIso(firstPurchase),
       sessions_before_purchase:
         firstPurchase === undefined || touches.length === 0
           ? null

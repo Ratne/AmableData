@@ -9,8 +9,9 @@ import {
   type MoveFolderItemsResult,
   type UpdateFolderInput,
 } from '@amable/api-types';
-import { placeholders, type SqlDb, type SqlValue } from '../crm/db/sql';
+import { chunks, placeholders, type SqlDb, type SqlValue } from '../crm/db/sql';
 import { CrmError, invalid, notFound } from '../crm/errors';
+import { toIso } from '../crm/util';
 
 /**
  * Generic folder tree over one items table. Each Durable Object keeps the
@@ -45,17 +46,6 @@ interface FolderRow {
   position: number;
   created_at: number;
   updated_at: number;
-}
-
-/** Ids per statement: SQLite in Durable Objects allows at most 100 bound parameters. */
-const CHUNK = 90;
-
-const iso = (ms: number) => new Date(ms).toISOString();
-
-export function chunks<T>(values: readonly T[], size = CHUNK): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < values.length; i += size) out.push(values.slice(i, i + size));
-  return out;
 }
 
 export function createFolderStore(db: SqlDb, config: FolderStoreConfig, ports: FolderPorts) {
@@ -228,8 +218,8 @@ export function createFolderStore(db: SqlDb, config: FolderStoreConfig, ports: F
           depth,
           item_count: counts.get(row.id) ?? 0,
           total_count: totals.get(row.id) ?? total(row.id, new Set()),
-          created_at: iso(row.created_at),
-          updated_at: iso(row.updated_at),
+          created_at: toIso(row.created_at),
+          updated_at: toIso(row.updated_at),
         });
         visit(row.id, depth + 1, seen);
       }

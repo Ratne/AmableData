@@ -13,6 +13,7 @@ import { geoFromCf } from '../analytics/enrich';
 import { parseUserAgent } from '../analytics/ua';
 import type { Env } from '../env';
 import { callCore, GatewayCallError } from '../gateway';
+import { escapeHtml } from '../public/http';
 
 /**
  * Public side of short links. Hostnames connected as `shortlink` domains are
@@ -167,10 +168,6 @@ export function composeDestination(link: ShortlinkTarget, incoming: URL): string
     for (const [k, v] of incoming.searchParams.entries()) dest.searchParams.set(k, v);
   }
   return dest.toString();
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function hasOg(link: ShortlinkTarget): boolean {

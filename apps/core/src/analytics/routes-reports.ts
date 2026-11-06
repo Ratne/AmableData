@@ -32,9 +32,10 @@ import type { CrmResult } from '../crm/ops';
 import type { CrmJourneyFacts } from './crm-ops';
 import { contactJourney } from './journey';
 import { runTenantSync } from './runtime';
-import { contactLabels, edgeOrigin, namespace, rangeOf, siteForQuery, siteRecord, unwrap } from './service';
+import { contactLabels, namespace, rangeOf, siteForQuery, siteRecord, unwrap } from './service';
 import { crawlerSnippets } from './snippets';
 import { forwardRealtimeSocket } from './ws';
+import { edgeOrigin } from '../env';
 
 const tags = ['Analytics'];
 const filterNote =
@@ -317,7 +318,7 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
     }),
     async (c) => {
       await siteRecord(c, c.req.valid('param').siteId);
-      return c.json(crawlerSnippets(`${edgeOrigin(c)}/e/server`), 200);
+      return c.json(crawlerSnippets(`${edgeOrigin(c.env)}/e/server`), 200);
     },
   );
 }
