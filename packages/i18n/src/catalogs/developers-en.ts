@@ -2,8 +2,6 @@
 export const developersEn = {
   'nav.apiDocs': 'API reference',
   'dev.noAccess': 'You do not have access to this page.',
-  'dev.copy': 'Copy',
-  'dev.copied': 'Copied',
   'dev.done': 'Done',
   'dev.close': 'Close',
   'dev.never': 'Never',

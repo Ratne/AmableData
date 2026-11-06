@@ -1,12 +1,12 @@
 import { INVOICE_STATUSES, type Invoice } from '@amable/api-types';
 import { ListTable, PageBody, PageToolbar, usePageChrome, type ListTableColumn } from '@amable/ui';
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { commerceKeys, useCommerce, useContactNames, useDates, useMoney } from '../api/hooks';
 import { ChoiceSelect, ErrorNotice, InvoiceStatusPill, ListFooter } from '../components/common';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
@@ -21,9 +21,8 @@ export function InvoicesPage() {
   const [year, setYear] = useState('');
   const currentYear = new Date().getFullYear();
 
-  const query = useInfiniteQuery({
+  const query = useCursorQuery({
     queryKey: [...commerceKeys.invoices(slug), 'list', status, year],
-    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       api.invoices.list({
         limit: 50,
@@ -31,7 +30,6 @@ export function InvoicesPage() {
         status: status ? (status as InvoiceStatus) : undefined,
         year: year ? Number(year) : undefined,
       }),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const rows = useMemo(() => (query.data?.pages ?? []).flatMap((p) => p.data), [query.data]);
   const contacts = useContactNames(useMemo(() => rows.map((i) => i.contact_id), [rows]));

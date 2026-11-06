@@ -1,13 +1,13 @@
 import type { Payment } from '@amable/api-types';
 import { ListTable, PageBody, PageToolbar, usePageChrome, type ListTableColumn } from '@amable/ui';
 import { Input } from '@amable/ui/ui/input';
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { commerceKeys, useCommerce, useContactNames, useDates, useMoney } from '../api/hooks';
 import { ChoiceSelect, ErrorNotice, ListFooter, Pill } from '../components/common';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 export function PaymentsPage() {
   const { t } = useI18n();
@@ -20,9 +20,8 @@ export function PaymentsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
-  const query = useInfiniteQuery({
+  const query = useCursorQuery({
     queryKey: [...commerceKeys.payments(slug), 'list', status, from, to],
-    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       api.payments.list({
         limit: 50,
@@ -31,7 +30,6 @@ export function PaymentsPage() {
         from: from ? new Date(`${from}T00:00:00`).toISOString() : undefined,
         to: to ? new Date(`${to}T23:59:59.999`).toISOString() : undefined,
       }),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const rows = useMemo(() => (query.data?.pages ?? []).flatMap((p) => p.data), [query.data]);
   const contacts = useContactNames(useMemo(() => rows.map((p) => p.contact_id), [rows]));

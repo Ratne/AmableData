@@ -13,7 +13,8 @@ import { BookOpen, KeyRound, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { devKeys, useDevelopersApi, useDevMutation, useTenantAccess, type ApiKey } from '../api';
-import { formatDateTime, Pill, SecretReveal, useStepUp } from '../components';
+import { Pill, SecretReveal, useStepUp } from '../components';
+import { formatDateTime } from '../../../lib/dates';
 
 type Preset = 'read' | 'full' | 'custom';
 

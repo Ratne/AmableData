@@ -1,7 +1,15 @@
 import type { Permission } from '@amable/core';
 import type { MessageKey } from '@amable/i18n';
 import { toast } from '@amable/ui';
-import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryKey,
+  type UseInfiniteQueryOptions,
+} from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useI18n } from '../i18n';
 import { request, TenantApiError, type TenantMe } from './tenant-api';
@@ -110,5 +118,21 @@ export function useApiMutation<TInput, TResult>(
       if (options.onError?.(error, input) === true) return;
       toast.error(describeError(t, error));
     },
+  });
+}
+
+type CursorPage = { next_cursor?: string | null };
+
+/** Infinite list paged by the `next_cursor` of each page, starting with no cursor. */
+export function useCursorQuery<T extends CursorPage>(
+  options: Omit<
+    UseInfiniteQueryOptions<T, Error, InfiniteData<T>, QueryKey, string | undefined>,
+    'initialPageParam' | 'getNextPageParam'
+  >,
+) {
+  return useInfiniteQuery({
+    ...options,
+    initialPageParam: undefined,
+    getNextPageParam: (last: T) => last.next_cursor ?? undefined,
   });
 }

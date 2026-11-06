@@ -5,9 +5,10 @@ import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { useCrawlerSnippets, useInstallCheck, useSnippet } from '../api';
-import { CodeBlock, CopyButton } from '../components/copy';
+import { CodeBlock } from '../components/copy';
 import { ErrorState, Fact, Panel, PulseDot, Segmented, StatusPill } from '../components/ui';
 import { useFormatters, useNow } from '../lib/format';
+import { CopyButton } from '../../../components/feature-kit';
 
 type Variant = 'recommended' | 'default' | 'cookieless' | 'hash';
 type Runtime = 'worker' | 'node' | 'php';

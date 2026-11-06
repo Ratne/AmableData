@@ -39,10 +39,11 @@ import {
   usePipelines,
 } from '../api/hooks';
 import { formatMoney } from '../../../lib/money';
-import { formatDate, formatTotals } from '../components/cells';
+import { formatTotals } from '../components/cells';
 import { ChoiceSelect, DatePicker, UserSelect } from '../components/inputs';
 import { PageState } from '../components/states';
 import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
+import { formatDate } from '../../../lib/dates';
 
 const DRAG_TYPE = 'application/x-amable-deal';
 

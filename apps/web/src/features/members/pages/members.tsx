@@ -43,6 +43,7 @@ import {
   type Member,
   type PendingInvite,
 } from '../api';
+import { formatDate } from '../../../lib/dates';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -64,10 +65,6 @@ function errorText(t: Translate, error: unknown): string {
     default:
       return t('common.error');
   }
-}
-
-function formatDate(locale: string, value: number): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value));
 }
 
 function initials(member: Member): string {

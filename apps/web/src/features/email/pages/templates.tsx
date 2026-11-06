@@ -27,11 +27,11 @@ import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../api';
-import { formatDateTime } from '../format';
 import { CodeEditor, insertAtCursor } from '../liquid/code-editor';
 import { GuideDialog } from '../liquid/guide';
 import { LiquidHelperPanel } from '../liquid/panel';
 import { IssueList } from '../liquid/preview-pane';
+import { formatDateTime } from '../../../lib/dates';
 
 const BLANK_DOC = {
   type: 'doc' as const,

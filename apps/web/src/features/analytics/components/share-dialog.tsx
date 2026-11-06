@@ -13,8 +13,8 @@ import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { analyticsApi, analyticsKeys, useAnalyticsMutation, useShares } from '../api';
 import { useFormatters, useNow } from '../lib/format';
-import { CopyButton } from './copy';
 import { EmptyNote, ErrorState, ListSkeleton, StatusPill } from './ui';
+import { CopyButton } from '../../../components/feature-kit';
 
 /** Create, copy and revoke the public read-only links of a site. */
 export function ShareManager({ tenant, site }: { tenant: string; site: Site }) {

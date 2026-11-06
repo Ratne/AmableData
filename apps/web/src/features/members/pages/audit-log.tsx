@@ -7,14 +7,9 @@ import { SectionCard } from '../../../components/feature-kit';
 import { useTenantMeQuery } from '../../../lib/feature-hooks';
 import { PageState } from '../../commerce/components/common';
 import { memberKeys, useMembersApi, type AuditEntry } from '../api';
+import { formatDateTime } from '../../../lib/dates';
 
 const PAGE_SIZE = 50;
-
-function formatDateTime(locale: string, value: number): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'medium' }).format(
-    new Date(value),
-  );
-}
 
 /** `key: value` pairs of the details JSON; the raw text when it is not an object. */
 function detailPairs(details: string | null): string[] {
@@ -100,7 +95,7 @@ export function AuditLogPage() {
                     {rows.map((entry) => (
                       <TableRow key={entry.id} className="align-top">
                         <TableCell className="whitespace-nowrap text-xs">
-                          {formatDateTime(locale, entry.createdAt)}
+                          {formatDateTime(locale, entry.createdAt, { seconds: true })}
                         </TableCell>
                         <TableCell className="max-w-48 truncate text-xs">
                           {actorOf(entry)}

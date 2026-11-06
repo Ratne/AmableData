@@ -22,17 +22,9 @@ import { Building2, FileText, Search, ShoppingCart, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../i18n';
 import { crmClient } from '../crm/api/client';
+import { useDebounced } from '../../components/feature-kit';
 
 const ICONS = { contact: User, company: Building2, note: FileText, order: ShoppingCart } as const;
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
-}
 
 /**
  * Global search (Cmd/Ctrl+K): full-text over contacts, companies and notes via

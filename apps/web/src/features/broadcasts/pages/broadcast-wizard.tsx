@@ -43,7 +43,7 @@ import { TagPicker } from '../../crm/components/tag-picker';
 import { SendingDomainBanner } from '../../developers/components';
 import { emailKeys, errorMessage, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
 import { EmailPreviewPanel, TestSendDialog, useLiquidFields } from '../../email/components';
-import { blockText, formatDateTime } from '../../email/format';
+import { blockText } from '../../email/format';
 import {
   audienceFromSegment,
   buildChecklist,
@@ -62,6 +62,7 @@ import {
   type WizardState,
   type WizardStep,
 } from '../lib/wizard';
+import { formatDateTime } from '../../../lib/dates';
 
 const AUTOSAVE_MS = 700;
 

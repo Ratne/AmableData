@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from '@amable/ui/ui/dialog';
 import { Input } from '@amable/ui/ui/input';
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@amable/ui';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -31,7 +31,7 @@ import {
   Settings,
   Upload,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { folderKeys, useFolderTree } from '../../folders/api';
@@ -52,17 +52,10 @@ import {
 } from '../api/hooks';
 import type { ImportPageResponse, LandingPage, PageImportWarnings, PageStatus } from '../api/types';
 import { ErrorNotice, FormField, normalizePath, Pill, slugifyTitle } from '../components/common';
+import { useDebounced } from '../../../components/feature-kit';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 type StatusFilter = 'all' | PageStatus;
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
-}
 
 export function PagesListPage() {
   const { t } = useI18n();
@@ -85,9 +78,8 @@ export function PagesListPage() {
   const moveTo = useMoveToDialog('page', itemsKey, tree.data);
   const folderFilter = folderQuery(folders.selection, folders.includeSubfolders);
 
-  const pages = useInfiniteQuery({
+  const pages = useCursorQuery({
     queryKey: [...landingKeys.list(slug, filter, q), folderFilter],
-    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       api.pages.list({
         ...(filter === 'all' ? {} : { status: filter }),
@@ -95,7 +87,6 @@ export function PagesListPage() {
         ...folderFilter,
         ...(pageParam ? { cursor: pageParam } : {}),
       }),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const rows = pages.data?.pages.flatMap((p) => p.data) ?? [];
   const refresh = () =>

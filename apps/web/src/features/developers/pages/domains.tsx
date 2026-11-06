@@ -10,7 +10,9 @@ import { CheckCircle2, Circle, Cloud, Globe, Link2, Mail, ShieldCheck, Trash2, T
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { apiErrorCode, devKeys, useDevelopersApi, useDevMutation, useTenantAccess, type DomainKind, type TenantDomain } from '../api';
-import { CopyButton, formatDateTime, Pill, SendingDomainBanner, useStepUp } from '../components';
+import { Pill, SendingDomainBanner, useStepUp } from '../components';
+import { formatDateTime } from '../../../lib/dates';
+import { CopyButton } from '../../../components/feature-kit';
 
 const KIND_ICON = { sending: Mail, tracking: Link2, app: Globe, shortlink: Waypoints } as const;
 
@@ -120,7 +122,7 @@ function DomainCard({ domain, automation }: { domain: TenantDomain; automation: 
                   <TableCell className="font-mono text-xs break-all">{r.name}</TableCell>
                   <TableCell className="font-mono text-xs break-all">{r.value}</TableCell>
                   <TableCell className="text-right">
-                    <CopyButton value={r.value} />
+                    <CopyButton text={r.value} />
                   </TableCell>
                 </TableRow>
               ))}

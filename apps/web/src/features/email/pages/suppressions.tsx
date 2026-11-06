@@ -12,13 +12,13 @@ import {
 } from '@amable/ui/ui/dialog';
 import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../api';
-import { formatDateTime } from '../format';
+import { formatDateTime } from '../../../lib/dates';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 const REASON_KEYS: Readonly<Record<SuppressionReason, MessageKey>> = {
   unsubscribe: 'email.suppressions.reason.unsubscribe',
@@ -78,11 +78,9 @@ export function SuppressionsPage() {
     const timer = window.setTimeout(() => setDebounced(q.trim()), 250);
     return () => window.clearTimeout(timer);
   }, [q]);
-  const pages = useInfiniteQuery({
+  const pages = useCursorQuery({
     queryKey: emailKeys.suppressions(slug, debounced),
     queryFn: ({ pageParam }) => api.suppressions.list(debounced, pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const remove = useEmailMutation({
     mutationFn: async (rows: Suppression[]) => {

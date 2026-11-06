@@ -27,9 +27,9 @@ import {
   trackingDomainsApi,
   useTrackingDomains,
 } from '../api-tracking-domains';
-import { CopyButton } from '../components/copy';
 import { EmptyNote, ErrorState, ListSkeleton, Panel, StatusPill } from '../components/ui';
 import { useFormatters, useNow } from '../lib/format';
+import { CopyButton } from '../../../components/feature-kit';
 
 const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 

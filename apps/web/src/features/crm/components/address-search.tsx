@@ -4,22 +4,14 @@ import { Input } from '@amable/ui/ui/input';
 import { Spinner } from '@amable/ui/ui/spinner';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { MapPin, Search } from 'lucide-react';
-import { useEffect, useId, useState, type KeyboardEvent } from 'react';
+import { useId, useState, type KeyboardEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { request } from '../../../lib/tenant-api';
 import { useCrm } from '../api/hooks';
+import { useDebounced } from '../../../components/feature-kit';
 
 const MIN_CHARS = 3;
 const DEBOUNCE_MS = 350;
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
-}
 
 export interface AddressSearchProps {
   /** ISO country the suggestions are restricted to (the address's own, else the tenant default). */

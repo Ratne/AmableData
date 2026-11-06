@@ -1,16 +1,9 @@
 import type { Permission } from '@amable/core';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
-import {
-  apiErrorMessage,
-  type ApiErrorMessages,
-  type ApiMutationOptions,
-  useApiMutation,
-  useGrantedPermissions,
-  useTenantMeQuery,
-} from '../../../lib/feature-hooks';
+import { apiErrorMessage, type ApiErrorMessages, type ApiMutationOptions, useApiMutation, useCursorQuery, useGrantedPermissions, useTenantMeQuery } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { esignClient, type EsignClient, type ListRequestsParams } from './client';
 
@@ -55,11 +48,9 @@ export function useTemplate(id: string) {
 
 export function useRequests(params: Omit<ListRequestsParams, 'cursor'>) {
   const { slug, api } = useEsign();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: esignKeys.requests(slug, JSON.stringify(params)),
     queryFn: ({ pageParam }) => api.requests.list({ ...params, cursor: pageParam }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
 }
 

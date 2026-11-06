@@ -25,7 +25,6 @@ import {
   usePipelines,
 } from '../api/hooks';
 import { formatMoney } from '../../../lib/money';
-import { formatDate } from '../components/cells';
 import { CompanyPicker } from '../components/company-picker';
 import { contactName } from '../components/contact-dialogs';
 import {
@@ -39,6 +38,7 @@ import { DateTimePicker } from '../components/inputs';
 import { NotesPanel, TasksPanel, TimelinePanel } from '../components/record-panels';
 import { PageState, SectionCard } from '../components/states';
 import { CustomFieldsPanel } from '../custom-fields/custom-fields-panel';
+import { formatDate } from '../../../lib/dates';
 
 /** Type-ahead over `GET /contacts?q=`; emits the chosen contact (or null to clear). */
 function ContactPicker({

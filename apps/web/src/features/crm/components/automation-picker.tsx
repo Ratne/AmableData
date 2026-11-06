@@ -16,17 +16,9 @@ import { useI18n } from '../../../i18n';
 import { useFolderTree } from '../../folders/api';
 import { ancestorsOf, indexFolders } from '../../folders/lib/tree';
 import { useAutomationSearch } from '../api/contact-tabs';
+import { useDebounced } from '../../../components/feature-kit';
 
 const SEARCH_DEBOUNCE_MS = 250;
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
-}
 
 /** "Parent › Child" of the automation folder (empty when unfiled). */
 function useFolderPath(): (folderId: string | null) => string {

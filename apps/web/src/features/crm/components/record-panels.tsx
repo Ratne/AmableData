@@ -26,10 +26,11 @@ import {
   usePipelines,
 } from '../api/hooks';
 import { formatMoney } from '../../../lib/money';
-import { formatDate } from './cells';
 import { DatePicker, DateTimePicker } from './inputs';
 import { ErrorNotice } from './states';
 import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
+import { formatDate } from '../../../lib/dates';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 const RELOAD_FLAG = 'amb.chunkReload';
 
@@ -101,7 +102,7 @@ export function TimelinePanel({
   const { t } = useI18n();
   const { slug, api } = useCrm();
   const [showArchive, setShowArchive] = useState(false);
-  const timeline = useInfiniteQuery({
+  const timeline = useCursorQuery({
     queryKey: crmKeys.timeline(slug, subject.kind, subject.id),
     queryFn: ({ pageParam }) =>
       subject.kind === 'contact'
@@ -109,8 +110,6 @@ export function TimelinePanel({
         : subject.kind === 'company'
           ? api.companies.timeline(subject.id, { limit: 30, cursor: pageParam })
           : api.opportunities.timeline(subject.id, { limit: 30, cursor: pageParam }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   // Months past the retention window, read from the workspace archive on demand.
   const archive = useInfiniteQuery({

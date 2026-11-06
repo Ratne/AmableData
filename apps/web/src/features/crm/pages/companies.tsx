@@ -27,7 +27,6 @@ import {
   useDirectory,
   usePermissions,
 } from '../api/hooks';
-import { formatDate } from '../components/cells';
 import { contactName, CreateContactDialog } from '../components/contact-dialogs';
 import { InlineEdit, InlineText, InlineUser } from '../components/inline-field';
 import { NotesPanel, TimelinePanel } from '../components/record-panels';
@@ -35,6 +34,7 @@ import { PageState, SectionCard } from '../components/states';
 import { CustomFieldsPanel } from '../custom-fields/custom-fields-panel';
 import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
 import { RecordSearchView, type SearchRow } from './record-search-view';
+import { formatDate } from '../../../lib/dates';
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 

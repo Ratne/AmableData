@@ -32,7 +32,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { formatMoney } from '../../lib/money';
-import { formatDate } from './components/cells';
+import { formatDate } from '../../lib/dates';
 
 const ACTIVITY_LABELS: Readonly<Record<string, MessageKey>> = {
   'contact.created': 'crm.activity.contactCreated',

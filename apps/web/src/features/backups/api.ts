@@ -2,6 +2,7 @@ import type { ArchiveSettings, UpdateArchiveRetentionInput } from '@amable/api-t
 import type { MessageKey } from '@amable/i18n';
 import { ApiError, apiFetch } from '../../lib/api';
 import { stepUpFetch } from '../../lib/step-up';
+import { downloadResponse } from '../../lib/download';
 
 export type BackupKind = 'scheduled' | 'manual';
 
@@ -53,16 +54,7 @@ export const backupsApi = {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
       throw new ApiError(response.status, body?.error ?? null);
     }
-    const disposition = response.headers.get('content-disposition') ?? '';
-    const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${id}.jsonl.gz`;
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = name;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    await downloadResponse(response, `${id}.jsonl.gz`);
   },
 };
 

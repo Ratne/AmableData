@@ -22,7 +22,6 @@ export const analyticsEn = {
   'analytics.common.never': 'never',
   'analytics.common.done': 'Done',
   'analytics.common.loadMore': 'Load more',
-  'analytics.common.copyFailed': 'Could not copy to the clipboard.',
 
   'analytics.error.forbidden': 'Your role does not allow this. Ask an admin of the workspace.',
   'analytics.error.notFound': 'Not found, or it was deleted.',

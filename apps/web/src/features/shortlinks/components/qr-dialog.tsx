@@ -13,6 +13,7 @@ import { useMemo } from 'react';
 import { encode } from 'uqr';
 import { useI18n } from '../../../i18n';
 import { displayShortUrl } from '../lib/links';
+import { downloadBlob, downloadHref } from '../../../lib/download';
 
 const PNG_SIZE = 512;
 
@@ -29,19 +30,8 @@ export function qrSvg(value: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
 }
 
-function download(href: string, filename: string): void {
-  const a = document.createElement('a');
-  a.href = href;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 function downloadSvg(svg: string, filename: string): void {
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  download(url, filename);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename);
 }
 
 function downloadPng(svg: string, filename: string): void {
@@ -55,7 +45,7 @@ function downloadPng(svg: string, filename: string): void {
     if (ctx !== null) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(image, 0, 0, PNG_SIZE, PNG_SIZE);
-      download(canvas.toDataURL('image/png'), filename);
+      downloadHref(canvas.toDataURL('image/png'), filename);
     }
     URL.revokeObjectURL(url);
   };

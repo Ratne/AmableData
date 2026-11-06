@@ -7,9 +7,10 @@ import type {
   MessageTemplateRef,
   Page,
 } from '@amable/api-types';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { apiFetch } from '../../lib/api';
+import { useCursorQuery } from '../../lib/feature-hooks';
 
 /** Shared inbox: REST v2 `/conversations` of the active workspace. */
 
@@ -89,11 +90,9 @@ export function useConversationsApi() {
 
 export function useInbox(view: InboxView) {
   const { slug, api } = useConversationsApi();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: conversationKeys.list(slug, view),
     queryFn: ({ pageParam }) => api.list(view, pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
     refetchInterval: INBOX_POLL_MS,
   });
 }
@@ -141,11 +140,9 @@ export function useConversation(id: string | undefined) {
 
 export function useThread(id: string | undefined) {
   const { slug, api } = useConversationsApi();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: conversationKeys.messages(slug, id ?? ''),
     queryFn: ({ pageParam }) => api.messages(id!, pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled: id !== undefined,
     refetchInterval: INBOX_POLL_MS,
   });

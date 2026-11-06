@@ -47,11 +47,6 @@ export function contactLabel(contact: Contact): string {
   return name === '' ? email : email === '' ? name : `${name} · ${email}`;
 }
 
-export function formatDateTime(locale: string, iso: string | null): string {
-  if (iso === null) return '—';
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
-}
-
 export function percent(value: number): string {
   return (Math.round(value * 1000) / 10).toString();
 }

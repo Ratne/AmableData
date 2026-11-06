@@ -1,5 +1,5 @@
 import { DashboardButton, PageBody, PageToolbar, usePageChrome } from '@amable/ui';
-import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
+import { Alert, AlertTitle } from '@amable/ui/ui/alert';
 import { Button } from '@amable/ui/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@amable/ui/ui/card';
 import { Checkbox } from '@amable/ui/ui/checkbox';
@@ -20,7 +20,8 @@ import {
   type WebhookDelivery,
   type WebhookEndpoint,
 } from '../api';
-import { formatDateTime, Pill, SecretReveal, useStepUp, type Tone } from '../components';
+import { Pill, SecretReveal, useStepUp, type Tone } from '../components';
+import { formatDateTime } from '../../../lib/dates';
 
 const DELIVERY_TONE: Record<DeliveryStatus, Tone> = {
   succeeded: 'success',

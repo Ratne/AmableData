@@ -1,4 +1,4 @@
-import { cn, PageBody } from '@amable/ui';
+import { cn, DashboardButton, PageBody, toast } from '@amable/ui';
 import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
 import { Badge } from '@amable/ui/ui/badge';
 import { Input } from '@amable/ui/ui/input';
@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@amable/ui/ui/select';
 import { Skeleton } from '@amable/ui/ui/skeleton';
-import { ShieldAlert, TriangleAlert } from 'lucide-react';
+import { Check, Copy, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { TenantApiError } from '../lib/tenant-api';
@@ -300,4 +300,38 @@ export function useDebounced<T>(value: T, delayMs = 300): T {
     return () => window.clearTimeout(timer);
   }, [value, delayMs]);
   return debounced;
+}
+
+/** Copies to the clipboard with a toast; `copied` is the id of the last copy for ~1.6 s. */
+export function useCopy() {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = async (text: string, id = 'default') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(id);
+      toast.success(t('common.copied'));
+      window.setTimeout(() => setCopied((current) => (current === id ? null : current)), 1600);
+    } catch {
+      toast.error(t('common.copyFailed'));
+    }
+  };
+  return { copy, copied };
+}
+
+export function CopyButton({ text, label, className }: { text: string; label?: string; className?: string }) {
+  const { t } = useI18n();
+  const { copy, copied } = useCopy();
+  return (
+    <DashboardButton
+      variant="secondary"
+      size="sm"
+      className={className}
+      onClick={() => void copy(text)}
+      aria-label={label ?? t('common.copy')}
+    >
+      {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+      {label ?? t('common.copy')}
+    </DashboardButton>
+  );
 }

@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@amable/ui/ui/shee
 import { Skeleton } from '@amable/ui/ui/skeleton';
 import { Link } from '@tanstack/react-router';
 import { ClipboardList, ExternalLink, Lock, Mail, Plus, Search, Workflow, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import {
   CONTACT_TAGS_PAGE,
@@ -26,18 +26,10 @@ import {
 } from '../api/contact-tabs';
 import { crmKeys, useCrm, useCrmMutation, useDirectory, usePermissions } from '../api/hooks';
 import { AutomationPicker } from './automation-picker';
-import { formatDate } from './cells';
 import { ErrorNotice } from './states';
 import { TagPicker } from './tag-picker';
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
-}
+import { useDebounced } from '../../../components/feature-kit';
+import { formatDate } from '../../../lib/dates';
 
 function LoadMore({
   query,

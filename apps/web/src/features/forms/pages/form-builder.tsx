@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@amable/ui/ui/tabs';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { Check, Copy, ExternalLink, Save } from 'lucide-react';
+import { ExternalLink, Save } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { EditLockBanner } from '../../../lib/edit-lock/edit-lock-banner';
@@ -20,6 +20,7 @@ import { useFormChrome } from '../components/form-chrome';
 import { FormPreview, previewConfig } from '../components/preview';
 import { useInstalledExtensions } from '../../apps/api';
 import { TagPicker } from '../../crm/components/tag-picker';
+import { CopyButton } from '../../../components/feature-kit';
 
 type BuilderTab = 'fields' | 'crm' | 'settings' | 'style' | 'embed';
 
@@ -31,26 +32,6 @@ export function FormBuilderPage() {
     <PageState isPending={form.isPending} error={form.error}>
       {() => (form.data ? <Builder key={form.data.id} form={form.data} /> : null)}
     </PageState>
-  );
-}
-
-function CopyButton({ text }: { text: string }) {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        });
-      }}
-    >
-      {copied ? <Check aria-hidden /> : <Copy aria-hidden />} {copied ? t('common.copied') : t('common.copy')}
-    </Button>
   );
 }
 

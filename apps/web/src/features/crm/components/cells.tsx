@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { formatMoney } from '../../../lib/money';
 import { formatCustomValue } from '../custom-fields/display';
 import type { FieldMeta } from '../field-catalog';
+import { formatDate } from '../../../lib/dates';
 
 export interface CellContext {
   readonly locale: string;
@@ -11,20 +12,6 @@ export interface CellContext {
   readonly tagsById: ReadonlyMap<string, Tag>;
   readonly yes: string;
   readonly no: string;
-}
-
-export function formatDate(
-  locale: string,
-  iso: string | null | undefined,
-  withTime = false,
-): string {
-  if (iso === null || iso === undefined || iso === '') return '';
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return iso;
-  return new Intl.DateTimeFormat(
-    locale,
-    withTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' },
-  ).format(ms);
 }
 
 /** Sum of amounts per currency (largest first), never mixing currencies. */

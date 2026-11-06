@@ -19,6 +19,7 @@ import type {
   SavedSection,
   UpdatePageInput,
 } from './types';
+import { downloadResponse } from '../../../lib/download';
 
 /**
  * Typed client of the pages REST v2 surface (`/api/v2/t/{slug}`) plus the
@@ -81,16 +82,7 @@ export function landingClient(slug: string) {
           const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
           throw new TenantApiError(response.status, body?.error ?? 'http_error', body?.message ?? null, []);
         }
-        const disposition = response.headers.get('content-disposition') ?? '';
-        const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'page.zip';
-        const url = URL.createObjectURL(await response.blob());
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = name;
-        document.body.append(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        await downloadResponse(response, 'page.zip');
       },
       importZip: (file: File) =>
         call<ImportPageResponse>('/pages/import', { method: 'POST', raw: file, contentType: 'application/zip' }),

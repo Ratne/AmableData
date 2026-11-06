@@ -12,10 +12,10 @@ import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { isStepUpRequired } from '../../../lib/step-up';
 import { apiErrorCode, useTenantAccess } from '../../developers/api';
-import { formatDateTime } from '../../developers/components';
 import { appKeys, text, useAppsApi, type AppInstallView } from '../api';
 import { AppIcon, ScopeList, StatusPill, useAppLabels, VerifiedBadge } from '../components';
 import { CloudflareAppsCard } from '../deployment';
+import { formatDateTime } from '../../../lib/dates';
 
 function useInstallAction<T>(fn: (id: string) => Promise<T>, success: string) {
   const { slug } = useAppsApi();

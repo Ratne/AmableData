@@ -13,9 +13,9 @@ import {
   usePermissions,
   useSavedSearches,
 } from '../crm/api/hooks';
-import { formatDate } from '../crm/components/cells';
 import { ErrorNotice } from '../crm/components/states';
 import { countConditions } from './query-model';
+import { formatDate } from '../../lib/dates';
 
 /** Every saved search (segment) of the workspace; opening one loads it in its list. */
 export function SavedSearchesPage() {

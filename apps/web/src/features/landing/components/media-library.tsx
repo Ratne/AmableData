@@ -4,12 +4,13 @@ import { Button } from '@amable/ui/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@amable/ui/ui/dialog';
 import { Input } from '@amable/ui/ui/input';
 import { Spinner } from '@amable/ui/ui/spinner';
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { ImageIcon, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { errorMessage, landingKeys, useLanding, usePermissions } from '../api/hooks';
 import type { MediaFile } from '../api/types';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 const ACCEPT = MEDIA_CONTENT_TYPES.join(',');
 
@@ -58,11 +59,9 @@ export function MediaLibraryDialog({ onClose, onSelect }: { onClose: () => void;
   const fileRef = useRef<HTMLInputElement>(null);
   const { upload, uploading } = useMediaUpload();
   const [filter, setFilter] = useState('');
-  const media = useInfiniteQuery({
+  const media = useCursorQuery({
     queryKey: landingKeys.media(slug),
-    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => api.media.list(pageParam),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const items = (media.data?.pages.flatMap((p) => p.data) ?? []).filter((m) =>
     filter.trim() === '' ? true : m.filename.toLowerCase().includes(filter.trim().toLowerCase()),

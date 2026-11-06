@@ -44,9 +44,9 @@ import {
   visibleRange,
   type CalendarView,
 } from '../calendar-utils';
-import { formatDate } from '../components/cells';
 import { ChoiceSelect, DateTimePicker, UserSelect } from '../components/inputs';
 import { ErrorNotice } from '../components/states';
+import { formatDate } from '../../../lib/dates';
 
 function NewEntryDialog({
   kind,

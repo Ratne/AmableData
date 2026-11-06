@@ -7,7 +7,6 @@ import {
   type ListTableColumn,
 } from '@amable/ui';
 import { Input } from '@amable/ui/ui/input';
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -30,6 +29,7 @@ import {
   SearchInput,
   useDebounced,
 } from '../components/common';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 interface OrderRow {
   readonly id: string;
@@ -130,9 +130,8 @@ export function OrdersPage() {
     return conditions;
   }, [status, contactId, from, to]);
 
-  const query = useInfiniteQuery({
+  const query = useCursorQuery({
     queryKey: [...commerceKeys.orders(slug), 'search', debouncedQ, filter],
-    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       api.search({
         entity: 'order',
@@ -144,7 +143,6 @@ export function OrdersPage() {
         include_total: pageParam === undefined,
         ...(pageParam ? { cursor: pageParam } : {}),
       }),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
 
   const rows = useMemo(

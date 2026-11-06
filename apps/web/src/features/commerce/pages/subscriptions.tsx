@@ -4,7 +4,6 @@ import {
   type SubscriptionStatus,
 } from '@amable/api-types';
 import { ListTable, PageBody, PageToolbar, usePageChrome, type ListTableColumn } from '@amable/ui';
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
@@ -24,6 +23,7 @@ import {
   SubscriptionStatusPill,
   intervalText,
 } from '../components/common';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 export function SubscriptionsPage() {
   const { t } = useI18n();
@@ -36,9 +36,8 @@ export function SubscriptionsPage() {
   const [status, setStatus] = useState('');
   const [productId, setProductId] = useState('');
 
-  const query = useInfiniteQuery({
+  const query = useCursorQuery({
     queryKey: [...commerceKeys.subscriptions(slug), 'list', status, productId],
-    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       api.subscriptions.list({
         limit: 50,
@@ -46,7 +45,6 @@ export function SubscriptionsPage() {
         status: status ? (status as SubscriptionStatus) : undefined,
         product_id: productId || undefined,
       }),
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const rows = useMemo(() => (query.data?.pages ?? []).flatMap((p) => p.data), [query.data]);
   const contactIds = useMemo(() => rows.map((s) => s.contact_id), [rows]);

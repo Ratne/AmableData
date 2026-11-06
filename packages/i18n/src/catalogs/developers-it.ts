@@ -4,8 +4,6 @@ import type { DevelopersMessageKey } from './developers-en';
 export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'nav.apiDocs': 'Riferimento API',
   'dev.noAccess': 'Non hai accesso a questa pagina.',
-  'dev.copy': 'Copia',
-  'dev.copied': 'Copiato',
   'dev.done': 'Fatto',
   'dev.close': 'Chiudi',
   'dev.never': 'Mai',

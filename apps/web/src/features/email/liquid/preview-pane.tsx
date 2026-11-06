@@ -8,20 +8,12 @@ import { useI18n } from '../../../i18n';
 import { emailKeys, errorMessage, useEmailApi } from '../api';
 import { CodeEditor } from './code-editor';
 import { ContactSelect } from './contact-select';
+import { useDebounced } from '../../../components/feature-kit';
 
 export interface DocumentSource {
   readonly label: string;
   /** Current Liquid of the snippet / email being edited. */
   readonly get: () => string;
-}
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
 }
 
 export function IssueList({ errors }: { errors: readonly LiquidPreviewIssue[] }) {

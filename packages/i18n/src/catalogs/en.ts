@@ -52,6 +52,7 @@ export const en = {
   'common.back': 'Back',
   'common.copy': 'Copy',
   'common.copied': 'Copied',
+  'common.copyFailed': 'Could not copy to the clipboard.',
   'common.lock.connecting': 'Connecting to the editing session…',
   'common.lock.offline': 'Connection lost — reconnecting. Editing is paused.',
   'common.lock.unavailable': 'Exclusive editing is not available right now: changes from other people may overwrite yours.',

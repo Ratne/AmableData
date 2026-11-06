@@ -1,48 +1,7 @@
-import { cn, DashboardButton, toast } from '@amable/ui';
-import { Check, Copy, KeyRound, TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { cn } from '@amable/ui';
+import { KeyRound, TriangleAlert } from 'lucide-react';
+import { CopyButton } from '../../../components/feature-kit';
 import { useI18n } from '../../../i18n';
-
-export function useCopy() {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState<string | null>(null);
-  const copy = async (text: string, id = 'default') => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(id);
-      toast.success(t('common.copied'));
-      window.setTimeout(() => setCopied((current) => (current === id ? null : current)), 1600);
-    } catch {
-      toast.error(t('analytics.common.copyFailed'));
-    }
-  };
-  return { copy, copied };
-}
-
-export function CopyButton({
-  text,
-  label,
-  className,
-}: {
-  text: string;
-  label?: string;
-  className?: string;
-}) {
-  const { t } = useI18n();
-  const { copy, copied } = useCopy();
-  return (
-    <DashboardButton
-      variant="secondary"
-      size="sm"
-      className={className}
-      onClick={() => void copy(text)}
-      aria-label={label ?? t('common.copy')}
-    >
-      {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-      {label ?? t('common.copy')}
-    </DashboardButton>
-  );
-}
 
 export function CodeBlock({ code, className }: { code: string; className?: string }) {
   return (

@@ -19,7 +19,7 @@ import {
 import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { Textarea } from '@amable/ui/ui/textarea';
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { FolderPlus, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -34,6 +34,7 @@ import {
 } from '../api/hooks';
 import { ChoiceSelect } from '../components/inputs';
 import { ErrorNotice } from '../components/states';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 type Editing =
   { kind: 'tag'; tag: Tag | null } | { kind: 'category'; category: TagCategory | null } | null;
@@ -151,7 +152,7 @@ export function TagsPage() {
   }, [search]);
   const serverCategory =
     categoryFilter === '' || categoryFilter === '__none' ? undefined : categoryFilter;
-  const tags = useInfiniteQuery({
+  const tags = useCursorQuery({
     queryKey: [...crmKeys.tags(slug), 'page', q, serverCategory ?? ''] as const,
     queryFn: ({ pageParam }) =>
       api.tags.list({
@@ -160,8 +161,6 @@ export function TagsPage() {
         ...(q === '' ? {} : { q }),
         ...(serverCategory === undefined ? {} : { category_id: serverCategory }),
       }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
     placeholderData: keepPreviousData,
   });
   const loaded = tags.data?.pages.flatMap((page) => page.data) ?? [];

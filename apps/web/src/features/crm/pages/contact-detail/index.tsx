@@ -18,7 +18,6 @@ import { TimeZoneSelect } from '../../../../components/locale/timezone-select';
 import { timeZoneLabel } from '../../../../components/locale/timezones';
 import { useI18n } from '../../../../i18n';
 import { crmKeys, useCrm, useCrmMutation, usePermissions } from '../../api/hooks';
-import { formatDate } from '../../components/cells';
 import { CompanyPicker } from '../../components/company-picker';
 import { contactName, MergeDialog } from '../../components/contact-dialogs';
 import { InlineDate, InlineEdit, InlineText } from '../../components/inline-field';
@@ -49,6 +48,7 @@ import {
 } from './emails-phones';
 import { LanguageDisplay, MarketingFields } from './marketing';
 import { CustomFieldsTab, ContactTabs } from './tabs';
+import { formatDate } from '../../../../lib/dates';
 
 /** Narrower label column for the three-column personal data grid. */
 const FIELD = 'sm:grid-cols-[7rem_1fr]';

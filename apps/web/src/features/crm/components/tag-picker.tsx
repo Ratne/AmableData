@@ -13,7 +13,6 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@amable/
 import { Spinner } from '@amable/ui/ui/spinner';
 import {
   keepPreviousData,
-  useInfiniteQuery,
   useQueries,
   useQueryClient,
 } from '@tanstack/react-query';
@@ -28,29 +27,19 @@ import {
   TAG_SEARCH_DEBOUNCE_MS,
   toggleTag,
 } from './tag-picker-model';
+import { useDebounced } from '../../../components/feature-kit';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 const STALE_MS = 60_000;
-
-/** Debounced value (search as you type). */
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
-}
 
 /** Server-side tag search (`GET /tags?q=`), paginated by cursor. */
 export function useTagSearch(query: string, enabled: boolean) {
   const { slug, api } = useCrm();
   const q = query.trim();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: [...crmKeys.tags(slug), 'search', q] as const,
     queryFn: ({ pageParam }) =>
       api.tags.list({ limit: TAG_PAGE_SIZE, ...(q === '' ? {} : { q }), cursor: pageParam }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled,
     staleTime: STALE_MS,
     placeholderData: keepPreviousData,

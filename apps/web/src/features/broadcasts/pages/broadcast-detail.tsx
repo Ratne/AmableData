@@ -23,7 +23,8 @@ import { Archive, ArrowLeft, Download, Pause, Play, XCircle } from 'lucide-react
 import { lazy, Suspense, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
-import { blockText, BroadcastStatusBadge, formatDateTime, percent } from '../../email/format';
+import { blockText, BroadcastStatusBadge, percent } from '../../email/format';
+import { formatDateTime } from '../../../lib/dates';
 
 // Drafts only: sent broadcasts show the report without loading the email editor.
 const BroadcastWizard = lazy(() => import('./broadcast-wizard').then((m) => ({ default: m.BroadcastWizard })));

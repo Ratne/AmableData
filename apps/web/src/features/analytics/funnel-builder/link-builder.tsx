@@ -11,28 +11,20 @@ import {
 import { Input } from '@amable/ui/ui/input';
 import { Link } from '@tanstack/react-router';
 import { TriangleAlert } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useI18n } from '../../../i18n';
 import { useFunnelLinks, useTrafficSources, type FunnelLinksParams } from '../api-funnels';
 import { useTrackingDomains } from '../api-tracking-domains';
-import { CodeBlock, CopyButton } from '../components/copy';
+import { CodeBlock } from '../components/copy';
 import { ErrorState, ListSkeleton } from '../components/ui';
 import { Field, selectClass, SwitchRow } from './panels/form-bits';
 import { liveNodes } from './state';
+import { CopyButton, useDebounced } from '../../../components/feature-kit';
 
 /** Entrance cost as accepted by the links API: `0.25`, `cpm_12.34` or a platform macro. */
 export const LINK_COST_RE = /^[A-Za-z0-9_.{}[\]-]{1,64}$/;
 
 const DEFAULT_DOMAIN = 'default';
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [current, setCurrent] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setCurrent(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return current;
-}
 
 function UrlRow({ label, hint, value }: { label: string; hint?: ReactNode; value: string }) {
   return (

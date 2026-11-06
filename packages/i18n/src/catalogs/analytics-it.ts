@@ -20,7 +20,6 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.common.never': 'mai',
   'analytics.common.done': 'Fatto',
   'analytics.common.loadMore': 'Carica altri',
-  'analytics.common.copyFailed': 'Impossibile copiare negli appunti.',
 
   'analytics.error.forbidden':
     'Il tuo ruolo non lo consente. Chiedi a un amministratore del workspace.',

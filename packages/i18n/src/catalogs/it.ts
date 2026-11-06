@@ -53,6 +53,7 @@ export const it: Readonly<Record<MessageKey, string>> = {
   'common.back': 'Indietro',
   'common.copy': 'Copia',
   'common.copied': 'Copiato',
+  'common.copyFailed': 'Impossibile copiare negli appunti.',
   'common.lock.connecting': 'Connessione alla sessione di modifica…',
   'common.lock.offline': 'Connessione persa — riconnessione in corso. La modifica è in pausa.',
   'common.lock.unavailable': 'La modifica esclusiva non è disponibile ora: le modifiche di altre persone potrebbero sovrascrivere le tue.',

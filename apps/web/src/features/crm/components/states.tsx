@@ -1,52 +1,29 @@
-import { PageBody } from '@amable/ui';
-import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
-import { Skeleton } from '@amable/ui/ui/skeleton';
-import { ShieldAlert, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { ApiErrorNotice, QueryPageState } from '../../../components/feature-kit';
 import { useI18n } from '../../../i18n';
-import { CrmApiError } from '../api/client';
 import { errorMessage } from '../api/hooks';
 
 /** Inline failure: a permission notice for 403, the API message otherwise. */
 export function ErrorNotice({ error }: { error: unknown }) {
   const { t } = useI18n();
-  const forbidden = error instanceof CrmApiError && error.status === 403;
   return (
-    <Alert variant={forbidden ? 'default' : 'destructive'} role="alert">
-      {forbidden ? <ShieldAlert aria-hidden /> : <TriangleAlert aria-hidden />}
-      <AlertTitle>{forbidden ? t('crm.error.forbiddenTitle') : t('common.error')}</AlertTitle>
-      <AlertDescription>{errorMessage(t, error)}</AlertDescription>
-    </Alert>
+    <ApiErrorNotice
+      error={error}
+      message={errorMessage(t, error)}
+      forbiddenTitle={t('crm.error.forbiddenTitle')}
+    />
   );
 }
 
 /** Loading skeleton / error for a whole page body. */
-export function PageState({
-  isPending,
-  error,
-  children,
-}: {
+export function PageState(props: {
   isPending: boolean;
   error: unknown;
   children: () => ReactNode;
 }) {
-  if (error) {
-    return (
-      <PageBody className="pt-4">
-        <ErrorNotice error={error} />
-      </PageBody>
-    );
-  }
-  if (isPending) {
-    return (
-      <PageBody className="grid gap-3 pt-4">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </PageBody>
-    );
-  }
-  return <>{children()}</>;
+  return (
+    <QueryPageState {...props} skeletons={2} notice={(error) => <ErrorNotice error={error} />} />
+  );
 }
 
 export function SectionCard({

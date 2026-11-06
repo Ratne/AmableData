@@ -1,5 +1,6 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
+import { downloadBlob } from '../../../lib/download';
 
 type Patch<T> = { [K in keyof T]?: T[K] | undefined };
 
@@ -29,12 +30,5 @@ export function useReportSearch<T extends object>(
 
 /** Saves `text` as a file through a temporary object URL. */
 export function downloadText(filename: string, text: string, type = 'text/csv;charset=utf-8') {
-  const url = URL.createObjectURL(new Blob(['\uFEFF', text], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(new Blob(['\uFEFF', text], { type }), filename);
 }

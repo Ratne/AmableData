@@ -7,9 +7,10 @@ import type {
   Enrollment,
 } from '@amable/api-types';
 import type { ContactCounts, ContactTag, Page } from '@amable/api-types/crm';
-import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { request } from '../../../lib/tenant-api';
 import { crmKeys, useCrm } from './hooks';
+import { useCursorQuery } from '../../../lib/feature-hooks';
 
 /**
  * Reads behind the contact page tabs that are not part of the CRM client:
@@ -95,7 +96,7 @@ export function useContactCounts(contactId: string) {
 export function useContactTags(contactId: string, q: string, enabled: boolean) {
   const { slug, tabsApi } = useContactTabsApi();
   const query = q.trim();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: contactTabKeys.tags(slug, contactId, query),
     queryFn: ({ pageParam }) =>
       tabsApi.tags(contactId, {
@@ -103,8 +104,6 @@ export function useContactTags(contactId: string, q: string, enabled: boolean) {
         ...(query === '' ? {} : { q: query }),
         cursor: pageParam,
       }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
     placeholderData: keepPreviousData,
     enabled,
   });
@@ -112,33 +111,27 @@ export function useContactTags(contactId: string, q: string, enabled: boolean) {
 
 export function useContactEmails(contactId: string) {
   const { slug, tabsApi } = useContactTabsApi();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: contactTabKeys.emails(slug, contactId),
     queryFn: ({ pageParam }) => tabsApi.emails(contactId, { limit: LIST_PAGE, cursor: pageParam }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
 }
 
 export function useContactEnrollments(contactId: string, scope: 'current' | 'history') {
   const { slug, tabsApi } = useContactTabsApi();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: contactTabKeys.enrollments(slug, contactId, scope),
     queryFn: ({ pageParam }) =>
       tabsApi.enrollments(contactId, { scope, limit: LIST_PAGE, cursor: pageParam }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
 }
 
 export function useContactSubmissions(contactId: string) {
   const { slug, tabsApi } = useContactTabsApi();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: contactTabKeys.submissions(slug, contactId),
     queryFn: ({ pageParam }) =>
       tabsApi.submissions(contactId, { limit: LIST_PAGE, cursor: pageParam }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
 }
 
@@ -155,15 +148,13 @@ export function useContactSubmission(contactId: string, submissionId: string | n
 export function useAutomationSearch(q: string, enabled: boolean) {
   const { slug, tabsApi } = useContactTabsApi();
   const query = q.trim();
-  return useInfiniteQuery({
+  return useCursorQuery({
     queryKey: contactTabKeys.automationSearch(slug, query),
     queryFn: ({ pageParam }) =>
       tabsApi.publishedAutomations({
         ...(query === '' ? {} : { q: query }),
         ...(pageParam === undefined ? {} : { cursor: pageParam }),
       }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
     enabled,

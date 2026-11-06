@@ -1,11 +1,11 @@
 import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
-import { Button } from '@amable/ui/ui/button';
 import { Link } from '@tanstack/react-router';
-import { Check, Copy, MailWarning } from 'lucide-react';
-import { useCallback, useState, type ReactNode } from 'react';
+import { MailWarning } from 'lucide-react';
+import { useCallback, type ReactNode } from 'react';
 import { useI18n } from '../../i18n';
 import { isStepUpRequired } from '../../lib/step-up';
 import { useSendingStatus } from './api';
+import { CopyButton } from '../../components/feature-kit';
 
 /**
  * The step-up dialog itself is app-wide (`StepUpProvider` + `stepUpFetch`):
@@ -16,27 +16,6 @@ import { useSendingStatus } from './api';
 export function useStepUp() {
   const guard = useCallback((error: unknown, _retry: () => void): boolean => isStepUpRequired(error), []);
   return { guard, dialog: null };
-}
-
-export function CopyButton({ value, label }: { value: string; label?: string }) {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={() => {
-        void navigator.clipboard.writeText(value).then(() => {
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        });
-      }}
-    >
-      {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-      {label ?? (copied ? t('dev.copied') : t('dev.copy'))}
-    </Button>
-  );
 }
 
 /** One-time secret display (API key, webhook signing secret). */
@@ -50,7 +29,7 @@ export function SecretReveal({ title, value, hint }: { title: string; value: str
           <code className="min-w-0 flex-1 truncate rounded bg-(--obsidian-dashboard-shell-panel-muted,#0000000d) px-2 py-1 font-mono text-xs" data-testid="secret-value">
             {value}
           </code>
-          <CopyButton value={value} />
+          <CopyButton text={value} />
         </div>
       </AlertDescription>
     </Alert>
@@ -115,9 +94,4 @@ export function SendingDomainBanner({ slug, compact = false }: { slug: string; c
       )}
     </Alert>
   );
-}
-
-export function formatDateTime(locale: string, value: string | number | null): string {
-  if (value === null) return '—';
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
