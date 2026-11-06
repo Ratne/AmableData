@@ -5,7 +5,7 @@
  * still estimate the real count. `k = ceil(BASE_K / sampleRate)`.
  */
 
-export const SAMPLE_WINDOW_MS = 60_000;
+const SAMPLE_WINDOW_MS = 60_000;
 export const SAMPLE_KEEP_FIRST = 10;
 const BASE_K = 10;
 const MAX_KEYS = 500;

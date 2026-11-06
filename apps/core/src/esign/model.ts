@@ -45,7 +45,7 @@ export interface ClientFacts {
   meta: Record<string, unknown>;
 }
 
-export const NO_CLIENT: ClientFacts = { ip: null, user_agent: null, country: null, meta: {} };
+const NO_CLIENT: ClientFacts = { ip: null, user_agent: null, country: null, meta: {} };
 
 export interface TemplateRow {
   id: string;
@@ -156,7 +156,7 @@ export const fieldsOf = (text: string): EsignField[] => parseJson<EsignField[]>(
 export const pagesOf = (text: string): StoredPage[] => parseJson<StoredPage[]>(text, []);
 export const valuesOf = (text: string): FieldValues => parseJson<FieldValues>(text, {});
 
-export function signerToApi(row: SignerRow): EsignSigner {
+function signerToApi(row: SignerRow): EsignSigner {
   return {
     id: row.id,
     party_id: row.party_id,

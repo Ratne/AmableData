@@ -25,7 +25,7 @@ import type { AppEnv } from '../middleware';
 type Ctx = Context<AppEnv>;
 
 /** How a module reaches the folder store of the DO that owns its items. */
-export interface FolderBackend {
+interface FolderBackend {
   list(c: Ctx): Promise<FolderTree>;
   get(c: Ctx, input: { id: string }): Promise<Folder>;
   create(c: Ctx, input: CreateFolderInput): Promise<Folder>;

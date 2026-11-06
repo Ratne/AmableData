@@ -27,7 +27,7 @@ function highlightTag(tag: string, key: number): ReactNode {
 }
 
 /** Cheap Liquid syntax highlighting: delimiters, strings, filters and keywords. */
-export function highlightLiquid(source: string): ReactNode[] {
+function highlightLiquid(source: string): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
   let key = 0;

@@ -13,7 +13,7 @@ import { compileGraph } from './graph';
 import { isValidTimeZone, parseDate } from './time';
 
 /** Looks up another automation's graph (for add/remove-from-sequence targets). */
-export type AutomationLookup = (automationId: string) => { graph: AutomationGraph } | null;
+type AutomationLookup = (automationId: string) => { graph: AutomationGraph } | null;
 
 /** Input schema of every action of the installed apps (active or paused), by app id then action key. */
 export type AppActionCatalog = Readonly<Record<string, Readonly<Record<string, AppInputSchema>>>>;

@@ -31,7 +31,7 @@ import { LiquidCode } from './code-editor';
 import { conditionFields, fieldLabel } from './schema';
 
 export type BuilderId = 'fallback' | 'date' | 'if' | 'tag' | 'loop' | 'case';
-export const BUILDERS: readonly BuilderId[] = ['fallback', 'date', 'if', 'tag', 'loop', 'case'];
+const BUILDERS: readonly BuilderId[] = ['fallback', 'date', 'if', 'tag', 'loop', 'case'];
 
 const OPERATOR_LABELS: Readonly<Record<BuilderOperator, MessageKey>> = {
   equals: 'email.liquid.op.equals',
@@ -107,7 +107,7 @@ export interface GeneratedActions {
 }
 
 /** The generated Liquid with copy / insert / try-in-preview. */
-export function GeneratedCode({ code, onInsert, onTry }: { code: string | null } & GeneratedActions) {
+function GeneratedCode({ code, onInsert, onTry }: { code: string | null } & GeneratedActions) {
   const { t } = useI18n();
   return (
     <div className="grid gap-2 rounded-md border p-2" data-testid="liquid-generated">

@@ -42,7 +42,7 @@ export function integrationsFor(env: Env): Integrations {
   return env.ENVIRONMENT === 'dev' || env.ENVIRONMENT === 'test' ? devIntegrations() : unavailableIntegrations();
 }
 
-export function appOrigin(env: Env): string {
+function appOrigin(env: Env): string {
   return (env.APP_ORIGIN ?? 'http://localhost:5173').replace(/\/+$/, '');
 }
 
@@ -114,8 +114,8 @@ export async function runTenantSync(env: Env, tenantId: string): Promise<SyncRep
 }
 
 /** Wall-clock share of a cron tick for the analytics sync (the tick also runs backups, archive, apps). */
-export const ANALYTICS_TICK_BUDGET_MS = 10_000;
-export const ANALYTICS_CURSOR_KEY = 'analytics/_cron.json';
+const ANALYTICS_TICK_BUDGET_MS = 10_000;
+const ANALYTICS_CURSOR_KEY = 'analytics/_cron.json';
 
 async function readCursor(env: Env): Promise<string | null> {
   try {

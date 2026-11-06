@@ -40,7 +40,7 @@ export const commerceKeys = {
   checkoutEmbed: (slug: string, id: string) => ['commerce', slug, 'checkouts', id, 'embed'] as const,
 };
 
-export function useTenantSlug(): string {
+function useTenantSlug(): string {
   return useParams({ from: tenantRoute.id }).tenant;
 }
 

@@ -84,7 +84,7 @@ export interface EnrichedEvent {
   landing?: LandingParams | null;
 }
 
-export interface LandingParams {
+interface LandingParams {
   /** SHA-256 of the normalized `he` email: the clear address is never kept. */
   emailHash: string | null;
   /** `sl`: custom source name, reported as `@<name>`. */

@@ -46,7 +46,7 @@ const SPECIAL_TARGETS = [
   'ignore',
 ] as const;
 
-export const IMPORT_TARGETS: readonly string[] = [
+const IMPORT_TARGETS: readonly string[] = [
   ...SCALAR_TARGETS,
   ...UTM_TARGETS,
   ...EMAIL_TARGETS,

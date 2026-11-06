@@ -32,8 +32,8 @@ import { clearTimers, ensureSignerContact, getRequestRow } from './requests';
 /** Signer actions are recorded as the signer, not as the anonymous public actor. */
 const signerActor = (signer: SignerRow) => ({ type: 'signer', id: signer.id });
 
-export const OTP_TTL_MS = 10 * 60_000;
-export const OTP_MAX_ATTEMPTS = 5;
+const OTP_TTL_MS = 10 * 60_000;
+const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_MS = 60_000;
 const OTP_MAX_PER_HOUR = 5;
 
@@ -92,11 +92,11 @@ function turnReached(
   );
 }
 
-export function signerLocale(request: RequestRow, preferred: readonly string[]): EsignLocale {
+function signerLocale(request: RequestRow, preferred: readonly string[]): EsignLocale {
   return resolveEsignLocale(request.locale, preferred);
 }
 
-export function buildView(
+function buildView(
   ctx: CrmContext,
   input: {
     request: RequestRow;

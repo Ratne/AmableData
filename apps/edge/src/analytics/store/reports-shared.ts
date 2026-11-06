@@ -232,9 +232,7 @@ export function entitySlots(source: Pick<TrafficSource, 'fields'>): {
 }
 
 /** Platform of a source: its template when it is an ad platform, else its conversion platform. */
-export function sourcePlatform(
-  source: Pick<TrafficSource, 'template' | 'conversion'>,
-): AdPlatform | null {
+function sourcePlatform(source: Pick<TrafficSource, 'template' | 'conversion'>): AdPlatform | null {
   if ((AD_PLATFORMS as readonly string[]).includes(source.template))
     return source.template as AdPlatform;
   return source.conversion.platform ?? null;
@@ -273,7 +271,7 @@ export function entitySlotSql(
   return cases.length === 0 ? 'NULL' : `CASE t.traffic_source_id ${cases.join(' ')} ELSE NULL END`;
 }
 
-export interface EntityInfo {
+interface EntityInfo {
   platform: AdPlatform;
   external_id: string;
   level: AdEntityLevel;
@@ -355,7 +353,7 @@ export interface PathOptions {
 }
 
 /** Touches of these visitors up to `until`, per visitor (unordered across visitors). */
-export function touchesOfVisitors(
+function touchesOfVisitors(
   db: SqlDb,
   visitorIds: readonly string[],
   opts: PathOptions,
@@ -431,7 +429,7 @@ export interface RevenueEvent {
 }
 
 /** `data` keys of a conversion holding its costs, in minor units. */
-export const CONVERSION_COST_KEYS = ['hard_cost_minor', 'cogs_minor', 'tax_minor'] as const;
+const CONVERSION_COST_KEYS = ['hard_cost_minor', 'cogs_minor', 'tax_minor'] as const;
 
 function conversionCosts(data: string | null): number {
   if (data === null) return 0;

@@ -26,12 +26,12 @@ import { mapLimited } from '../concurrency';
  * Only an opaque account reference is stored in the site DO, never a token.
  */
 
-export interface IntegrationAccount {
+interface IntegrationAccount {
   accountId: string;
   accountName: string;
 }
 
-export interface IntegrationOAuth {
+interface IntegrationOAuth {
   readonly available: boolean;
   readonly fake: boolean;
   startConnect(input: {
@@ -49,7 +49,7 @@ export interface IntegrationOAuth {
   }): Promise<IntegrationAccount>;
 }
 
-export interface AdsProvider {
+interface AdsProvider {
   /** Daily spend per campaign for [from, to] (UTC days, inclusive). */
   dailySpend(input: {
     account: IntegrationAccount;
@@ -61,7 +61,7 @@ export interface AdsProvider {
   }): Promise<AdSpendRow[]>;
 }
 
-export interface SearchConsoleProvider {
+interface SearchConsoleProvider {
   /** Daily clicks / impressions / position per query and per page. */
   searchStats(input: {
     account: IntegrationAccount;
@@ -199,7 +199,7 @@ export function devIntegrations(): Integrations {
 
 // -------------------------------------------------------------------- sync
 
-export const INTEGRATION_SYNC_INTERVAL_MS = 20 * 3_600_000;
+const INTEGRATION_SYNC_INTERVAL_MS = 20 * 3_600_000;
 const FIRST_SYNC_DAYS = 90;
 const RESYNC_DAYS = 3;
 
@@ -296,7 +296,7 @@ export interface AdPlatformSecretsEnv {
  * plane (managed offering, no secrets needed), or not available at all. An own
  * app always takes precedence over the broker.
  */
-export type AdPlatformMode = 'fake' | 'own' | 'broker' | 'unavailable';
+type AdPlatformMode = 'fake' | 'own' | 'broker' | 'unavailable';
 
 export interface AdPlatformClients {
   readonly fake: boolean;

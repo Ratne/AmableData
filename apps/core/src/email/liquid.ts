@@ -78,7 +78,7 @@ const CUSTOM_KIND: Readonly<Record<CustomFieldType, LiquidValueKind>> = {
 };
 
 /** Liquid tags available to templates (`include`/`render`/`layout` find no files in the sandbox). */
-export const LIQUID_TAGS = [
+const LIQUID_TAGS = [
   'if',
   'elsif',
   'else',

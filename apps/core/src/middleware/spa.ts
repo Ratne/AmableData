@@ -100,7 +100,7 @@ export function contentSecurityPolicy(nonce: string, https: boolean, frameOrigin
   ].join('; ');
 }
 
-export function documentSecurityHeaders(headers: Headers, nonce: string, https: boolean, frameOrigins: readonly string[] = []) {
+function documentSecurityHeaders(headers: Headers, nonce: string, https: boolean, frameOrigins: readonly string[] = []) {
   headers.set('Content-Security-Policy', contentSecurityPolicy(nonce, https, frameOrigins));
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

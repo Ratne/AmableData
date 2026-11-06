@@ -44,11 +44,11 @@ export function isFilterDimension(value: string): value is AnalyticsFilterDimens
   return (ANALYTICS_FILTER_DIMENSIONS as readonly string[]).includes(value);
 }
 
-export function encodeFilter(filter: AnalyticsFilter): string {
+function encodeFilter(filter: AnalyticsFilter): string {
   return `${filter.dimension}:${filter.op}:${filter.value}`;
 }
 
-export function decodeFilter(raw: string): AnalyticsFilter | null {
+function decodeFilter(raw: string): AnalyticsFilter | null {
   const first = raw.indexOf(':');
   const second = first < 0 ? -1 : raw.indexOf(':', first + 1);
   if (second < 0) return null;
@@ -89,7 +89,7 @@ export function validateAnalyticsSearch(raw: Record<string, unknown>): Analytics
   };
 }
 
-export interface DerivedQuery {
+interface DerivedQuery {
   readonly preset: RangePreset;
   readonly range: DayRange;
   readonly interval: AnalyticsInterval;
@@ -98,7 +98,7 @@ export interface DerivedQuery {
   readonly query: AnalyticsQuery;
 }
 
-export function deriveQuery(search: AnalyticsSearch, timezone: string | undefined): DerivedQuery {
+function deriveQuery(search: AnalyticsSearch, timezone: string | undefined): DerivedQuery {
   const preset = search.range ?? DEFAULT_PRESET;
   const range = resolveRange(preset, timezone, { from: search.from, to: search.to });
   const intervals = allowedIntervals(range);

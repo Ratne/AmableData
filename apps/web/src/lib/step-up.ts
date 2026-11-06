@@ -6,7 +6,7 @@
  * retried response or, when the user cancels, the original 403.
  */
 
-export const STEP_UP_REQUIRED = 'step_up_required';
+const STEP_UP_REQUIRED = 'step_up_required';
 
 /** Resolves `true` once the second factor was verified, `false` if the user gave up. */
 export type StepUpPrompt = () => Promise<boolean>;

@@ -9,9 +9,9 @@ import { archiveCall, archiveDeps } from './scheduler';
  * Durable Object database (10 GB hard limit per object on Cloudflare).
  */
 
-export const DO_SIZE_LIMIT_BYTES = 10 * 1024 ** 3;
+const DO_SIZE_LIMIT_BYTES = 10 * 1024 ** 3;
 /** Above this a database is reported as close to the limit. */
-export const DO_SIZE_WARNING_BYTES = 7 * 1024 ** 3;
+const DO_SIZE_WARNING_BYTES = 7 * 1024 ** 3;
 
 type Summary = ArchiveSettings['streams'];
 
@@ -33,7 +33,7 @@ async function sizeOf(stub: () => unknown): Promise<number | null> {
   }
 }
 
-export async function databaseSizes(env: Env, tenantId: string): Promise<DatabaseSizes> {
+async function databaseSizes(env: Env, tenantId: string): Promise<DatabaseSizes> {
   const [tenantDb, mailDb, engine] = await Promise.all([
     sizeOf(() => env.TENANT_DB.get(env.TENANT_DB.idFromName(tenantId))),
     sizeOf(() => env.MAIL_DB.get(env.MAIL_DB.idFromName(tenantId))),

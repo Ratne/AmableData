@@ -40,7 +40,7 @@ function errorMessage(error: unknown): string {
 }
 
 /** Builds a scrubbed event: no request data, no personal data, route pattern only. */
-export function buildErrorEvent(env: Env, error: unknown, meta: ErrorMeta, nowMs: number): ErrorEvent {
+function buildErrorEvent(env: Env, error: unknown, meta: ErrorMeta, nowMs: number): ErrorEvent {
   return {
     eventId: ulid(nowMs),
     occurredAt: new Date(nowMs).toISOString(),
@@ -61,7 +61,7 @@ function frameKey(frame: StackFrame): string {
 }
 
 /** Local grouping key for sampling (line numbers ignored). */
-export function localFingerprint(event: Pick<ErrorEvent, 'errorType' | 'frames' | 'message'>): string {
+function localFingerprint(event: Pick<ErrorEvent, 'errorType' | 'frames' | 'message'>): string {
   if (event.frames.length > 0) return `${event.errorType}|${event.frames.slice(0, 3).map(frameKey).join('|')}`;
   return `${event.errorType}|${event.message.replace(/\d+/g, '0').slice(0, 200)}`;
 }

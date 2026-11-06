@@ -8,9 +8,9 @@ import { replaceRecoveryCodes } from './store';
  * Local-only credentials for the seeded admin. Public on purpose — they only
  * ever exist when ENVIRONMENT=dev (the seed route is not mounted otherwise).
  */
-export const DEV_ADMIN_PASSWORD = 'amable-local-dev-password';
-export const DEV_ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
-export const DEV_ADMIN_RECOVERY_CODES = [
+const DEV_ADMIN_PASSWORD = 'amable-local-dev-password';
+const DEV_ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+const DEV_ADMIN_RECOVERY_CODES = [
   'devaa-aaaa1',
   'devaa-aaaa2',
   'devaa-aaaa3',

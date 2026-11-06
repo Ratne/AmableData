@@ -15,9 +15,9 @@ export interface BackupSql {
 
 /** DO SQLite rejects statements with more than 100 bound parameters. */
 export const BACKUP_MAX_PARAMS = 90;
-export const DUMP_PAGE_ROWS = 500;
+const DUMP_PAGE_ROWS = 500;
 /** Approximate JSON size of one dump page (RPC payloads stay small). */
-export const DUMP_PAGE_BYTES = 1_000_000;
+const DUMP_PAGE_BYTES = 1_000_000;
 
 const ROWID = '__backup_rowid';
 
@@ -78,7 +78,7 @@ export function encodeValue(value: BackupSqlValue | bigint | undefined): BackupJ
   return { $b64: toBase64(new Uint8Array(value)) };
 }
 
-export function decodeValue(value: BackupJsonValue): BackupSqlValue {
+function decodeValue(value: BackupJsonValue): BackupSqlValue {
   if (value === null || typeof value === 'string' || typeof value === 'number') return value;
   return fromBase64(value.$b64);
 }
@@ -149,7 +149,7 @@ export function listBackupTables(sql: BackupSql, exclude: readonly string[] = []
   });
 }
 
-export function readSchemaVersion(sql: BackupSql, metaTable: string): number {
+function readSchemaVersion(sql: BackupSql, metaTable: string): number {
   const row = sql.query(
     `SELECT value FROM ${quoteIdent(metaTable)} WHERE key = 'schema_version'`,
   )[0];
@@ -157,7 +157,7 @@ export function readSchemaVersion(sql: BackupSql, metaTable: string): number {
   return Number.isFinite(value) ? value : 0;
 }
 
-export function dumpInfo(sql: BackupSql, options: SqlBackupOptions): BackupDbInfo {
+function dumpInfo(sql: BackupSql, options: SqlBackupOptions): BackupDbInfo {
   return {
     schemaVersion: readSchemaVersion(sql, options.metaTable),
     tables: listBackupTables(sql, options.exclude).map((t) => t.name),
@@ -219,7 +219,7 @@ export function dumpPage(
 }
 
 /** Deletes every row of every dumped table (children first), keeping `schema_version`. */
-export function wipeForRestore(sql: BackupSql, options: SqlBackupOptions): void {
+function wipeForRestore(sql: BackupSql, options: SqlBackupOptions): void {
   const tables = listBackupTables(sql, options.exclude).reverse();
   sql.transaction(() => {
     sql.query(`PRAGMA defer_foreign_keys = ON`);
@@ -234,7 +234,7 @@ export function wipeForRestore(sql: BackupSql, options: SqlBackupOptions): void 
 }
 
 /** Inserts backup rows into `table` in statements of at most BACKUP_MAX_PARAMS parameters. */
-export function restoreRows(
+function restoreRows(
   sql: BackupSql,
   options: SqlBackupOptions,
   tableName: string,

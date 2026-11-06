@@ -12,7 +12,7 @@ import { DAY_MS } from '../time';
  * parameters are never stored.
  */
 
-export const FUNNEL_SESSION_TTL_MS = 90 * DAY_MS;
+const FUNNEL_SESSION_TTL_MS = 90 * DAY_MS;
 
 const id = z.string().min(1).max(128);
 const text = (max: number) => z.string().max(max).nullable().optional();

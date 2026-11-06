@@ -6,7 +6,6 @@ import type { ContactOrdersPanelProps } from './components/contact-orders-panel'
  * `features/commerce` only; internals may move.
  */
 
-export { commerceRoutes } from './routes';
 export type { ContactOrdersPanelProps } from './components/contact-orders-panel';
 
 const LazyContactOrdersPanel = lazy(() =>

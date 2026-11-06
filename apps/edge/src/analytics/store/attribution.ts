@@ -8,7 +8,7 @@ import { first, type SqlDb, type SqlValue } from '../db/sql';
 import { filterSql, SESSION_COLUMNS, type ResolvedRange } from './query';
 
 /** Channel of sessions without any campaign, referrer or click id. */
-export const DIRECT_CHANNEL = 'Direct';
+const DIRECT_CHANNEL = 'Direct';
 
 const ATTRIBUTION_DIMS = new Set<string>(ATTRIBUTION_DIMENSIONS);
 

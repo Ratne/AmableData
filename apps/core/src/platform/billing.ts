@@ -7,7 +7,7 @@ import type { AppEnv } from '../middleware';
 import { DEFAULT_CONTROL_PLANE_URL, platformLink } from './license';
 import { loadQuotaSnapshot, localUsage, overageCost, storedQuotaSnapshot } from './quota';
 
-export const MANAGED_PRICE_MONTHLY = 99;
+const MANAGED_PRICE_MONTHLY = 99;
 const CURRENCY = 'USD';
 const MICROS = 1_000_000;
 

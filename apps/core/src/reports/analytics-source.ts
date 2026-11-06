@@ -17,8 +17,6 @@ import type { AggregateOutput, AggregateRow } from './aggregate';
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } };
 
-export type { AttributionModel };
-
 /** The fields the reports read (the analytics responses carry more). */
 export interface OverviewFacts {
   visitors: number;
@@ -29,7 +27,7 @@ export interface OverviewFacts {
   goals?: number;
   currency: string;
 }
-export interface TimeseriesFacts {
+interface TimeseriesFacts {
   points: Array<{
     t: string;
     label: string;

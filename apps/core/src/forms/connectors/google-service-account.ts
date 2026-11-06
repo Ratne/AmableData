@@ -8,7 +8,7 @@ import { safeFetch } from '@amable/auth/security';
  */
 
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-export const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
 export interface ServiceAccountKey {
   readonly clientEmail: string;

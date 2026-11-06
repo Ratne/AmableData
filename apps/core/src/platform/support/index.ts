@@ -5,8 +5,6 @@ import { assistTenantRoutes, mountAssistEntry, sweepAssist } from './assist';
 import { proxyRoutes } from './proxy';
 import { sessionOnly } from './shared';
 
-export { isSupportUserEmail, rejectSupportUsers } from './shared';
-
 /**
  * Support tickets, ideas and assisted access (installation side):
  * - `/t/:slug/platform/{support,ideas,changelog}` proxy to the control plane (central guards apply)

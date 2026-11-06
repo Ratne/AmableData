@@ -15,7 +15,7 @@ import { registerConversationRoutes } from '../../conversations/api';
 import { registerArchiveTimelineRoutes } from '../../archive/api';
 
 /** Every CRM REST v2 route, relative to `/api/v2/t/{slug}`. */
-export const crmApi = createCrmRouter();
+const crmApi = createCrmRouter();
 crmApi.use('*', idempotency());
 registerContactRoutes(crmApi);
 registerAddressLookupRoutes(crmApi);

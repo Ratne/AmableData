@@ -7,18 +7,18 @@ import { failure, httpResult, type Connector, type ConnectorContext } from './ty
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 /** "A" → 0, "AB" → 27. */
-export function columnIndex(letters: string): number {
+function columnIndex(letters: string): number {
   let n = 0;
   for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
   return n - 1;
 }
 
 /** Spreadsheet formula injection: values starting with = + - @ are stored as text. */
-export function sheetCell(value: string): string {
+function sheetCell(value: string): string {
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 
-export function sheetRow(ctx: ConnectorContext<GoogleSheetsConfig>): string[] {
+function sheetRow(ctx: ConnectorContext<GoogleSheetsConfig>): string[] {
   const context = mergeContext(ctx);
   const config = ctx.connection.config;
   if (config.columns.length === 0) {

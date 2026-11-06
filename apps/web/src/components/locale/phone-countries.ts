@@ -70,7 +70,7 @@ const MAX_DIAL_LENGTH = Math.max(...[...BY_DIAL.keys()].map((dial) => dial.lengt
 /** Numbering plans whose leading 0 is part of the subscriber number. */
 const KEEPS_LEADING_ZERO = new Set(['IT', 'VA', 'SM', 'CI', 'CG']);
 
-export function phoneCountry(code: string): PhoneCountry | undefined {
+function phoneCountry(code: string): PhoneCountry | undefined {
   return BY_CODE.get(code.toUpperCase());
 }
 

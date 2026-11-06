@@ -58,7 +58,7 @@ async function generate(env: Env): Promise<void> {
     .run();
 }
 
-export async function installationKey(env: Env): Promise<LoadedKey> {
+async function installationKey(env: Env): Promise<LoadedKey> {
   if (cached?.db === env.DB) return cached.key;
   let stored = await readStored(env.DB);
   if (stored === null) {
@@ -87,7 +87,7 @@ export async function signInstallationJwt(env: Env, claims: JwtClaims): Promise<
   return signJwt({ iss: appOriginOf(env), ...claims }, key.privateKey, key.kid);
 }
 
-export function discoveryDocument(env: Env): Record<string, unknown> {
+function discoveryDocument(env: Env): Record<string, unknown> {
   const origin = appOriginOf(env);
   return {
     issuer: origin,

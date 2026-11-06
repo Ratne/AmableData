@@ -20,7 +20,7 @@ function isMessage(body: unknown): body is FormSubmissionMessage {
 }
 
 /** 30 s, 2 min, 8 min, 32 min… capped at 1 h. */
-export function retryDelaySeconds(attempt: number): number {
+function retryDelaySeconds(attempt: number): number {
   return Math.min(3600, 30 * 4 ** Math.max(0, attempt - 1));
 }
 

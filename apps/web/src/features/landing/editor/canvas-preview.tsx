@@ -5,7 +5,7 @@ import { useI18n } from '../../../i18n';
 import type { CanvasZoom } from '../lib/devices';
 import { editorCanvasDocument, serializeDocument } from '../lib/preview-html';
 
-export const CANVAS_SHORTCUTS = ['copy', 'paste', 'duplicate', 'undo', 'redo'] as const;
+const CANVAS_SHORTCUTS = ['copy', 'paste', 'duplicate', 'undo', 'redo'] as const;
 export type CanvasShortcut = (typeof CANVAS_SHORTCUTS)[number];
 
 export interface ColumnResize {

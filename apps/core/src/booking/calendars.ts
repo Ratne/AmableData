@@ -34,13 +34,13 @@ export interface CalendarRef {
   googleCalendarId: string | null;
 }
 
-export const DEFAULT_WEEKLY_RULES: BookingWeeklyRule[] = [1, 2, 3, 4, 5].map((weekday) => ({
+const DEFAULT_WEEKLY_RULES: BookingWeeklyRule[] = [1, 2, 3, 4, 5].map((weekday) => ({
   weekday,
   start: '09:00',
   end: '17:00',
 }));
 
-export function calendarToApi(row: CalendarRow): BookingCalendar {
+function calendarToApi(row: CalendarRow): BookingCalendar {
   return {
     id: row.id,
     name: row.name,
@@ -68,7 +68,7 @@ export function calendarRef(row: CalendarRow): CalendarRef {
   };
 }
 
-export function getCalendarRow(ctx: CrmContext, id: string): CalendarRow {
+function getCalendarRow(ctx: CrmContext, id: string): CalendarRow {
   const row = ctx.db.all<CalendarRow>(`SELECT * FROM booking_calendars WHERE id = ? AND deleted_at IS NULL`, id)[0];
   if (row === undefined) throw notFound('calendar', id);
   return row;

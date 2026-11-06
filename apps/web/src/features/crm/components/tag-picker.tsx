@@ -33,7 +33,7 @@ import { useCursorQuery } from '../../../lib/feature-hooks';
 const STALE_MS = 60_000;
 
 /** Server-side tag search (`GET /tags?q=`), paginated by cursor. */
-export function useTagSearch(query: string, enabled: boolean) {
+function useTagSearch(query: string, enabled: boolean) {
   const { slug, api } = useCrm();
   const q = query.trim();
   return useCursorQuery({

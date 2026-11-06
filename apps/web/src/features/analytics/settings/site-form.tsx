@@ -40,7 +40,7 @@ const CURRENCIES = [
   'MXN',
   'INR',
 ];
-export const selectClass =
+const selectClass =
   'h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40';
 
 function timeZones(): string[] {

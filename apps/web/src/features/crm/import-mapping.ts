@@ -46,7 +46,7 @@ export const IMPORT_TARGETS = [
 
 export type ImportTarget = (typeof IMPORT_TARGETS)[number] | `custom.${string}` | 'ignore';
 
-export function detectDelimiter(headerLine: string): ',' | ';' | '\t' {
+function detectDelimiter(headerLine: string): ',' | ';' | '\t' {
   const counts = { ',': 0, ';': 0, '\t': 0 };
   let quoted = false;
   for (const char of headerLine) {

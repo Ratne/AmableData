@@ -7,7 +7,7 @@ import { tenantRoute } from '../../routes/tenant';
  */
 
 /** `?saved=<id>` opens a saved search, `?tag=<id>` filters by one tag. */
-export interface RecordListSearch {
+interface RecordListSearch {
   saved?: string;
   tag?: string;
 }
@@ -19,14 +19,14 @@ function recordListSearch(search: Record<string, unknown>): RecordListSearch {
   };
 }
 
-export const contactsRoute = createRoute({
+const contactsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'contacts',
   validateSearch: recordListSearch,
   component: lazyRouteComponent(() => import('./pages/contacts-list'), 'ContactsListPage'),
 });
 
-export const contactImportRoute = createRoute({
+const contactImportRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'contacts/import',
   component: lazyRouteComponent(() => import('./pages/import-wizard'), 'ImportWizardPage'),
@@ -68,57 +68,57 @@ function contactDetailSearch(search: Record<string, unknown>): ContactDetailSear
   return isCustomFieldTab(tab) ? { tab } : {};
 }
 
-export const contactDetailRoute = createRoute({
+const contactDetailRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'contacts/$contactId',
   validateSearch: contactDetailSearch,
   component: lazyRouteComponent(() => import('./pages/contact-detail'), 'ContactDetailPage'),
 });
 
-export const companiesRoute = createRoute({
+const companiesRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'companies',
   validateSearch: recordListSearch,
   component: lazyRouteComponent(() => import('./pages/companies'), 'CompaniesListPage'),
 });
 
-export const companyDetailRoute = createRoute({
+const companyDetailRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'companies/$companyId',
   component: lazyRouteComponent(() => import('./pages/companies'), 'CompanyDetailPage'),
 });
 
-export const dealsRoute = createRoute({
+const dealsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'deals',
   component: lazyRouteComponent(() => import('./pages/deals'), 'DealsPage'),
 });
 
-export const dealDetailRoute = createRoute({
+const dealDetailRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'deals/$dealId',
   component: lazyRouteComponent(() => import('./pages/deal-detail'), 'DealDetailPage'),
 });
 
-export const tasksRoute = createRoute({
+const tasksRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'tasks',
   component: lazyRouteComponent(() => import('./pages/tasks'), 'TasksPage'),
 });
 
-export const tagsRoute = createRoute({
+const tagsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'tags',
   component: lazyRouteComponent(() => import('./pages/tags'), 'TagsPage'),
 });
 
-export const searchesRoute = createRoute({
+const searchesRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'searches',
   component: lazyRouteComponent(() => import('../search/searches-page'), 'SavedSearchesPage'),
 });
 
-export const customFieldsSettingsRoute = createRoute({
+const customFieldsSettingsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'settings/custom-fields',
   component: lazyRouteComponent(
@@ -127,7 +127,7 @@ export const customFieldsSettingsRoute = createRoute({
   ),
 });
 
-export const pipelinesSettingsRoute = createRoute({
+const pipelinesSettingsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'settings/pipelines',
   component: lazyRouteComponent(

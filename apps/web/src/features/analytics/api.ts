@@ -569,8 +569,6 @@ export function analyticsApi(tenant: string) {
   };
 }
 
-export type AnalyticsApi = ReturnType<typeof analyticsApi>;
-
 /** Mutation that toasts failures and refreshes the analytics queries of the tenant. */
 export function useAnalyticsMutation<TVariables, TResult>(
   tenant: string,

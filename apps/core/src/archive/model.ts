@@ -13,7 +13,7 @@ export type ArchiveStream =
   | 'mail_messages'
   | 'mail_clicks';
 
-export const ARCHIVE_STREAMS: readonly ArchiveStream[] = [
+const ARCHIVE_STREAMS: readonly ArchiveStream[] = [
   'crm_activities',
   'form_submissions',
   'esign_events',
@@ -35,9 +35,9 @@ export const TENANT_ARCHIVE_STREAMS: readonly ArchiveStream[] = ARCHIVE_STREAMS.
 export const MAIL_ARCHIVE_STREAMS: readonly ArchiveStream[] = ARCHIVE_STREAMS.filter((s) => STREAM_DB[s] === 'mail_db');
 
 /** Settings group of each stream (what the owner configures). */
-export type RetentionFamily = 'crm_events' | 'email' | 'clicks' | 'submissions' | 'esign';
+type RetentionFamily = 'crm_events' | 'email' | 'clicks' | 'submissions' | 'esign';
 
-export const RETENTION_FAMILIES: readonly RetentionFamily[] = [
+const RETENTION_FAMILIES: readonly RetentionFamily[] = [
   'crm_events',
   'email',
   'clicks',
@@ -45,7 +45,7 @@ export const RETENTION_FAMILIES: readonly RetentionFamily[] = [
   'esign',
 ];
 
-export const STREAM_FAMILY: Readonly<Record<ArchiveStream, RetentionFamily>> = {
+const STREAM_FAMILY: Readonly<Record<ArchiveStream, RetentionFamily>> = {
   crm_activities: 'crm_events',
   form_submissions: 'submissions',
   esign_events: 'esign',
@@ -56,7 +56,7 @@ export const STREAM_FAMILY: Readonly<Record<ArchiveStream, RetentionFamily>> = {
 /** Months kept in the database; 0 keeps everything. Defaults need no configuration. */
 export type RetentionSettings = Record<RetentionFamily, number>;
 
-export const DEFAULT_RETENTION: Readonly<RetentionSettings> = {
+const DEFAULT_RETENTION: Readonly<RetentionSettings> = {
   crm_events: 24,
   email: 24,
   clicks: 12,
@@ -64,8 +64,8 @@ export const DEFAULT_RETENTION: Readonly<RetentionSettings> = {
   esign: 24,
 };
 
-export const MIN_RETENTION_MONTHS = 3;
-export const MAX_RETENTION_MONTHS = 120;
+const MIN_RETENTION_MONTHS = 3;
+const MAX_RETENTION_MONTHS = 120;
 
 /** Consumed outbox rows (automation and analytics already read them) are deleted, not archived. */
 export const OUTBOX_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -129,7 +129,7 @@ export function normalizeRetention(raw: unknown): RetentionSettings {
 }
 
 /** R2 key segment of an id: kept when made of safe characters, hex-encoded otherwise. */
-export function keySegment(value: string): string {
+function keySegment(value: string): string {
   if (/^[A-Za-z0-9_-]{1,80}$/.test(value)) return value;
   return `x${Array.from(new TextEncoder().encode(value), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 160)}`;
 }

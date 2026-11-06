@@ -68,7 +68,7 @@ export function createCrmRouter(): OpenAPIHono<AppEnv> {
 const errorContent = { 'application/json': { schema: errorResponseSchema } };
 
 /** Error responses every v2 route can return. */
-export const ERROR_RESPONSES = {
+const ERROR_RESPONSES = {
   401: { description: 'Missing or invalid session / API key', content: errorContent },
   403: { description: 'The caller lacks the required permission', content: errorContent },
   404: { description: 'Tenant or resource not found', content: errorContent },

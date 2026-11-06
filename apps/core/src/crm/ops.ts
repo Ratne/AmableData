@@ -1,7 +1,6 @@
 import type {
   ApplyTagsInput,
   Contact,
-  CustomFieldEntity,
   GlobalSearchResponse,
   ListCompaniesQuery,
   ListContactsQuery,
@@ -95,7 +94,7 @@ function listCompanies(ctx: CrmContext, input: ListCompaniesQuery): Page<Company
  * through one RPC method (`TenantDb.crm`) so the DO surface stays a single,
  * typed entry point; each call runs in one SQLite transaction.
  */
-export const crmOps = {
+const crmOps = {
   // contacts
   'contacts.list': listContacts,
   'contacts.get': contacts.getContact,
@@ -247,14 +246,14 @@ export const crmOps = {
   ...shortlinksOps,
 } satisfies Record<string, (ctx: CrmContext, input: never) => unknown>;
 
-export type CrmOps = typeof crmOps;
+type CrmOps = typeof crmOps;
 export type CrmOpName = keyof CrmOps;
 export type CrmOpInput<K extends CrmOpName> = Parameters<CrmOps[K]>[1];
 export type CrmOpOutput<K extends CrmOpName> = ReturnType<CrmOps[K]>;
 
 export type CrmResult<T> = { ok: true; value: T } | { ok: false; error: CrmErrorShape };
 
-export function isCrmOp(op: string): op is CrmOpName {
+function isCrmOp(op: string): op is CrmOpName {
   return Object.hasOwn(crmOps, op);
 }
 
@@ -297,5 +296,3 @@ export function runCrmOp(
     throw error;
   }
 }
-
-export type { CustomFieldEntity };

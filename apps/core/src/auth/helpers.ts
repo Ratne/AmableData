@@ -42,7 +42,7 @@ export function accountKey(email: string): Promise<string> {
   return sha256Hex(`account:${email}`);
 }
 
-export function publicUser(user: Pick<UserRow, 'id' | 'email' | 'name' | 'locale' | 'theme'>) {
+function publicUser(user: Pick<UserRow, 'id' | 'email' | 'name' | 'locale' | 'theme'>) {
   return { id: user.id, email: user.email, name: user.name, locale: user.locale, theme: user.theme };
 }
 

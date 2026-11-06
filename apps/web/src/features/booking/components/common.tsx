@@ -5,13 +5,7 @@ import { useI18n } from '../../../i18n';
 import { errorMessage, useBooking } from '../api/hooks';
 import { ApiErrorNotice, QueryPageState } from '../../../components/feature-kit';
 
-export {
-  Pill,
-  SectionCard,
-  Choice,
-  type Tone,
-  FormField as Field,
-} from '../../../components/feature-kit';
+export { Pill, SectionCard, Choice, FormField as Field } from '../../../components/feature-kit';
 
 export function ErrorNotice({ error }: { error: unknown }) {
   const { t } = useI18n();

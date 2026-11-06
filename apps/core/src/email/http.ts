@@ -8,7 +8,7 @@ import type { MailDb } from './mail-db';
 import type { MailOpInput, MailOpName, MailOpOutput, MailResult } from './ops';
 
 /** Error raised by the REST layer from a MailDb error result. */
-export class MailHttpError extends Error {
+class MailHttpError extends Error {
   constructor(readonly shape: MailErrorShape) {
     super(shape.message);
   }

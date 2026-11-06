@@ -18,7 +18,7 @@ import { downloadBlob, downloadHref } from '../../../lib/download';
 const PNG_SIZE = 512;
 
 /** Standalone SVG document of a QR code (black modules on white). */
-export function qrSvg(value: string): string {
+function qrSvg(value: string): string {
   const qr = encode(value, { ecc: 'M', border: 2 });
   let path = '';
   qr.data.forEach((row, y) =>

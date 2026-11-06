@@ -9,10 +9,10 @@ import type { Env } from '../env';
 
 export const RELEASES_API_URL = 'https://api.github.com/repos/Ratne/AmableData/releases/latest';
 const RELEASES_PAGE_PREFIX = 'https://github.com/Ratne/AmableData/releases/';
-export const UPDATE_CHECK_KEY = 'update_check';
+const UPDATE_CHECK_KEY = 'update_check';
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-export interface StoredUpdateCheck {
+interface StoredUpdateCheck {
   readonly latest: string | null;
   readonly url: string | null;
   readonly checkedAt: number;
@@ -43,7 +43,7 @@ export function isNewer(candidate: string, current: string): boolean {
   return false;
 }
 
-export function updateChecksEnabled(env: Env): boolean {
+function updateChecksEnabled(env: Env): boolean {
   return env.UPDATE_CHECK?.trim().toLowerCase() !== 'off' && parseVersion(env.APP_VERSION) !== null;
 }
 

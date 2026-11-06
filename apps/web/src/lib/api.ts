@@ -38,7 +38,7 @@ export async function fetchAllPages<T>(
   return rows;
 }
 
-export interface MeMembership {
+interface MeMembership {
   readonly slug: string;
   readonly name: string;
   readonly role: Role;

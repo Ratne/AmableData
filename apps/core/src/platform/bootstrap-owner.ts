@@ -4,7 +4,7 @@ import { ulid } from 'ulid';
 import { insertInvite, normalizeEmail } from '../auth/store';
 import type { Env } from '../env';
 
-export function workspaceSlug(name: string): string {
+function workspaceSlug(name: string): string {
   const slug = name
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')

@@ -5,7 +5,7 @@
 
 export type AppMetricKind = 'api' | 'hook' | 'action' | 'webhook' | 'connector' | 'channel';
 
-export const METRICS_RETENTION_MS = 30 * 24 * 3600 * 1000;
+const METRICS_RETENTION_MS = 30 * 24 * 3600 * 1000;
 const HOUR_MS = 3600 * 1000;
 
 export async function recordAppMetric(
@@ -23,7 +23,7 @@ export async function recordAppMetric(
     .run();
 }
 
-export interface AppHealthBucket {
+interface AppHealthBucket {
   readonly kind: AppMetricKind;
   readonly calls: number;
   readonly errors: number;

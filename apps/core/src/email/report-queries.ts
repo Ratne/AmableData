@@ -127,7 +127,7 @@ function broadcastOptions(deps: MailDeps): Array<{ value: string; label: string 
 }
 
 /** Aggregates one email source inside the MailDb DO. */
-export function mailReportAggregate(deps: MailDeps, input: AggregateInput): AggregateOutput {
+function mailReportAggregate(deps: MailDeps, input: AggregateInput): AggregateOutput {
   ensureIndexes(deps.db, 'mail', MAIL_REPORT_INDEXES);
   const ctx = { db: deps.db, filter: null, currency: null };
   try {

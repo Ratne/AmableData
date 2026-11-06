@@ -6,13 +6,13 @@ import { tenantRoute } from '../../routes/tenant';
  * `landing-pages` replaces the navigation placeholder.
  */
 
-export const landingListRoute = createRoute({
+const landingListRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'landing-pages',
   component: lazyRouteComponent(() => import('./pages/pages-list'), 'PagesListPage'),
 });
 
-export const landingPageRoute = createRoute({
+const landingPageRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'landing-pages/$pageId',
   beforeLoad: ({ params }) => {
@@ -20,14 +20,14 @@ export const landingPageRoute = createRoute({
   },
 });
 
-export const landingEditorRoute = createRoute({
+const landingEditorRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'landing-pages/$pageId/edit',
   staticData: { immersive: true },
   component: lazyRouteComponent(() => import('./pages/canvas-editor'), 'CanvasEditorPage'),
 });
 
-export const landingSettingsRoute = createRoute({
+const landingSettingsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'landing-pages/$pageId/settings',
   component: lazyRouteComponent(() => import('./pages/page-settings'), 'PageSettingsPage'),

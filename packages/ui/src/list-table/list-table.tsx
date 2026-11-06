@@ -105,7 +105,7 @@ export interface ListTableLabels {
   readonly loading: string;
 }
 
-export const DEFAULT_LIST_TABLE_LABELS: ListTableLabels = {
+const DEFAULT_LIST_TABLE_LABELS: ListTableLabels = {
   selectAll: 'Select all rows in view',
   selectRow: (label) => `Select ${label}`,
   rowActions: (label) => `Actions for ${label}`,

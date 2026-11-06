@@ -27,13 +27,13 @@ export interface PostbackDeps {
 const HIT_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const REV_RE = /^-?\d{1,12}(?:\.\d{1,9})?$/;
 const SHARE_RE = /^\d{1,3}(?:\.\d{1,6})?$/;
-export const MAX_CUSTOM_EVENT = 10;
+const MAX_CUSTOM_EVENT = 10;
 
 const PENDING_STATUSES = new Set(['pending', 'hold', 'preapproved']);
 const REJECTED_STATUSES = new Set(['rejected', 'reject', 'trash', 'cancelled', 'canceled']);
 
 /** Provisional revenue of a pending conversion: one minor unit (0.01). */
-export const PENDING_REVENUE_MINOR = 1;
+const PENDING_REVENUE_MINOR = 1;
 
 function answer(c: Ctx, status: 200 | 400 | 404, body: string): Response {
   return c.text(body, status, { 'cache-control': 'no-store' });
@@ -47,7 +47,7 @@ function clip(v: string | null, max: number): string | null {
 }
 
 /** PII of the postback, kept in memory for the outbound queue only. */
-export function postbackPii(q: URLSearchParams): OutboundPii {
+function postbackPii(q: URLSearchParams): OutboundPii {
   const pii: OutboundPii = {};
   const email = clip(q.get('pii_email') ?? q.get('email'), 320);
   const phone = clip(q.get('pii_phone') ?? q.get('phone'), 64);

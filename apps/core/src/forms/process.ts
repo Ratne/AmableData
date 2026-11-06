@@ -50,7 +50,7 @@ async function tenantSlug(env: Env, tenantId: string): Promise<string | null> {
   }
 }
 
-export interface DeliverInput {
+interface DeliverInput {
   env: Env;
   runtime: FormsRuntime;
   tenantId: string;
@@ -63,7 +63,7 @@ export interface DeliverInput {
 }
 
 /** Runs one connector; config or secret problems become a non-retryable failure. */
-export async function deliver(input: DeliverInput): Promise<ConnectorResult> {
+async function deliver(input: DeliverInput): Promise<ConnectorResult> {
   const connector = connectorOf(input.connection.type);
   if (connector === null) {
     return { status: 'failed', retryable: false, statusCode: null, request: null, response: `unknown connector ${input.connection.type}` };
@@ -186,7 +186,7 @@ export async function processSubmission(
 }
 
 /** Sample submission used by "test connection". */
-export function sampleSubmission(fields: readonly FormField[], now: number): ConnectorSubmission {
+function sampleSubmission(fields: readonly FormField[], now: number): ConnectorSubmission {
   const values: Record<string, string | number | boolean | string[]> = {};
   for (const field of fields) {
     switch (field.kind) {

@@ -4,7 +4,7 @@ import { renderEmailLayout } from '@amable/i18n';
 import { mergeContext, renderTags, zodConfig } from './merge';
 import { failure, type Connector, type ConnectorContext } from './types';
 
-export function notificationEmail(ctx: ConnectorContext<EmailNotificationConfig>): {
+function notificationEmail(ctx: ConnectorContext<EmailNotificationConfig>): {
   subject: string;
   text: string;
   html: string;

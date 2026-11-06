@@ -2,7 +2,7 @@ import { ESIGN_IMAGE_FIELDS, type EsignField } from '@amable/api-types';
 import type { ErrorDetail } from '../crm/errors';
 import { isImageValue, type FieldValue, type FieldValues } from './model';
 
-export const TEXT_VALUE_MAX = 1000;
+const TEXT_VALUE_MAX = 1000;
 const NUMBER_RE = /^-?\d{1,15}(?:[.,]\d{1,6})?$/;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 

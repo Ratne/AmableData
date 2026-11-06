@@ -19,7 +19,7 @@ function expandHex(hex: string): string {
 }
 
 /** Picks near-white or near-black text by WCAG relative luminance. */
-export function readableForeground(hex: string): string {
+function readableForeground(hex: string): string {
   const full = expandHex(hex);
   const channel = (offset: number) => {
     const value = Number.parseInt(full.slice(offset, offset + 2), 16) / 255;
@@ -29,7 +29,7 @@ export function readableForeground(hex: string): string {
   return luminance > 0.45 ? '#161616' : '#f9fbff';
 }
 
-export function isSafeColor(value: string | null | undefined): value is string {
+function isSafeColor(value: string | null | undefined): value is string {
   return typeof value === 'string' && HEX_RE.test(value);
 }
 

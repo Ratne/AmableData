@@ -9,7 +9,7 @@ import type {
 import type { SystemEmail, SystemEmailProvider } from './system-email';
 
 /** Placeholder SPF / DKIM / DMARC records, shaped like the provider's, for local wizards. */
-export function devDnsRecords(domain: string): DnsRecord[] {
+function devDnsRecords(domain: string): DnsRecord[] {
   return [
     { type: 'TXT', name: domain, value: 'v=spf1 include:spf.mail.example.net ~all' },
     { type: 'CNAME', name: `amb1._domainkey.${domain}`, value: 'amb1.dkim.mail.example.net' },

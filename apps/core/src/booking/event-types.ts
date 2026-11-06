@@ -79,7 +79,7 @@ function normalizeNotifications(list: readonly BookingNotificationInput[]): Book
   return [...parsed.data].sort((a, b) => rank(a) - rank(b));
 }
 
-export function notificationsOf(row: EventTypeRow): BookingNotification[] {
+function notificationsOf(row: EventTypeRow): BookingNotification[] {
   return parseJson<BookingNotification[]>(row.notifications, []);
 }
 
@@ -125,7 +125,7 @@ function keptWeights(weights: Record<string, number>, hosts: readonly string[], 
   }
 }
 
-export function messagesOf(row: EventTypeRow): BookingMessages {
+function messagesOf(row: EventTypeRow): BookingMessages {
   const stored = parseJson<Partial<BookingMessages>>(row.messages, {});
   return {
     confirmation_subject: stored.confirmation_subject ?? '',
@@ -186,7 +186,7 @@ export function getEventTypeRow(ctx: CrmContext, id: string): EventTypeRow {
   return row;
 }
 
-export function eventTypeRowBySlug(ctx: CrmContext, slug: string): EventTypeRow {
+function eventTypeRowBySlug(ctx: CrmContext, slug: string): EventTypeRow {
   const row = ctx.db.all<EventTypeRow>(
     `SELECT * FROM booking_event_types WHERE slug = ? AND deleted_at IS NULL`,
     slug.toLowerCase(),

@@ -22,8 +22,8 @@ export function resolveErrorSink(env: Env): ErrorSink {
 }
 
 /** Knobs pushed by the control plane in heartbeat responses (`installation_meta`). */
-export const REPORTING_META_KEY = 'platform:reporting';
-export const DEFAULT_MAX_BATCH = 50;
+const REPORTING_META_KEY = 'platform:reporting';
+const DEFAULT_MAX_BATCH = 50;
 const MAX_BATCH_CAP = 100;
 const KNOBS_TTL_MS = 60_000;
 

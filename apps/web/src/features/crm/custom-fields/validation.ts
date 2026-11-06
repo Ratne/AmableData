@@ -14,7 +14,7 @@ import type {
 
 export type FieldDefinition = Pick<CustomField, 'key' | 'type' | 'options' | 'config' | 'required'>;
 
-export type ValidationErrorCode =
+type ValidationErrorCode =
   | 'required'
   | 'tooLong'
   | 'email'
@@ -62,7 +62,7 @@ const fail = (
   vars?: Readonly<Record<string, string | number>>,
 ): ValidationResult => (vars === undefined ? { ok: false, error } : { ok: false, error, vars });
 
-export function isValidDate(text: string): boolean {
+function isValidDate(text: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   if (match === null) return false;
   const [, y, m, d] = match;

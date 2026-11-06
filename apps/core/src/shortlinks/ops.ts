@@ -138,7 +138,7 @@ function expiresMs(value: string | null | undefined): number | null | undefined 
 
 // ------------------------------------------------------------------ links
 
-export function listLinks(ctx: CrmContext, input: ShortlinkListQuery): { data: ShortlinkRecord[] } {
+function listLinks(ctx: CrmContext, input: ShortlinkListQuery): { data: ShortlinkRecord[] } {
   const where: string[] = [];
   const params: SqlValue[] = [];
   if (input.folder_id === 'none') where.push('folder_id IS NULL');
@@ -165,11 +165,11 @@ export function listLinks(ctx: CrmContext, input: ShortlinkListQuery): { data: S
   return { data: rows.map(serialize) };
 }
 
-export function getLink(ctx: CrmContext, input: { id: string }): ShortlinkRecord {
+function getLink(ctx: CrmContext, input: { id: string }): ShortlinkRecord {
   return serialize(getRow(ctx, input.id));
 }
 
-export function createLink(ctx: CrmContext, input: CreateShortlinkInput): ShortlinkRecord {
+function createLink(ctx: CrmContext, input: CreateShortlinkInput): ShortlinkRecord {
   const folderId = input.folder_id ?? null;
   checkFolder(ctx, folderId, input.domain_id);
   let key = clean(input.key);
@@ -216,7 +216,7 @@ export function createLink(ctx: CrmContext, input: CreateShortlinkInput): Shortl
   return serialize(getRow(ctx, id));
 }
 
-export function updateLink(
+function updateLink(
   ctx: CrmContext,
   input: { id: string; data: UpdateShortlinkInput },
 ): ShortlinkRecord {
@@ -262,7 +262,7 @@ export function updateLink(
   return serialize(getRow(ctx, row.id));
 }
 
-export function deleteLink(ctx: CrmContext, input: { id: string }): ShortlinkRecord {
+function deleteLink(ctx: CrmContext, input: { id: string }): ShortlinkRecord {
   const row = getRow(ctx, input.id);
   ctx.db.run(`DELETE FROM short_link_clicks_daily WHERE link_id = ?`, row.id);
   ctx.db.run(`DELETE FROM short_links WHERE id = ?`, row.id);
@@ -302,7 +302,7 @@ function setFolderDomains(ctx: CrmContext, folderId: string, domainIds: readonly
   }
 }
 
-export function listFolders(ctx: CrmContext, _input: Record<string, never>): { data: ShortlinkFolder[] } {
+function listFolders(ctx: CrmContext, _input: Record<string, never>): { data: ShortlinkFolder[] } {
   const rows = ctx.db.all<{ id: string; name: string; created_at: number; link_count: number }>(
     `SELECT f.id, f.name, f.created_at, (SELECT COUNT(*) FROM short_links l WHERE l.folder_id = f.id) AS link_count
      FROM short_link_folders f ORDER BY f.name COLLATE NOCASE, f.id`,
@@ -326,7 +326,7 @@ export function listFolders(ctx: CrmContext, _input: Record<string, never>): { d
   };
 }
 
-export function createFolder(ctx: CrmContext, input: CreateShortlinkFolderInput): ShortlinkFolder {
+function createFolder(ctx: CrmContext, input: CreateShortlinkFolderInput): ShortlinkFolder {
   const id = ctx.newId();
   ctx.db.run(
     `INSERT INTO short_link_folders (id, name, created_at) VALUES (?, ?, ?)`,
@@ -338,7 +338,7 @@ export function createFolder(ctx: CrmContext, input: CreateShortlinkFolderInput)
   return serializeFolder(ctx, getFolderRow(ctx, id));
 }
 
-export function updateFolder(
+function updateFolder(
   ctx: CrmContext,
   input: { id: string; data: UpdateShortlinkFolderInput },
 ): ShortlinkFolder {
@@ -351,7 +351,7 @@ export function updateFolder(
 }
 
 /** The links of the folder stay, without folder. */
-export function deleteFolder(ctx: CrmContext, input: { id: string }): { id: string; deleted: true; moved_links: number } {
+function deleteFolder(ctx: CrmContext, input: { id: string }): { id: string; deleted: true; moved_links: number } {
   const folder = serializeFolder(ctx, getFolderRow(ctx, input.id));
   ctx.db.run(`UPDATE short_links SET folder_id = NULL WHERE folder_id = ?`, folder.id);
   ctx.db.run(`DELETE FROM short_link_folder_domains WHERE folder_id = ?`, folder.id);
@@ -362,7 +362,7 @@ export function deleteFolder(ctx: CrmContext, input: { id: string }): { id: stri
 // ------------------------------------------------------------- redirect
 
 /** Config of a link for the edge; archived links do not resolve. */
-export function resolveLink(ctx: CrmContext, input: { domainId: string; key: string }): ShortlinkTarget | null {
+function resolveLink(ctx: CrmContext, input: { domainId: string; key: string }): ShortlinkTarget | null {
   const row = ctx.db.all<LinkRow>(
     `SELECT * FROM short_links WHERE domain_id = ? AND key = ? AND archived = 0`,
     input.domainId,
@@ -391,7 +391,7 @@ function dim(value: string | null, max: number): string {
   return (value ?? '').trim().slice(0, max);
 }
 
-export function recordClick(ctx: CrmContext, input: ShortlinkClickInput): { ok: true } {
+function recordClick(ctx: CrmContext, input: ShortlinkClickInput): { ok: true } {
   const exists = ctx.db.all(`SELECT id FROM short_links WHERE id = ?`, input.linkId).length > 0;
   if (!exists) return { ok: true };
   const day = new Date(ctx.now()).toISOString().slice(0, 10);
@@ -413,7 +413,7 @@ export function recordClick(ctx: CrmContext, input: ShortlinkClickInput): { ok: 
   return { ok: true };
 }
 
-export function linkStats(ctx: CrmContext, input: { id: string; days: number }): ShortlinkStats {
+function linkStats(ctx: CrmContext, input: { id: string; days: number }): ShortlinkStats {
   const row = getRow(ctx, input.id);
   const today = Math.floor(ctx.now() / DAY_MS) * DAY_MS;
   const days: string[] = [];
@@ -463,7 +463,7 @@ export function linkStats(ctx: CrmContext, input: { id: string; days: number }):
 }
 
 /** Cascade of a removed (or re-kinded) shortlink domain. */
-export function domainDeleted(ctx: CrmContext, input: { domainId: string }): { deleted_links: number } {
+function domainDeleted(ctx: CrmContext, input: { domainId: string }): { deleted_links: number } {
   ctx.db.run(
     `DELETE FROM short_link_clicks_daily WHERE link_id IN (SELECT id FROM short_links WHERE domain_id = ?)`,
     input.domainId,

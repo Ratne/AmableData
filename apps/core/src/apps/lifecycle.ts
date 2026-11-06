@@ -36,7 +36,7 @@ async function reload(env: Env, id: string): Promise<AppInstall> {
   return install;
 }
 
-export async function revokeTokens(db: D1Database, installId: string, nowMs: number): Promise<void> {
+async function revokeTokens(db: D1Database, installId: string, nowMs: number): Promise<void> {
   await db
     .prepare(`UPDATE app_tokens SET revoked_at = ? WHERE install_id = ? AND revoked_at IS NULL`)
     .bind(nowMs, installId)

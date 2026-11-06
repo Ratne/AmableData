@@ -73,7 +73,7 @@ export function ensureSearchIndex(db: SqlDb, forceMode?: SearchMode): SearchMode
 
 const MAX_TRIGRAMS = 4000;
 
-export function trigramsOf(text: string): string[] {
+function trigramsOf(text: string): string[] {
   const grams = new Set<string>();
   for (const word of text.split(/\s+/)) {
     if (word.length < 3) continue;

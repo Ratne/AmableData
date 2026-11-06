@@ -79,7 +79,7 @@ interface MergeRow {
 const toMerge = (r: MergeRow): VisitorMerge => ({ ...r, active: r.active === 1 });
 
 /** Records (or re-activates) the child → origin link. */
-export function upsertVisitorMerge(
+function upsertVisitorMerge(
   db: SqlDb,
   childVisitorId: string,
   originVisitorId: string,
@@ -99,7 +99,7 @@ export function upsertVisitorMerge(
   );
 }
 
-export function setVisitorMergeActive(
+function setVisitorMergeActive(
   db: SqlDb,
   childVisitorId: string,
   originVisitorId: string,
@@ -113,18 +113,6 @@ export function setVisitorMergeActive(
     childVisitorId,
     originVisitorId,
   );
-}
-
-/** Merges where the visitor is child or origin (active and disconnected). */
-export function visitorMerges(db: SqlDb, visitorId: string): VisitorMerge[] {
-  return db
-    .all<MergeRow>(
-      `SELECT child_visitor_id, origin_visitor_id, mechanism, active, created_at FROM visitor_merges
-       WHERE child_visitor_id = ? OR origin_visitor_id = ? ORDER BY created_at, child_visitor_id`,
-      visitorId,
-      visitorId,
-    )
-    .map(toMerge);
 }
 
 // ---------------------------------------------------------------------- tags
@@ -363,11 +351,11 @@ export function signalsFromEvent(e: EnrichedEvent): IdentitySignals | null {
 
 // ------------------------------------------------------------ merge settings
 
-export const IDENTITY_MERGE_MECHANISMS = ['email', 'phone', 'session'] as const;
-export type AutoMergeMechanism = (typeof IDENTITY_MERGE_MECHANISMS)[number];
+const IDENTITY_MERGE_MECHANISMS = ['email', 'phone', 'session'] as const;
+type AutoMergeMechanism = (typeof IDENTITY_MERGE_MECHANISMS)[number];
 export type IdentityMergeSettings = Record<AutoMergeMechanism, boolean>;
 
-export const DEFAULT_MERGE_SETTINGS: IdentityMergeSettings = { email: true, phone: true, session: true };
+const DEFAULT_MERGE_SETTINGS: IdentityMergeSettings = { email: true, phone: true, session: true };
 
 export const identityMergeSettingsPatchSchema = z
   .object({ email: z.boolean(), phone: z.boolean(), session: z.boolean() })
@@ -438,7 +426,7 @@ function activeParent(db: SqlDb, visitorId: string): string | null {
 }
 
 /** Origin of the visitor's group (the visitor itself when not merged). */
-export function groupOrigin(db: SqlDb, visitorId: string): string {
+function groupOrigin(db: SqlDb, visitorId: string): string {
   let current = visitorId;
   const seen = new Set([current]);
   for (let parent = activeParent(db, current); parent !== null && !seen.has(parent); parent = activeParent(db, current)) {
@@ -481,7 +469,7 @@ export function visitorOrigins(db: SqlDb, visitorIds: readonly string[]): Map<st
 }
 
 /** Union of the groups of these visitors (each group origin first). */
-export function resolveVisitorGroups(db: SqlDb, visitorIds: readonly string[]): string[] {
+function resolveVisitorGroups(db: SqlDb, visitorIds: readonly string[]): string[] {
   const out = new Set<string>();
   const origins = new Set<string>();
   for (const id of visitorIds) {

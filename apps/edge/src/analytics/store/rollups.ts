@@ -1,7 +1,7 @@
 import { first, type SqlDb, type SqlValue } from '../db/sql';
 import { dayKey, dayStart, HOUR_MS, nextDay } from '../time';
 
-export interface RollupTotals {
+interface RollupTotals {
   visitors: number;
   sessions: number;
   pageviews: number;
@@ -16,7 +16,7 @@ export interface RollupTotals {
  * duration) count sessions that *started* in the range; pageviews, goals and
  * revenue count rows whose timestamp falls in it.
  */
-export function aggregateRange(
+function aggregateRange(
   db: SqlDb,
   from: number,
   to: number,

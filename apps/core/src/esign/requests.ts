@@ -383,7 +383,7 @@ export function voidRequest(
 }
 
 /** Signers whose turn it is and who did not finish (sequential: only the first unfinished party). */
-export function signersToRemind(
+function signersToRemind(
   signers: readonly SignerRow[],
   order: RequestRow['signing_order'],
 ): SignerRow[] {

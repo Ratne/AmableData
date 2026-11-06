@@ -14,7 +14,7 @@ import type {
  * before finalizing.
  */
 
-export interface WizardProductLine {
+interface WizardProductLine {
   readonly key: string;
   readonly kind: 'product';
   readonly productId: string;
@@ -26,7 +26,7 @@ export interface WizardProductLine {
   readonly taxRateBps: number | null;
 }
 
-export interface WizardCustomLine {
+interface WizardCustomLine {
   readonly key: string;
   readonly kind: 'custom';
   readonly name: string;
@@ -38,7 +38,7 @@ export interface WizardCustomLine {
 export type WizardLine = WizardProductLine | WizardCustomLine;
 
 /** A plan to subscribe the contact to when the order is confirmed. */
-export interface WizardPlanLine {
+interface WizardPlanLine {
   readonly key: string;
   readonly planId: string;
   readonly name: string;
@@ -66,7 +66,7 @@ export const EMPTY_WIZARD: WizardState = {
   customFields: {},
 };
 
-export function toItemInput(line: WizardLine): OrderItemInput {
+function toItemInput(line: WizardLine): OrderItemInput {
   if (line.kind === 'product') {
     return {
       product_id: line.productId,
@@ -139,7 +139,7 @@ export function buildSubscriptionInputs(state: WizardState): CreateSubscriptionI
   }));
 }
 
-export interface PreviewLine {
+interface PreviewLine {
   readonly id: string;
   readonly name: string;
   readonly sku: string | null;
@@ -152,7 +152,7 @@ export interface PreviewLine {
   readonly totalMinor: number;
 }
 
-export interface TaxBucket {
+interface TaxBucket {
   readonly rateBps: number;
   /** Taxable base: line subtotals minus their discount share. */
   readonly baseMinor: number;

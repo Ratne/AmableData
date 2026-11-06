@@ -52,7 +52,7 @@ export interface CompileInput {
   readonly timezone: string;
 }
 
-export async function contentKey(input: Omit<CompileInput, 'timezone'>): Promise<string> {
+async function contentKey(input: Omit<CompileInput, 'timezone'>): Promise<string> {
   return sha256Hex(
     JSON.stringify([
       input.body,

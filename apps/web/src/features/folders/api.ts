@@ -24,7 +24,7 @@ export const folderKeys = {
 };
 
 /** REST v2 client of one folder tree (`/automationFolders` or `/pageFolders`). */
-export function folderClient(slug: string, kind: FolderKind) {
+function folderClient(slug: string, kind: FolderKind) {
   const base = `/api/v2/t/${encodeURIComponent(slug)}/${PATHS[kind]}`;
   const one = (id: string) => `${base}/${encodeURIComponent(id)}`;
   return {

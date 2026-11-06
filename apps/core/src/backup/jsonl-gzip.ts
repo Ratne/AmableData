@@ -5,7 +5,7 @@
  */
 
 /** R2 minimum part size is 5 MiB. */
-export const DEFAULT_PART_SIZE = 8 * 1024 * 1024;
+const DEFAULT_PART_SIZE = 8 * 1024 * 1024;
 const LINE_BATCH_CHARS = 64 * 1024;
 const MAX_LINE_CHARS = 32 * 1024 * 1024;
 

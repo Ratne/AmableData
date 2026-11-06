@@ -108,14 +108,14 @@ export interface Fragment {
   params: SqlValue[];
 }
 
-export interface MeasureSql {
+interface MeasureSql {
   /** Aggregate expression (e.g. `COUNT(*)`, `SUM(o.total_minor)`). */
   expr: string;
   /** Date column the range applies to; null = snapshot (no date condition). */
   anchor: string | null;
 }
 
-export interface DimensionSql {
+interface DimensionSql {
   key: string;
   label?: string;
   /** Natural order (ascending) instead of the first measure (e.g. stage position). */

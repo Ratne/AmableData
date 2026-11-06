@@ -53,7 +53,7 @@ export interface ReportVisualProps {
   readonly maxRows?: number;
 }
 
-export function useValueFormatter(currency: string | null): ValueFormatter {
+function useValueFormatter(currency: string | null): ValueFormatter {
   const { locale } = useI18n();
   return useMemo(() => createValueFormatter(locale, currency), [locale, currency]);
 }
@@ -91,7 +91,7 @@ function ChangeBadge({ value, kind }: { value: number | null; kind: MeasureKind 
   );
 }
 
-export function EmptyReason({ result }: { result: ReportResult }) {
+function EmptyReason({ result }: { result: ReportResult }) {
   const { t } = useI18n();
   const reason = result.meta.empty_reason;
   const text =

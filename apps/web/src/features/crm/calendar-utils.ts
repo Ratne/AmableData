@@ -6,12 +6,12 @@ export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-export function addDays(date: Date, days: number): Date {
+function addDays(date: Date, days: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }
 
 /** Monday of the week containing `date`. */
-export function startOfWeek(date: Date): Date {
+function startOfWeek(date: Date): Date {
   const day = (date.getDay() + 6) % 7;
   return addDays(startOfDay(date), -day);
 }

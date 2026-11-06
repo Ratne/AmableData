@@ -11,8 +11,8 @@ import {
  * serialization sent to `PATCH /dashboards/{id}`.
  */
 
-export const MAX_ROWS_PER_WIDGET = 12;
-export const MAX_Y = 1000;
+const MAX_ROWS_PER_WIDGET = 12;
+const MAX_Y = 1000;
 
 /** Default size of a new widget per type. */
 export const DEFAULT_SIZE: Readonly<Record<DashboardWidget['type'], { w: number; h: number }>> = {

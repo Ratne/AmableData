@@ -48,7 +48,7 @@ import {
 const tags = ['Analytics'];
 
 /** Web analytics REST v2, relative to `/api/v2/t/{slug}/analytics`. */
-export const analyticsApi = createCrmRouter();
+const analyticsApi = createCrmRouter();
 analyticsApi.use('*', edgeUnreachableAs503());
 
 // ------------------------------------------------------------------- sites

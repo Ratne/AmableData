@@ -54,7 +54,7 @@ export interface BookingSource {
   page_id: string | null;
 }
 
-export interface BookingRow extends BookingSource {
+interface BookingRow extends BookingSource {
   id: string;
   event_type_id: string;
   calendar_id: string;
@@ -85,7 +85,7 @@ export interface BookingRow extends BookingSource {
 
 type BookingRowWithTitle = BookingRow & { event_type_title: string | null };
 
-export function bookingToApi(row: BookingRowWithTitle): Booking {
+function bookingToApi(row: BookingRowWithTitle): Booking {
   return {
     id: row.id,
     event_type_id: row.event_type_id,

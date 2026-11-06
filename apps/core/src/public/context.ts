@@ -8,7 +8,7 @@ import type { Env } from '../env';
  * Actor of operations triggered by anonymous visitors through the edge
  * (form submissions, bookings, page views). Events record it as `system`.
  */
-export const PUBLIC_ACTOR: CrmActor = { type: 'system', id: null, canReadSensitive: false };
+const PUBLIC_ACTOR: CrmActor = { type: 'system', id: null, canReadSensitive: false };
 
 /** Expected error of a gateway op: becomes `{ ok: false, error }` for the edge. */
 export class GatewayError extends Error {
@@ -45,9 +45,9 @@ export interface GatewayContext {
 }
 
 /** Ops validate their own input (Zod) — the gateway only authenticates the edge and resolves the tenant. */
-export type GatewayHandler = (ctx: GatewayContext, input: unknown) => Promise<unknown>;
+type GatewayHandler = (ctx: GatewayContext, input: unknown) => Promise<unknown>;
 export type GatewayHandlers = Record<string, GatewayHandler>;
-export type GatewayRawHandler = (ctx: GatewayContext, input: unknown) => Promise<Response>;
+type GatewayRawHandler = (ctx: GatewayContext, input: unknown) => Promise<Response>;
 export type GatewayRawHandlers = Record<string, GatewayRawHandler>;
 
 export function createGatewayContext(input: {

@@ -14,7 +14,7 @@ type QuotaUsage = Parameters<NonNullable<QuotaGuard['recordUsage']>>[0];
 export const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 /** Automation / single sends held by an empty wallet are re-checked after this. */
-export const BALANCE_RETRY_MS = 10 * 60_000;
+const BALANCE_RETRY_MS = 10 * 60_000;
 
 export interface LocalUsage {
   /** Metered sends of the current period not yet accepted by the control plane. */
@@ -23,7 +23,7 @@ export interface LocalUsage {
   readonly today: number;
 }
 
-export function hourStart(nowMs: number): number {
+function hourStart(nowMs: number): number {
   return Math.floor(nowMs / HOUR_MS) * HOUR_MS;
 }
 
@@ -158,7 +158,7 @@ export function createPlatformQuotaGuard(
 }
 
 /** The plan's hourly cap spread over the hour; null when the plan sets no cap (self-hosted). */
-export function planRatePerMinute(snapshot: Pick<QuotaSnapshot, 'caps'>): number | null {
+function planRatePerMinute(snapshot: Pick<QuotaSnapshot, 'caps'>): number | null {
   const hourly = snapshot.caps.hourly;
   return hourly === null ? null : Math.max(1, Math.floor(hourly / 60));
 }

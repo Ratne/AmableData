@@ -21,7 +21,7 @@ export interface Ticket {
   readonly lastMessageAt: string;
 }
 
-export interface TicketMessage {
+interface TicketMessage {
   readonly id: string;
   readonly authorKind: 'customer' | 'crm_user' | 'staff';
   readonly authorName: string | null;
@@ -29,7 +29,7 @@ export interface TicketMessage {
   readonly createdAt: string;
 }
 
-export interface TicketAttachment {
+interface TicketAttachment {
   readonly id: string;
   readonly filename: string;
   readonly size: number;

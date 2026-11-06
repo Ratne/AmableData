@@ -8,7 +8,7 @@ import { generateKeys, secretValue } from './keys';
 const APP_ID_RE = /^[a-z][a-z0-9-]{2,39}$/;
 const TEXT = /\.(ts|tsx|js|mjs|json|jsonc|md|html|css|toml|txt)$|^_gitignore$|^\.dev\.vars\.example$/;
 
-export function templateDir(): string {
+function templateDir(): string {
   // dist/cli.mjs → ../template; src/create.ts (tests) → ../template.
   return resolve(dirname(fileURLToPath(import.meta.url)), '..', 'template');
 }

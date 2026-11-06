@@ -8,7 +8,7 @@ import { registerPagesRoutes } from '../pages/api';
 import { registerShortlinksRoutes } from '../shortlinks/api';
 
 /** Forms, calendars & bookings, landing pages, e-signatures and short links REST v2, relative to `/api/v2/t/{slug}`. */
-export const publishingApi = createCrmRouter();
+const publishingApi = createCrmRouter();
 registerFormsRoutes(publishingApi);
 registerBookingRoutes(publishingApi);
 registerPagesRoutes(publishingApi);

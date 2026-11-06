@@ -109,7 +109,7 @@ interface ResolvedContent {
 }
 
 /** Content of a send: inline body, stored template, or the broadcast it belongs to. */
-export async function resolveContent(deps: MailDeps, request: EmailSendRequest): Promise<ResolvedContent> {
+async function resolveContent(deps: MailDeps, request: EmailSendRequest): Promise<ResolvedContent> {
   const c = request.content;
   const footerAddress = getSetting(deps, 'physical_address');
   const timezone = tenantTimeZone(deps);

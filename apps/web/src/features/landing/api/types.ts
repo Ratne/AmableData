@@ -10,8 +10,6 @@ export type {
   ImportPageResponse,
   MediaFile,
   PageImportWarnings,
-  PageSeo,
-  PageSettings,
   PageStatus,
   PageVersion,
   UpdatePageInput,

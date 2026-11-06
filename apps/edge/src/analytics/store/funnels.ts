@@ -15,13 +15,13 @@ export interface FunnelEvent {
   value: string;
 }
 
-export function stepMatches(step: StoredFunnelStep, e: FunnelEvent): boolean {
+function stepMatches(step: StoredFunnelStep, e: FunnelEvent): boolean {
   if (step.type !== e.kind) return false;
   if (step.type === 'goal') return e.value === step.value;
   return step.match === 'contains' ? e.value.includes(step.value) : e.value === step.value;
 }
 
-export function stepLabel(step: StoredFunnelStep): string {
+function stepLabel(step: StoredFunnelStep): string {
   if (step.label !== undefined && step.label !== '') return step.label;
   return step.type === 'goal' ? `Goal: ${step.value}` : step.match === 'contains' ? `Page contains ${step.value}` : step.value;
 }

@@ -3,7 +3,7 @@ import { canonicalFontFamily } from '@amable/builder';
 const GENERIC = /system-ui|sans-serif|serif|monospace|inherit|cursive|fantasy/i;
 
 /** Google Fonts CSS2 URL for a set of families (weights 300-800); the API is case-sensitive. */
-export function googleFontHref(families: readonly string[]): string | null {
+function googleFontHref(families: readonly string[]): string | null {
   const list = [
     ...new Set(
       families.filter((f) => f && !f.startsWith('var(') && !GENERIC.test(f)).map((f) => canonicalFontFamily(f)),

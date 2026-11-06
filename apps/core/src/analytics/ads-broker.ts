@@ -76,7 +76,7 @@ function unavailable(error: unknown): never {
   throw error;
 }
 
-export function controlPlaneAdsBroker(client: ControlPlaneClient): AdsOAuthBroker {
+function controlPlaneAdsBroker(client: ControlPlaneClient): AdsOAuthBroker {
   return {
     async start(input) {
       const provider = brokerProviderOf(input.platform);

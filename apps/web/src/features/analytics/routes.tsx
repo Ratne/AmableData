@@ -18,7 +18,7 @@ import {
  * search params (see lib/query-state.ts) so every view is a shareable link.
  */
 
-export interface FunnelsSearch extends AnalyticsSearch {
+interface FunnelsSearch extends AnalyticsSearch {
   readonly funnel?: string;
 }
 
@@ -55,7 +55,7 @@ export interface SettingsSearch extends AnalyticsSearch {
 }
 
 /** Query of the fixed OAuth redirect page of the ad platforms. */
-export interface AdsOAuthSearch {
+interface AdsOAuthSearch {
   readonly state?: string;
   readonly code?: string;
   readonly error?: string;
@@ -109,28 +109,28 @@ function funnelBuilderSearch(raw: Record<string, unknown>): FunnelBuilderSearch 
   };
 }
 
-export const analyticsDashboardRoute = createRoute({
+const analyticsDashboardRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics',
   validateSearch: validateAnalyticsSearch,
   component: lazyRouteComponent(() => import('./pages/dashboard'), 'AnalyticsDashboardPage'),
 });
 
-export const analyticsRealtimeRoute = createRoute({
+const analyticsRealtimeRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/realtime',
   validateSearch: validateAnalyticsSearch,
   component: lazyRouteComponent(() => import('./pages/realtime'), 'AnalyticsRealtimePage'),
 });
 
-export const analyticsInsightsRoute = createRoute({
+const analyticsInsightsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/insights',
   validateSearch: validateAnalyticsSearch,
   component: lazyRouteComponent(() => import('./pages/insights'), 'AnalyticsInsightsPage'),
 });
 
-export const analyticsVisitorsRoute = createRoute({
+const analyticsVisitorsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/visitors',
   validateSearch: validateAnalyticsSearch,
@@ -144,7 +144,7 @@ export const analyticsVisitorRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/visitor-profile'), 'AnalyticsVisitorPage'),
 });
 
-export const analyticsFunnelsRoute = createRoute({
+const analyticsFunnelsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/funnels',
   validateSearch: funnelsSearch,
@@ -161,35 +161,35 @@ export const analyticsFunnelBuilderRoute = createRoute({
   ),
 });
 
-export const analyticsPerformanceRoute = createRoute({
+const analyticsPerformanceRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/performance',
   validateSearch: validatePerformanceSearch,
   component: lazyRouteComponent(() => import('./pages/performance'), 'AnalyticsPerformancePage'),
 });
 
-export const analyticsLtvRoute = createRoute({
+const analyticsLtvRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/ltv',
   validateSearch: validateLtvSearch,
   component: lazyRouteComponent(() => import('./pages/ltv'), 'AnalyticsLtvPage'),
 });
 
-export const analyticsCohortsRoute = createRoute({
+const analyticsCohortsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/cohorts',
   validateSearch: validateCohortSearch,
   component: lazyRouteComponent(() => import('./pages/cohorts'), 'AnalyticsCohortsPage'),
 });
 
-export const analyticsJourneysRoute = createRoute({
+const analyticsJourneysRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/journeys',
   validateSearch: validateJourneySearch,
   component: lazyRouteComponent(() => import('./pages/journeys'), 'AnalyticsJourneysPage'),
 });
 
-export const analyticsSourcesRoute = createRoute({
+const analyticsSourcesRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/sources',
   validateSearch: validateAnalyticsSearch,
@@ -203,7 +203,7 @@ export const analyticsSettingsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/settings'), 'AnalyticsSettingsPage'),
 });
 
-export const analyticsFunnelsV2Route = createRoute({
+const analyticsFunnelsV2Route = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/funnels-v2',
   validateSearch: validateAnalyticsSearch,

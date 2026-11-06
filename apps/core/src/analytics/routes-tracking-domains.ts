@@ -104,7 +104,7 @@ function hostOf(origin: string | undefined): string | null {
 const covers = (base: string, host: string): boolean => host === base || host.endsWith(`.${base}`);
 
 /** Hostnames of the installation itself (app, API, edge, CNAME target) and well-known reserved names. */
-export function isReservedTrackingHost(env: Env, hostname: string, cnameTarget: string): boolean {
+function isReservedTrackingHost(env: Env, hostname: string, cnameTarget: string): boolean {
   if (RESERVED_SUFFIXES.some((suffix) => covers(suffix, hostname))) return true;
   const platform = [
     hostOf(env.APP_ORIGIN),

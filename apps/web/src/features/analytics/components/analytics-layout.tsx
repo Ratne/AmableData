@@ -56,7 +56,7 @@ export function useAnalyticsChrome(
   });
 }
 
-export function scopeOf(state: AnalyticsState): ReportScope {
+function scopeOf(state: AnalyticsState): ReportScope {
   return {
     source: state.source,
     query: state.query,

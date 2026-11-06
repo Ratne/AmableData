@@ -183,7 +183,7 @@ export function weekdayOptions(locale: string): ValueOption[] {
   }));
 }
 
-export function hourOptions(): ValueOption[] {
+function hourOptions(): ValueOption[] {
   return Array.from({ length: 24 }, (_, h) => ({
     value: String(h),
     label: `${String(h).padStart(2, '0')}:00`,
@@ -191,7 +191,7 @@ export function hourOptions(): ValueOption[] {
   }));
 }
 
-export function countryOptions(locale: string): ValueOption[] {
+function countryOptions(locale: string): ValueOption[] {
   return PHONE_COUNTRIES.map(({ code }) => ({
     value: code,
     label: regionName(code, locale),

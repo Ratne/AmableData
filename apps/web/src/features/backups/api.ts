@@ -19,7 +19,7 @@ export interface BackupList {
   retention: { scheduled: number; manual: number };
 }
 
-export interface DatabaseSizes {
+interface DatabaseSizes {
   databases: Array<{ name: 'tenant_db' | 'mail_db' | 'engine'; bytes: number | null }>;
   limit: number;
   warning: number;

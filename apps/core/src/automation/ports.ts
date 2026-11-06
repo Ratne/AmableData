@@ -16,18 +16,18 @@ export interface CrmPort {
   call(op: string, input: unknown): Promise<CrmResult<unknown>>;
 }
 
-export interface EmailQueuePort {
+interface EmailQueuePort {
   send(message: EmailSendRequest): Promise<void>;
 }
 
 /** Single DO alarm: `null` clears it. */
-export interface AlarmPort {
+interface AlarmPort {
   set(at: number | null): Promise<void>;
 }
 
 export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 
-export interface WebhookPublisher {
+interface WebhookPublisher {
   publish(
     events: ReadonlyArray<{
       id: string;

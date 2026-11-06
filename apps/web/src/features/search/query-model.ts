@@ -45,7 +45,7 @@ export interface UiGroup {
 export type UiNode = UiFieldCondition | UiTagCondition | UiGroup;
 
 let counter = 0;
-export function nodeId(): string {
+function nodeId(): string {
   counter += 1;
   return `n${String(counter)}`;
 }
@@ -148,7 +148,7 @@ function scalar(kind: FieldKind, raw: string): string | number | boolean | null 
 }
 
 /** Typed value of a field condition, or `undefined` when the condition is incomplete. */
-export function conditionValue(
+function conditionValue(
   condition: UiFieldCondition,
   kind: FieldKind,
 ): ConditionValue | undefined | 'skip' {

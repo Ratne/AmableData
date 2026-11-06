@@ -15,7 +15,7 @@ import { signInstallationJwt } from './well-known';
  */
 
 export const FRAME_TOKEN_TTL_S = 300;
-export const FRAME_TOKEN_PARAM = 'session_token';
+const FRAME_TOKEN_PARAM = 'session_token';
 
 const CONTACT_SLOTS: readonly AppUiSlot[] = ['contact.sidebar', 'contact.actions'];
 

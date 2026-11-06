@@ -7,7 +7,7 @@ import { createMailRouter } from './http';
 import { registerLiquidRoutes } from './liquid-api';
 
 /** Email + broadcast REST v2 routes, relative to `/api/v2/t/{slug}`. */
-export const emailApi = createMailRouter();
+const emailApi = createMailRouter();
 registerEmailRoutes(emailApi);
 registerBroadcastRoutes(emailApi);
 registerArchiveBroadcastRoutes(emailApi);

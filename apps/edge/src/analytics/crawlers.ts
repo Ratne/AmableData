@@ -8,7 +8,7 @@
 
 export type BotCategory = 'ai_answers' | 'training' | 'indexing' | 'other';
 
-export interface CrawlerEntry {
+interface CrawlerEntry {
   /** Bot name as reported in the dashboard. */
   name: string;
   provider: string;
@@ -18,7 +18,7 @@ export interface CrawlerEntry {
 
 export const CRAWLER_LIST_VERSION = '2026-10-15';
 
-export const CRAWLERS: readonly CrawlerEntry[] = [
+const CRAWLERS: readonly CrawlerEntry[] = [
   // AI assistants fetching pages to answer a user (live retrieval / AI search).
   { name: 'ChatGPT-User', provider: 'OpenAI', category: 'ai_answers', pattern: /ChatGPT-User/i },
   { name: 'OAI-SearchBot', provider: 'OpenAI', category: 'ai_answers', pattern: /OAI-SearchBot/i },

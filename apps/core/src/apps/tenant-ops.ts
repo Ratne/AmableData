@@ -14,9 +14,9 @@ import { eraseConversationsOf } from '../conversations/ops';
  * install the admin manages; `appId` therefore always comes from verified context.
  */
 
-export const APP_DATA_MAX_KEYS = 500;
-export const APP_DATA_MAX_VALUE_BYTES = 16 * 1024;
-export const APP_ENTITY_MAX_KEYS = 50;
+const APP_DATA_MAX_KEYS = 500;
+const APP_DATA_MAX_VALUE_BYTES = 16 * 1024;
+const APP_ENTITY_MAX_KEYS = 50;
 
 const ENTITY_TABLES: Record<AppEntityKind, string> = {
   contact: 'crm_contacts',
@@ -205,7 +205,7 @@ export function mergeAppEntityData(ctx: CrmContext, survivorId: string, sourceId
   }
 }
 
-export function deleteAppEntityDataOf(ctx: CrmContext, entity: AppEntityKind, entityId: string): void {
+function deleteAppEntityDataOf(ctx: CrmContext, entity: AppEntityKind, entityId: string): void {
   ctx.db.run(`DELETE FROM app_entity_data WHERE entity = ? AND entity_id = ?`, entity, entityId);
 }
 
@@ -286,7 +286,7 @@ function cleanup(ctx: CrmContext, input: { appId: string; keepData: boolean }): 
 
 // ------------------------------------------------------------------ timeline
 
-export interface AppTimelineInput {
+interface AppTimelineInput {
   readonly appId: string;
   readonly appName: string;
   readonly contactId: string;
@@ -299,7 +299,7 @@ export interface AppTimelineInput {
 
 /** An activity on the contact timeline written by an app ("WhatsApp delivered"). */
 /** Effects of a `contact.validate` answer: app-owned fields, tags by name, metadata. */
-export interface AppValidationEffects {
+interface AppValidationEffects {
   readonly appId: string;
   readonly contactId: string;
   /** Keys without the `app_<id>_` prefix; only fields the app owns are written. */

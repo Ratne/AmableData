@@ -12,7 +12,7 @@ import { chunks } from '../crm/db/sql';
 
 export type BroadcastTotals = BroadcastStats['totals'];
 export type BroadcastLinkStats = BroadcastStats['links'][number];
-export type BroadcastProgress = BroadcastStats['progress'];
+type BroadcastProgress = BroadcastStats['progress'];
 
 export interface FrozenBroadcastStats {
   totals: BroadcastTotals;
@@ -74,7 +74,7 @@ export function liveLinks(db: SqlDb, broadcastId: string): BroadcastLinkStats[] 
 }
 
 /** Recipient counters of a broadcast from the live recipients table. */
-export function liveProgress(db: SqlDb, broadcastId: string): BroadcastProgress {
+function liveProgress(db: SqlDb, broadcastId: string): BroadcastProgress {
   const row = db.all<{ total: number; pending: number; enqueued: number; cancelled: number }>(
     `SELECT COUNT(*) AS total,
             COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,

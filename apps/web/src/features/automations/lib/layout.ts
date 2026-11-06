@@ -11,7 +11,7 @@ export const COLUMN_WIDTH = 330;
 const ROW_GAP = 56;
 
 /** Approximate rendered height (the canvas measures later; this only spaces rows). */
-export function estimatedHeight(node: GraphNode): number {
+function estimatedHeight(node: GraphNode): number {
   switch (node.type) {
     case 'goal':
       return node.triggers.length > 1 ? 86 : 64;

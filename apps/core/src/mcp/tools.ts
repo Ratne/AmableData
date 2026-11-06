@@ -11,7 +11,7 @@ import {
 } from './catalog';
 import { dispatch, DispatchError, type DispatchInput, type DispatchTarget } from './dispatch';
 
-export interface ToolAnnotations {
+interface ToolAnnotations {
   readonly title: string;
   readonly readOnlyHint: boolean;
   readonly destructiveHint: boolean;
@@ -19,7 +19,7 @@ export interface ToolAnnotations {
   readonly openWorldHint: boolean;
 }
 
-export interface ToolDefinition {
+interface ToolDefinition {
   readonly name: string;
   readonly title: string;
   readonly description: string;
@@ -27,13 +27,13 @@ export interface ToolDefinition {
   readonly annotations: ToolAnnotations;
 }
 
-export interface ToolResult {
+interface ToolResult {
   readonly content: Array<{ type: 'text'; text: string }>;
   readonly isError: boolean;
 }
 
 /** Resolved by the MCP endpoint itself (API key, tenant) — only for tools that need scopes. */
-export interface Caller {
+interface Caller {
   readonly auth: AuthContext;
   readonly tenant: TenantContext;
 }
@@ -163,10 +163,7 @@ interface ArgumentLayout {
 }
 
 /** One flat argument object per operation: path + query params, then the JSON body properties. */
-export function argumentLayout(
-  op: CatalogOperation,
-  queryPick?: readonly string[],
-): ArgumentLayout {
+function argumentLayout(op: CatalogOperation, queryPick?: readonly string[]): ArgumentLayout {
   const properties: JsonObject = {};
   const required: string[] = [];
   const path = new Set<string>();

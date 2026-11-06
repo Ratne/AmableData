@@ -22,7 +22,7 @@ function formatter(timeZone: string): Intl.DateTimeFormat {
   return f;
 }
 
-export function isTimeZone(value: string): boolean {
+function isTimeZone(value: string): boolean {
   try {
     formatter(value);
     return true;
@@ -32,7 +32,7 @@ export function isTimeZone(value: string): boolean {
 }
 
 /** Offset (ms) of `timeZone` from UTC at instant `ms`. */
-export function timeZoneOffset(ms: number, timeZone: string): number {
+function timeZoneOffset(ms: number, timeZone: string): number {
   const parts: Record<string, number> = {};
   for (const part of formatter(timeZone).formatToParts(new Date(ms))) {
     if (part.type !== 'literal') parts[part.type] = Number(part.value);

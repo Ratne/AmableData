@@ -22,7 +22,7 @@ export interface StoredBankAccount {
 
 const META_KEY = 'commerce_bank_accounts';
 
-export function readBankAccounts(ctx: Pick<CrmContext, 'db'>): StoredBankAccount[] {
+function readBankAccounts(ctx: Pick<CrmContext, 'db'>): StoredBankAccount[] {
   const row = ctx.db.all<{ value: string }>(`SELECT value FROM tenant_meta WHERE key = ?`, META_KEY)[0];
   const list = parseJson<unknown>(row?.value, []);
   return Array.isArray(list) ? (list as StoredBankAccount[]).filter((a) => typeof a?.id === 'string') : [];

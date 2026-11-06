@@ -437,7 +437,7 @@ async function action(c: Ctx, deps: Deps, defaults: ActionDefaults | null): Prom
 // ------------------------------------------------------------- direct links
 
 /** Entrance + view of a page reached directly from an ad (pageview with `f`, `ts`, `n`). */
-export async function recordDirectLinkView(
+async function recordDirectLinkView(
   env: Env,
   siteId: string,
   view: DirectLinkView,
@@ -498,7 +498,7 @@ export async function recordDirectLinkView(
  * echoes as `dl.vid`. Only the landing itself counts (the tracker resends its
  * funnel context with every event).
  */
-export function funnelVisitorLink(payload: TrackerEvent): { visitorId: string; funnelVisitorId: string } | null {
+function funnelVisitorLink(payload: TrackerEvent): { visitorId: string; funnelVisitorId: string } | null {
   const funnelVisitorId = validVisitorId(payload.dl?.vid);
   if (payload.type !== 'pageview' || payload.cl === 1 || payload.vid === undefined || funnelVisitorId === null) return null;
   if (funnelVisitorId === payload.vid) return null;

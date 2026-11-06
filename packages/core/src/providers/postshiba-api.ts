@@ -13,10 +13,10 @@ import {
  * (`{tenant: {...}}`), errors are `{error, field, message, retryable}`.
  */
 
-export const POSTSHIBA_DEFAULT_BASE_URL = 'https://app.postshiba.com/api/v1';
+const POSTSHIBA_DEFAULT_BASE_URL = 'https://app.postshiba.com/api/v1';
 export const POSTSHIBA_DEFAULT_INJECT_URL = 'https://inject.postshiba.com/api/inject/v1';
 /** Delivery events forwarded to the CRM webhook (SendGrid Event Webhook names). */
-export const POSTSHIBA_WEBHOOK_EVENTS = [
+const POSTSHIBA_WEBHOOK_EVENTS = [
   'processed',
   'delivered',
   'deferred',
@@ -69,7 +69,7 @@ interface RequestOptions {
 }
 
 /** One JSON request; non-2xx answers become `EmailProviderError` with the provider code. */
-export async function postshibaRequest(
+async function postshibaRequest(
   options: RequestOptions,
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   url: string,
@@ -604,7 +604,7 @@ export interface PostShibaSmtpLogin {
 }
 
 /** Provider limits: at most 32 scalar keys, keys ≤ 64 bytes, values ≤ 256 bytes. */
-export function postshibaUniqueArgs(metadata: Readonly<Record<string, string>>): Record<string, string> {
+function postshibaUniqueArgs(metadata: Readonly<Record<string, string>>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(metadata).slice(0, 32)) {
     if (key.length > 64) continue;

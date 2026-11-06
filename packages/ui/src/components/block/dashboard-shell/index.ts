@@ -1,4 +1,4 @@
-import '../dashboard-shell.css';
+import './dashboard-shell.css';
 
 export { DashboardButton, dashboardButtonVariants, type DashboardButtonProps } from './button';
 export {

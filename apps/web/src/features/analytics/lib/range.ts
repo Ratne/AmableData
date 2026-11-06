@@ -23,7 +23,7 @@ export function isYmd(value: unknown): value is string {
 }
 
 /** Local calendar day (YYYY-MM-DD) of `date` in `timeZone`. */
-export function todayIn(timeZone: string | undefined, date = new Date()): string {
+function todayIn(timeZone: string | undefined, date = new Date()): string {
   try {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone,
@@ -36,13 +36,13 @@ export function todayIn(timeZone: string | undefined, date = new Date()): string
   }
 }
 
-export function addDays(ymd: string, days: number): string {
+function addDays(ymd: string, days: number): string {
   const date = new Date(`${ymd}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-export function daysBetween(from: string, to: string): number {
+function daysBetween(from: string, to: string): number {
   return Math.round(
     (new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86_400_000,
   );

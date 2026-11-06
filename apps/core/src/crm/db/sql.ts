@@ -26,7 +26,7 @@ export function first<T extends object>(
 }
 
 /** Durable Object SQLite binds at most 100 parameters per statement: IN lists go in chunks. */
-export const SQL_IN_CHUNK = 90;
+const SQL_IN_CHUNK = 90;
 
 export function chunks<T>(items: readonly T[], size: number = SQL_IN_CHUNK): T[][] {
   const out: T[][] = [];

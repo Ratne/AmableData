@@ -25,7 +25,7 @@ const RAW_TABLES: ReadonlyArray<[table: string, column: string]> = [
 ];
 
 /** Dedupe keys only need to outlive queue redeliveries. */
-export const INGESTED_EVENTS_TTL_MS = 3 * DAY_MS;
+const INGESTED_EVENTS_TTL_MS = 3 * DAY_MS;
 
 export interface RetentionResult {
   archived: Record<string, number>;

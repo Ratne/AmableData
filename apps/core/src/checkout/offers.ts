@@ -23,7 +23,7 @@ import {
 } from './sessions';
 
 /** Charge attempts per offer (a declined card, a failed 3-D Secure). */
-export const MAX_OFFER_ATTEMPTS = 3;
+const MAX_OFFER_ATTEMPTS = 3;
 
 function localeOf(session: SessionRow): CheckoutLocale {
   return session.locale === 'it' ? 'it' : 'en';

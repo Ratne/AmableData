@@ -19,7 +19,7 @@ export interface CivilDate {
 
 const DAY_MS = 86_400_000;
 /** Bucketed queries join a literal VALUES list: keep it bounded. */
-export const MAX_BUCKETS = 400;
+const MAX_BUCKETS = 400;
 const ALL_TIME_START: CivilDate = { y: 2000, m: 1, d: 1 };
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -70,18 +70,18 @@ export function startOfLocalDay(date: CivilDate, timeZone: string): number {
   return guess - offsetAt(first, timeZone);
 }
 
-export function localDate(epochMs: number, timeZone: string): CivilDate {
+function localDate(epochMs: number, timeZone: string): CivilDate {
   const wall = new Date(wallClock(epochMs, timeZone));
   return { y: wall.getUTCFullYear(), m: wall.getUTCMonth() + 1, d: wall.getUTCDate() };
 }
 
-export function addDays(date: CivilDate, days: number): CivilDate {
+function addDays(date: CivilDate, days: number): CivilDate {
   const t = new Date(Date.UTC(date.y, date.m - 1, date.d + days));
   return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
 }
 
 /** Adds months, clamping the day to the target month (31/1 + 1 month = 28/2). */
-export function addMonths(date: CivilDate, months: number): CivilDate {
+function addMonths(date: CivilDate, months: number): CivilDate {
   const index = date.y * 12 + (date.m - 1) + months;
   const y = Math.floor(index / 12);
   const m = (index % 12) + 1;
@@ -89,11 +89,11 @@ export function addMonths(date: CivilDate, months: number): CivilDate {
   return { y, m, d: Math.min(date.d, last) };
 }
 
-export function compareDates(a: CivilDate, b: CivilDate): number {
+function compareDates(a: CivilDate, b: CivilDate): number {
   return Date.UTC(a.y, a.m - 1, a.d) - Date.UTC(b.y, b.m - 1, b.d);
 }
 
-export function daysBetween(a: CivilDate, b: CivilDate): number {
+function daysBetween(a: CivilDate, b: CivilDate): number {
   return Math.round(compareDates(b, a) / DAY_MS);
 }
 

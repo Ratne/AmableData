@@ -11,7 +11,7 @@ import { parseJson, toIso } from '../crm/util';
  */
 
 /** Outbox event types analytics consumes. */
-export const ANALYTICS_OUTBOX_TYPES = [
+const ANALYTICS_OUTBOX_TYPES = [
   'form.submitted',
   'appointment.booked',
   'payment.recorded',
@@ -31,7 +31,7 @@ export const ANALYTICS_OUTBOX_TYPES = [
 ] as const;
 
 /** Re-read window behind the cursor (events committed out of id order are claimed once). */
-export const OUTBOX_LOOKBACK_MS = 5_000;
+const OUTBOX_LOOKBACK_MS = 5_000;
 
 interface OutboxRow {
   id: string;
@@ -52,7 +52,7 @@ export function lookbackBound(cursorTs: number): string {
  * analytics types. Returns the last id scanned so the caller can page even
  * past events of other types.
  */
-export function outboxSince(
+function outboxSince(
   ctx: CrmContext,
   input: { after: string; limit?: number },
 ): { events: OutboxEvent[]; scanned: number; lastId: string | null; lastTs: number | null } {
@@ -86,7 +86,7 @@ export function outboxSince(
 }
 
 /** Live contacts having one of these emails (normalized, lowercase). */
-export function contactsByEmail(
+function contactsByEmail(
   ctx: CrmContext,
   input: { emails: string[] },
 ): Array<{ email: string; contactId: string }> {
@@ -101,7 +101,7 @@ export function contactsByEmail(
 }
 
 /** Names and emails of contacts (for avatars and labels). */
-export function contactsBrief(
+function contactsBrief(
   ctx: CrmContext,
   input: { ids: string[] },
 ): Array<{ id: string; name: string | null; email: string | null; deleted: boolean }> {
@@ -126,7 +126,7 @@ export function contactsBrief(
 }
 
 /** Emails and phone numbers of live contacts (identity keys of their web visitors). */
-export function contactIdentities(
+function contactIdentities(
   ctx: CrmContext,
   input: { ids: string[] },
 ): Array<{ id: string; emails: string[]; phones: string[] }> {
@@ -171,7 +171,7 @@ export interface CrmJourneyFacts {
 }
 
 /** CRM side of a contact journey: orders and marketing touchpoints from the timeline. */
-export function contactJourneyFacts(
+function contactJourneyFacts(
   ctx: CrmContext,
   input: { contactId: string; limit?: number },
 ): CrmJourneyFacts {
@@ -215,7 +215,7 @@ export function contactJourneyFacts(
 }
 
 /** Succeeded payments since a date with the payer (local traffic generator, demo data). */
-export function recentPayments(
+function recentPayments(
   ctx: CrmContext,
   input: { since: number; limit?: number },
 ): Array<{ contactId: string; email: string | null; ts: number; amountMinor: number }> {

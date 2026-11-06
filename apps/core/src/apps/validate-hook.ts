@@ -12,11 +12,11 @@ import { tenantOp, appActor } from './tenant';
  * BREAKER_OPEN_MS) and results are cached per value for the app's TTL.
  */
 
-export const HOOK_TIMEOUT_MS = 1_500;
-export const BATCH_TIMEOUT_MS = 10_000;
+const HOOK_TIMEOUT_MS = 1_500;
+const BATCH_TIMEOUT_MS = 10_000;
 export const BREAKER_THRESHOLD = 5;
-export const BREAKER_OPEN_MS = 5 * 60_000;
-export const BATCH_MAX_ITEMS = 100;
+const BREAKER_OPEN_MS = 5 * 60_000;
+const BATCH_MAX_ITEMS = 100;
 
 export type ValidateSource = 'crm' | 'form' | 'import';
 
@@ -158,7 +158,7 @@ async function recordHookOutcome(env: Env, install: AppInstall, ok: boolean, now
 }
 
 /** Active installs that declare `contact.validate`. */
-export async function validateHooks(env: Env, tenantId: string): Promise<AppInstall[]> {
+async function validateHooks(env: Env, tenantId: string): Promise<AppInstall[]> {
   return (await activeInstalls(env.DB, tenantId)).filter((install) => hookOf(install) !== null);
 }
 
@@ -206,7 +206,7 @@ export async function validateContactValues(
 }
 
 /** Writes what the apps asked for on the contact (fields they own, tags, metadata); best effort. */
-export async function applyValidationResults(
+async function applyValidationResults(
   env: Env,
   tenantId: string,
   contactId: string,

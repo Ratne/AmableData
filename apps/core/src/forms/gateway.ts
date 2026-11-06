@@ -41,7 +41,7 @@ function turnstileRequired(definition: FormDefinition, runtime: FormsRuntime): b
   return definition.settings.turnstile_enabled && runtime.turnstile.enabled;
 }
 
-export function publicConfig(
+function publicConfig(
   form: { id: string; name: string; definition: FormDefinition },
   tenantSlug: string,
   runtime: FormsRuntime,

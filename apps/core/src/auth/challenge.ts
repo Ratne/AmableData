@@ -50,13 +50,13 @@ import {
  *   at every further lock (atomic counter in D1).
  */
 
-export type OtpMethod = 'totp' | 'email' | 'recovery';
+type OtpMethod = 'totp' | 'email' | 'recovery';
 export type VerifyMethod = OtpMethod | 'enroll_totp' | 'enroll_email';
 
-export const ISSUER = 'amabledata';
+const ISSUER = 'amabledata';
 
 /** Methods a challenge accepts, given the user's enrollment and how they got here. */
-export function allowedMethods(user: UserRow, challenge: Pick<ChallengeRow, 'purpose' | 'firstFactor'>): VerifyMethod[] {
+function allowedMethods(user: UserRow, challenge: Pick<ChallengeRow, 'purpose' | 'firstFactor'>): VerifyMethod[] {
   if (challenge.purpose === 'enroll' || user.mfaMethod === null) {
     return ['enroll_totp', 'enroll_email'];
   }

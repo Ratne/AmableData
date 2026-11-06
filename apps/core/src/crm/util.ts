@@ -117,7 +117,7 @@ export function richTextToPlain(doc: unknown): string {
     .trim();
 }
 
-export const MAX_RICH_TEXT_BYTES = 256 * 1024;
+const MAX_RICH_TEXT_BYTES = 256 * 1024;
 
 export function serializeRichText(doc: unknown, path: string): string {
   const json = JSON.stringify(doc);

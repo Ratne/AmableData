@@ -267,7 +267,7 @@ function conditionAttrs(node: TiptapNode): LiquidConditionAttrs {
   };
 }
 
-export function renderBlocks(nodes: readonly TiptapNode[] | undefined, ctx: Ctx): ReactNode[] {
+function renderBlocks(nodes: readonly TiptapNode[] | undefined, ctx: Ctx): ReactNode[] {
   return (nodes ?? []).map((node, index) => (
     <Fragment key={index}>{renderBlock(node, ctx)}</Fragment>
   ));

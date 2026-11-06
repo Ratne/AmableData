@@ -7,7 +7,7 @@ import type { CrawlerSnippets } from '@amable/api-types';
  * the report is fire-and-forget with a short timeout.
  */
 
-export const SECRET_PLACEHOLDER = 'amb_sk_REPLACE_WITH_SITE_SECRET';
+const SECRET_PLACEHOLDER = 'amb_sk_REPLACE_WITH_SITE_SECRET';
 
 const BOT_PATTERN =
   'bot|crawl|spider|slurp|GPTBot|ChatGPT-User|OAI-SearchBot|Claude|Perplexity|Bytespider|CCBot|Amazonbot|Applebot|cohere|Diffbot|facebookexternalhit|Google-Extended|Meta-External';

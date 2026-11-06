@@ -64,7 +64,7 @@ function getRow(ctx: CrmContext, id: string): PromoRow {
   return row;
 }
 
-export function normalizeCode(code: string): string {
+function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
 }
 

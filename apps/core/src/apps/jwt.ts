@@ -6,10 +6,10 @@ import { fromBase64Url, fromUtf8, toBase64Url, utf8 } from '@amable/auth';
  * RS256 (keys from their published JWKS).
  */
 
-export type JwtAlg = 'EdDSA' | 'ES256' | 'RS256';
-export const JWT_ALGS: readonly JwtAlg[] = ['EdDSA', 'ES256', 'RS256'];
+type JwtAlg = 'EdDSA' | 'ES256' | 'RS256';
+const JWT_ALGS: readonly JwtAlg[] = ['EdDSA', 'ES256', 'RS256'];
 
-export interface JwtHeader {
+interface JwtHeader {
   readonly alg: string;
   readonly kid?: string;
   readonly typ?: string;

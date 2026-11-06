@@ -34,7 +34,7 @@ export interface FormRow {
 }
 
 /** Validates a definition document; Zod issues become `validation_failed` details under `definition.`. */
-export function parseDefinition(input: unknown): FormDefinition {
+function parseDefinition(input: unknown): FormDefinition {
   const result = formDefinitionSchema.safeParse(input);
   if (!result.success) {
     throw invalidMany(
@@ -90,7 +90,7 @@ function serializeBase(row: FormRow) {
   };
 }
 
-export function serializeForm(row: FormRow): Form {
+function serializeForm(row: FormRow): Form {
   return { ...serializeBase(row), definition: storedDefinition(row) as unknown as Form['definition'] };
 }
 

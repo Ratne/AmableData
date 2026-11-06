@@ -45,7 +45,7 @@ import type { Env } from '../../env';
 import type { AutomationOpInput, AutomationOpName, AutomationOpOutput } from '../ops';
 
 /** Stub of the tenant's Engine DO (tenant id comes from the verified context only). */
-export function engineStub(env: Env, tenantId: string): DurableObjectStub<Engine> {
+function engineStub(env: Env, tenantId: string): DurableObjectStub<Engine> {
   return env.ENGINE.get(env.ENGINE.idFromName(tenantId));
 }
 
@@ -112,7 +112,7 @@ export async function callEngine<K extends AutomationOpName>(
  * TenantDb outbox (fire-and-forget). Registered before the guards so it wraps
  * every v2 route, CRM included.
  */
-export function automationKick(): MiddlewareHandler<AppEnv> {
+function automationKick(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     await next();
     if (c.req.method === 'GET' || c.req.method === 'HEAD' || c.res.status >= 400) return;

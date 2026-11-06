@@ -48,14 +48,14 @@ export function localParts(ts: number, timeZone: string): LocalParts {
 }
 
 /** Offset (local - UTC) of `timeZone` at instant `ts`, in ms. */
-export function tzOffset(ts: number, timeZone: string): number {
+function tzOffset(ts: number, timeZone: string): number {
   const p = localParts(ts, timeZone);
   const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
   return asUtc - Math.floor(ts / 1000) * 1000;
 }
 
 /** UTC instant of a local wall-clock time (DST-safe for the usual 1 h shifts). */
-export function zonedTime(
+function zonedTime(
   year: number,
   month: number,
   day: number,
@@ -68,7 +68,7 @@ export function zonedTime(
   return ts;
 }
 
-export function pad2(n: number): string {
+function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 

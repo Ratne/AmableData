@@ -1,4 +1,4 @@
-import type { Permission, Role } from '@amable/core';
+import type { Role } from '@amable/core';
 import { useParams } from '@tanstack/react-router';
 import { ApiError } from '../../lib/api';
 import { request } from '../../lib/tenant-api';
@@ -33,13 +33,7 @@ export interface AuditEntry {
   readonly createdAt: number;
 }
 
-export interface TenantMe {
-  readonly tenant: { readonly id: string; readonly slug: string; readonly name: string };
-  readonly role: Role;
-  readonly permissions: Permission[];
-}
-
-export function membersApi(slug: string) {
+function membersApi(slug: string) {
   const base = `/api/t/${encodeURIComponent(slug)}`;
   const send = <T>(method: 'POST' | 'PATCH' | 'PUT', path: string, body?: unknown) =>
     request<T>(`${base}${path}`, { method, json: body ?? {}, idempotent: false });

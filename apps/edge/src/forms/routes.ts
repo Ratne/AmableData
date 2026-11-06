@@ -32,7 +32,7 @@ export const formsEdgeRoutes = new Hono<{ Bindings: Env }>();
 
 type Ctx = Context<{ Bindings: Env }>;
 
-export const MAX_SUBMIT_BYTES = 64 * 1024;
+const MAX_SUBMIT_BYTES = 64 * 1024;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,99}$/i;
 

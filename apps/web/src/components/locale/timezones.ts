@@ -1,5 +1,5 @@
 /** Used when the runtime cannot enumerate IANA zones (`Intl.supportedValuesOf`). */
-export const FALLBACK_TIME_ZONES: readonly string[] = [
+const FALLBACK_TIME_ZONES: readonly string[] = [
   'Africa/Abidjan',
   'Africa/Accra',
   'Africa/Addis_Ababa',
@@ -104,7 +104,7 @@ export const FALLBACK_TIME_ZONES: readonly string[] = [
   'UTC',
 ];
 
-export const TIME_ZONE_REGIONS = [
+const TIME_ZONE_REGIONS = [
   'Africa',
   'America',
   'Antarctica',

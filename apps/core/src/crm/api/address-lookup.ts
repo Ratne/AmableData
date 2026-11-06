@@ -23,7 +23,7 @@ import { crmRoute, json } from './core';
 const tags = ['Contacts'];
 
 /** Autocomplete runs while the user types: a slow app falls back to the geocoder. */
-export const ADDRESS_APP_TIMEOUT_MS = 3_000;
+const ADDRESS_APP_TIMEOUT_MS = 3_000;
 
 const unavailable = (message: string) => ({ error: 'address_lookup_unavailable', message }) as const;
 

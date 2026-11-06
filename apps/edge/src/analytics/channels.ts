@@ -1,6 +1,6 @@
 /** Traffic channel classification (computed once, at session start). */
 
-export const CHANNELS = [
+const CHANNELS = [
   'Direct',
   'Organic search',
   'Paid search',

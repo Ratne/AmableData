@@ -90,7 +90,7 @@ export interface StepContext {
   timeZone(explicit?: string): Promise<string>;
 }
 
-export const EMAIL_PAUSE_RECHECK_MS = 15 * 60_000;
+const EMAIL_PAUSE_RECHECK_MS = 15 * 60_000;
 const HTTP_FORBIDDEN_HEADERS = new Set([
   'host',
   'content-length',

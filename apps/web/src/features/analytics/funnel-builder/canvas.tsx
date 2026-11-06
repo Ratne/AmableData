@@ -55,7 +55,7 @@ function sourceHandleOf(graph: Pick<FunnelGraph, 'nodes'>, edge: FunnelEdge): st
   return edge.via.type === 'route' ? edge.via.route_id : DEFAULT_HANDLE;
 }
 
-export function useEdgeLabel() {
+function useEdgeLabel() {
   const { t, locale } = useI18n();
   return useCallback(
     (graph: Pick<FunnelGraph, 'nodes' | 'edges'>, edge: FunnelEdge): string => {

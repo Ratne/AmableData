@@ -2,7 +2,7 @@ import type { Permission, Role } from '@amable/core';
 import type { AuthServices } from '../auth/services';
 import type { Env } from '../env';
 
-export interface AuthUser {
+interface AuthUser {
   readonly id: string;
   readonly email: string;
   readonly name: string | null;
@@ -11,7 +11,7 @@ export interface AuthUser {
   readonly lastTenantId: string | null;
 }
 
-export interface AuthSession {
+interface AuthSession {
   /** Public id (device list); never the token or its hash. */
   readonly publicId: string;
   /** Internal: hash of the session token (row key). */
@@ -19,7 +19,7 @@ export interface AuthSession {
   readonly stepUpAt: number | null;
 }
 
-export interface AuthApiKey {
+interface AuthApiKey {
   readonly id: string;
   readonly tenantId: string;
   readonly scopes: readonly string[];

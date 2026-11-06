@@ -47,7 +47,7 @@ function scalar(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function buildPath(op: CatalogOperation, pathParams: Record<string, unknown> = {}): string {
+function buildPath(op: CatalogOperation, pathParams: Record<string, unknown> = {}): string {
   return op.path.replace(/\{([^}]+)\}/g, (_, name: string) => {
     const value = pathParams[name];
     if (value === undefined || value === null || scalar(value) === '') {
@@ -60,7 +60,7 @@ export function buildPath(op: CatalogOperation, pathParams: Record<string, unkno
   });
 }
 
-export function buildQuery(query: Record<string, unknown> = {}): string {
+function buildQuery(query: Record<string, unknown> = {}): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null) continue;

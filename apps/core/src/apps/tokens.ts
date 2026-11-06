@@ -16,17 +16,17 @@ import { installRowById, toInstall, type AppInstall, type InstallRow } from './s
 
 const nextId = monotonicFactory();
 export const ACCESS_TOKEN_PREFIX = 'amb_app_';
-export const REFRESH_TOKEN_PREFIX = 'amb_apr_';
-export const ACCESS_TOKEN_TTL_MS = 3600 * 1000;
-export const REFRESH_TOKEN_TTL_MS = 180 * 86_400_000;
-export const CODE_TTL_MS = 10 * 60 * 1000;
+const REFRESH_TOKEN_PREFIX = 'amb_apr_';
+const ACCESS_TOKEN_TTL_MS = 3600 * 1000;
+const REFRESH_TOKEN_TTL_MS = 180 * 86_400_000;
+const CODE_TTL_MS = 10 * 60 * 1000;
 const ASSERTION_MAX_LIFETIME_S = 300;
 const CLOCK_SKEW_S = 60;
 const JWKS_TTL_MS = 10 * 60 * 1000;
 
-export const CLIENT_ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+const CLIENT_ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
 
-export function tokenEndpointUrl(env: Env): string {
+function tokenEndpointUrl(env: Env): string {
   return `${appOriginOf(env)}/api/apps/v1/token`;
 }
 

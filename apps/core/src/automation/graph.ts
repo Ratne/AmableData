@@ -30,7 +30,7 @@ export const TRIGGER_EVENTS: Record<GoalTrigger['type'], readonly string[]> = {
   document_declined: ['esign.request_declined'],
 };
 
-export interface GoalRef {
+interface GoalRef {
   node: GoalNode;
   trigger: GoalTrigger;
   triggerIndex: number;
@@ -124,14 +124,4 @@ export function isSequence(node: GraphNode | undefined): node is SequenceNode {
 
 export function isDecision(node: GraphNode | undefined): node is DecisionNode {
   return node?.type === 'decision';
-}
-
-/** Every step id of the graph mapped to its sequence (step ids are unique per graph). */
-export function stepIndex(graph: AutomationGraph): Map<string, { nodeId: string; index: number }> {
-  const out = new Map<string, { nodeId: string; index: number }>();
-  for (const node of graph.nodes) {
-    if (node.type !== 'sequence') continue;
-    node.steps.forEach((step, index) => out.set(step.id, { nodeId: node.id, index }));
-  }
-  return out;
 }

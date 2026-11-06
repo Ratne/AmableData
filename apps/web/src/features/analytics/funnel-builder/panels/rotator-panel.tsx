@@ -9,7 +9,7 @@ import { liveEdges, weightShare, type BuilderAction } from '../state';
 import { Field, NumberInput, selectClass } from './form-bits';
 
 /** Weights of the weighted exits of a traffic or rotator node. */
-export function WeightList({
+function WeightList({
   graph,
   nodeId,
   dispatch,

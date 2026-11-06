@@ -7,7 +7,7 @@ import type { StoredBankAccount } from '../commerce/bank-accounts';
 import type { SessionRow } from './sessions';
 
 /** Without an answer on the offer page, the summary email goes out this long after the last action. */
-export const SUMMARY_IDLE_MS = 15 * 60_000;
+const SUMMARY_IDLE_MS = 15 * 60_000;
 
 /** Coordinates the purchase was placed with (kept on the session: later edits of the account do not change them). */
 export interface BankSnapshot {

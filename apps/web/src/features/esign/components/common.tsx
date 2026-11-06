@@ -76,7 +76,7 @@ export function useEsignChrome(
   });
 }
 
-export const REQUEST_STATUS_TONE: Record<EsignRequestStatus, Tone> = {
+const REQUEST_STATUS_TONE: Record<EsignRequestStatus, Tone> = {
   sent: 'info',
   partially_signed: 'warning',
   completed: 'success',
@@ -85,7 +85,7 @@ export const REQUEST_STATUS_TONE: Record<EsignRequestStatus, Tone> = {
   expired: 'neutral',
 };
 
-export const SIGNER_STATUS_TONE: Record<EsignSignerStatus, Tone> = {
+const SIGNER_STATUS_TONE: Record<EsignSignerStatus, Tone> = {
   pending: 'neutral',
   sent: 'info',
   opened: 'warning',
@@ -93,7 +93,7 @@ export const SIGNER_STATUS_TONE: Record<EsignSignerStatus, Tone> = {
   declined: 'danger',
 };
 
-export const TEMPLATE_STATUS_TONE: Record<EsignTemplate['status'], Tone> = {
+const TEMPLATE_STATUS_TONE: Record<EsignTemplate['status'], Tone> = {
   draft: 'neutral',
   active: 'success',
   archived: 'warning',

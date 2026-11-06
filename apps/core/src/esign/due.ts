@@ -67,7 +67,7 @@ function signedLocale(ctx: CrmContext, signerId: string): EsignLocale | null {
   return locale === 'it' || locale === 'en' ? locale : null;
 }
 
-export function mailFor(
+function mailFor(
   ctx: CrmContext,
   kind: EsignMail['kind'],
   request: RequestRow,

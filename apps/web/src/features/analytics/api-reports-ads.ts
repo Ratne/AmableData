@@ -41,7 +41,7 @@ export interface JourneyRequest extends ReportRange {
 
 const base = (tenant: string) => `${tenantBase(tenant)}/ads-reports`;
 
-export const adsReportsApi = {
+const adsReportsApi = {
   performance: (tenant: string, params: PerformanceRequest) =>
     request<PerformanceReport>(`${base(tenant)}/performance?${performanceQueryString(params)}`),
   ltv: (tenant: string, siteId: string, params: LtvRequest) =>

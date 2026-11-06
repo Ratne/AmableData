@@ -95,7 +95,7 @@ function findExisting(ctx: CrmContext, email: string): string | null {
   return row?.id ?? null;
 }
 
-export interface ImportedContact {
+interface ImportedContact {
   readonly id: string;
   readonly email: string | null;
   readonly phone: string | null;

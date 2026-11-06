@@ -177,7 +177,7 @@ function touchDims(ctx: PerformanceContext, t: TouchPoint, day: (ts: number) => 
 }
 
 /** Query filters, the shorthand options included. */
-export function queryFilters(
+function queryFilters(
   q: Pick<PerformanceQueryParsed, 'filters' | 'platform' | 'traffic_source_id' | 'funnel_id'>,
 ): PerformanceFilter[] {
   const out = [...q.filters];

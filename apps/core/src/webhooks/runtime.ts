@@ -17,7 +17,7 @@ export function overrideWebhookDeps(next: Override | null): void {
   override = next;
 }
 
-export function webhookDeps(env: Env): WebhookDeps {
+function webhookDeps(env: Env): WebhookDeps {
   const base: WebhookDeps = {
     db: env.DB,
     box: async () => (await getAuthServices(env)).secretBox,

@@ -18,7 +18,7 @@ export const SITE_PATH_PREFIX = '/s/:siteId{st_[a-z2-7]{20}}';
 export type LinkSiteResolver = (env: Env, host: string) => Promise<LinkSite | null>;
 
 /** Custom tracking hostnames (`track.customer.com`), indexed by the core. */
-export const trackingDomainResolver: LinkSiteResolver = async (env, host) => {
+const trackingDomainResolver: LinkSiteResolver = async (env, host) => {
   const found = await resolveTrackingHost(env, host);
   return found === null ? null : { siteId: found.siteId, tenantId: found.tenant.id, basePath: '' };
 };
@@ -26,7 +26,7 @@ export const trackingDomainResolver: LinkSiteResolver = async (env, host) => {
 export const DEFAULT_LINK_SITE_RESOLVERS: readonly LinkSiteResolver[] = [trackingDomainResolver];
 
 /** First resolver answering for the hostname; null = unknown host (the link routes answer 404). */
-export async function resolveLinkSite(
+async function resolveLinkSite(
   env: Env,
   host: string,
   resolvers: readonly LinkSiteResolver[] = DEFAULT_LINK_SITE_RESOLVERS,

@@ -25,7 +25,7 @@ export interface CustomFieldsPanelProps {
 }
 
 /** One custom field, read-only until "edit"; validated client-side before saving. */
-export function CustomFieldRow({
+function CustomFieldRow({
   field,
   value,
   canEdit,

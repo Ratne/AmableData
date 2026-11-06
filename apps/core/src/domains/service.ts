@@ -3,11 +3,11 @@ import type { DomainKind, DomainStatus, TenantDomain } from '@amable/api-types';
 import { ZoneAutomationError, type ZoneAutomation } from './zone';
 import { toIso } from '../crm/util';
 
-export type { DomainKind, DomainStatus, TenantDomain };
+export type { DomainKind, TenantDomain };
 
 /** Edge paths a site on the customer's own hostname needs besides its landing paths. */
-export const SITE_EDGE_PATHS = ['/health', '/m/*', '/b/*'] as const;
-export const MAX_SITE_PATHS = 10;
+const SITE_EDGE_PATHS = ['/health', '/m/*', '/b/*'] as const;
+const MAX_SITE_PATHS = 10;
 
 export interface DomainDeps {
   readonly db: D1Database;
@@ -75,7 +75,7 @@ export function normalizeHostname(input: string): string | null {
   return HOSTNAME_RE.test(host) ? host : null;
 }
 
-export function normalizePath(input: string): string | null {
+function normalizePath(input: string): string | null {
   const path = `/${input.trim().toLowerCase().replace(/^\/+|\/+$/g, '').replace(/\*$/, '')}`.replace(/\/+$/, '');
   return PATH_RE.test(path) ? path : null;
 }

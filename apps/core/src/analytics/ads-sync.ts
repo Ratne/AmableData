@@ -72,13 +72,13 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 
-export const SPEND_SYNC_INTERVAL_MS = 55 * MIN;
+const SPEND_SYNC_INTERVAL_MS = 55 * MIN;
 export const RECONCILE_DAYS = 7;
-export const RECONCILE_LOCAL_HOUR = 3;
-export const ENTITY_REFRESH_MS = DAY;
+const RECONCILE_LOCAL_HOUR = 3;
+const ENTITY_REFRESH_MS = DAY;
 export const BACKFILL_MAX_DAYS = 90;
 /** Access tokens closer than this to their expiry are refreshed first (sync runs hourly). */
-export const TOKEN_REFRESH_MARGIN_MS = 2 * HOUR;
+const TOKEN_REFRESH_MARGIN_MS = 2 * HOUR;
 const STATE_TTL_MS = 10 * MIN;
 export const MAX_ACCOUNTS_PER_CONNECT = 25;
 /** How long the ad account choice of a fresh authorization stays open. */
@@ -108,7 +108,7 @@ export const adsStub = (ns: AnalyticsNamespace, siteId: string): AdsSiteStub =>
 
 // ------------------------------------------------------------------ grants
 
-export interface AdGrant {
+interface AdGrant {
   tenantId: string;
   siteId: string;
   platform: AdPlatform;
@@ -123,7 +123,7 @@ export interface AdGrant {
   pending?: { accounts: AdAccountInfo[]; expiresAt: number };
 }
 
-export interface AdOAuthState {
+interface AdOAuthState {
   tenantId: string;
   siteId: string;
   platform: AdPlatform;
@@ -142,7 +142,7 @@ export interface AdGrantStore {
   deleteGrant(grantId: string): Promise<void>;
 }
 
-export interface GrantRef {
+interface GrantRef {
   tenantId: string;
   siteId: string;
   grantId: string;
@@ -208,12 +208,12 @@ function dayParts(ts: number, timeZone: string): { day: string; hour: number } {
 
 export const localDay = (ts: number, timeZone: string): string => dayParts(ts, timeZone).day;
 
-export function addDays(day: string, n: number): string {
+function addDays(day: string, n: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 }
 
 /** Inclusive number of days of [from, to]. */
-export const dayCount = (from: string, to: string): number =>
+const dayCount = (from: string, to: string): number =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY) + 1;
 
 // -------------------------------------------------------------------- spend
@@ -581,7 +581,7 @@ export interface AdsSyncReport {
 const SITE_SYNC_CONCURRENCY = 3;
 
 /** Every connection of the given sites (sites of other tenants or deleted ones are skipped). */
-export async function syncAdsOfTenant(
+async function syncAdsOfTenant(
   ports: AdsSyncPorts,
   tenantId: string,
   report: AdsSyncReport = { connections: 0, synced: 0, retry: 0, authExpired: 0, errors: 0 },
@@ -763,7 +763,7 @@ async function releaseGrantIfUnused(
   await ports.grants.deleteGrant(grantId);
 }
 
-export interface AdAccountChoice extends AdAccountInfo {
+interface AdAccountChoice extends AdAccountInfo {
   /** Already connected on this site (re-authorizing moves it to the new grant when picked). */
   readonly connected: boolean;
 }
@@ -974,7 +974,7 @@ export async function disconnectAdConnection(
  * disconnected connection; throws `ProviderError` `auth_expired` (connection
  * marked) when the authorization is gone.
  */
-export async function adsTokenForConnection(
+async function adsTokenForConnection(
   ports: AdsSyncPorts,
   input: AdsTokenInput,
   extras: (platform: AdPlatform) => Omit<NonNullable<AdsTokenOutput>, 'platform' | 'access_token'> = () => ({}),
@@ -1002,7 +1002,7 @@ export async function adsTokenForConnection(
 
 const ALERT_ROLES = ['owner', 'admin'];
 
-export function adConnectionAlertEmail(alert: AdConnectionAlert, to: string, appOrigin: string): SystemEmail {
+function adConnectionAlertEmail(alert: AdConnectionAlert, to: string, appOrigin: string): SystemEmail {
   const account = alert.connection.account_name ?? alert.connection.account_id;
   const what = `The ${alert.connection.platform} ad account "${account}" of ${alert.site.name} needs to be reconnected: its authorization expired or was revoked. Spend sync is paused until then.`;
   const origin = appOrigin.replace(/\/+$/, '');

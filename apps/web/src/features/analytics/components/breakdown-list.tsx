@@ -22,7 +22,7 @@ import { EmptyNote, ErrorState, Flag, ListSkeleton } from './ui';
 
 const PATH_DIMENSIONS = new Set<AnalyticsBreakdownDimension>(['page', 'entry_page', 'exit_page']);
 
-export function isAttributed(dimension: AnalyticsBreakdownDimension): boolean {
+function isAttributed(dimension: AnalyticsBreakdownDimension): boolean {
   return (ATTRIBUTION_DIMENSIONS as readonly string[]).includes(dimension);
 }
 
@@ -119,7 +119,7 @@ function useColumns(dimension: AnalyticsBreakdownDimension, totalVisitors: numbe
   return columns;
 }
 
-export function BreakdownRows({
+function BreakdownRows({
   dimension,
   rows,
   totalVisitors,

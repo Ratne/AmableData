@@ -139,7 +139,7 @@ function inside(lon: number, lat: number, polygon: Ring): boolean {
   return hit;
 }
 
-export function isLand(lon: number, lat: number): boolean {
+function isLand(lon: number, lat: number): boolean {
   if (!LAND.some((polygon) => inside(lon, lat, polygon))) return false;
   return !WATER.some((polygon) => inside(lon, lat, polygon));
 }

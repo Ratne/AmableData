@@ -94,7 +94,7 @@ const seenNonces = new Map<string, number>();
 const MAX_SEEN_NONCES = 50_000;
 
 /** Records a nonce; false when it was already used inside the window. */
-export function markGatewayNonce(nonce: string, nowMs: number): boolean {
+function markGatewayNonce(nonce: string, nowMs: number): boolean {
   const windowMs = EDGE_GATEWAY_TOLERANCE_SECONDS * 2 * 1000;
   if (seenNonces.size >= MAX_SEEN_NONCES) {
     // Insertion order is chronological: drop the oldest half.
@@ -138,7 +138,7 @@ function failure(error: GatewayError): Response {
 }
 
 /** Tenant of a public request; unknown slugs / hostnames are a 404. */
-export async function resolveTenant(env: Env, ref: GatewayTenantRef): Promise<GatewayTenantInfo> {
+async function resolveTenant(env: Env, ref: GatewayTenantRef): Promise<GatewayTenantInfo> {
   const row =
     'slug' in ref
       ? await findTenantBySlug(env.DB, ref.slug.toLowerCase())

@@ -49,7 +49,7 @@ export interface ResolvedRange {
   filters: readonly AnalyticsFilter[];
 }
 
-export const MAX_RANGE_MS = 3 * 366 * 24 * HOUR_MS;
+const MAX_RANGE_MS = 3 * 366 * 24 * HOUR_MS;
 
 /** `YYYY-MM-DD` bounds are local days (inclusive `to`); date-times are instants. */
 export function resolveRange(
@@ -110,7 +110,7 @@ export function filterSql(
  * Purchase session of a payment aliased `t`: its own session or, for server-side and
  * CRM payments (often days after the visit), the visitor's last session before it.
  */
-export const PURCHASE_SESSION_SQL = `COALESCE(t.session_id, (SELECT ps.id FROM sessions ps
+const PURCHASE_SESSION_SQL = `COALESCE(t.session_id, (SELECT ps.id FROM sessions ps
   WHERE ps.visitor_id = t.visitor_id AND ps.started_at <= t.ts ORDER BY ps.started_at DESC LIMIT 1))`;
 
 const ratio = (a: number, b: number): number =>

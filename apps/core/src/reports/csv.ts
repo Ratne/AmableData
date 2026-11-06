@@ -23,7 +23,7 @@ export function csvLine(cells: ReadonlyArray<string | number | null>): string {
 const digitsCache = new Map<string, number>();
 
 /** Minor-unit digits of an ISO currency (EUR 2, JPY 0, …). */
-export function currencyDigits(currency: string): number {
+function currencyDigits(currency: string): number {
   let digits = digitsCache.get(currency);
   if (digits === undefined) {
     try {

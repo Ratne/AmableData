@@ -164,32 +164,15 @@ export type { IngestResult } from './ingest';
 export type { ArchiveSink, RetentionResult } from './retention';
 export type { CrmFact, CrmApplyResult, CoreWork, IdentityItem, AutomationItem, AlertItem, AlertTarget, CrmLinkSource } from './crm';
 export type { ContactActivity, VisitorListQuery } from './visitors';
-export type { StoredAlert, ShareRow } from './config';
+export type { ShareRow } from './config';
 export type { IntegrationRow, IntegrationProviderId, AdSpendRow, SearchStatRow } from './bots';
 export type { ContactVisitor, SyncCursor } from './registry';
-export { crmTransactionId } from './crm';
 export type { AdConnectionInput, AdConnectionRecord, AdEntityQuery, AdEntityRecord, AdSpendQuery } from './ad-entities';
-export type { ConversionInput, ConversionQuery, ConversionRecord, ConversionStatus, TouchQuery } from './touches';
-export type {
-  FunnelLinkContext,
-  FunnelLinkQuery,
-  FunnelSessionInput,
-  FunnelSessionRecord,
-  FunnelStepInput,
-  FunnelStepResult,
-} from './funnel-sessions';
+export type { ConversionInput, ConversionQuery, ConversionRecord, TouchQuery } from './touches';
 export type { OutboundEnqueueInput, OutboundOutcome, OutboundQuery } from './outbound';
-export type { OutboundResendFilter, OutboundSkipReason, OutboundStats } from './outbound';
 export type { IdentityKeyRef } from './identity';
 export type { TrackingQualityQuery } from './reports-journey';
-export type {
-  IdentityMergeSettings,
-  JourneyFunnelTouch,
-  VisitorIdentityGraph,
-  VisitorIdentityInput,
-} from './identity';
-export { resolveVisitorGroup, resolveVisitorGroups, visitorOrigins, VISITOR_ORIGIN_CTE } from './identity';
-
+export type { IdentityMergeSettings, VisitorIdentityGraph, VisitorIdentityInput } from './identity';
 export type AnalyticsResult<T> =
   | { ok: true; value: T }
   | {

@@ -98,7 +98,7 @@ export type EnqueueForConversionResult =
     };
 
 /** Platforms that need the click to settle before a conversion can be matched to it. */
-export const PLATFORM_SEND_DELAY_MS: Readonly<Record<AdPlatform, number>> = {
+const PLATFORM_SEND_DELAY_MS: Readonly<Record<AdPlatform, number>> = {
   meta: 0,
   google: 6 * 3_600_000,
   tiktok: 0,
@@ -304,7 +304,7 @@ function conversionTouch(
  * modifier applied), `{txid}`, `{hit}` and `{data-<field name>}`. Unknown
  * tokens become empty.
  */
-export function postbackUrl(
+function postbackUrl(
   template: string,
   source: TrafficSource,
   conversion: ConversionRecord | OutboundConversionInput,
@@ -415,15 +415,15 @@ export type ConversionOutboundRequest = z.input<typeof conversionOutboundRequest
 export const OUTBOUND_BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 12 * 3_600_000] as const;
 /** The first attempt plus one retry after each backoff delay. */
 export const OUTBOUND_MAX_ATTEMPTS = OUTBOUND_BACKOFF_MS.length + 1;
-export const OUTBOUND_BATCH_SIZE = 50;
+const OUTBOUND_BATCH_SIZE = 50;
 
-export function outboundRetryDelay(attempts: number): number {
+function outboundRetryDelay(attempts: number): number {
   const i = Math.min(Math.max(attempts, 1), OUTBOUND_BACKOFF_MS.length) - 1;
   return OUTBOUND_BACKOFF_MS[i] as number;
 }
 
 /** Platform client + access token of a connection. Tokens live in the core, never in the edge. */
-export interface ResolvedProvider {
+interface ResolvedProvider {
   provider: AdsProvider;
   token: string;
   /** Merged over the options derived from the connection metadata. */
@@ -455,7 +455,7 @@ function metaString(metadata: Record<string, unknown>, ...keys: string[]): strin
 }
 
 /** Send options read from the connection metadata (`pixel_id`, `pixel_code`, `customer_id`, `test_event_code`…). */
-export function connectionSendOptions(connection: AdConnectionRecord, job: OutboundConversionJob): SendConversionOptions {
+function connectionSendOptions(connection: AdConnectionRecord, job: OutboundConversionJob): SendConversionOptions {
   const md = connection.metadata;
   const pick: Record<string, string | undefined> = {
     testEventCode: metaString(md, 'test_event_code'),
@@ -487,7 +487,7 @@ function errorText(error: unknown): string {
   return text.slice(0, MAX_ERROR_LENGTH);
 }
 
-export const POSTBACK_TIMEOUT_MS = 10_000;
+const POSTBACK_TIMEOUT_MS = 10_000;
 
 /** GET of a postback job's URL: `sent` on 2xx, retried on 408/429/5xx and network errors. */
 async function sendPostback(job: OutboundConversionJob, fetcher: typeof fetch): Promise<'sent' | { retry: boolean; error: string }> {

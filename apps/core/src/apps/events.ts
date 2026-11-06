@@ -21,7 +21,7 @@ import type { AppInstall } from './store';
 
 const nextId = monotonicFactory();
 /** How long the previous secret keeps signing deliveries after a rotation. */
-export const SECRET_OVERLAP_MS = 24 * 3600 * 1000;
+const SECRET_OVERLAP_MS = 24 * 3600 * 1000;
 
 /** Events the endpoint receives: subscriptions the granted scopes cover, lifecycle, privacy. */
 export function appEventTypes(manifest: AppManifest, scopes: readonly string[]): string[] {

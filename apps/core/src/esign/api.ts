@@ -81,7 +81,7 @@ function tenantFacts(c: Ctx): TenantFacts {
 }
 
 /** Who called, for the audit trail of the request. */
-export function staffClient(c: Ctx): ClientFacts {
+function staffClient(c: Ctx): ClientFacts {
   return {
     ip: clientIp(c),
     user_agent: c.req.header('user-agent') ?? null,

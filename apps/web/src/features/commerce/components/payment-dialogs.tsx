@@ -19,7 +19,7 @@ import { ChoiceSelect, FormField, MoneyInput } from './common';
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 /** Settled by a Stripe PaymentIntent of the workspace account (checkouts, offers, renewals). */
-export function isStripePayment(payment: Pick<Payment, 'status' | 'transaction_id'>): boolean {
+function isStripePayment(payment: Pick<Payment, 'status' | 'transaction_id'>): boolean {
   return payment.status === 'succeeded' && (payment.transaction_id?.startsWith('pi_') ?? false);
 }
 

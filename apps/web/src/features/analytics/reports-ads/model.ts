@@ -26,7 +26,7 @@ import { searchString } from '../lib/search';
 export type MetricFormat = 'int' | 'number' | 'money' | 'ratio' | 'percent';
 
 /** Metric columns of the performance report and how their values read. */
-export const PERFORMANCE_COLUMNS = {
+const PERFORMANCE_COLUMNS = {
   visits: 'int',
   clicks: 'int',
   cost_minor: 'money',
@@ -64,13 +64,13 @@ export const DEFAULT_PERFORMANCE_COLUMNS: readonly PerformanceColumn[] = [
 ];
 
 /** Columns where a higher value is worse (colored red when rising). */
-export const LOWER_IS_BETTER: ReadonlySet<PerformanceColumn> = new Set([
+const LOWER_IS_BETTER: ReadonlySet<PerformanceColumn> = new Set([
   'cost_minor',
   'hard_costs_minor',
   'cpa_minor',
 ]);
 
-export function isPerformanceColumn(value: unknown): value is PerformanceColumn {
+function isPerformanceColumn(value: unknown): value is PerformanceColumn {
   return typeof value === 'string' && value in PERFORMANCE_COLUMNS;
 }
 
@@ -113,7 +113,7 @@ export function toggleColumn(
 export const WINDOW_PRESETS = [1, 5, 7, 10, 15, 30] as const;
 
 /** Platform → campaign → adset → ad: the drill-down path of the ad entities. */
-export const PERFORMANCE_HIERARCHY = ['platform', 'campaign', 'adset', 'ad'] as const;
+const PERFORMANCE_HIERARCHY = ['platform', 'campaign', 'adset', 'ad'] as const;
 
 export const PERFORMANCE_VIEWS = ['table', 'nested', 'chart'] as const;
 export type PerformanceView = (typeof PERFORMANCE_VIEWS)[number];
@@ -146,7 +146,7 @@ export interface PerformanceSearchParams {
 const includes = <T extends string>(list: readonly T[], value: unknown): value is T =>
   typeof value === 'string' && (list as readonly string[]).includes(value);
 
-export function isGroupBy(value: unknown): value is PerformanceGroupBy {
+function isGroupBy(value: unknown): value is PerformanceGroupBy {
   return includes(PERFORMANCE_GROUP_BY, value);
 }
 
@@ -154,7 +154,7 @@ export function encodeDrill(filter: PerformanceFilter): string {
   return `${filter.dimension}:${filter.value}`;
 }
 
-export function decodeDrill(raw: string): PerformanceFilter | null {
+function decodeDrill(raw: string): PerformanceFilter | null {
   const at = raw.indexOf(':');
   if (at < 0) return null;
   const dimension = raw.slice(0, at);

@@ -222,7 +222,7 @@ export function listAlerts(db: SqlDb, now: number): StoredAlert[] {
   return db.all<AlertRow>(`SELECT * FROM alerts ORDER BY created_at, id`).map((r) => toAlert(db, r, now));
 }
 
-export function getAlert(db: SqlDb, id: string, now: number): StoredAlert | null {
+function getAlert(db: SqlDb, id: string, now: number): StoredAlert | null {
   const row = first<AlertRow>(db, `SELECT * FROM alerts WHERE id = ?`, id);
   return row === undefined ? null : toAlert(db, row, now);
 }

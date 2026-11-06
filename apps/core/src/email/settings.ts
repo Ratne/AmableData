@@ -16,7 +16,7 @@ export const WARMUP_CAPS: readonly number[] = [
   50, 100, 200, 400, 800, 1_500, 3_000, 5_000, 10_000, 20_000, 40_000, 80_000,
 ];
 
-export const DEFAULT_RATE_PER_MINUTE = 600;
+const DEFAULT_RATE_PER_MINUTE = 600;
 
 /** Auto-suspension: evaluated over a rolling window once enough mail was sent. */
 export const HEALTH_POLICY = {
@@ -70,7 +70,7 @@ export function tenantTimeZone(deps: MailDeps): string {
 }
 
 /** The plan's rate when the managed offering sets one (`planRate`), else the workspace setting. */
-export function ratePerMinute(deps: MailDeps, planRate: number | null = null): number {
+function ratePerMinute(deps: MailDeps, planRate: number | null = null): number {
   if (planRate !== null) return planRate;
   const value = Number(getSetting(deps, 'rate_per_minute'));
   return Number.isInteger(value) && value > 0 ? value : DEFAULT_RATE_PER_MINUTE;
@@ -186,7 +186,7 @@ export function suspension(deps: MailDeps): Suspension {
     : { suspended: false, reason: null, at: null };
 }
 
-export interface SendingHealth {
+interface SendingHealth {
   readonly sent: number;
   readonly bounced: number;
   readonly complained: number;
@@ -194,7 +194,7 @@ export interface SendingHealth {
   readonly complaintRate: number;
 }
 
-export function sendingHealth(deps: MailDeps): SendingHealth {
+function sendingHealth(deps: MailDeps): SendingHealth {
   const since = deps.now() - HEALTH_POLICY.windowDays * DAY_MS;
   const row = deps.db.all<{ sent: number; bounced: number; complained: number }>(
     `SELECT COUNT(*) AS sent,
@@ -222,7 +222,7 @@ export function evaluateHealth(deps: MailDeps): string | null {
   return reason;
 }
 
-export function suspend(deps: MailDeps, reason: string): void {
+function suspend(deps: MailDeps, reason: string): void {
   setSetting(deps, 'suspended_at', String(deps.now()));
   setSetting(deps, 'suspended_reason', reason);
   deps.db.run(

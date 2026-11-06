@@ -21,7 +21,7 @@ export interface AlertTransport {
   appOrigin: string;
 }
 
-export function alertEmail(d: AlertDelivery, to: string, appOrigin: string): {
+function alertEmail(d: AlertDelivery, to: string, appOrigin: string): {
   to: string;
   subject: string;
   text: string;

@@ -163,7 +163,7 @@ export interface MessageRow {
   updated_at: number;
 }
 
-export const toMessage = (row: MessageRow): EmailMessage => ({
+const toMessage = (row: MessageRow): EmailMessage => ({
   id: row.id,
   contact_id: row.contact_id,
   email: row.email,

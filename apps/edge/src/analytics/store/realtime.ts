@@ -10,11 +10,11 @@ import { ONLINE_WINDOW_MS } from './query';
 import { toIso } from '../time';
 
 /** Strips identities for public (share link) viewers. */
-export function anonymizeEvent(e: RealtimeEvent): RealtimeEvent {
+function anonymizeEvent(e: RealtimeEvent): RealtimeEvent {
   return { ...e, label: null };
 }
 
-export function anonymizeSnapshot(s: AnalyticsRealtime): AnalyticsRealtime {
+function anonymizeSnapshot(s: AnalyticsRealtime): AnalyticsRealtime {
   return {
     ...s,
     visitors: s.visitors.map((v) => ({ ...v, name: null, contact_id: null })),

@@ -16,7 +16,7 @@ const FORBIDDEN_HEADERS = new Set([
   'user-agent',
 ]);
 
-export const WEBHOOK_EVENT = 'form.submitted';
+const WEBHOOK_EVENT = 'form.submitted';
 
 /** JSON body sent when the connection has no field map. */
 export function webhookPayload(ctx: ConnectorContext<WebhookConfig>): Record<string, unknown> {

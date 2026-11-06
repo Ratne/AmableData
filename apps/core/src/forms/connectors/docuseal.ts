@@ -5,7 +5,7 @@ import { failure, httpResult, type Connector, type ConnectorContext, type Connec
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function docusealApiBase(config: Pick<DocusealConfig, 'region' | 'base_url'>): string {
+function docusealApiBase(config: Pick<DocusealConfig, 'region' | 'base_url'>): string {
   if (config.region === 'eu') return 'https://api.docuseal.eu';
   if (config.region === 'custom') return config.base_url.replace(/\/+$/, '');
   return 'https://api.docuseal.com';
@@ -34,7 +34,7 @@ async function call(
 }
 
 /** Body of the signing invitation; DocuSeal variables (`{{submitter.link}}`) are left for DocuSeal. */
-export function signingMessage(template: string, context: Record<string, string>): string {
+function signingMessage(template: string, context: Record<string, string>): string {
   const rendered = renderTags(template, context);
   if (rendered.trim() === '' || /\{\{\s*submitter\.link\s*\}\}/.test(rendered)) return rendered;
   return `${rendered.trim()}\n\n{{submitter.link}}`;

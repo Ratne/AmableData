@@ -52,7 +52,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** Validates ids are unique, positive integers, and returns the list sorted by id. */
-export function sortAndValidate(migrations: readonly Migration[]): readonly Migration[] {
+function sortAndValidate(migrations: readonly Migration[]): readonly Migration[] {
   const sorted = [...migrations].sort((a, b) => a.id - b.id);
   let previous = 0;
   for (const migration of sorted) {

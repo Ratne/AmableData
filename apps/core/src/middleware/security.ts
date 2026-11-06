@@ -6,7 +6,7 @@ import type { AppEnv } from './context';
 import { jsonError } from './errors';
 
 /** Origins accepted for cookie-authenticated, state-changing requests. */
-export function allowedOrigins(env: Env, requestUrl: string): string[] {
+function allowedOrigins(env: Env, requestUrl: string): string[] {
   const origins = new Set<string>([new URL(requestUrl).origin]);
   if (env.APP_ORIGIN !== undefined && env.APP_ORIGIN !== '') origins.add(env.APP_ORIGIN);
   for (const origin of (env.ALLOWED_ORIGINS ?? '').split(',')) {

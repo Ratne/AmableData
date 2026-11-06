@@ -9,7 +9,7 @@ import { tenantRoute } from '../../routes/tenant';
 const str = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
 
-export const ordersRoute = createRoute({
+const ordersRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'orders',
   validateSearch: (search: Record<string, unknown>): { contact?: string; status?: string } => {
@@ -20,7 +20,7 @@ export const ordersRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/orders'), 'OrdersPage'),
 });
 
-export const newOrderRoute = createRoute({
+const newOrderRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'orders/new',
   validateSearch: (search: Record<string, unknown>): { contact?: string } => {
@@ -36,7 +36,7 @@ export const orderDetailRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/order-detail'), 'OrderDetailPage'),
 });
 
-export const productsRoute = createRoute({
+const productsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'products',
   component: lazyRouteComponent(() => import('./pages/products'), 'ProductsPage'),
@@ -48,13 +48,13 @@ export const productDetailRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/product-editor'), 'ProductEditorPage'),
 });
 
-export const promotionsRoute = createRoute({
+const promotionsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'promotions',
   component: lazyRouteComponent(() => import('./pages/promotions'), 'PromotionsPage'),
 });
 
-export const subscriptionsRoute = createRoute({
+const subscriptionsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'subscriptions',
   component: lazyRouteComponent(() => import('./pages/subscriptions'), 'SubscriptionsPage'),
@@ -69,7 +69,7 @@ export const subscriptionDetailRoute = createRoute({
   ),
 });
 
-export const invoicesRoute = createRoute({
+const invoicesRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'invoices',
   component: lazyRouteComponent(() => import('./pages/invoices'), 'InvoicesPage'),
@@ -81,25 +81,25 @@ export const invoiceDetailRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/invoice-view'), 'InvoiceViewPage'),
 });
 
-export const paymentsRoute = createRoute({
+const paymentsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'payments',
   component: lazyRouteComponent(() => import('./pages/payments'), 'PaymentsPage'),
 });
 
-export const checkoutsRoute = createRoute({
+const checkoutsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'checkouts',
   component: lazyRouteComponent(() => import('./pages/checkouts'), 'CheckoutsPage'),
 });
 
-export const checkoutEditorRoute = createRoute({
+const checkoutEditorRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'checkouts/$checkoutId',
   component: lazyRouteComponent(() => import('./pages/checkout-editor'), 'CheckoutEditorPage'),
 });
 
-export const commerceSettingsRoute = createRoute({
+const commerceSettingsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'settings/commerce',
   component: lazyRouteComponent(() => import('./pages/settings'), 'CommerceSettingsPage'),

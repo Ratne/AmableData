@@ -22,7 +22,7 @@ import { liveNodes } from './state';
 import { CopyButton, useDebounced } from '../../../components/feature-kit';
 
 /** Entrance cost as accepted by the links API: `0.25`, `cpm_12.34` or a platform macro. */
-export const LINK_COST_RE = /^[A-Za-z0-9_.{}[\]-]{1,64}$/;
+const LINK_COST_RE = /^[A-Za-z0-9_.{}[\]-]{1,64}$/;
 
 const DEFAULT_DOMAIN = 'default';
 

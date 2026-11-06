@@ -4,15 +4,15 @@ import { listOperations, mergedOpenApiDocument, OPENAPI_SOURCES } from '../devel
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type JsonObject = { [key: string]: Json };
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /**
  * How an operation travels: JSON in/out, a raw request body (CSV, images, PDF),
  * or a WebSocket upgrade (edit locks), which no MCP client can hold open.
  */
-export type OperationTransport = 'json' | 'raw_body' | 'websocket';
+type OperationTransport = 'json' | 'raw_body' | 'websocket';
 
-export interface OperationParam {
+interface OperationParam {
   readonly name: string;
   readonly required: boolean;
   readonly schema: JsonObject;
@@ -44,7 +44,7 @@ export interface CatalogOperation {
   readonly idempotent: boolean;
 }
 
-export interface CatalogModule {
+interface CatalogModule {
   readonly id: string;
   readonly title: string;
 }
@@ -108,7 +108,7 @@ export function operationId(module: string, method: string, path: string): strin
 }
 
 /** Inlines `#/components/schemas/*` references (cycles stop at the second visit). */
-export function resolveRefs(node: Json, schemas: JsonObject, seen: readonly string[] = []): Json {
+function resolveRefs(node: Json, schemas: JsonObject, seen: readonly string[] = []): Json {
   if (Array.isArray(node)) return node.map((item) => resolveRefs(item, schemas, seen));
   if (!isObject(node)) return node;
   const ref = node['$ref'];

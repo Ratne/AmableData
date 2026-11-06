@@ -45,7 +45,7 @@ export function templateReady(
   );
 }
 
-export function templateToApi(row: TemplateRow): EsignTemplate {
+function templateToApi(row: TemplateRow): EsignTemplate {
   const pages = pagesOf(row.pages);
   const parties = partiesOf(row.parties);
   const fields = fieldsOf(row.fields);

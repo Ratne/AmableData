@@ -287,7 +287,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
 // ------------------------------------------------------------- serialization
 
 /** Key-sorted JSON without `null`/`undefined` members: equal graphs, equal strings. */
-export function canonical(value: unknown): string {
+function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, v: unknown) => {
     if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
     const out: Record<string, unknown> = {};
@@ -375,7 +375,7 @@ function sameIssue(a: BuilderIssue, b: BuilderIssue): boolean {
 // ------------------------------------------------------------- server replies
 
 /** Field detail of a `validation_failed` reply (`path` like `nodes.3.config.url`). */
-export interface ValidationDetail {
+interface ValidationDetail {
   readonly path: string;
   readonly message: string;
 }
@@ -393,7 +393,7 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 /** Structural errors of `validateGraph` (`invalid_graph` reply) as builder issues. */
-export function graphErrorIssues(errors: readonly FunnelGraphError[]): BuilderIssue[] {
+function graphErrorIssues(errors: readonly FunnelGraphError[]): BuilderIssue[] {
   return errors.map((e) => ({
     code: e.code,
     ...(e.node_id !== undefined ? { node_id: e.node_id } : {}),
@@ -403,7 +403,7 @@ export function graphErrorIssues(errors: readonly FunnelGraphError[]): BuilderIs
 }
 
 /** Schema errors (`validation_failed` details) pinned to the node or edge at their path. */
-export function detailIssues(
+function detailIssues(
   graph: Pick<FunnelGraph, 'nodes' | 'edges'>,
   details: readonly ValidationDetail[],
 ): BuilderIssue[] {

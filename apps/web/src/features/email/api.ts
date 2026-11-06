@@ -41,7 +41,7 @@ import { ApiError } from '../../lib/api';
 import { request } from '../../lib/tenant-api';
 
 /** Typed client of the email + broadcast REST v2 routes (and the CRM lookups their pickers need). */
-export function emailApi(slug: string) {
+function emailApi(slug: string) {
   const v2 = `/api/v2/t/${encodeURIComponent(slug)}`;
   const qs = (params: Record<string, string | number | undefined>) => {
     const search = new URLSearchParams();

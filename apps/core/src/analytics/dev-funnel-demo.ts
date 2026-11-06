@@ -140,7 +140,7 @@ function uuid(rnd: () => number): string {
 const anyOf = <T,>(rnd: () => number, list: readonly T[]): T => list[Math.floor(rnd() * list.length)] as T;
 
 /** Conversion postback for the edge `/pb` route of the site. */
-export interface DemoPostback {
+interface DemoPostback {
   hit: string;
   /** Major units, as sent by a shop or a network. */
   rev: string;

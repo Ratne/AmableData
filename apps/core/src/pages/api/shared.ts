@@ -23,11 +23,7 @@ export const pageIdParam = z.object({ id: idSchema });
 export const versionParam = z.object({ id: idSchema, versionId: idSchema });
 
 /** `https://<host><path>` once a domain is connected, else the edge fallback `/p/<slug><path>`. */
-export function publicUrl(
-  edge: string,
-  slug: string,
-  page: Pick<PageRecord, 'host' | 'path'>,
-): string {
+function publicUrl(edge: string, slug: string, page: Pick<PageRecord, 'host' | 'path'>): string {
   if (page.host !== null) return `https://${page.host}${page.path}`;
   return `${edge}/p/${slug}${page.path === '/' ? '' : page.path}`;
 }

@@ -13,7 +13,7 @@ import { uniqueId } from './ids';
 
 export const DEFAULT_HANDLE = 'default';
 
-export type FlowNodeData = { node: GraphNode };
+type FlowNodeData = { node: GraphNode };
 export type AutomationFlowNode = Node<FlowNodeData, GraphNode['type']>;
 export type AutomationFlowEdge = Edge;
 
@@ -64,7 +64,7 @@ function rounded(value: number): number {
 }
 
 /** Branch handles a decision exposes (branches in order, then `default`). */
-export function decisionHandles(node: GraphNode): string[] {
+function decisionHandles(node: GraphNode): string[] {
   return node.type === 'decision' ? [...node.branches.map((b) => b.id), DEFAULT_HANDLE] : [];
 }
 

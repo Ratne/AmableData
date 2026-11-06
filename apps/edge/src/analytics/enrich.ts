@@ -288,7 +288,7 @@ function landingLabel(raw: string | null | undefined): string | null {
  * `@<label>`, `sl` sets the source `@<name>` (an otherwise direct visit
  * becomes a referral).
  */
-export function applyLandingParams(event: EnrichedEvent, la: TrackerEvent['la']): void {
+function applyLandingParams(event: EnrichedEvent, la: TrackerEvent['la']): void {
   if (event.type !== 'pageview') return;
   const url = parseUrl(event.url);
   const q = url?.searchParams;

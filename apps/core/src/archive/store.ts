@@ -32,7 +32,7 @@ export interface ArchiveHost {
   now(): number;
 }
 
-export class ArchiveOpError extends Error {
+class ArchiveOpError extends Error {
   constructor(
     readonly code: 'bad_request' | 'not_archived',
     message: string,
@@ -104,7 +104,7 @@ function pendingOf(db: SqlDb, s: ArchiveStream, m: string): PendingPartition[] {
 }
 
 /** Oldest month past the cutoff of each stream, with its partitions not written yet. */
-export function archivePlan(host: ArchiveHost, input: { cutoffs?: Record<string, unknown> }): ArchivePlanStream[] {
+function archivePlan(host: ArchiveHost, input: { cutoffs?: Record<string, unknown> }): ArchivePlanStream[] {
   const out: ArchivePlanStream[] = [];
   for (const [name, value] of Object.entries(input.cutoffs ?? {})) {
     const s = stream(host, name);
@@ -117,7 +117,7 @@ export function archivePlan(host: ArchiveHost, input: { cutoffs?: Record<string,
 }
 
 /** One page of a partition, in id order after `after`, bounded in rows and size. */
-export function archiveRows(
+function archiveRows(
   host: ArchiveHost,
   input: { stream?: unknown; month?: unknown; partition?: unknown; after?: unknown; limit?: unknown },
 ): ArchiveRowsPage {
@@ -144,7 +144,7 @@ export function archiveRows(
 }
 
 /** Records an object the worker finished writing to R2. */
-export function archiveRecord(host: ArchiveHost, input: Partial<ArchiveCatalogEntry>): void {
+function archiveRecord(host: ArchiveHost, input: Partial<ArchiveCatalogEntry>): void {
   const s = stream(host, input.stream);
   const m = month(input.month);
   const partition = text(input.partition, 'partition');
@@ -174,7 +174,7 @@ export function archiveRecord(host: ArchiveHost, input: Partial<ArchiveCatalogEn
  * the month is not fully written (`not_archived`) or when the month is not past
  * the cutoff. `done` once the month has no rows left.
  */
-export function archivePrune(
+function archivePrune(
   host: ArchiveHost,
   input: { stream?: unknown; month?: unknown; cutoff?: unknown; limit?: unknown },
 ): { deleted: number; done: boolean } {
@@ -194,14 +194,14 @@ export function archivePrune(
 }
 
 /** Deletes consumed outbox rows older than `before` (bounded batch). */
-export function archivePurgeOutbox(host: ArchiveHost, input: { before?: unknown; limit?: unknown }): { deleted: number } {
+function archivePurgeOutbox(host: ArchiveHost, input: { before?: unknown; limit?: unknown }): { deleted: number } {
   if (typeof input.before !== 'number' || !Number.isFinite(input.before)) throw new ArchiveOpError('bad_request', 'before is required');
   const limit = typeof input.limit === 'number' ? Math.min(Math.max(Math.floor(input.limit), 1), PRUNE_MAX) : PRUNE_MAX;
   return { deleted: host.db.transaction(() => purgeOutbox(host.db, host.outbox, input.before as number, limit)) };
 }
 
 /** Objects of a partition, newest month first (optionally one month, or months before `before`). */
-export function archiveCatalog(
+function archiveCatalog(
   host: ArchiveHost,
   input: { stream?: unknown; partition?: unknown; month?: unknown; before?: unknown; limit?: unknown },
 ): ArchiveCatalogEntry[] {
@@ -228,7 +228,7 @@ export function archiveCatalog(
 }
 
 /** Archived months of a partition with their row counts, newest first. */
-export function archiveMonths(host: ArchiveHost, input: { stream?: unknown; partition?: unknown }): ArchiveMonthSummary[] {
+function archiveMonths(host: ArchiveHost, input: { stream?: unknown; partition?: unknown }): ArchiveMonthSummary[] {
   const s = stream(host, input.stream);
   const partition = text(input.partition, 'partition');
   return host.db.all<ArchiveMonthSummary>(
@@ -241,7 +241,7 @@ export function archiveMonths(host: ArchiveHost, input: { stream?: unknown; part
 }
 
 /** Totals of every stream of this database (settings page). */
-export function archiveSummary(host: ArchiveHost): Array<{ stream: ArchiveStream; rows: number; bytes: number; oldest: string | null; newest: string | null }> {
+function archiveSummary(host: ArchiveHost): Array<{ stream: ArchiveStream; rows: number; bytes: number; oldest: string | null; newest: string | null }> {
   return host.streams.map((s) => {
     const row = host.db.all<{ rows: number | null; bytes: number | null; oldest: string | null; newest: string | null }>(
       `SELECT SUM(rows) AS rows, SUM(bytes) AS bytes, MIN(month) AS oldest, MAX(month) AS newest
@@ -252,7 +252,7 @@ export function archiveSummary(host: ArchiveHost): Array<{ stream: ArchiveStream
   });
 }
 
-export function readRetention(host: ArchiveHost): RetentionSettings {
+function readRetention(host: ArchiveHost): RetentionSettings {
   if (host.settingsTable === null) throw new ArchiveOpError('bad_request', 'retention settings live in the TenantDb');
   const raw = host.db.all<{ value: string }>(`SELECT value FROM ${host.settingsTable} WHERE key = ?`, SETTINGS_KEY)[0]?.value;
   let parsed: unknown = {};
@@ -264,7 +264,7 @@ export function readRetention(host: ArchiveHost): RetentionSettings {
   return normalizeRetention(parsed);
 }
 
-export function saveRetention(host: ArchiveHost, input: unknown): RetentionSettings {
+function saveRetention(host: ArchiveHost, input: unknown): RetentionSettings {
   if (host.settingsTable === null) throw new ArchiveOpError('bad_request', 'retention settings live in the TenantDb');
   const settings = normalizeRetention({ ...readRetention(host), ...(typeof input === 'object' && input !== null ? input : {}) });
   host.db.run(
@@ -290,7 +290,7 @@ const OPS = {
   'settings.save': saveRetention,
 } as const;
 
-export type ArchiveOpName = keyof typeof OPS;
+type ArchiveOpName = keyof typeof OPS;
 
 /** Single RPC entry point of the archive in a Durable Object; errors become `{ ok: false }`. */
 export function runArchiveOp(host: ArchiveHost, op: string, input: unknown): ArchiveOpResult<unknown> {

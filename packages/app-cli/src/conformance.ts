@@ -9,7 +9,7 @@ import { signPayload } from '@amable/app-sdk';
  * and timings.
  */
 
-export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
+type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface CheckResult {
   readonly name: string;

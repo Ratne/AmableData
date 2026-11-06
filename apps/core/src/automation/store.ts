@@ -5,13 +5,13 @@ import {
   type AutomationGraph,
   type AutomationSettings,
 } from '@amable/api-types';
-import { first, placeholders, type SqlDb, type SqlValue } from '../crm/db/sql';
+import { first, placeholders, type SqlDb } from '../crm/db/sql';
 import { parseJson } from '../crm/util';
 
 /** Row shapes of the Engine DO tables and small query helpers. */
 
 export type AutomationStatusValue = 'draft' | 'active' | 'inactive';
-export type EnrollmentStatusValue = 'active' | 'completed' | 'removed' | 'failed';
+type EnrollmentStatusValue = 'active' | 'completed' | 'removed' | 'failed';
 export type TokenStatus =
   'scheduled' | 'running' | 'paused' | 'waiting' | 'suspended' | 'done' | 'cancelled' | 'failed';
 
@@ -217,5 +217,3 @@ export function setMeta(db: SqlDb, key: string, value: string): void {
     value,
   );
 }
-
-export type { SqlValue };

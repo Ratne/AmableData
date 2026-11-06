@@ -38,7 +38,7 @@ const NO_STORE = 'no-store, no-cache, must-revalidate, private';
 const PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'";
 
 /** POSTs to the core public email endpoints; null when unreachable. */
-export async function callCore<T>(env: EmailEdgeEnv, path: string, body: unknown): Promise<T | null> {
+async function callCore<T>(env: EmailEdgeEnv, path: string, body: unknown): Promise<T | null> {
   const init: RequestInit = {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

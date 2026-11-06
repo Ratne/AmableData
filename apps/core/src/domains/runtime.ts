@@ -15,7 +15,7 @@ export function overrideDomainDeps(next: Override | null): void {
 }
 
 /** Fake zone in dev (no network ever), the Cloudflare API with a token, otherwise manual mode. */
-export function zoneAutomation(env: Env): ZoneAutomation | null {
+function zoneAutomation(env: Env): ZoneAutomation | null {
   if (env.ENVIRONMENT === 'dev') return new FakeZoneAutomation(env.DB);
   const token = env.CLOUDFLARE_DNS_API_TOKEN;
   if (token === undefined || token === '') return null;

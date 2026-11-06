@@ -3,7 +3,7 @@ import { tenantRoute } from '../../routes/tenant';
 
 /* Settings > Backups under /t/$tenant (lazy chunk). The path matches navigation.ts. */
 
-export const backupsRoute = createRoute({
+const backupsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'settings/backups',
   component: lazyRouteComponent(() => import('./pages/backups'), 'BackupsPage'),

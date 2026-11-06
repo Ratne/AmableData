@@ -61,7 +61,7 @@ export function formatMoney(minor: number, currency: string, locale: string): st
 }
 
 /** Decimal separator of a locale (`.` for en, `,` for it). */
-export function decimalSeparator(locale: string): string {
+function decimalSeparator(locale: string): string {
   const part = new Intl.NumberFormat(locale).formatToParts(1.5).find((p) => p.type === 'decimal');
   return part?.value ?? '.';
 }

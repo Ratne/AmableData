@@ -130,7 +130,7 @@ function submissionRow(ctx: CrmContext, id: string, formId?: string): Submission
   return row;
 }
 
-export function deliveriesOf(ctx: CrmContext, submissionIds: string[]): Map<string, DeliveryRow[]> {
+function deliveriesOf(ctx: CrmContext, submissionIds: string[]): Map<string, DeliveryRow[]> {
   const out = new Map<string, DeliveryRow[]>(submissionIds.map((id) => [id, []]));
   if (submissionIds.length === 0) return out;
   for (let i = 0; i < submissionIds.length; i += 90) {

@@ -42,7 +42,7 @@ const USER_CHUNK = 90;
 // --------------------------------------------------------------------- access
 
 /** Report permission (sales vs all reports) + the module permission of the source. */
-export function canReadSource(c: Ctx, source: ReportSource): boolean {
+function canReadSource(c: Ctx, source: ReportSource): boolean {
   const tenant = getTenant(c);
   const spec: ReportSourceSpec = REPORT_SOURCE_SPECS[source];
   return (
@@ -79,7 +79,7 @@ async function userLabels(c: Ctx, ids: string[]): Promise<Map<string, string>> {
   return labels;
 }
 
-export function reportPorts(c: Ctx): ReportPorts {
+function reportPorts(c: Ctx): ReportPorts {
   const tenantId = getTenant(c).tenant.id;
   return {
     tenantId,
@@ -187,7 +187,7 @@ function homeDashboard(c: Ctx): Dashboard {
 // ---------------------------------------------------------------------- routes
 
 /** Report engine REST v2, relative to `/api/v2/t/{slug}`. */
-export const reportsApi = createCrmRouter();
+const reportsApi = createCrmRouter();
 
 const sourcesSchema = z.record(z.string(), z.unknown());
 

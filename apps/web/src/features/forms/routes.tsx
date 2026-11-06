@@ -6,19 +6,19 @@ import { tenantRoute } from '../../routes/tenant';
  * replaces the navigation placeholder.
  */
 
-export const formsListRoute = createRoute({
+const formsListRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'forms',
   component: lazyRouteComponent(() => import('./pages/forms-list'), 'FormsListPage'),
 });
 
-export const formBuilderRoute = createRoute({
+const formBuilderRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'forms/$formId',
   component: lazyRouteComponent(() => import('./pages/form-builder'), 'FormBuilderPage'),
 });
 
-export const formSubmissionsRoute = createRoute({
+const formSubmissionsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'forms/$formId/submissions',
   validateSearch: (search: Record<string, unknown>): { submission?: string } =>
@@ -26,7 +26,7 @@ export const formSubmissionsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/submissions'), 'SubmissionsPage'),
 });
 
-export const formConnectionsRoute = createRoute({
+const formConnectionsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'forms/$formId/connections',
   component: lazyRouteComponent(() => import('./pages/connections'), 'ConnectionsPage'),

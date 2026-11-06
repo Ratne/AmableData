@@ -8,7 +8,7 @@ import type { Connector } from './types';
 import { webhookConnector } from './webhook';
 
 /** Every connector, by type. Adding one: implement `Connector` and list it here (and in CONNECTOR_TYPES). */
-export const CONNECTORS: { readonly [K in ConnectorType]: Connector<unknown> } = {
+const CONNECTORS: { readonly [K in ConnectorType]: Connector<unknown> } = {
   webhook: webhookConnector as Connector<unknown>,
   google_sheets: googleSheetsConnector as Connector<unknown>,
   email_notification: emailNotificationConnector as Connector<unknown>,

@@ -56,7 +56,7 @@ export function monthChoices(locale: string) {
   }));
 }
 
-export function currencySymbol(locale: string, currency: string): string {
+function currencySymbol(locale: string, currency: string): string {
   try {
     const part = new Intl.NumberFormat(locale, { style: 'currency', currency })
       .formatToParts(0)

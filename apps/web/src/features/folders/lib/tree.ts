@@ -50,7 +50,7 @@ export function subtreeIds(index: FolderIndex, id: string): Set<string> {
 }
 
 /** Levels of a subtree (1 = no subfolders). */
-export function subtreeHeight(index: FolderIndex, id: string): number {
+function subtreeHeight(index: FolderIndex, id: string): number {
   const children = index.children.get(id) ?? [];
   let max = 0;
   for (const child of children) max = Math.max(max, subtreeHeight(index, child.id));

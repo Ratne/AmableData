@@ -29,9 +29,9 @@ import type { ArchiveOpResult } from './store';
  */
 
 export const ARCHIVE_STATE_KEY = 'archive/_state.json';
-export const ARCHIVE_INTERVAL_MS = 24 * 60 * 60 * 1000 - 10 * 60 * 1000;
-export const ARCHIVE_TICK_BUDGET_MS = 10_000;
-export const ARCHIVE_MAX_TENANTS_PER_TICK = 5;
+const ARCHIVE_INTERVAL_MS = 24 * 60 * 60 * 1000 - 10 * 60 * 1000;
+const ARCHIVE_TICK_BUDGET_MS = 10_000;
+const ARCHIVE_MAX_TENANTS_PER_TICK = 5;
 const ARCHIVE_LEASE_MS = 10 * 60 * 1000;
 const RETRY_AFTER_FAILURE_MS = 60 * 60 * 1000;
 const PRUNE_BATCH = 2000;
@@ -62,7 +62,7 @@ export function archiveDeps(env: Env): ArchiveDeps {
   };
 }
 
-export class ArchiveJobError extends Error {
+class ArchiveJobError extends Error {
   constructor(
     readonly code: string,
     message: string,

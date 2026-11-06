@@ -10,7 +10,7 @@
 
 export const BACKUP_FORMAT = 'amable-backup';
 export const BACKUP_FORMAT_VERSION = 1;
-export const BACKUP_PREFIX = 'backups/';
+const BACKUP_PREFIX = 'backups/';
 export const BACKUP_STATE_KEY = 'backups/_state.json';
 
 /** Scheduled backups older than this are due (slightly under 24 h so the slot does not drift by a cron tick per day). */
@@ -55,11 +55,6 @@ export interface BackupRowLine {
   row: BackupRow;
 }
 
-export interface BackupEndLine {
-  type: 'end';
-  rows: number;
-}
-
 const ID_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-(scheduled|manual)-[0-9A-Za-z]{6,32}$/;
 
 export interface BackupObjectInfo {
@@ -71,7 +66,7 @@ export interface BackupObjectInfo {
 }
 
 /** `2026-10-15T19:20:00.000Z` → `2026-10-15T19-20-00-000Z` (sortable, key-safe). */
-export function stampOf(at: number): string {
+function stampOf(at: number): string {
   return new Date(at).toISOString().replace(/[:.]/g, '-');
 }
 

@@ -44,7 +44,7 @@ export function useLiquidFields(): LiquidFieldGroup[] {
 }
 
 /** Search-as-you-type contact picker (preview with a real contact). */
-export function ContactPicker({
+function ContactPicker({
   value,
   onChange,
 }: {

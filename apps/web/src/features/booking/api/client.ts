@@ -18,8 +18,6 @@ import type {
 } from '@amable/api-types';
 import { type Deleted, tenantRest } from '../../../lib/tenant-api';
 
-export { TenantApiError as BookingApiError } from '../../../lib/tenant-api';
-
 /**
  * Typed client of the calendars & bookings REST v2 surface (`/api/v2/t/{slug}`)
  * plus the lookups the editors need (members, contact custom fields, tags).

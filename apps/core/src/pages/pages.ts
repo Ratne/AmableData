@@ -26,7 +26,7 @@ import { createFolderStore, type FolderStore } from '../folders/store';
  * version) is one TenantDb row, which Durable Object SQLite caps at 2 MB with the
  * other columns included.
  */
-export const MAX_DOCUMENT_BYTES = 1_800_000;
+const MAX_DOCUMENT_BYTES = 1_800_000;
 
 /**
  * Paths the edge serves itself on every host (other edge routes win over the
@@ -34,7 +34,7 @@ export const MAX_DOCUMENT_BYTES = 1_800_000;
  */
 const RESERVED_PREFIXES = ['/_edge', '/f', '/b', '/p', '/m', '/e', '/s.js', '/forms.js', '/booking.js', '/c', '/checkout.js', '/sitemap.xml', '/robots.txt'];
 
-export interface PageRow {
+interface PageRow {
   id: string;
   title: string;
   path: string;
@@ -54,7 +54,7 @@ export interface PageRow {
   deleted_at: number | null;
 }
 
-export interface VersionRow {
+interface VersionRow {
   id: string;
   page_id: string;
   version: number;
@@ -71,7 +71,7 @@ export interface VersionRow {
 export type PageRecord = Omit<LandingPage, 'public_url'>;
 export type PageDetailRecord = PageRecord & { draft: PageDocument; draft_revision: number };
 
-export interface StoredSeo {
+interface StoredSeo {
   title: string | null;
   description: string | null;
   og_image: string | null;
@@ -79,7 +79,7 @@ export interface StoredSeo {
   noindex: boolean;
 }
 
-export interface StoredSettings {
+interface StoredSettings {
   analytics_site_id: string | null;
   favicon: string | null;
   lang: string | null;
@@ -87,7 +87,7 @@ export interface StoredSettings {
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
 
-export function readSeo(json: string): StoredSeo {
+function readSeo(json: string): StoredSeo {
   const raw = parseJson<Record<string, unknown>>(json, {});
   return {
     title: str(raw.title),
@@ -98,13 +98,13 @@ export function readSeo(json: string): StoredSeo {
   };
 }
 
-export function readSettings(json: string): StoredSettings {
+function readSettings(json: string): StoredSettings {
   const raw = parseJson<Record<string, unknown>>(json, {});
   return { analytics_site_id: str(raw.analytics_site_id), favicon: str(raw.favicon), lang: str(raw.lang) };
 }
 
 /** `/`-prefixed, lowercase, no duplicate or trailing slashes, no dot segments. */
-export function normalizePath(raw: string, path = 'path'): string {
+function normalizePath(raw: string, path = 'path'): string {
   const trimmed = raw.trim().toLowerCase();
   const segments = trimmed.split('/').filter((s) => s !== '');
   if (segments.some((s) => s === '.' || s === '..')) throw invalid(path, 'dot segments are not allowed');
@@ -157,7 +157,7 @@ export function pageFolders(ctx: CrmContext): FolderStore {
   );
 }
 
-export function getPageRow(ctx: CrmContext, id: string, options: { deleted?: boolean } = {}): PageRow {
+function getPageRow(ctx: CrmContext, id: string, options: { deleted?: boolean } = {}): PageRow {
   const row = ctx.db.all<PageRow>(
     `SELECT * FROM page_pages WHERE id = ? AND deleted_at IS ${options.deleted === true ? 'NOT NULL' : 'NULL'}`,
     id,
@@ -185,7 +185,7 @@ function draftKind(draft: string): 'canvas' | 'html' {
   return draft.startsWith('{"editorKind":"html"') ? 'html' : 'canvas';
 }
 
-export function serializePage(row: PageRow): PageRecord {
+function serializePage(row: PageRow): PageRecord {
   return {
     id: row.id,
     title: row.title,
@@ -208,7 +208,7 @@ function detail(row: PageRow): PageDetailRecord {
   return { ...serializePage(row), draft: storedDocument(row.draft), draft_revision: row.draft_revision };
 }
 
-export function serializeVersion(row: Pick<VersionRow, 'id' | 'version' | 'note' | 'published_at' | 'published_by'>): PageVersion {
+function serializeVersion(row: Pick<VersionRow, 'id' | 'version' | 'note' | 'published_at' | 'published_by'>): PageVersion {
   return {
     id: row.id,
     version: row.version,

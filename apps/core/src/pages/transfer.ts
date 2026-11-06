@@ -16,9 +16,9 @@ import { sha256Hex } from '@amable/auth';
 
 export const PAGE_EXPORT_FORMAT = 'amable-page';
 export const PAGE_EXPORT_VERSION = 1;
-export const PAGE_MANIFEST_NAME = 'page.json';
+const PAGE_MANIFEST_NAME = 'page.json';
 /** Media bytes per export; later files are listed in `media_skipped`. */
-export const PAGE_EXPORT_MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+const PAGE_EXPORT_MAX_MEDIA_BYTES = 50 * 1024 * 1024;
 /** Import body cap: the media cap plus the manifest, so every export is importable. */
 export const PAGE_IMPORT_MAX_BYTES = PAGE_EXPORT_MAX_MEDIA_BYTES + 5 * 1024 * 1024;
 const MANIFEST_MAX_BYTES = 4 * 1024 * 1024;
@@ -35,9 +35,9 @@ const mediaEntrySchema = z.object({
   size: z.number().int().nonnegative(),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
-export type PageExportMedia = z.infer<typeof mediaEntrySchema>;
+type PageExportMedia = z.infer<typeof mediaEntrySchema>;
 
-export const pageManifestSchema = z.object({
+const pageManifestSchema = z.object({
   format: z.literal(PAGE_EXPORT_FORMAT),
   version: z.literal(PAGE_EXPORT_VERSION),
   exported_at: z.string().max(64),
@@ -94,7 +94,7 @@ export function collectMediaFiles(values: unknown[]): string[] {
 }
 
 /** Points media URLs of known files at `<mediaBase><new file>`; unknown files stay as they are. */
-export function rewriteMediaUrls(value: string, files: ReadonlyMap<string, string>, mediaBase: string): string {
+function rewriteMediaUrls(value: string, files: ReadonlyMap<string, string>, mediaBase: string): string {
   const base = mediaBase.endsWith('/') ? mediaBase : `${mediaBase}/`;
   return value.replace(MEDIA_URL_RE, (whole, file: string) => {
     const next = files.get(file);

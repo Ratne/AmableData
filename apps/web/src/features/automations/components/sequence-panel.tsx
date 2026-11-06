@@ -23,7 +23,7 @@ import { IssueList } from './issue-list';
 import { StepIcon } from './node-icons';
 import { StepForm, useStepSummary, type StepFormContext } from './step-forms';
 
-export function AddStepMenu({ onAdd, label }: { onAdd: (type: StepType) => void; label: string }) {
+function AddStepMenu({ onAdd, label }: { onAdd: (type: StepType) => void; label: string }) {
   const { t } = useI18n();
   return (
     <DropdownMenu>

@@ -34,7 +34,7 @@ export function addMonths(date: LocalDate, months: number): LocalDate {
   return { y: Math.floor(index / 12), m: (index % 12) + 1, d: 1 };
 }
 
-export function daysInMonth(date: LocalDate): number {
+function daysInMonth(date: LocalDate): number {
   return new Date(Date.UTC(date.y, date.m, 0)).getUTCDate();
 }
 

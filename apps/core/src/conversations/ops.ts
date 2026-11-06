@@ -67,12 +67,12 @@ interface MessageRow {
 const PREVIEW_LENGTH = 140;
 const preview = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, PREVIEW_LENGTH);
 
-export function channelId(appId: string, key: string): string {
+function channelId(appId: string, key: string): string {
   return `${appId}:${key}`;
 }
 
 /** Same address, same thread: phone numbers keep `+` and digits, emails are lowercased. */
-export function normalizeAddress(field: AddressField, value: string): string {
+function normalizeAddress(field: AddressField, value: string): string {
   const trimmed = value.trim();
   if (field === 'phone') {
     const digits = trimmed.replace(/\D/g, '');
@@ -157,7 +157,7 @@ const refs = (row: ConversationRow) => ({ conversationId: row.id, contactId: row
 
 // ------------------------------------------------------------------- reads
 
-export function listConversations(ctx: CrmContext, input: ListConversationsQuery & { me: string | null }): Page<Conversation> {
+function listConversations(ctx: CrmContext, input: ListConversationsQuery & { me: string | null }): Page<Conversation> {
   const after = input.cursor === undefined ? null : decodeCursor(input.cursor);
   const assigned = input.assigned_to === 'me' ? input.me : input.assigned_to;
   const rows = ctx.db.all<ConversationRow>(
@@ -191,12 +191,12 @@ export function listConversations(ctx: CrmContext, input: ListConversationsQuery
   };
 }
 
-export function getConversation(ctx: CrmContext, input: { id: string }): Conversation {
+function getConversation(ctx: CrmContext, input: { id: string }): Conversation {
   return toConversation(getRow(ctx, input.id));
 }
 
 /** Newest first; the next page holds older messages. */
-export function listMessages(ctx: CrmContext, input: ListMessagesQuery & { id: string }): Page<ConversationMessage> {
+function listMessages(ctx: CrmContext, input: ListMessagesQuery & { id: string }): Page<ConversationMessage> {
   getRow(ctx, input.id);
   const before = input.cursor === undefined ? null : decodeCursor(input.cursor).id;
   const rows = ctx.db.all<MessageRow>(
@@ -214,7 +214,7 @@ export function listMessages(ctx: CrmContext, input: ListMessagesQuery & { id: s
   };
 }
 
-export function conversationCounts(ctx: CrmContext, input: { me: string | null }): { open: number; unassigned: number; mine: number; unread: number } {
+function conversationCounts(ctx: CrmContext, input: { me: string | null }): { open: number; unassigned: number; mine: number; unread: number } {
   const row = ctx.db.all<{ open: number; unassigned: number; mine: number; unread: number }>(
     `SELECT
        COALESCE(SUM(status = 'open'), 0) AS open,
@@ -229,7 +229,7 @@ export function conversationCounts(ctx: CrmContext, input: { me: string | null }
 
 // ----------------------------------------------------------------- updates
 
-export function updateConversation(ctx: CrmContext, input: { id: string; data: UpdateConversationInput }): Conversation {
+function updateConversation(ctx: CrmContext, input: { id: string; data: UpdateConversationInput }): Conversation {
   const current = getRow(ctx, input.id);
   const status = input.data.status ?? current.status;
   const assignedTo = input.data.assigned_to === undefined ? current.assigned_to : input.data.assigned_to;
@@ -240,7 +240,7 @@ export function updateConversation(ctx: CrmContext, input: { id: string; data: U
   return getConversation(ctx, input);
 }
 
-export function markRead(ctx: CrmContext, input: { id: string }): Conversation {
+function markRead(ctx: CrmContext, input: { id: string }): Conversation {
   getRow(ctx, input.id);
   ctx.db.run(`UPDATE conv_conversations SET unread = 0 WHERE id = ?`, input.id);
   return getConversation(ctx, input);
@@ -313,7 +313,7 @@ export interface QueuedMessage {
 }
 
 /** A reply from the team: queued for the worker to send, or an internal note. */
-export function addMessage(
+function addMessage(
   ctx: CrmContext,
   input: {
     id: string;
@@ -392,7 +392,7 @@ function findOrCreateThread(
 }
 
 /** The team writes first to a contact on a channel. */
-export function startConversation(
+function startConversation(
   ctx: CrmContext,
   input: {
     appId: string;
@@ -419,7 +419,7 @@ export function startConversation(
 }
 
 /** Outcome of a send attempt (worker) or a delivery update (app). */
-export function recordDelivery(
+function recordDelivery(
   ctx: CrmContext,
   input: { messageId: string; status: 'sent' | 'delivered' | 'read' | 'failed'; externalId?: string | null; error?: string | null; text?: string | null },
 ): ConversationMessage {
@@ -451,7 +451,7 @@ export function recordDelivery(
 }
 
 /** Delivery update reported by the app, by provider id. Unknown ids are ignored (`null`). */
-export function recordDeliveryByExternalId(
+function recordDeliveryByExternalId(
   ctx: CrmContext,
   input: { appId: string; channelKey: string; externalId: string; status: 'sent' | 'delivered' | 'read' | 'failed'; error?: string | undefined },
 ): ConversationMessage | null {
@@ -486,7 +486,7 @@ function inboundContact(ctx: CrmContext, field: AddressField, address: string, i
 }
 
 /** A message an app received from a contact. The same `external_id` twice is stored once. */
-export function receiveMessage(
+function receiveMessage(
   ctx: CrmContext,
   input: { appId: string; addressField: AddressField; message: InboundMessageInput },
 ): { conversation: Conversation; message: ConversationMessage; duplicate: boolean } {
@@ -532,7 +532,7 @@ export function receiveMessage(
  * app): it shows in the thread without being sent again. Same `external_id`
  * twice is stored once.
  */
-export function recordOutbound(
+function recordOutbound(
   ctx: CrmContext,
   input: { appId: string; addressField: AddressField; message: OutboundMessageInput },
 ): { conversation: Conversation; message: ConversationMessage; duplicate: boolean } {

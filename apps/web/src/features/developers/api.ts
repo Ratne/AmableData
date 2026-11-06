@@ -25,22 +25,15 @@ export interface ApiKey {
   readonly revokedAt: number | null;
 }
 
-export type {
-  DeliveryStatus,
-  DomainKind,
-  TenantDomain,
-  WebhookDelivery,
-  WebhookDeliveryDetail,
-  WebhookEndpoint,
-};
+export type { DeliveryStatus, DomainKind, TenantDomain, WebhookDelivery, WebhookEndpoint };
 
-export interface DomainList {
+interface DomainList {
   readonly automation: 'cloudflare' | 'fake' | 'manual';
   readonly edge_hostname: string;
   readonly data: TenantDomain[];
 }
 
-export interface SendingStatus {
+interface SendingStatus {
   readonly state: 'verified' | 'unverified' | 'dev_override';
   readonly can_send: boolean;
   readonly verified_domains: string[];
@@ -48,7 +41,7 @@ export interface SendingStatus {
   readonly dns_update_needed?: string[];
 }
 
-export function developersApi(slug: string) {
+function developersApi(slug: string) {
   const admin = `/api/t/${encodeURIComponent(slug)}`;
   const v2 = `/api/v2/t/${encodeURIComponent(slug)}`;
   const post = <T>(path: string, body: unknown = {}) =>

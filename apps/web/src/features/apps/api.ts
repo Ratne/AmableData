@@ -72,7 +72,7 @@ export interface AppInputProperty {
   readonly options_endpoint?: string;
 }
 
-export interface AppInputOption {
+interface AppInputOption {
   readonly value: string;
   readonly label: string;
   readonly description?: string;
@@ -91,7 +91,7 @@ export interface AppInputSchema {
   readonly required?: string[];
 }
 
-export interface AppAutomationAction {
+interface AppAutomationAction {
   readonly key: string;
   readonly name: LocalizedText;
   readonly description?: LocalizedText;
@@ -129,13 +129,13 @@ export interface AppInstallView {
   readonly activated_at: string | null;
 }
 
-export interface CatalogItem {
+interface CatalogItem {
   readonly manifest: AppManifestView;
   readonly added_at: string | null;
   readonly install: AppInstallView | null;
 }
 
-export interface AppHealth {
+interface AppHealth {
   readonly since: string;
   readonly totals: Array<{ kind: string; calls: number; errors: number; avg_ms: number }>;
   readonly hourly: Array<{ hour: string; calls: number; errors: number }>;
@@ -145,7 +145,7 @@ export interface AppHealth {
   readonly last_failure_at: string | null;
 }
 
-export interface AppEventRecord {
+interface AppEventRecord {
   readonly sequence: number;
   readonly id: string;
   readonly type: string;
@@ -153,11 +153,11 @@ export interface AppEventRecord {
 }
 
 /** `base_url` of catalog apps that run in this installation's own Cloudflare account. */
-export const DEPLOYED_APP_ORIGIN = 'https://deployed-app.invalid';
+const DEPLOYED_APP_ORIGIN = 'https://deployed-app.invalid';
 
 export const isDeployedApp = (manifest: Pick<AppManifestView, 'base_url'>): boolean => manifest.base_url === DEPLOYED_APP_ORIGIN;
 
-export interface CloudflareCredentialsView {
+interface CloudflareCredentialsView {
   readonly account_id: string;
   readonly account_name: string | null;
   readonly token_hint: string;
@@ -166,12 +166,12 @@ export interface CloudflareCredentialsView {
 }
 
 /** `direct`: self-hosted, the owner connects a token; `control_plane`: AmableData Cloud, the portal token is used. */
-export interface CloudflareStatus {
+interface CloudflareStatus {
   readonly provider: 'direct' | 'control_plane';
   readonly credentials: CloudflareCredentialsView | null;
 }
 
-export interface AppDeploymentView {
+interface AppDeploymentView {
   readonly status: 'ready' | 'failed';
   readonly provider: 'direct' | 'control_plane';
   readonly origin: string | null;
@@ -196,7 +196,7 @@ export interface AuthorizeInput {
   readonly code_challenge_method?: 'S256';
 }
 
-export function appsApi(slug: string) {
+function appsApi(slug: string) {
   const base = `/api/t/${encodeURIComponent(slug)}/apps`;
   const post = <T>(path: string, body: unknown = {}) => request<T>(`${base}${path}`, { method: 'POST', json: body, idempotent: false });
   return {

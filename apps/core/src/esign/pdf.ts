@@ -127,7 +127,7 @@ const EVENT_LABELS: Record<Locale, Record<string, string>> = {
   },
 };
 
-export type ImageLoader = (key: string) => Promise<Uint8Array | null>;
+type ImageLoader = (key: string) => Promise<Uint8Array | null>;
 
 // ------------------------------------------------------------ text helpers
 

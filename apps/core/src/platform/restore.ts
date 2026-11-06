@@ -6,7 +6,7 @@ import type { Env } from '../env';
 /** Durable Object SQLite storage keeps 30 days of point-in-time history. */
 export const POINT_IN_TIME_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
-export function tenantObject(env: Env, tenantId: string, name: TenantDoName): PointInTimeStub {
+function tenantObject(env: Env, tenantId: string, name: TenantDoName): PointInTimeStub {
   if (name === 'tenant_db') return env.TENANT_DB.get(env.TENANT_DB.idFromName(tenantId));
   if (name === 'mail_db') return env.MAIL_DB.get(env.MAIL_DB.idFromName(tenantId));
   return env.ENGINE.get(env.ENGINE.idFromName(tenantId));

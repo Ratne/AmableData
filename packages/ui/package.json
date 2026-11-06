@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ui/*": "./src/components/ui/*.tsx",
+    "./blocks/dashboard-shell": "./src/components/block/dashboard-shell/index.ts",
     "./blocks/*": "./src/components/block/*.tsx",
     "./theme.css": "./src/styles/theme.css"
   },

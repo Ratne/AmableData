@@ -7,7 +7,7 @@ import { collectsValue, UTM_PARAMS, type FormField } from '@amable/forms';
  */
 
 export type JsonObject = { [key: string]: JsonValue };
-export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
+type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 
 const tag = (key: string) => `{{${key}}}`;
 

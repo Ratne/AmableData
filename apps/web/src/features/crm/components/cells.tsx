@@ -35,7 +35,7 @@ export function formatTotals(
   return totals.map((total) => formatMoney(total.minor, total.currency, locale)).join(' + ');
 }
 
-export function TagBadges({
+function TagBadges({
   ids,
   tagsById,
   max = 3,

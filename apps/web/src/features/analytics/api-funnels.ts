@@ -213,8 +213,6 @@ export function funnelsApi(tenant: string) {
   };
 }
 
-export type FunnelsApi = ReturnType<typeof funnelsApi>;
-
 // ---------------------------------------------------------------- ads OAuth
 
 /** Ad accounts of a fresh authorization, waiting for the user to pick the ones to connect. */

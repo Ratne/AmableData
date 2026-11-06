@@ -1,7 +1,7 @@
 import type { ReportCatalogEntry, ReportSource } from '@amable/api-types/reports';
 
 /** Catalog sections of the reports page, in display order. */
-export const REPORT_AREAS = [
+const REPORT_AREAS = [
   'custom',
   'sales',
   'subscriptions',
@@ -14,7 +14,7 @@ export const REPORT_AREAS = [
   'pipeline',
   'attribution',
 ] as const;
-export type ReportArea = (typeof REPORT_AREAS)[number];
+type ReportArea = (typeof REPORT_AREAS)[number];
 
 const AREA_BY_SOURCE: Readonly<Record<ReportSource, Exclude<ReportArea, 'custom'>>> = {
   orders: 'sales',
@@ -40,7 +40,7 @@ const AREA_BY_SOURCE: Readonly<Record<ReportSource, Exclude<ReportArea, 'custom'
   ad_campaigns: 'attribution',
 };
 
-export function areaOf(entry: Pick<ReportCatalogEntry, 'kind' | 'definition'>): ReportArea {
+function areaOf(entry: Pick<ReportCatalogEntry, 'kind' | 'definition'>): ReportArea {
   return entry.kind === 'custom' ? 'custom' : AREA_BY_SOURCE[entry.definition.source];
 }
 

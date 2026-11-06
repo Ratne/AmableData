@@ -23,7 +23,7 @@ interface InvoiceRow {
 }
 
 /** Invoice number: `<prefix><year>-<5-digit sequence>`; the sequence restarts each (UTC) year. */
-export function formatInvoiceNumber(prefix: string, year: number, sequence: number): string {
+function formatInvoiceNumber(prefix: string, year: number, sequence: number): string {
   return `${prefix}${year}-${String(sequence).padStart(5, '0')}`;
 }
 

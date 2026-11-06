@@ -43,7 +43,7 @@ export const DEPLOY_ERRORS = new Set([
 ]);
 
 /** Readable message for the deployment errors of the apps API. */
-export function useDeployErrorText(): (error: unknown) => string {
+function useDeployErrorText(): (error: unknown) => string {
   const { t } = useI18n();
   return (error) => {
     const code = apiErrorCode(error);
@@ -51,7 +51,7 @@ export function useDeployErrorText(): (error: unknown) => string {
   };
 }
 
-export function useCloudflareStatus() {
+function useCloudflareStatus() {
   const { slug, api } = useAppsApi();
   return useQuery({ queryKey: appKeys.cloudflare(slug), queryFn: api.cloudflare, staleTime: 30_000 });
 }

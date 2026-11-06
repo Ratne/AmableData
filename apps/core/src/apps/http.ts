@@ -20,7 +20,7 @@ export interface AppHttpOptions {
 
 const LOOPBACK = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/;
 
-export function isLoopbackUrl(url: string): boolean {
+function isLoopbackUrl(url: string): boolean {
   return LOOPBACK.test(url);
 }
 

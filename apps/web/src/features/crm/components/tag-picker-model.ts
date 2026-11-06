@@ -3,7 +3,7 @@
 export const TAG_PAGE_SIZE = 25;
 export const TAG_SEARCH_DEBOUNCE_MS = 200;
 /** `GET /tags?ids=` accepts at most this many ids per call. */
-export const TAG_IDS_PER_CALL = 100;
+const TAG_IDS_PER_CALL = 100;
 
 /** Picks or un-picks `id`: multi toggles (respecting `max`), single replaces. */
 export function toggleTag(

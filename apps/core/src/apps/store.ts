@@ -2,7 +2,7 @@ import type { AppManifest } from '@amable/core/apps';
 
 /** Rows of the installation D1 tables behind marketplace apps (migration 0007). */
 
-export type InstallStatus = 'pending' | 'active' | 'paused' | 'uninstalling' | 'uninstalled' | 'revoked';
+type InstallStatus = 'pending' | 'active' | 'paused' | 'uninstalling' | 'uninstalled' | 'revoked';
 export type InstallSource = 'catalog' | 'private';
 
 export interface InstallRow {

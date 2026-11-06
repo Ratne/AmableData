@@ -29,7 +29,7 @@ import {
  * empty buckets and labels the rows.
  */
 
-export type AggregateTarget = 'tenant' | 'mail' | 'engine';
+type AggregateTarget = 'tenant' | 'mail' | 'engine';
 
 export interface ReportPorts {
   tenantId: string;
@@ -78,7 +78,7 @@ function n(v: Values, key: string): number {
 }
 
 /** Ratio rounded to 4 decimals; null when the denominator is 0. */
-export function ratio(num: number, den: number): number | null {
+function ratio(num: number, den: number): number | null {
   return den === 0 ? null : Math.round((num / den) * 10_000) / 10_000;
 }
 
@@ -183,7 +183,7 @@ const DERIVED: Partial<Record<ReportSource, Readonly<Record<string, Derived>>>> 
 };
 
 /** Base measures the adapter must return for the requested ones. */
-export function baseMeasures(source: ReportSource, measures: readonly string[]): string[] {
+function baseMeasures(source: ReportSource, measures: readonly string[]): string[] {
   const derived = DERIVED[source] ?? {};
   const out = new Set<string>();
   for (const m of measures) {
@@ -194,7 +194,7 @@ export function baseMeasures(source: ReportSource, measures: readonly string[]):
   return [...out];
 }
 
-export function deriveValues(
+function deriveValues(
   source: ReportSource,
   measures: readonly string[],
   base: Values,

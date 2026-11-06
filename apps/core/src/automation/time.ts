@@ -8,7 +8,7 @@ import type { Duration, SendWindow } from '@amable/api-types';
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
-export const DURATION_MS: Record<Duration['unit'], number> = {
+const DURATION_MS: Record<Duration['unit'], number> = {
   minutes: MINUTE,
   hours: 60 * MINUTE,
   days: DAY,

@@ -31,7 +31,7 @@ import type {
 import { EMPTY_GRAPH, LOG_KINDS } from '@amable/api-types';
 import type { AutomationInboundEvent } from '@amable/core';
 import { mapLimited } from '../concurrency';
-import { chunks, first, placeholders, type SqlDb, type SqlValue } from '../crm/db/sql';
+import { chunks, first, placeholders, type SqlDb } from '../crm/db/sql';
 import { CrmError, invalidMany, notFound } from '../crm/errors';
 import { decodeCursor, encodeCursor, parseJson, toIso } from '../crm/util';
 import { createFolderStore, type FolderStore } from '../folders/store';
@@ -40,7 +40,6 @@ import { compileGraph, edgesFrom, isDecision, isSequence, type CompiledGraph } f
 import { eventContactId, triggerMatches, type EngineEvent } from './goals';
 import { CrmCallError, crmCall, type EnginePorts } from './ports';
 import {
-  EMAIL_PAUSE_RECHECK_MS,
   StepFailure,
   TIMER_STEPS,
   executeStep,
@@ -1741,6 +1740,4 @@ export class AutomationEngine implements StepHost {
 
 }
 
-export type { SqlValue };
-export { backoffMs, LEASE_MS, LOG_RETENTION_MS, MAX_ATTEMPTS, POLL_INTERVAL_MS } from './scheduler';
-export { EMAIL_PAUSE_RECHECK_MS };
+export { backoffMs, LOG_RETENTION_MS, MAX_ATTEMPTS } from './scheduler';

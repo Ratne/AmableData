@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
  * signed with it keep verifying until it is pruned.
  */
 
-export const KEYS_FILE = join('.amable', 'keys.json');
+const KEYS_FILE = join('.amable', 'keys.json');
 
 export interface KeyFile {
   readonly keys: PrivateJwk[];
@@ -20,7 +20,7 @@ export function readKeys(dir: string): KeyFile {
   return JSON.parse(readFileSync(path, 'utf8')) as KeyFile;
 }
 
-export function writeKeys(dir: string, file: KeyFile): void {
+function writeKeys(dir: string, file: KeyFile): void {
   const path = join(dir, KEYS_FILE);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 });

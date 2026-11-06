@@ -11,7 +11,7 @@ import { newObjectId } from './config';
  * anonymous touches expire after 90 days, identified ones are kept.
  */
 
-export const ANONYMOUS_TOUCH_TTL_MS = 90 * DAY_MS;
+const ANONYMOUS_TOUCH_TTL_MS = 90 * DAY_MS;
 
 interface TouchRow {
   id: string;
@@ -175,7 +175,7 @@ export function purgeAnonymousTouches(db: SqlDb, now: number): number {
 
 // ------------------------------------------------------------- conversion log
 
-export const CONVERSION_STATUSES = ['approved', 'pending', 'rejected'] as const;
+const CONVERSION_STATUSES = ['approved', 'pending', 'rejected'] as const;
 export type ConversionStatus = (typeof CONVERSION_STATUSES)[number];
 
 /** Conversion received for a hit (postback, JS conversion, bulk update). Never holds PII. */

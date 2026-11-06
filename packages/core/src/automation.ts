@@ -103,7 +103,7 @@ export type QuotaDecision =
   | { readonly action: 'deny'; readonly reason: string }
   | { readonly action: 'pause'; readonly reason: string; readonly retryAfterMs?: number };
 
-export interface QuotaUsage {
+interface QuotaUsage {
   readonly tenantId: string;
   readonly channel: 'email';
   readonly count: number;

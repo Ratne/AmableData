@@ -20,7 +20,7 @@ import { hashSigningToken, otpCodeHash } from './tokens';
 type Output<K extends keyof EsignGatewayOps> = EsignGatewayOps[K]['output'];
 
 /** Decoded size cap of one signature / picture. */
-export const SIGNING_IMAGE_MAX_BYTES = 400_000;
+const SIGNING_IMAGE_MAX_BYTES = 400_000;
 
 const TOKEN = z.string().regex(SIGNING_TOKEN_RE);
 const short = (max: number) => z.string().max(max).optional();
@@ -74,7 +74,7 @@ function parse<T>(schema: z.ZodType<T>, input: unknown): T {
 }
 
 /** Edge request facts + what the signing app read from the browser. */
-export function clientFacts(ctx: GatewayContext, browser: SigningBrowserFacts | undefined): ClientFacts {
+function clientFacts(ctx: GatewayContext, browser: SigningBrowserFacts | undefined): ClientFacts {
   return {
     ip: ctx.client.ip,
     user_agent: ctx.client.userAgent,

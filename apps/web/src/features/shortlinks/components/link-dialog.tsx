@@ -28,7 +28,7 @@ import { composePreview, fromLocalInput, toLocalInput } from '../lib/links';
 const KEY_RE = /^[a-zA-Z0-9_-]{0,64}$/;
 
 /** Domains a link may use: the folder's ones when it has any, else every given domain. */
-export function domainChoices(
+function domainChoices(
   domains: readonly ShortlinkDomain[],
   folder: ShortlinkFolder | undefined,
 ): ShortlinkDomain[] {

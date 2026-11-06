@@ -37,7 +37,7 @@ const EDGE_UNREACHABLE_RE =
   /Worker "[^"]*" not found|Network connection lost|script[^.]* (not found|does not exist)|Durable Object namespace .* not found/i;
 
 /** The AnalyticsDO binding exists but the edge worker behind it cannot be reached. */
-export function isEdgeUnreachable(error: unknown): boolean {
+function isEdgeUnreachable(error: unknown): boolean {
   return error instanceof Error && EDGE_UNREACHABLE_RE.test(error.message);
 }
 

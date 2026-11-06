@@ -303,7 +303,7 @@ export function useDebounced<T>(value: T, delayMs = 300): T {
 }
 
 /** Copies to the clipboard with a toast; `copied` is the id of the last copy for ~1.6 s. */
-export function useCopy() {
+function useCopy() {
   const { t } = useI18n();
   const [copied, setCopied] = useState<string | null>(null);
   const copy = async (text: string, id = 'default') => {

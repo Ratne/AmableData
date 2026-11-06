@@ -7,8 +7,8 @@ import { settleOfferCharge } from './offers';
 import { settleCheckoutIntent, type IntentFacts } from './sessions';
 
 /** Automatic charges of a renewal order: the first try plus these retries. */
-export const RETRY_DELAYS_MS = [3 * 86_400_000, 5 * 86_400_000] as const;
-export const MAX_CHARGE_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
+const RETRY_DELAYS_MS = [3 * 86_400_000, 5 * 86_400_000] as const;
+const MAX_CHARGE_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
 /** A charge picked up by the alarm is not picked up again for this long (crash safety). */
 const LEASE_MS = 15 * 60_000;
 const PROCESSING_RECHECK_MS = 86_400_000;

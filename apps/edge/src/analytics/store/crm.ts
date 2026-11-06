@@ -71,7 +71,7 @@ function visitorExists(db: SqlDb, id: string): boolean {
 }
 
 /** Most recently seen visitor of a contact in this site. */
-export function latestVisitorOf(db: SqlDb, contactId: string): string | null {
+function latestVisitorOf(db: SqlDb, contactId: string): string | null {
   return (
     first<{ id: string }>(
       db,
@@ -96,7 +96,7 @@ function sessionAround(db: SqlDb, visitorId: string, ts: number): string | null 
 }
 
 /** Links a visitor to a contact (the most recent identification wins) and adopts its orphan payments. */
-export function linkVisitor(
+function linkVisitor(
   db: SqlDb,
   visitorId: string,
   contactId: string,

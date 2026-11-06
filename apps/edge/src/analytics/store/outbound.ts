@@ -239,7 +239,7 @@ export function outboundRouteFor(source: TrafficSource, event: string): Outbound
   return entry === undefined ? null : { connection_id: connectionId, platform, platform_event: entry.platform_event };
 }
 
-export const OUTBOUND_SKIP_REASONS = ['no_consent', 'not_approved', 'zero_revenue', 'throttled', 'blacklisted'] as const;
+const OUTBOUND_SKIP_REASONS = ['no_consent', 'not_approved', 'zero_revenue', 'throttled', 'blacklisted'] as const;
 export type OutboundSkipReason = (typeof OUTBOUND_SKIP_REASONS)[number];
 
 export interface OutboundGateInput {

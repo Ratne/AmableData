@@ -301,7 +301,7 @@ export async function createTenantBackup(
   return info;
 }
 
-export async function createInstallationBackup(deps: BackupDeps): Promise<BackupObjectInfo> {
+async function createInstallationBackup(deps: BackupDeps): Promise<BackupObjectInfo> {
   const info = await writeBackup(
     deps,
     INSTALLATION_BACKUP_PREFIX,
@@ -335,7 +335,7 @@ export async function getTenantBackup(
 
 // --- Scheduler -------------------------------------------------------------------------------
 
-export interface BackupState {
+interface BackupState {
   version: 1;
   installation: number | null;
   tenants: Record<string, number>;

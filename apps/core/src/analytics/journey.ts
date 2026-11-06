@@ -82,7 +82,7 @@ export async function contactJourney(
 }
 
 /** Merges the per-site activity of a contact's visitors with its CRM facts (pure). */
-export function buildContactJourney(
+function buildContactJourney(
   contactId: string,
   sites: ContactJourney['sites'],
   activities: readonly ContactActivity[],

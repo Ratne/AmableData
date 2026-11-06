@@ -31,7 +31,7 @@ import { appFetch } from './http';
 
 export type DeployProvider = 'direct' | 'control_plane';
 
-export interface DeployedDatabase {
+interface DeployedDatabase {
   readonly binding: string;
   readonly name: string;
   readonly id: string;
@@ -51,14 +51,14 @@ export interface AppDeploymentRecord {
   readonly updatedAt: number;
 }
 
-export interface DeployResult {
+interface DeployResult {
   readonly accountId: string | null;
   readonly scriptName: string;
   readonly origin: string;
   readonly databases: DeployedDatabase[];
 }
 
-export interface AppDeployer {
+interface AppDeployer {
   readonly provider: DeployProvider;
   deploy(appId: string, deployment: ReleasedDeployment): Promise<DeployResult>;
   destroy(record: AppDeploymentRecord): Promise<void>;
@@ -69,7 +69,7 @@ export const UNUSED_DEPLOYMENT_GRACE_MS = 3600 * 1000;
 const MAX_BUNDLE_BYTES = 10 * 1024 * 1024;
 const TOKEN_AD = 'app-cloudflare-token';
 
-export const tokenRequired = () =>
+const tokenRequired = () =>
   new AppError(409, 'cloudflare_token_required', 'connect a Cloudflare account to install this app');
 const tokenInvalid = () =>
   new AppError(409, 'cloudflare_token_invalid', 'the Cloudflare token is no longer valid: create a new one');
@@ -254,7 +254,7 @@ export async function deleteCloudflareCredentials(db: D1Database): Promise<void>
 const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
 /** The release bundle, checked against the SHA-256 of the signed catalog. */
-export async function downloadBundle(deployment: ReleasedDeployment): Promise<Uint8Array> {
+async function downloadBundle(deployment: ReleasedDeployment): Promise<Uint8Array> {
   let response;
   try {
     response = await safeFetch(deployment.bundle_url, { method: 'GET' }, {

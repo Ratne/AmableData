@@ -19,7 +19,7 @@ import { suppress, type MessageRow } from './suppressions';
 /** Unique arg carrying our mail message id; echoed on every delivery event. */
 export const MESSAGE_ID_ARG = 'amb_message_id';
 
-export type ProviderEventType =
+type ProviderEventType =
   | 'processed'
   | 'delivered'
   | 'deferred'
@@ -186,14 +186,14 @@ function findMessage(deps: MailDeps, event: ProviderEvent): MessageRow | undefin
   )[0];
 }
 
-export interface AppliedEvent {
+interface AppliedEvent {
   readonly applied: boolean;
   /** Contact marketable status to set in the CRM (hard bounce, complaint, provider unsubscribe). */
   readonly contactStatus: { contactId: string; status: 'bounced' | 'complained' | 'unsubscribed' } | null;
 }
 
 /** Applies one event (deduplicated by provider event id). */
-export function applyProviderEvent(deps: MailDeps, event: ProviderEvent): AppliedEvent {
+function applyProviderEvent(deps: MailDeps, event: ProviderEvent): AppliedEvent {
   const key = `evt:${event.id}`;
   if (deps.db.all(`SELECT 1 AS x FROM mail_webhook_seen WHERE id = ?`, key).length > 0) {
     return { applied: false, contactStatus: null };

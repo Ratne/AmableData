@@ -24,7 +24,7 @@ function average(values: readonly number[]): number | null {
 }
 
 /** Histogram over labelled closed ranges (`max` inclusive, null = unbounded). */
-export function histogram(
+function histogram(
   values: readonly number[],
   ranges: ReadonlyArray<[label: string, max: number | null]>,
 ): Array<{ bucket: string; customers: number }> {
@@ -57,7 +57,7 @@ const DAY_BUCKETS: ReadonlyArray<[string, number | null]> = [
 ];
 
 /** Monday = 0 … Sunday = 6, plus the local hour. */
-export function localDayHour(ts: number, timeZone: string): { day: number; hour: number } {
+function localDayHour(ts: number, timeZone: string): { day: number; hour: number } {
   const p = localParts(ts, timeZone);
   const dow = new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay();
   return { day: (dow + 6) % 7, hour: p.hour % 24 };

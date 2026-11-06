@@ -8,11 +8,11 @@ import type { SubmissionContent } from './submissions';
  * to another submission or tenant fails to decrypt.
  */
 
-export function submissionAd(tenantId: string, submissionId: string): string {
+function submissionAd(tenantId: string, submissionId: string): string {
   return `form-submission:${tenantId}:${submissionId}`;
 }
 
-export function connectionAd(tenantId: string, connectionId: string): string {
+function connectionAd(tenantId: string, connectionId: string): string {
   return `form-connection:${tenantId}:${connectionId}`;
 }
 

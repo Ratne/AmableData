@@ -6,25 +6,25 @@ import { tenantRoute } from '../../routes/tenant';
  * requests sent for signature, templates and the template editor.
  */
 
-export const esignRequestsRoute = createRoute({
+const esignRequestsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'signatures',
   component: lazyRouteComponent(() => import('./pages/requests-list'), 'EsignRequestsPage'),
 });
 
-export const esignTemplatesRoute = createRoute({
+const esignTemplatesRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'signatures/templates',
   component: lazyRouteComponent(() => import('./pages/templates-list'), 'EsignTemplatesPage'),
 });
 
-export const esignTemplateRoute = createRoute({
+const esignTemplateRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'signatures/templates/$templateId',
   component: lazyRouteComponent(() => import('./pages/template-editor'), 'EsignTemplateEditorPage'),
 });
 
-export const esignRequestRoute = createRoute({
+const esignRequestRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'signatures/$requestId',
   component: lazyRouteComponent(() => import('./pages/request-detail'), 'EsignRequestDetailPage'),

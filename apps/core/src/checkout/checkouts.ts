@@ -33,7 +33,7 @@ export interface CheckoutRow {
 }
 
 /** Validates a definition document; Zod issues become `validation_failed` details under `definition.`. */
-export function parseCheckoutDefinition(input: unknown): CheckoutDefinition {
+function parseCheckoutDefinition(input: unknown): CheckoutDefinition {
   const result = checkoutDefinitionSchema.safeParse(input);
   if (!result.success) {
     throw invalidMany(

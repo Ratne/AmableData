@@ -22,7 +22,7 @@ interface ArchiveRpc {
 }
 
 /** Runs an archive op in the DO holding `stream` for the verified tenant. */
-export async function callArchive<T>(c: Ctx, stream: ArchiveStream, op: 'catalog' | 'months', input: Record<string, unknown>): Promise<T> {
+async function callArchive<T>(c: Ctx, stream: ArchiveStream, op: 'catalog' | 'months', input: Record<string, unknown>): Promise<T> {
   const stub = (STREAM_DB[stream] === 'tenant_db' ? tenantDb(c) : mailDb(c)) as unknown as ArchiveRpc;
   const result = await stub.archive(op, { stream, ...input });
   if (!result.ok) throw new CrmError('bad_request', result.error.message);

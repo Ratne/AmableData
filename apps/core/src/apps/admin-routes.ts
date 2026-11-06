@@ -68,14 +68,14 @@ appsAdminRoutes.onError((error, c) => {
   throw error;
 });
 
-export function manifestView(manifest: AppManifest) {
+function manifestView(manifest: AppManifest) {
   return {
     ...manifest,
     sensitive_scopes: manifest.scopes.filter((s) => (APP_SENSITIVE_SCOPES as readonly string[]).includes(s)),
   };
 }
 
-export function installView(install: AppInstall) {
+function installView(install: AppInstall) {
   const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
   return {
     id: install.id,

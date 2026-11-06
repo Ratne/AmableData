@@ -12,7 +12,7 @@ import type { ConnectionRow } from './submissions';
  * clear); reads never return the ciphertext except to the processing worker.
  */
 
-export function connectionRow(ctx: CrmContext, formId: string, id: string): ConnectionRow {
+function connectionRow(ctx: CrmContext, formId: string, id: string): ConnectionRow {
   const row = ctx.db.all<ConnectionRow>(
     `SELECT * FROM form_connections WHERE id = ? AND form_id = ? AND deleted_at IS NULL`,
     id,
@@ -35,7 +35,7 @@ function lastDeliveries(
   return new Map(rows.map((r) => [r.connection_id, { status: r.status, at: r.updated_at }]));
 }
 
-export function serializeConnections(ctx: CrmContext, rows: ConnectionRow[]): FormConnection[] {
+function serializeConnections(ctx: CrmContext, rows: ConnectionRow[]): FormConnection[] {
   const last = lastDeliveries(
     ctx,
     rows.map((r) => r.id),

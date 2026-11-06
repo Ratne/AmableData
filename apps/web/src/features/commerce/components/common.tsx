@@ -1,7 +1,6 @@
 import type { BillingInterval, OrderStatus, SubscriptionStatus } from '@amable/api-types';
 import { cn } from '@amable/ui';
 import { Input } from '@amable/ui/ui/input';
-import { Select } from '@amable/ui/ui/select';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '../../../i18n';
 import { errorMessage } from '../api/hooks';
@@ -23,7 +22,6 @@ export {
   SearchInput,
   SectionCard,
   useDebounced,
-  type ChoiceOption as Choice,
   type Tone,
 } from '../../../components/feature-kit';
 
@@ -57,7 +55,7 @@ export function intervalText(t: Translate, interval: BillingInterval, count: num
     : t(`commerce.intervals.${interval}`, { count });
 }
 
-export const ORDER_STATUS_TONE: Record<OrderStatus, Tone> = {
+const ORDER_STATUS_TONE: Record<OrderStatus, Tone> = {
   draft: 'neutral',
   unpaid: 'warning',
   partially_paid: 'info',
@@ -66,7 +64,7 @@ export const ORDER_STATUS_TONE: Record<OrderStatus, Tone> = {
   cancelled: 'neutral',
 };
 
-export const SUBSCRIPTION_STATUS_TONE: Record<SubscriptionStatus, Tone> = {
+const SUBSCRIPTION_STATUS_TONE: Record<SubscriptionStatus, Tone> = {
   trialing: 'info',
   active: 'success',
   past_due: 'danger',
@@ -74,7 +72,7 @@ export const SUBSCRIPTION_STATUS_TONE: Record<SubscriptionStatus, Tone> = {
   cancelled: 'neutral',
 };
 
-export const INVOICE_STATUS_TONE: Record<'open' | 'paid' | 'void', Tone> = {
+const INVOICE_STATUS_TONE: Record<'open' | 'paid' | 'void', Tone> = {
   open: 'warning',
   paid: 'success',
   void: 'neutral',

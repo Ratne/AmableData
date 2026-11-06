@@ -39,7 +39,7 @@ export class CustomHostnameError extends Error {
 }
 
 /** Variables of `apps/core/wrangler.jsonc` (token as a Wrangler secret). */
-export interface CustomHostnameEnv {
+interface CustomHostnameEnv {
   CF_ZONE_ID?: string;
   CF_API_TOKEN?: string;
   TRACKING_CNAME_TARGET?: string;

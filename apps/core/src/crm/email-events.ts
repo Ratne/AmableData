@@ -23,7 +23,7 @@ export interface BridgedEmailEvent {
   readonly timeline?: Readonly<Record<string, unknown>>;
 }
 
-export const EMAIL_BRIDGE_MAX_EVENTS = 200;
+const EMAIL_BRIDGE_MAX_EVENTS = 200;
 const EMAIL_TYPES = new Set<string>(EMAIL_EVENT_TYPES);
 
 export function recordEmailEvents(

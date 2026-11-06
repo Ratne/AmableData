@@ -15,7 +15,7 @@ import { useCursorQuery } from '../../../lib/feature-hooks';
 const ACCEPT = MEDIA_CONTENT_TYPES.join(',');
 
 /** Upload shared by the library dialog and the inline "upload" buttons. */
-export function useMediaUpload(): { upload: (file: File) => Promise<MediaFile | null>; uploading: boolean } {
+function useMediaUpload(): { upload: (file: File) => Promise<MediaFile | null>; uploading: boolean } {
   const { t } = useI18n();
   const { slug, api } = useLanding();
   const queryClient = useQueryClient();
@@ -51,7 +51,7 @@ function formatSize(bytes: number): string {
 }
 
 /** Tenant media library: upload (PUT /media), pick, delete. */
-export function MediaLibraryDialog({ onClose, onSelect }: { onClose: () => void; onSelect: (file: MediaFile) => void }) {
+function MediaLibraryDialog({ onClose, onSelect }: { onClose: () => void; onSelect: (file: MediaFile) => void }) {
   const { t } = useI18n();
   const { slug, api } = useLanding();
   const { can } = usePermissions();

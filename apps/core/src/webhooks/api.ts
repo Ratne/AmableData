@@ -77,7 +77,7 @@ function service(c: Context<AppEnv>) {
   return webhookService(c.env);
 }
 
-export function registerWebhookRoutes(app: OpenAPIHono<AppEnv>): void {
+function registerWebhookRoutes(app: OpenAPIHono<AppEnv>): void {
   app.openapi(
     crmRoute('webhooks:manage', {
       method: 'get',

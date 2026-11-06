@@ -32,15 +32,6 @@ export function sessionOnly(): MiddlewareHandler<AppEnv> {
   };
 }
 
-/** Guard for full-export routes: assisted-access support users may never bulk-export tenant data. */
-export function rejectSupportUsers(): MiddlewareHandler<AppEnv> {
-  return async (c, next) => {
-    const auth = c.get('auth');
-    if (auth !== undefined && isSupportUserEmail(auth.user.email)) return jsonError(c, 403, 'support_user_forbidden');
-    return next();
-  };
-}
-
 /** Maps a control plane failure to the installation's answer (never leaks upstream bodies). */
 export function controlPlaneFailure(c: Context<AppEnv>, error: unknown): Response {
   if (!(error instanceof ControlPlaneError)) throw error;

@@ -21,9 +21,9 @@ import { useCursorQuery } from '../../../lib/feature-hooks';
 
 export const CONTACT_TAGS_PAGE = 50;
 const LIST_PAGE = 25;
-export const AUTOMATION_SEARCH_PAGE = 20;
+const AUTOMATION_SEARCH_PAGE = 20;
 
-export function contactTabsClient(slug: string) {
+function contactTabsClient(slug: string) {
   const base = `/api/v2/t/${encodeURIComponent(slug)}`;
   const id = (value: string) => encodeURIComponent(value);
   return {

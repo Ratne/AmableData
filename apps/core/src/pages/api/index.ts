@@ -1,5 +1,4 @@
 import type { OpenAPIHono } from '@hono/zod-openapi';
-import type { LandingPage } from '@amable/api-types';
 import { callCrm } from '../../crm/api/core';
 import { registerFolderRoutes } from '../../folders/routes';
 import type { AppEnv } from '../../middleware';
@@ -11,9 +10,6 @@ import { registerPageLockRoutes } from './edit-lock';
 import { registerSavedSectionsRoutes } from './saved-sections';
 import { registerPersonalClipboardRoutes } from './personal-clipboard';
 import { registerMediaRoutes } from './media';
-
-export { publicUrl, renderDraft } from './shared';
-export type { LandingPage };
 
 /** Landing pages REST v2 routes (relative to `/api/v2/t/{slug}`). */
 export function registerPagesRoutes(router: OpenAPIHono<AppEnv>): void {

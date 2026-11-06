@@ -30,7 +30,7 @@ export interface EsignRunResult {
   tenantId: string | null;
 }
 
-export function completedKey(tenantId: string, requestId: string): string {
+function completedKey(tenantId: string, requestId: string): string {
   return `tenants/${tenantId}/esign/requests/${requestId}/completed-${ulid()}.pdf`;
 }
 

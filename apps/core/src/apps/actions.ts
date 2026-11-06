@@ -38,7 +38,7 @@ export interface AppActionPort {
   run(request: AppActionRequest): Promise<AppActionOutcome>;
 }
 
-export function findAction(manifest: AppManifest, key: string): AppAutomationAction | null {
+function findAction(manifest: AppManifest, key: string): AppAutomationAction | null {
   return manifest.extensions.automation_actions?.find((action) => action.key === key) ?? null;
 }
 

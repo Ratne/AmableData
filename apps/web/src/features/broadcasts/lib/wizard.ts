@@ -48,7 +48,7 @@ export function audienceFromSegment(segment: BroadcastSegment | null): AudienceD
   }
 }
 
-export function hasInclude(draft: AudienceDraft): boolean {
+function hasInclude(draft: AudienceDraft): boolean {
   return draft.includeTagIds.length > 0 || draft.includeSavedSearchIds.length > 0;
 }
 
@@ -67,7 +67,7 @@ export function segmentFromAudience(draft: AudienceDraft): BroadcastSegment | nu
 
 // --------------------------------------------------------------- documents
 
-export interface DocNode {
+interface DocNode {
   readonly type?: string;
   readonly attrs?: Readonly<Record<string, unknown>>;
   readonly marks?: readonly { readonly type: string; readonly attrs?: Readonly<Record<string, unknown>> }[];
@@ -110,7 +110,7 @@ export function setPreheader(doc: EmailDoc, text: string): EmailDoc {
 }
 
 /** Link targets: link marks and button hrefs. */
-export function collectLinks(doc: EmailDoc): string[] {
+function collectLinks(doc: EmailDoc): string[] {
   const links: string[] = [];
   walk(doc, (node) => {
     if (node.type === BUTTON && typeof node.attrs?.['href'] === 'string') links.push(node.attrs['href']);
@@ -122,7 +122,7 @@ export function collectLinks(doc: EmailDoc): string[] {
 }
 
 /** http(s) URLs with a host, mailto:, tel:, or anything built with Liquid. */
-export function isValidLink(href: string): boolean {
+function isValidLink(href: string): boolean {
   const value = href.trim();
   if (value === '') return false;
   if (value.includes('{{')) return true;
@@ -153,7 +153,7 @@ export function hasUnsubscribe(doc: EmailDoc): boolean {
 }
 
 /** Visible text of the body (text nodes + button labels), preheader excluded. */
-export function docText(doc: EmailDoc): string {
+function docText(doc: EmailDoc): string {
   const parts: string[] = [];
   walk(doc, (node) => {
     if (typeof node.text === 'string') parts.push(node.text);
@@ -162,7 +162,7 @@ export function docText(doc: EmailDoc): string {
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
-export function hasContent(doc: EmailDoc): boolean {
+function hasContent(doc: EmailDoc): boolean {
   if (docText(doc) !== '') return true;
   let media = false;
   walk(doc, (node) => {
@@ -259,8 +259,8 @@ export function canOpenStep(target: number, state: WizardState): boolean {
 
 // ----------------------------------------------------------------- checklist
 
-export type CheckStatus = 'ok' | 'warn' | 'fail';
-export type CheckId =
+type CheckStatus = 'ok' | 'warn' | 'fail';
+type CheckId =
   | 'domain'
   | 'sender'
   | 'address'

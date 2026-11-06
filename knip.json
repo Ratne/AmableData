@@ -53,7 +53,8 @@
       "ignoreDependencies": ["@amable/app-bridge"]
     },
     "packages/editor": {
-      "project": ["src/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["src/components/**", "src/hooks/**", "src/lib/tiptap-utils.ts"]
     },
     "packages/i18n": {
       "project": ["src/**/*.ts"]

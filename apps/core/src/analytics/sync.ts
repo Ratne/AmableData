@@ -66,7 +66,7 @@ export interface SyncReport {
 }
 
 /** Subscription events → reserved lifecycle goal names. */
-export const LIFECYCLE_GOALS: Readonly<Record<string, string>> = {
+const LIFECYCLE_GOALS: Readonly<Record<string, string>> = {
   'subscription.started': 'subscription_started',
   'subscription.trial_started': 'trial_started',
   'subscription.trial_converted': 'trial_converted',

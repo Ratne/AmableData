@@ -22,7 +22,7 @@ type Id = { id: string };
  * Every operation the Engine DO exposes to the REST layer, keyed by name
  * (single RPC entry point `Engine.automation`, like `TenantDb.crm`).
  */
-export const automationOps = {
+const automationOps = {
   'automations.list': (e: AutomationEngine, _a: EngineActor, input: ListAutomationsQuery) =>
     e.listAutomations(input),
   'automations.get': (e: AutomationEngine, _a: EngineActor, input: Id) => e.getAutomation(input),
@@ -117,12 +117,12 @@ export const automationOps = {
     e.updateSettings(input),
 } satisfies Record<string, (engine: AutomationEngine, actor: EngineActor, input: never) => unknown>;
 
-export type AutomationOps = typeof automationOps;
+type AutomationOps = typeof automationOps;
 export type AutomationOpName = keyof AutomationOps;
 export type AutomationOpInput<K extends AutomationOpName> = Parameters<AutomationOps[K]>[2];
 export type AutomationOpOutput<K extends AutomationOpName> = Awaited<ReturnType<AutomationOps[K]>>;
 
-export function isAutomationOp(op: string): op is AutomationOpName {
+function isAutomationOp(op: string): op is AutomationOpName {
   return Object.hasOwn(automationOps, op);
 }
 

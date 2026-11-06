@@ -340,7 +340,7 @@ export function NotesPanel({ subject }: { subject: Subject }) {
 
 // ------------------------------------------------------------------- tasks
 
-export function TaskRow({ task }: { task: Task }) {
+function TaskRow({ task }: { task: Task }) {
   const { t, locale } = useI18n();
   const { api } = useCrm();
   const { can } = usePermissions();

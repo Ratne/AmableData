@@ -47,20 +47,20 @@ export function monthlyMinor(
 }
 
 /** Instant the subscription starts producing recurring revenue. */
-export function revenueStart(sub: SubscriptionFact): number {
+function revenueStart(sub: SubscriptionFact): number {
   return sub.trial_ends_at !== null && sub.trial_ends_at > sub.started_at
     ? sub.trial_ends_at
     : sub.started_at;
 }
 
 /** End of the contribution (exclusive), or null when still contributing. */
-export function revenueEnd(sub: SubscriptionFact): number | null {
+function revenueEnd(sub: SubscriptionFact): number | null {
   const pausedEnd = sub.status === 'paused' && sub.paused_at !== null ? sub.paused_at : null;
   if (sub.ended_at === null) return pausedEnd;
   return pausedEnd === null ? sub.ended_at : Math.min(pausedEnd, sub.ended_at);
 }
 
-export function contributesAt(sub: SubscriptionFact, t: number): boolean {
+function contributesAt(sub: SubscriptionFact, t: number): boolean {
   const start = revenueStart(sub);
   const end = revenueEnd(sub);
   return start <= t && (end === null || end > t);

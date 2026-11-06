@@ -69,7 +69,7 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function isRole(value: string): value is Role {
+function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
 

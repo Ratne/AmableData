@@ -73,7 +73,7 @@ export interface SearchFieldDescription {
   readonly selectable: boolean;
 }
 
-export type SearchFieldKind =
+type SearchFieldKind =
   'text' | 'number' | 'date' | 'datetime_ms' | 'datetime_iso' | 'boolean' | 'enum' | 'id' | 'multi';
 
 export interface ListParams {

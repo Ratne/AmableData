@@ -6,25 +6,25 @@ import { tenantRoute } from '../../routes/tenant';
  * chunk. `bookings` replaces the navigation placeholder.
  */
 
-export const bookingsListRoute = createRoute({
+const bookingsListRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'bookings',
   component: lazyRouteComponent(() => import('./pages/bookings-list'), 'BookingsListPage'),
 });
 
-export const bookingCalendarsRoute = createRoute({
+const bookingCalendarsRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'bookings/calendars',
   component: lazyRouteComponent(() => import('./pages/calendars'), 'CalendarsPage'),
 });
 
-export const bookingEventTypesRoute = createRoute({
+const bookingEventTypesRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'bookings/event-types',
   component: lazyRouteComponent(() => import('./pages/event-types-list'), 'EventTypesListPage'),
 });
 
-export const bookingEventTypeRoute = createRoute({
+const bookingEventTypeRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'bookings/event-types/$eventTypeId',
   component: lazyRouteComponent(() => import('./pages/event-type-editor'), 'EventTypeEditorPage'),

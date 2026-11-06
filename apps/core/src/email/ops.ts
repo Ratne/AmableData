@@ -18,7 +18,7 @@ import { handleProviderWebhook } from './webhooks';
  * entry point `mail(op, input)`. Inputs come from the verified REST layer (or
  * the queue consumer / public endpoints, which verify tokens and signatures).
  */
-export const mailOps = {
+const mailOps = {
   // templates & snippets
   'templates.list': library.listTemplates,
   'templates.get': library.getTemplate,
@@ -93,14 +93,14 @@ export const mailOps = {
   ...mailReportOps,
 } satisfies Record<string, (deps: MailDeps, input: never) => unknown>;
 
-export type MailOps = typeof mailOps;
+type MailOps = typeof mailOps;
 export type MailOpName = keyof MailOps;
 export type MailOpInput<K extends MailOpName> = Parameters<MailOps[K]>[1];
 export type MailOpOutput<K extends MailOpName> = Awaited<ReturnType<MailOps[K]>>;
 
 export type MailResult<T> = { ok: true; value: T } | { ok: false; error: MailErrorShape };
 
-export function isMailOp(op: string): op is MailOpName {
+function isMailOp(op: string): op is MailOpName {
   return Object.hasOwn(mailOps, op);
 }
 

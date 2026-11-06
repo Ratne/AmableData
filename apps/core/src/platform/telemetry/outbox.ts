@@ -10,8 +10,8 @@ import { reportingKnobs, resolveErrorSink, type ErrorSink } from './config';
  * Bounded in rows, event size, request size and attempts.
  */
 
-export const MAX_OUTBOX_ROWS = 1_000;
-export const MAX_ATTEMPTS = 12;
+const MAX_OUTBOX_ROWS = 1_000;
+const MAX_ATTEMPTS = 12;
 const MAX_EVENT_BYTES = 16_000;
 const MAX_BODY_BYTES = 256_000;
 const MAX_ROUNDS = 5;

@@ -115,7 +115,7 @@ export function DraggableItem({
 }
 
 /** Moves items into a folder (drag & drop or the picker) and toasts where they went. */
-export function useMoveItems(kind: FolderKind, itemsKey: QueryKey, tree: FolderTree | undefined) {
+function useMoveItems(kind: FolderKind, itemsKey: QueryKey, tree: FolderTree | undefined) {
   const { t } = useI18n();
   const names = useMemo(() => new Map((tree?.data ?? []).map((f) => [f.id, f.name])), [tree]);
   return useFolderMutation(

@@ -37,7 +37,7 @@ import type {
 const DEV_TOKEN_SECRET = 'amable-dev-email-token-secret-not-for-production';
 let warnedDevSecret = false;
 
-export class EmailConfigError extends Error {
+class EmailConfigError extends Error {
   override readonly name = 'EmailConfigError';
 }
 
@@ -58,7 +58,7 @@ export function tokenSecrets(env: Env): string[] {
   throw new EmailConfigError('EMAIL_TOKEN_SECRET is not configured');
 }
 
-export function webhookSecrets(env: Env): string[] {
+function webhookSecrets(env: Env): string[] {
   return (env.POSTSHIBA_WEBHOOK_SECRET ?? '')
     .split(',')
     .map((s) => s.trim())

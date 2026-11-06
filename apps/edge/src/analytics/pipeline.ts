@@ -60,7 +60,7 @@ function writePoint(env: Env, siteId: string, blobs: string[], doubles: number[]
  * index = site id; blobs = type, path, channel, country, device, browser, os,
  * referrer host, goal name / bot category, visitor id; doubles = count, revenue (minor).
  */
-export function writeEventPoint(env: Env, e: EnrichedEvent): void {
+function writeEventPoint(env: Env, e: EnrichedEvent): void {
   writePoint(
     env,
     e.site,
@@ -80,7 +80,7 @@ export function writeEventPoint(env: Env, e: EnrichedEvent): void {
   );
 }
 
-export function writeBotPoint(env: Env, hit: BotHit): void {
+function writeBotPoint(env: Env, hit: BotHit): void {
   writePoint(
     env,
     hit.site,
@@ -92,7 +92,7 @@ export function writeBotPoint(env: Env, hit: BotHit): void {
 // ------------------------------------------------------------- delivery
 
 /** Groups messages per site and applies them to each site's AnalyticsDO. */
-export async function deliverToSites(
+async function deliverToSites(
   env: Env,
   messages: readonly AnalyticsMessage[],
 ): Promise<Map<string, Error | null>> {

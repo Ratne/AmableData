@@ -18,7 +18,7 @@ function sourceOf(raw: string | null): EmailSendSource | null {
 }
 
 /** Appends the signed contact identity (`_amb_c`) to the destination URL. */
-export async function withContactToken(
+async function withContactToken(
   url: string,
   secret: string,
   tenantId: string,

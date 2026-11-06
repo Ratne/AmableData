@@ -3,7 +3,7 @@ import type { Env } from '../env';
 import { controlPlaneClient } from './client';
 import { HOUR_MS, parseQuotaSnapshot, storeQuotaSnapshot } from './quota';
 
-export const MAX_BLOCKS_PER_REPORT = 100;
+const MAX_BLOCKS_PER_REPORT = 100;
 
 interface UsageRow {
   tenant_id: string;

@@ -16,7 +16,7 @@ export interface MessageText {
   subject: string;
   body: string;
 }
-export type MessageLocale = 'en' | 'it';
+type MessageLocale = 'en' | 'it';
 
 export interface BookingMessageVars {
   eventTitle: string;
@@ -107,7 +107,7 @@ const DEFAULTS: Record<MessageLocale, Record<MessageKind, { subject: string; bod
  * Subject/body of a kind: the event type's own text when set (the confirmation
  * from `messages`, a reminder or follow-up from its notification), else the built-in one.
  */
-export function templateFor(
+function templateFor(
   kind: MessageKind,
   locale: MessageLocale,
   messages: BookingMessages,
@@ -137,7 +137,7 @@ function format(ms: number, timeZone: string, locale: MessageLocale, options: In
 /** Visitor-provided values must not open Liquid tags. */
 const inert = (value: string): string => value.replace(/[{}%]/g, '');
 
-export function variables(vars: BookingMessageVars): Record<string, string> {
+function variables(vars: BookingMessageVars): Record<string, string> {
   const time: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
   return {
     event_title: inert(vars.eventTitle),

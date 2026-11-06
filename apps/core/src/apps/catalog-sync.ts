@@ -23,8 +23,8 @@ import { installsOfApp, toInstall, type AppInstall, type InstallRow } from './st
  * marketplace off with APP_CATALOG=off.
  */
 
-export const CATALOG_SYNC_INTERVAL_MS = 6 * 3600 * 1000;
-export const CATALOG_SYNC_KEY = 'app_catalog_sync';
+const CATALOG_SYNC_INTERVAL_MS = 6 * 3600 * 1000;
+const CATALOG_SYNC_KEY = 'app_catalog_sync';
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_INDEX_BYTES = 20_000_000;
 
@@ -282,7 +282,7 @@ export async function fetchPrivateManifest(
   return { manifest: check.manifest, hash: await manifestHash(check.manifest) };
 }
 
-export const PRIVATE_REFRESH_KEY = 'app_private_refresh';
+const PRIVATE_REFRESH_KEY = 'app_private_refresh';
 
 /**
  * Apps installed from a URL get manifest updates like catalog ones: every

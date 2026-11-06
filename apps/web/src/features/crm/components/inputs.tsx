@@ -19,7 +19,7 @@ import { useDirectory } from '../api/hooks';
 import { TagPicker } from './tag-picker';
 
 /** Radix Select forbids empty item values: this stands for "no value". */
-export const NONE = '__none__';
+const NONE = '__none__';
 
 export interface Choice {
   readonly value: string;
@@ -180,7 +180,7 @@ function parseIsoDate(value: string): Date | undefined {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-export function isoDate(date: Date): string {
+function isoDate(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

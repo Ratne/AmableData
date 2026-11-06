@@ -68,7 +68,7 @@ function getCompanyRow(ctx: CrmContext, id: string, includeDeleted = false): Com
   return row;
 }
 
-export function serializeCompanies(ctx: CrmContext, rows: CompanyRow[]): Company[] {
+function serializeCompanies(ctx: CrmContext, rows: CompanyRow[]): Company[] {
   const custom = readValues(
     ctx,
     'company',

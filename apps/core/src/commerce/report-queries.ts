@@ -125,7 +125,7 @@ function refundsSpec(): GenericSpec {
 }
 
 /** Aging buckets of open balances: not yet due, 1–30, 31–60, 61–90, over 90 days past due. */
-export const AGING_BUCKETS = ['current', '1_30', '31_60', '61_90', '90_plus'] as const;
+const AGING_BUCKETS = ['current', '1_30', '31_60', '61_90', '90_plus'] as const;
 
 function receivablesSpec(now: number): GenericSpec {
   const late = `(${lit(now)} - o.due_at)`;
@@ -257,7 +257,7 @@ function subscriptionsReport(
   return { rows, totals, currency, currencies, truncated };
 }
 
-export const COMMERCE_REPORT_SOURCES = [
+const COMMERCE_REPORT_SOURCES = [
   'orders',
   'order_items',
   'payments',

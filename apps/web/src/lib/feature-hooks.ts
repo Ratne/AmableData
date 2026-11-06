@@ -20,7 +20,7 @@ import { request, TenantApiError, type TenantMe } from './tenant-api';
 export const REFERENCE_STALE_MS = 60_000;
 
 /** One cache entry for the active membership, shared by every feature of the workspace. */
-export const tenantMeKey = (slug: string) => ['tenant', slug, 'me'] as const;
+const tenantMeKey = (slug: string) => ['tenant', slug, 'me'] as const;
 
 /** Active membership: tenant, role and permissions (`GET /api/t/:slug/me`). */
 export function useTenantMeQuery(slug: string) {

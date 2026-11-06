@@ -30,7 +30,7 @@ function lockName(tenantId: string, kind: EditLockKind, id: string): string {
   return kind === 'pages' ? `${tenantId}:${id}` : `${tenantId}:${kind}:${id}`;
 }
 
-export function lockStub(c: Ctx, kind: EditLockKind, id: string): DurableObjectStub<EditSession> | null {
+function lockStub(c: Ctx, kind: EditLockKind, id: string): DurableObjectStub<EditSession> | null {
   const ns = c.env.EDIT_SESSION;
   if (ns === undefined) return null;
   return ns.get(ns.idFromName(lockName(getTenant(c).tenant.id, kind, id)));

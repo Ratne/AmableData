@@ -33,7 +33,7 @@ export interface InboxCounts {
 }
 
 /** The inbox has no push channel yet: lists and threads refresh on this interval. */
-export const INBOX_POLL_MS = 15_000;
+const INBOX_POLL_MS = 15_000;
 
 function viewQuery(view: InboxView): Record<string, string> {
   switch (view) {
@@ -70,7 +70,7 @@ export function conversationsApi(slug: string) {
   };
 }
 
-export const conversationKeys = {
+const conversationKeys = {
   all: (slug: string) => ['conversations', slug] as const,
   list: (slug: string, view: InboxView) => ['conversations', slug, 'list', view] as const,
   ofContact: (slug: string, contactId: string) => ['conversations', slug, 'contact', contactId] as const,
@@ -81,7 +81,7 @@ export const conversationKeys = {
   messages: (slug: string, id: string) => ['conversations', slug, 'messages', id] as const,
 };
 
-export function useConversationsApi() {
+function useConversationsApi() {
   const { tenant } = useParams({ strict: false });
   const slug = tenant ?? 'demo';
   return { slug, api: conversationsApi(slug) };

@@ -57,7 +57,7 @@ export const EmailFooterGuard = Extension.create<EmailGuardOptions>({
 });
 
 /** Strips Word and Google Docs noise before ProseMirror parses pasted HTML. */
-export function cleanPastedHtml(html: string): string {
+function cleanPastedHtml(html: string): string {
   return html
     .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '')

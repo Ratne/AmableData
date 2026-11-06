@@ -37,7 +37,7 @@ export const bookingEdgeRoutes = new Hono<{ Bindings: Env }>();
 
 type Ctx = Context<{ Bindings: Env }>;
 
-export const MAX_BOOK_BYTES = 32 * 1024;
+const MAX_BOOK_BYTES = 32 * 1024;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,99}$/i;
 const EVENT_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,128}$/;

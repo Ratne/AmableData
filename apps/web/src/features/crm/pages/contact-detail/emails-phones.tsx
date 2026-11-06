@@ -19,7 +19,7 @@ import { ChoiceSelect } from '../../components/inputs';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const EMAIL_STATUSES = ['deliverable', 'risky', 'unknown', 'undeliverable'] as const;
+const EMAIL_STATUSES = ['deliverable', 'risky', 'unknown', 'undeliverable'] as const;
 export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 
 const STATUS_KEY = /^app_[a-z0-9_]+_email_status$/;

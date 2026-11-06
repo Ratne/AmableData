@@ -6,8 +6,8 @@ import { buildTools, UnauthorizedError, type McpTool, type ToolContext } from '.
 import { edgeOrigin } from '../env';
 
 /** Newest first; an unknown client version gets the newest one. */
-export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
-export const SERVER_INFO = { name: 'amabledata', title: 'amabledata', version: '1.0.0' } as const;
+const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
+const SERVER_INFO = { name: 'amabledata', title: 'amabledata', version: '1.0.0' } as const;
 
 const INSTRUCTIONS = [
   'amabledata CRM workspace (contacts, companies, deals, tasks, commerce, checkouts, email, automations, forms, bookings, landing pages, e-sign, web analytics, reports, webhooks, domains).',

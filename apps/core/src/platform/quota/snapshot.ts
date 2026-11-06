@@ -4,10 +4,10 @@ import { controlPlaneClient } from '../client';
 import { META_QUOTA, parseQuotaSnapshot, readMeta, writeMeta } from './meta';
 
 /** Isolate memory layer: shields D1 from a read per message. */
-export const MEMORY_TTL_MS = 5_000;
-export const DEFAULT_SNAPSHOT_TTL_SECONDS = 30;
+const MEMORY_TTL_MS = 5_000;
+const DEFAULT_SNAPSHOT_TTL_SECONDS = 30;
 /** With the control plane unreachable, an older snapshot is still trusted up to this age. */
-export const STALE_SNAPSHOT_MAX_AGE_MS = 24 * 3_600_000;
+const STALE_SNAPSHOT_MAX_AGE_MS = 24 * 3_600_000;
 
 interface StoredSnapshot {
   readonly snapshot: QuotaSnapshot;

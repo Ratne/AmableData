@@ -22,7 +22,7 @@ export interface CalendarDoRef {
   googleCalendarId: string | null;
 }
 
-export type SyncStatus = 'ok' | 'stub' | 'not_connected' | 'unavailable' | 'error';
+type SyncStatus = 'ok' | 'stub' | 'not_connected' | 'unavailable' | 'error';
 
 export interface SyncResult {
   status: SyncStatus;
@@ -88,17 +88,17 @@ export interface CalendarDeps {
 }
 
 /** Busy time older than this is refreshed before answering (callers may ask for fresher). */
-export const BUSY_TTL_MS = 5 * 60_000;
+const BUSY_TTL_MS = 5 * 60_000;
 /** Busy time freshness of the slot lists shown to visitors. */
 export const SLOTS_MAX_AGE_MS = 60_000;
 /** Freshness right before a booking is confirmed; also the floor that stops a burst from hammering Google. */
 export const BOOKING_MAX_AGE_MS = 10_000;
 /** Window of the external busy time kept in cache. */
-export const BUSY_WINDOW_MS = 120 * 86_400_000;
+const BUSY_WINDOW_MS = 120 * 86_400_000;
 const GOOGLE_FREEBUSY_URL = 'https://www.googleapis.com/calendar/v3/freeBusy';
 const GOOGLE_CALENDARS_URL = 'https://www.googleapis.com/calendar/v3/calendars';
 /** Delay before the next event write attempt, indexed by the attempts already made − 1. */
-export const EVENT_RETRY_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 12 * 3_600_000] as const;
+const EVENT_RETRY_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 12 * 3_600_000] as const;
 
 /** Google event id of a booking: hex of its id (event ids only allow `a-v` and `0-9`). */
 export function googleEventId(bookingId: string): string {

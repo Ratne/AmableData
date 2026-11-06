@@ -38,8 +38,8 @@ export const RETRY_DELAYS_S = [30, 120, 600, 1800, 3600, 3 * 3600, 6 * 3600, 12 
 export const MAX_ATTEMPTS = RETRY_DELAYS_S.length + 1;
 /** Failed attempts in a row (across deliveries) that disable an endpoint. */
 export const AUTO_DISABLE_AFTER = 20;
-export const MAX_ENDPOINTS_PER_TENANT = 20;
-export const DELIVERY_RETENTION_MS = 30 * 24 * 3600 * 1000;
+const MAX_ENDPOINTS_PER_TENANT = 20;
+const DELIVERY_RETENTION_MS = 30 * 24 * 3600 * 1000;
 const RESPONSE_SNIPPET_BYTES = 1024;
 const FANOUT_CHUNK = 20;
 /** D1 batch and Queues `sendBatch` limits stay well above this. */
@@ -181,7 +181,7 @@ function isLoopback(url: string): boolean {
 }
 
 /** Validates a receiver URL: https (or http) on a public host, standard ports. */
-export function validateEndpointUrl(url: string, allowLoopback = false): string | null {
+function validateEndpointUrl(url: string, allowLoopback = false): string | null {
   if (allowLoopback && isLoopback(url)) return null;
   try {
     assertSafeUrl(url);
@@ -198,12 +198,12 @@ function validateTypes(types: readonly string[]): void {
   }
 }
 
-export function subscribes(eventTypes: readonly string[], type: string): boolean {
+function subscribes(eventTypes: readonly string[], type: string): boolean {
   return eventTypes.includes('*') || eventTypes.includes(type);
 }
 
 /** Exact body sent to receivers (also what the signature covers). */
-export function deliveryBody(tenantSlug: string, event: WebhookEvent): string {
+function deliveryBody(tenantSlug: string, event: WebhookEvent): string {
   return JSON.stringify({
     id: event.id,
     type: event.type,
@@ -214,7 +214,7 @@ export function deliveryBody(tenantSlug: string, event: WebhookEvent): string {
 }
 
 /** Body sent to an app: the webhook body plus its replay position and API version. */
-export function appDeliveryBody(
+function appDeliveryBody(
   tenantSlug: string,
   event: WebhookEvent,
   app: { installId: string; apiVersion: string; sequence: number },

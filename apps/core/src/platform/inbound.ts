@@ -35,7 +35,7 @@ const resumeEmailSchema = z.strictObject({
 const RESUME_CONCURRENCY = 8;
 
 /** Asks every tenant's Engine DO to re-check its paused email steps. */
-export async function resumeAllTenants(env: Env): Promise<{ tenants: number; resumed: number }> {
+async function resumeAllTenants(env: Env): Promise<{ tenants: number; resumed: number }> {
   const tenants = (await env.DB.prepare(`SELECT id FROM tenants`).all<{ id: string }>()).results;
   const counts = await mapLimited(tenants, RESUME_CONCURRENCY, async ({ id }) => {
     try {

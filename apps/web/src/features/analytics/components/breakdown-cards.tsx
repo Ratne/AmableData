@@ -18,7 +18,7 @@ interface TabDef {
   readonly render: () => ReactNode;
 }
 
-export function TabbedCard({
+function TabbedCard({
   tabs,
   label,
   className,

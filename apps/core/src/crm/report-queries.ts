@@ -256,7 +256,7 @@ export function runSpec(
   return runGeneric(spec, { db: ctx.db, filter: filterFor(ctx, spec, input), currency }, input);
 }
 
-export const CRM_REPORT_SOURCES = [
+const CRM_REPORT_SOURCES = [
   'contacts',
   'companies',
   'tags',

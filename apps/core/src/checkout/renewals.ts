@@ -11,7 +11,7 @@ export interface RenewalRunResult {
   failed: number;
 }
 
-export function intentOutcome(intent: StripePaymentIntent): 'succeeded' | 'processing' | 'failed' {
+function intentOutcome(intent: StripePaymentIntent): 'succeeded' | 'processing' | 'failed' {
   if (intent.status === 'succeeded') return 'succeeded';
   if (intent.status === 'processing') return 'processing';
   return 'failed';

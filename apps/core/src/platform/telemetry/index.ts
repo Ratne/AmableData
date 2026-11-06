@@ -6,15 +6,11 @@
  */
 export { reportApiError, moduleFromRoute } from './api';
 export { addBreadcrumb } from './breadcrumbs';
-export { resolveErrorSink, type ErrorSink } from './config';
 export { flushErrorOutbox, pendingErrorCount } from './outbox';
 export {
   AlarmStepError,
-  buildErrorEvent,
   reportAlarmFailure,
   reportError,
   withAlarmReporting,
   withErrorReporting,
-  type ErrorMeta,
-  type ReportOptions,
 } from './reporter';

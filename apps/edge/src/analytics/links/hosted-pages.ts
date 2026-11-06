@@ -9,7 +9,7 @@ import { callCore, GatewayCallError } from '../../gateway';
  * tenant travels in the input). Answers are cached per isolate.
  */
 
-export const PAGE_PUBLIC_URL_OP = 'pages.publicUrl';
+const PAGE_PUBLIC_URL_OP = 'pages.publicUrl';
 
 type PageUrlOps = {
   [PAGE_PUBLIC_URL_OP]: { input: { tenant_id: string; page_id: string }; output: { url: string } };

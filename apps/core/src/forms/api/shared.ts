@@ -43,7 +43,7 @@ export function edgeOrigin(c: Ctx): string {
   return (c.env.EDGE_ORIGIN ?? 'http://localhost:8788').replace(/\/+$/, '');
 }
 
-export function serializeDelivery(row: DeliveryRow): FormDelivery {
+function serializeDelivery(row: DeliveryRow): FormDelivery {
   return {
     id: row.id,
     connection_id: row.connection_id,
@@ -59,7 +59,7 @@ export function serializeDelivery(row: DeliveryRow): FormDelivery {
 }
 
 /** Decrypts in the worker: the DO only ever holds the ciphertext. A failure becomes the submission error. */
-export async function openSubmission(
+async function openSubmission(
   c: Ctx,
   submission: { id: string; ciphertext: string; error: string | null },
 ): Promise<{
@@ -144,7 +144,7 @@ export function serializeContactSubmission(
   };
 }
 
-export function isSubmissionValue(value: unknown): value is SubmissionValue {
+function isSubmissionValue(value: unknown): value is SubmissionValue {
   return (
     typeof value === 'string' ||
     typeof value === 'number' ||

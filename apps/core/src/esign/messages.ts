@@ -56,7 +56,7 @@ const DEADLINE: Record<EsignLocale, string> = {
   it: 'Firma entro il {date}.',
 };
 
-export function fillEsignVars(template: string, values: Readonly<Record<string, string>>): string {
+function fillEsignVars(template: string, values: Readonly<Record<string, string>>): string {
   return template.replace(
     /\{\{\s*esign\.([a-z_]+)\s*\}\}/g,
     (_match, key: string) => values[key] ?? '',

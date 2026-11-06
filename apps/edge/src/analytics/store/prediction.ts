@@ -10,10 +10,10 @@ import { first, type SqlDb } from '../db/sql';
  * iterations, rows in a stable order.
  */
 
-export const MODEL_VERSION = 1;
-export const MAX_TRAINING_VISITORS = 20_000;
-export const MIN_SAMPLES = 20;
-export const MIN_POSITIVES = 2;
+const MODEL_VERSION = 1;
+const MAX_TRAINING_VISITORS = 20_000;
+const MIN_SAMPLES = 20;
+const MIN_POSITIVES = 2;
 const ITERATIONS = 300;
 const LEARNING_RATE = 1;
 const L2 = 0.001;

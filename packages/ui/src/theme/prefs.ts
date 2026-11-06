@@ -33,7 +33,7 @@ declare global {
   }
 }
 
-export const PREFS_COOKIE = 'amb_prefs';
+const PREFS_COOKIE = 'amb_prefs';
 
 export function isThemePreference(value: unknown): value is ThemePreference {
   return typeof value === 'string' && (THEME_PREFERENCES as readonly string[]).includes(value);

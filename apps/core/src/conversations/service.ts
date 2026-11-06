@@ -8,7 +8,7 @@ import type { AddressField, QueuedMessage } from './ops';
 
 /** Channels come from installed apps: `extensions.channels` of their manifest. */
 
-export const CHANNEL_SEND_TIMEOUT_MS = 10_000;
+const CHANNEL_SEND_TIMEOUT_MS = 10_000;
 
 type ChannelDef = NonNullable<AppInstall['manifest']['extensions']['channels']>[number];
 
@@ -45,7 +45,7 @@ export async function findChannel(env: Env, tenantId: string, appId: string, key
   return install === undefined || def === undefined ? null : { install, def };
 }
 
-export const CHANNEL_TEMPLATES_TIMEOUT_MS = 8_000;
+const CHANNEL_TEMPLATES_TIMEOUT_MS = 8_000;
 const MAX_TEMPLATES = 500;
 
 /**

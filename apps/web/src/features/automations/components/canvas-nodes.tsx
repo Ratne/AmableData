@@ -125,7 +125,7 @@ function Shell({
   );
 }
 
-export const GoalNodeView = memo(function GoalNodeView({
+const GoalNodeView = memo(function GoalNodeView({
   id,
   data,
   selected,
@@ -168,7 +168,7 @@ export const GoalNodeView = memo(function GoalNodeView({
   );
 });
 
-export const SequenceNodeView = memo(function SequenceNodeView({
+const SequenceNodeView = memo(function SequenceNodeView({
   id,
   data,
   selected,
@@ -224,7 +224,7 @@ export const SequenceNodeView = memo(function SequenceNodeView({
   );
 });
 
-export const DecisionNodeView = memo(function DecisionNodeView({
+const DecisionNodeView = memo(function DecisionNodeView({
   id,
   data,
   selected,
@@ -300,10 +300,7 @@ const NOTE_COLORS: Record<string, string> = {
 };
 export const NOTE_COLOR_NAMES = Object.keys(NOTE_COLORS);
 
-export const NoteNodeView = memo(function NoteNodeView({
-  data,
-  selected,
-}: NodeProps<AutomationFlowNode>) {
+const NoteNodeView = memo(function NoteNodeView({ data, selected }: NodeProps<AutomationFlowNode>) {
   const { t } = useI18n();
   const { readOnly, updateNode } = useCanvas();
   const node = data.node;

@@ -30,7 +30,7 @@ export const ADDABLE_KINDS: readonly FieldKind[] = [
 const DEFAULT_MAPPING: Partial<Record<FieldKind, FormField['map_to']>> = { email: 'email', phone: 'phone' };
 
 /** `First name!` → `first_name`, unique among `taken`. */
-export function fieldKey(label: string, taken: ReadonlySet<string>, fallback: string): string {
+function fieldKey(label: string, taken: ReadonlySet<string>, fallback: string): string {
   const base =
     label
       .normalize('NFD')

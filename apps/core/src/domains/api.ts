@@ -54,7 +54,7 @@ const sendingStatusSchema = z.object({
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
-export function registerDomainRoutes(app: OpenAPIHono<AppEnv>): void {
+function registerDomainRoutes(app: OpenAPIHono<AppEnv>): void {
   app.openapi(
     crmRoute('broadcasts:read', {
       method: 'get',

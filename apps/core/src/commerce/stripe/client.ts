@@ -4,10 +4,10 @@
  * customers, PaymentIntents, SetupIntents, payment methods, refunds.
  */
 
-export const STRIPE_API = 'https://api.stripe.com';
-export const STRIPE_API_VERSION = '2024-06-20';
+const STRIPE_API = 'https://api.stripe.com';
+const STRIPE_API_VERSION = '2024-06-20';
 /** Managed Payments Checkout Sessions need at least `2025-03-31.basil`. */
-export const STRIPE_MANAGED_API_VERSION = '2025-09-30.clover';
+const STRIPE_MANAGED_API_VERSION = '2025-09-30.clover';
 
 export type StripeFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -136,7 +136,7 @@ export const STRIPE_WEBHOOK_EVENTS = [
 type Param = string | number | boolean | null | undefined | Param[] | { [key: string]: Param };
 
 /** `a[b][c]=…` bracket encoding of nested params (Stripe's form convention). */
-export function formEncode(params: Record<string, Param>): string {
+function formEncode(params: Record<string, Param>): string {
   const out = new URLSearchParams();
   const walk = (prefix: string, value: Param): void => {
     if (value === undefined || value === null) return;
