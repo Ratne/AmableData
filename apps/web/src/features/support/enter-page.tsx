@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n';
-import { postJson } from './api';
+import { apiFetch } from '../../lib/api';
 
 /** Reads the assist token from the URL fragment (never sent to servers or logs) and scrubs it. */
 function takeAssistToken(): string | null {
@@ -22,7 +22,8 @@ export function AssistEnterPage() {
       setError('missing');
       return;
     }
-    postJson<{ redirect: string }>('/api/platform/assist/enter', { token })
+    // apiFetch: a rejected token answers 401 and must show the error here, not bounce to sign-in.
+    apiFetch<{ redirect: string }>('/api/platform/assist/enter', { method: 'POST', body: JSON.stringify({ token }) })
       .then((body) => window.location.replace(body.redirect))
       .catch(() => setError('invalid'));
   }, []);

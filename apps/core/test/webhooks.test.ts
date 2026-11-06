@@ -220,6 +220,34 @@ describe('fan-out and delivery', () => {
     h.clock.advance(31 * 24 * 3600 * 1000);
     expect(await service.prune()).toBe(1);
   });
+
+  it('re-enqueues pending deliveries whose queue message was lost', async () => {
+    const d = await deps();
+    let queueDown = false;
+    const service = new WebhookService({
+      ...d,
+      enqueue: (message, delay) => (queueDown ? Promise.reject(new Error('queue down')) : d.enqueue(message, delay)),
+    });
+    await service.create('t_acme', { url: 'https://a.example.com/h', event_types: ['*'], createdBy: null });
+    // The queue fails after the delivery rows are written: the fan-out retry
+    // finds them already inserted and enqueues nothing.
+    queueDown = true;
+    await expect(service.fanout('t_acme', [event(1)])).rejects.toThrow('queue down');
+    queueDown = false;
+    expect(await service.fanout('t_acme', [event(1)])).toBe(0);
+    expect(queue).toHaveLength(0);
+
+    // Too fresh to sweep (its message could still be in flight)…
+    await service.prune();
+    expect(queue).toHaveLength(0);
+    // …but after the threshold the cron re-enqueues it, and the attempt succeeds.
+    h.clock.advance(16 * 60_000);
+    await service.prune();
+    expect(queue.map((q) => q.message.kind)).toEqual(['webhooks.deliver']);
+    const message = queue[0]!.message;
+    if (message.kind !== 'webhooks.deliver') throw new Error('unreachable');
+    expect(await service.attempt(message.deliveryId)).toBe('succeeded');
+  });
 });
 
 describe('webhook REST API', () => {

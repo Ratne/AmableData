@@ -34,7 +34,7 @@ import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { useMe } from '../../../lib/api';
 import { FormField, SectionCard } from '../../../components/feature-kit';
-import { useTenantMeQuery } from '../../../lib/feature-hooks';
+import { tenantMeKey, useTenantMeQuery } from '../../../lib/feature-hooks';
 import { PageState } from '../../commerce/components/common';
 import {
   memberErrorCode,
@@ -142,7 +142,13 @@ function MembersView({
   const isLastOwner = (m: Member) => m.role === 'owner' && owners <= 1;
   const grantable = ROLES.filter((role) => canTouch(actorRole, role));
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['members', slug] });
+  // Also the shared tenant `me`: a role change must refresh the actor's own permissions.
+  const refresh = async (): Promise<void> => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['members', slug] }),
+      queryClient.invalidateQueries({ queryKey: tenantMeKey(slug) }),
+    ]);
+  };
   const onError = (error: unknown) => {
     toast.error(errorText(t, error));
     const code = memberErrorCode(error);
@@ -180,6 +186,7 @@ function MembersView({
       toast.success(t('members.left'));
       await queryClient.invalidateQueries({ queryKey: ['me'] });
       queryClient.removeQueries({ queryKey: ['members', slug] });
+      queryClient.removeQueries({ queryKey: tenantMeKey(slug) });
       void navigate({ to: '/' });
     },
     onError,

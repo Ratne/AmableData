@@ -74,9 +74,14 @@ export async function trackerSiteId(
   if (explicit !== null) return explicit;
   try {
     const ids = await tenantSitesStub(env.ANALYTICS, tenantId).indexList();
-    const records = await Promise.all(ids.map((id) => siteStub(env.ANALYTICS, id).getSite()));
+    // allSettled: one unreachable site DO must not drop the tracker from the page.
+    const records = await Promise.allSettled(ids.map((id) => siteStub(env.ANALYTICS, id).getSite()));
     const index = records.findIndex(
-      (record) => record !== null && !record.deleted && record.site.hostnames.some((h) => hostMatches(h, host)),
+      (result) =>
+        result.status === 'fulfilled' &&
+        result.value !== null &&
+        !result.value.deleted &&
+        result.value.site.hostnames.some((h) => hostMatches(h, host)),
     );
     return ids[index] ?? ids[0] ?? null;
   } catch (error) {

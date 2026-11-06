@@ -149,7 +149,7 @@ export function usePermissions(): { can: (permission: Permission) => boolean; re
 }
 
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.code ?? `HTTP ${String(error.status)}`;
+  if (error instanceof ApiError) return error.code === 'http_error' ? `HTTP ${String(error.status)}` : error.code;
   return error instanceof Error ? error.message : String(error);
 }
 

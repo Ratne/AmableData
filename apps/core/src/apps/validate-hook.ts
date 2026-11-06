@@ -126,15 +126,17 @@ async function readCache(env: Env, install: AppInstall, key: string, nowMs: numb
   }
 }
 
-async function writeCache(env: Env, install: AppInstall, key: string, body: unknown, nowMs: number): Promise<void> {
+function cacheStatement(env: Env, install: AppInstall, key: string, body: unknown, nowMs: number): D1PreparedStatement | null {
   const ttl = hookOf(install)?.cache_ttl_seconds ?? 0;
-  if (ttl <= 0) return;
-  await env.DB.prepare(
+  if (ttl <= 0) return null;
+  return env.DB.prepare(
     `INSERT INTO app_hook_cache (install_id, value_hash, result, expires_at) VALUES (?, ?, ?, ?)
      ON CONFLICT(install_id, value_hash) DO UPDATE SET result = excluded.result, expires_at = excluded.expires_at`,
-  )
-    .bind(install.id, key, JSON.stringify(body), nowMs + ttl * 1000)
-    .run();
+  ).bind(install.id, key, JSON.stringify(body), nowMs + ttl * 1000);
+}
+
+async function writeCache(env: Env, install: AppInstall, key: string, body: unknown, nowMs: number): Promise<void> {
+  await cacheStatement(env, install, key, body, nowMs)?.run();
 }
 
 function breakerOpen(install: AppInstall, nowMs: number): boolean {
@@ -288,6 +290,9 @@ export async function validateImportBatch(
           : null;
       await recordHookOutcome(env, install, answers !== null, nowMs);
       if (answers === null) break;
+      // Cache writes batched per chunk: one D1 query instead of one per contact.
+      const writes: D1PreparedStatement[] = [];
+      const accepted: { ref: string; parsed: AppValidation }[] = [];
       for (const raw of answers) {
         if (typeof raw !== 'object' || raw === null) continue;
         const ref = (raw as Record<string, unknown>)['ref'];
@@ -295,8 +300,13 @@ export async function validateImportBatch(
         if (item === undefined) continue;
         const parsed = parseAnswer(install, Object.keys(item.values), raw, false);
         if (parsed === null) continue;
-        await writeCache(env, install, await cacheKey(install, item.values), raw, nowMs);
-        await applyValidationResults(env, tenantId, item.ref, [parsed], [install]);
+        const statement = cacheStatement(env, install, await cacheKey(install, item.values), raw, nowMs);
+        if (statement !== null) writes.push(statement);
+        accepted.push({ ref: item.ref, parsed });
+      }
+      if (writes.length > 0) await env.DB.batch(writes);
+      for (const { ref, parsed } of accepted) {
+        await applyValidationResults(env, tenantId, ref, [parsed], [install]);
         applied += 1;
       }
     }

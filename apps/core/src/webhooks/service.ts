@@ -40,6 +40,8 @@ export const MAX_ATTEMPTS = RETRY_DELAYS_S.length + 1;
 export const AUTO_DISABLE_AFTER = 20;
 const MAX_ENDPOINTS_PER_TENANT = 20;
 const DELIVERY_RETENTION_MS = 30 * 24 * 3600 * 1000;
+/** A `pending` delivery this old lost its queue message (the cron sweeps every 5 minutes). */
+const STUCK_PENDING_MS = 15 * 60_000;
 const RESPONSE_SNIPPET_BYTES = 1024;
 const FANOUT_CHUNK = 20;
 /** D1 batch and Queues `sendBatch` limits stay well above this. */
@@ -564,8 +566,8 @@ export class WebhookService {
         .bind(tenantId)
         .all<EndpointRow & { app_api_version: string | null; app_status: string | null }>()
     ).results;
-    let created = 0;
     const plain: { endpoint: EndpointRow; event: WebhookEvent }[] = [];
+    const apps: { endpoint: EndpointRow; app: AppEndpointInfo; events: WebhookEvent[] }[] = [];
     for (const endpoint of endpoints) {
       const app: AppEndpointInfo | null =
         endpoint.app_install_id === null
@@ -577,13 +579,89 @@ export class WebhookService {
             };
       if (app !== null && app.status !== 'active') continue;
       const types = parseTypes(endpoint.event_types);
-      for (const event of events) {
-        if (!subscribes(types, event.type)) continue;
-        if (app === null) plain.push({ endpoint, event });
-        else if (await this.queueDelivery(tenantId, tenant.slug, endpoint, app, event)) created += 1;
+      const subscribed = events.filter((event) => subscribes(types, event.type));
+      if (subscribed.length === 0) continue;
+      if (app === null) for (const event of subscribed) plain.push({ endpoint, event });
+      else apps.push({ endpoint, app, events: subscribed });
+    }
+    return (
+      (await this.queueAppDeliveries(tenantId, tenant.slug, apps)) +
+      (await this.queuePlainDeliveries(tenantId, tenant.slug, plain))
+    );
+  }
+
+  /**
+   * App deliveries of a fan-out, batched like `queuePlainDeliveries`: per chunk
+   * one claim batch on `app_events`, one seq lookup, one payload update, one
+   * delivery insert and one queue send, instead of four queries per event.
+   * Claim semantics match `queueDelivery`: only the call that first logged the
+   * event (empty `body`) delivers it.
+   */
+  private async queueAppDeliveries(
+    tenantId: string,
+    tenantSlug: string,
+    groups: readonly { endpoint: EndpointRow; app: AppEndpointInfo; events: readonly WebhookEvent[] }[],
+  ): Promise<number> {
+    let created = 0;
+    for (const { endpoint, app, events } of groups) {
+      for (let i = 0; i < events.length; i += INSERT_CHUNK) {
+        const chunk = events.slice(i, i + INSERT_CHUNK);
+        const now = this.deps.now();
+        await this.deps.db.batch(
+          chunk.map((event) =>
+            this.deps.db
+              .prepare(
+                `INSERT OR IGNORE INTO app_events (tenant_id, install_id, event_id, event_type, body, created_at)
+                 VALUES (?, ?, ?, ?, '', ?)`,
+              )
+              .bind(tenantId, app.installId, event.id, event.type, now),
+          ),
+        );
+        const logged = (
+          await this.deps.db
+            .prepare(
+              `SELECT seq, body, event_id FROM app_events
+               WHERE install_id = ? AND event_id IN (SELECT value FROM json_each(?))`,
+            )
+            .bind(app.installId, JSON.stringify(chunk.map((event) => event.id)))
+            .all<{ seq: number; body: string; event_id: string }>()
+        ).results;
+        const byEvent = new Map(logged.map((row) => [row.event_id, row]));
+        const fresh = chunk.flatMap((event) => {
+          const row = byEvent.get(event.id);
+          if (row === undefined || row.body !== '') return [];
+          const payload = appDeliveryBody(tenantSlug, event, { ...app, sequence: row.seq });
+          return [{ event, seq: row.seq, payload, id: this.deps.newId() }];
+        });
+        if (fresh.length === 0) continue;
+        await this.deps.db.batch(
+          fresh.map(({ payload, seq }) =>
+            this.deps.db.prepare(`UPDATE app_events SET body = ? WHERE seq = ?`).bind(payload, seq),
+          ),
+        );
+        const results = await this.deps.db.batch(
+          fresh.map(({ id, event, payload }) =>
+            this.insertStatement({
+              id,
+              tenantId,
+              endpointId: endpoint.id,
+              eventId: event.id,
+              eventType: event.type,
+              payload,
+              replayOf: null,
+            }),
+          ),
+        );
+        const messages: WebhookMessage[] = fresh
+          .filter((_, index) => (results[index]?.meta.changes ?? 0) > 0)
+          .map(({ id }) => ({ kind: 'webhooks.deliver', version: 1, deliveryId: id }));
+        if (messages.length === 0) continue;
+        if (this.deps.enqueueMany !== undefined) await this.deps.enqueueMany(messages);
+        else for (const message of messages) await this.deps.enqueue(message);
+        created += messages.length;
       }
     }
-    return created + (await this.queuePlainDeliveries(tenantId, tenant.slug, plain));
+    return created;
   }
 
   /**
@@ -837,8 +915,39 @@ export class WebhookService {
     return { statusCode, error, snippet, permanent };
   }
 
-  /** Drops delivery rows older than the retention window. */
+  /**
+   * Fan-out and replay write the delivery row before its queue message, so a
+   * queue failure in between leaves `pending` rows (attempts = 0) no consumer
+   * will ever pick up: the retried fan-out skips them (`INSERT OR IGNORE`).
+   * Rows older than the threshold are re-enqueued; a message still in flight
+   * for them would have been consumed long before it, so duplicates stay
+   * exceptional (and `attempt` tolerates them).
+   */
+  private async requeueStuckPending(): Promise<number> {
+    const cutoff = this.deps.now() - STUCK_PENDING_MS;
+    const rows = (
+      await this.deps.db
+        .prepare(
+          `SELECT id FROM webhook_deliveries WHERE status = 'pending' AND attempts = 0 AND created_at < ?
+           ORDER BY created_at LIMIT 100`,
+        )
+        .bind(cutoff)
+        .all<{ id: string }>()
+    ).results;
+    if (rows.length === 0) return 0;
+    const messages: WebhookMessage[] = rows.map((row) => ({
+      kind: 'webhooks.deliver',
+      version: 1,
+      deliveryId: row.id,
+    }));
+    if (this.deps.enqueueMany !== undefined) await this.deps.enqueueMany(messages);
+    else for (const message of messages) await this.deps.enqueue(message);
+    return messages.length;
+  }
+
+  /** Drops delivery rows older than the retention window; recovers stuck pending ones first. */
   async prune(): Promise<number> {
+    await this.requeueStuckPending();
     const cutoff = this.deps.now() - DELIVERY_RETENTION_MS;
     const result = await this.deps.db
       .prepare(`DELETE FROM webhook_deliveries WHERE created_at < ?`)

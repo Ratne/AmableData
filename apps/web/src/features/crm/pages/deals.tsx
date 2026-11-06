@@ -38,7 +38,7 @@ import {
   usePermissions,
   usePipelines,
 } from '../api/hooks';
-import { formatMoney } from '../../../lib/money';
+import { formatMoney, parseMoneyInput } from '../../../lib/money';
 import { formatTotals } from '../components/cells';
 import { ChoiceSelect, DatePicker, UserSelect } from '../components/inputs';
 import { PageState } from '../components/states';
@@ -206,7 +206,7 @@ function NewDealDialog({
   onOpenChange: (open: boolean) => void;
   pipeline: Pipeline;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { api } = useCrm();
   const [title, setTitle] = useState('');
   const [value, setValue] = useState('');
@@ -214,7 +214,7 @@ function NewDealDialog({
   const [stageId, setStageId] = useState(pipeline.stages[0]?.id ?? '');
   const [owner, setOwner] = useState('');
   const [close, setClose] = useState('');
-  const amount = value.trim() === '' ? 0 : Number(value.replace(',', '.'));
+  const amountMinor = value.trim() === '' ? 0 : parseMoneyInput(value, currency, locale);
   const required = useRequiredCustomFields('opportunities');
   const create = useCrmMutation({
     mutationFn: (customFields: CustomFieldValues) =>
@@ -222,7 +222,7 @@ function NewDealDialog({
         title: title.trim(),
         pipeline_id: pipeline.id,
         ...(stageId ? { stage_id: stageId } : {}),
-        value_minor: Math.round(amount * 100),
+        value_minor: amountMinor ?? 0,
         currency,
         ...(owner ? { owner_id: owner } : {}),
         ...(close ? { expected_close_date: close } : {}),
@@ -236,8 +236,7 @@ function NewDealDialog({
       onOpenChange(false);
     },
   });
-  const valid =
-    title.trim() !== '' && Number.isFinite(amount) && amount >= 0 && /^[A-Z]{3}$/.test(currency);
+  const valid = title.trim() !== '' && amountMinor !== null && /^[A-Z]{3}$/.test(currency);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!valid) return;

@@ -24,7 +24,7 @@ import {
   usePermissions,
   usePipelines,
 } from '../api/hooks';
-import { formatMoney } from '../../../lib/money';
+import { formatMoney, minorToInput, parseMoneyInput } from '../../../lib/money';
 import { CompanyPicker } from '../components/company-picker';
 import { contactName } from '../components/contact-dialogs';
 import {
@@ -254,13 +254,13 @@ function DealView({ deal }: { deal: Opportunity }) {
               />
               <InlineText
                 label={t('crm.deals.value')}
-                value={(deal.value_minor / 100).toFixed(2)}
+                value={minorToInput(deal.value_minor, deal.currency, locale)}
                 canEdit={canEdit}
                 validate={(value) =>
-                  /^\d+([.,]\d{1,2})?$/.test(value.trim()) ? null : t('crm.validation.number')
+                  parseMoneyInput(value, deal.currency, locale) !== null ? null : t('crm.validation.number')
                 }
                 onSave={(value) =>
-                  save({ value_minor: Math.round(Number((value ?? '0').replace(',', '.')) * 100) })
+                  save({ value_minor: parseMoneyInput(value ?? '', deal.currency, locale) ?? deal.value_minor })
                 }
               />
               <InlineEdit<string>

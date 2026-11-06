@@ -161,8 +161,9 @@ export async function listDeadlines(
   const binds: unknown[] = [installId, campaignId];
   if (options.contactIds !== undefined) {
     if (options.contactIds.length === 0) return [];
-    where.push(`contact_id IN (${options.contactIds.map(() => '?').join(', ')})`);
-    binds.push(...options.contactIds);
+    // json_each: one bound parameter however many ids (D1 caps binds at 100).
+    where.push(`contact_id IN (SELECT value FROM json_each(?))`);
+    binds.push(JSON.stringify(options.contactIds));
   }
   if (options.contactsOnly === true) where.push('contact_id IS NOT NULL');
   if (options.before != null) {
@@ -205,8 +206,9 @@ export async function changeDeadlines(
   change: Change,
   now: number,
 ): Promise<number> {
-  const scope = ids === null ? '' : ` AND id IN (${ids.map(() => '?').join(', ')})`;
-  const binds = [campaign.installId, campaign.id, ...(ids ?? [])];
+  // json_each: one bound parameter however many ids (D1 caps binds at 100).
+  const scope = ids === null ? '' : ` AND id IN (SELECT value FROM json_each(?))`;
+  const binds = [campaign.installId, campaign.id, ...(ids === null ? [] : [JSON.stringify(ids)])];
   if (ids !== null && ids.length === 0) return 0;
   let statement;
   switch (change.kind) {

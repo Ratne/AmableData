@@ -25,7 +25,7 @@ import {
   usePermissions,
   usePipelines,
 } from '../api/hooks';
-import { formatMoney } from '../../../lib/money';
+import { formatMoney, parseMoneyInput } from '../../../lib/money';
 import { DatePicker, DateTimePicker } from './inputs';
 import { ErrorNotice } from './states';
 import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
@@ -560,6 +560,9 @@ export function DealsPanel({ contactId, companyId }: { contactId?: string; compa
     enabled: contactId !== undefined,
   });
   const dealItems = deals.data?.pages.flatMap((p) => p.data) ?? [];
+  // No currency field here: the server defaults new deals to EUR.
+  const valueMinor = value.trim() === '' ? null : parseMoneyInput(value, 'EUR', locale);
+  const valueInvalid = value.trim() !== '' && valueMinor === null;
   const required = useRequiredCustomFields('opportunities');
   const create = useCrmMutation({
     mutationFn: (customFields: CustomFieldValues) =>
@@ -567,7 +570,7 @@ export function DealsPanel({ contactId, companyId }: { contactId?: string; compa
         title: title.trim(),
         ...(contactId ? { contact_id: contactId } : {}),
         ...(companyId ? { company_id: companyId } : {}),
-        ...(value ? { value_minor: Math.round(Number(value.replace(',', '.')) * 100) } : {}),
+        ...(valueMinor !== null ? { value_minor: valueMinor } : {}),
         ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
       }),
     success: t('crm.deals.created'),
@@ -604,9 +607,14 @@ export function DealsPanel({ contactId, companyId }: { contactId?: string; compa
             onChange={(e) => setValue(e.target.value)}
             placeholder={t('crm.deals.value')}
             aria-label={t('crm.deals.value')}
+            aria-invalid={valueInvalid || undefined}
             className="h-8 w-28"
           />
-          <Button type="submit" size="sm" disabled={!title.trim() || create.isPending}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!title.trim() || valueInvalid || create.isPending}
+          >
             <Plus className="size-3.5" aria-hidden /> {t('crm.common.add')}
           </Button>
           {title.trim() ? (

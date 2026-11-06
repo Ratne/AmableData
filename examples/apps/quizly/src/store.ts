@@ -380,10 +380,11 @@ export async function answersOf(db: SqlDb, sessionIds: readonly string[]): Promi
   if (sessionIds.length === 0) return out;
   const { results } = await db
     .prepare(
+      // json_each: one bound parameter however many sessions (D1 caps binds at 100).
       `SELECT session_id, step_id, answer_id, value_text, tagged, updated_at FROM session_answers
-       WHERE session_id IN (${sessionIds.map(() => '?').join(', ')}) ORDER BY created_at, step_id`,
+       WHERE session_id IN (SELECT value FROM json_each(?)) ORDER BY created_at, step_id`,
     )
-    .bind(...sessionIds)
+    .bind(JSON.stringify(sessionIds))
     .all<{ session_id: string; step_id: string; answer_id: string | null; value_text: string | null; tagged: number; updated_at: number }>();
   for (const r of results) {
     const list = out.get(r.session_id) ?? [];
