@@ -56,7 +56,7 @@ export function CanvasPreview({
   deviceWidth: number;
   zoom: CanvasZoom;
   selectedId: string | null;
-  iframeRef: RefObject<HTMLIFrameElement>;
+  iframeRef: RefObject<HTMLIFrameElement | null>;
   onSelectNode: (id: string) => void;
   onContextMenu: (id: string, x: number, y: number) => void;
   onStartMove: (id: string) => void;

@@ -132,7 +132,7 @@ const LayerOpenContext = createContext(false);
 // Portaled layers leave a scoped `.dark` wrapper behind, so the shell passes its theme down to them.
 const ShellDarkContext = createContext(false);
 
-function useScopedDark(ref: RefObject<HTMLElement>, className?: string) {
+function useScopedDark(ref: RefObject<HTMLElement | null>, className?: string) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {

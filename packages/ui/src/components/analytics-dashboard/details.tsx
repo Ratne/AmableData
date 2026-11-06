@@ -36,8 +36,8 @@ type Props = {
   open: boolean;
   /** Whether the panel is on screen in the current layout. */
   visible: boolean;
-  panelRef: RefObject<HTMLElement>;
-  hideRef: RefObject<HTMLButtonElement>;
+  panelRef: RefObject<HTMLElement | null>;
+  hideRef: RefObject<HTMLButtonElement | null>;
   onHide: () => void;
 };
 

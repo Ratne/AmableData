@@ -57,7 +57,7 @@ function defaultDrop(body: ElementNode[]): DropTarget {
  * container outline and a cursor chip.
  */
 export function useCanvasDnd(opts: {
-  iframeRef: RefObject<HTMLIFrameElement>;
+  iframeRef: RefObject<HTMLIFrameElement | null>;
   getBody: () => ElementNode[];
   labelOf: (type: string) => string;
   addNode: (type: string, parentId: string | null, index?: number) => string;
