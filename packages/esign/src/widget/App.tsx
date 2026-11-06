@@ -134,19 +134,27 @@ function OwnField(props: {
       </div>
     );
   } else {
-    content = (
-      <input
-        type={field.type === 'date' ? 'date' : 'text'}
-        inputMode={field.type === 'number' ? 'decimal' : undefined}
-        aria-label={field.label}
-        placeholder={field.label}
-        value={typeof value === 'string' ? value : ''}
-        disabled={!props.editable}
-        maxLength={1000}
-        onFocus={props.onFocus}
-        onInput={(event) => props.onChange((event.currentTarget as HTMLInputElement).value)}
-      />
-    );
+    // Preact 11 types <input> as a union discriminated by `type`, so each literal needs its own element.
+    const inputProps = {
+      'aria-label': field.label,
+      placeholder: field.label,
+      value: typeof value === 'string' ? value : '',
+      disabled: !props.editable,
+      maxLength: 1000,
+      onFocus: props.onFocus,
+      onInput: (event: { currentTarget: HTMLInputElement }) =>
+        props.onChange(event.currentTarget.value),
+    };
+    content =
+      field.type === 'date' ? (
+        <input type="date" {...inputProps} />
+      ) : (
+        <input
+          type="text"
+          inputMode={field.type === 'number' ? 'decimal' : undefined}
+          {...inputProps}
+        />
+      );
   }
   return (
     <div class={classes} style={style} title={title} data-field={field.id}>

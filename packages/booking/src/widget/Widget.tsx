@@ -287,17 +287,24 @@ function QuestionInput({
           {question.placeholder !== '' ? question.placeholder : question.label}
         </label>
       );
-    default:
-      return (
-        <input
-          class="ab-input"
-          name={name}
-          type={question.kind === 'number' ? 'number' : question.kind === 'phone' ? 'tel' : 'text'}
-          value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''}
-          placeholder={question.placeholder}
-          onInput={(e) => onChange((e.target as HTMLInputElement).value)}
-        />
+    default: {
+      // Preact 11 types <input> as a union discriminated by `type`, so each literal needs its own element.
+      const shared = {
+        class: 'ab-input',
+        name,
+        value: typeof value === 'string' || typeof value === 'number' ? String(value) : '',
+        placeholder: question.placeholder,
+        onInput: (e: { target: EventTarget | null }) =>
+          onChange((e.target as HTMLInputElement).value),
+      };
+      return question.kind === 'number' ? (
+        <input {...shared} type="number" />
+      ) : question.kind === 'phone' ? (
+        <input {...shared} type="tel" />
+      ) : (
+        <input {...shared} type="text" />
       );
+    }
   }
 }
 

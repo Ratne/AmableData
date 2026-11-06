@@ -464,20 +464,36 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       ));
 
   const c = config.contact;
-  const input = (key: keyof Buyer, label: string, mode: ContactFieldMode, type = 'text', autoComplete = 'on') =>
+  const input = (
+    key: keyof Buyer,
+    label: string,
+    mode: ContactFieldMode,
+    type: 'text' | 'email' | 'tel' = 'text',
+    autoComplete = 'on',
+  ) =>
     mode === 'hidden' ? null : (
       <div class={`af-field${errors[key] !== undefined ? ' af-invalid' : ''}`} data-af-invalid={errors[key] === undefined ? undefined : ''}>
         <label class="af-label" for={`ac-${key}`}>
           {modeLabel(mode, label)}
         </label>
-        <input
-          id={`ac-${key}`}
-          class="af-input"
-          type={type}
-          autoComplete={autoComplete}
-          value={buyer[key]}
-          onInput={(e) => setBuyerField(key, (e.target as HTMLInputElement).value)}
-        />
+        {(() => {
+          // Preact 11 types <input> as a union discriminated by `type`, so each literal needs its own element.
+          const shared = {
+            id: `ac-${key}`,
+            class: 'af-input',
+            autoComplete,
+            value: buyer[key],
+            onInput: (e: { target: EventTarget | null }) =>
+              setBuyerField(key, (e.target as HTMLInputElement).value),
+          };
+          return type === 'email' ? (
+            <input {...shared} type="email" />
+          ) : type === 'tel' ? (
+            <input {...shared} type="tel" />
+          ) : (
+            <input {...shared} type="text" />
+          );
+        })()}
         {errors[key] !== undefined ? <div class="af-error">{errors[key]}</div> : null}
       </div>
     );

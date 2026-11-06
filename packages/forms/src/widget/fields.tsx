@@ -12,21 +12,6 @@ interface FieldProps {
 const text = (value: unknown): string =>
   typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '';
 
-function inputType(kind: FormField['kind']): string {
-  switch (kind) {
-    case 'email':
-      return 'email';
-    case 'phone':
-      return 'tel';
-    case 'number':
-      return 'number';
-    case 'date':
-      return 'date';
-    default:
-      return 'text';
-  }
-}
-
 function autoComplete(field: FormField): string {
   switch (field.map_to) {
     case 'email':
@@ -178,22 +163,32 @@ function Control({ field, value, strings, onChange }: FieldProps) {
         </div>
       );
     }
-    default:
-      return (
-        <input
-          id={id}
-          class="af-input"
-          type={inputType(field.kind)}
-          name={field.key}
-          placeholder={field.placeholder}
-          autoComplete={autoComplete(field)}
-          min={field.min}
-          max={field.max}
-          maxLength={field.kind === 'number' || field.kind === 'date' ? undefined : (field.max_length ?? 255)}
-          value={text(value)}
-          onInput={(e) => onChange((e.target as HTMLInputElement).value)}
-        />
-      );
+    default: {
+      // Preact 11 types <input> as a union discriminated by `type`, so each literal needs its own element.
+      const shared = {
+        id,
+        class: 'af-input',
+        name: field.key,
+        placeholder: field.placeholder,
+        autoComplete: autoComplete(field),
+        value: text(value),
+        onInput: (e: { target: EventTarget | null }) =>
+          onChange((e.target as HTMLInputElement).value),
+      };
+      const maxLength = field.max_length ?? 255;
+      switch (field.kind) {
+        case 'number':
+          return <input {...shared} type="number" min={field.min} max={field.max} />;
+        case 'date':
+          return <input {...shared} type="date" min={field.min} max={field.max} />;
+        case 'email':
+          return <input {...shared} type="email" maxLength={maxLength} />;
+        case 'phone':
+          return <input {...shared} type="tel" maxLength={maxLength} />;
+        default:
+          return <input {...shared} type="text" maxLength={maxLength} />;
+      }
+    }
   }
 }
 
