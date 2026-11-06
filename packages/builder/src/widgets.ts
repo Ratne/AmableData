@@ -211,9 +211,10 @@ const render: Record<string, (s: S, ctx: WidgetContext) => string> = {
     const pos = ["left", "right"].includes(str(s.position)) ? str(s.position) : "top";
     const tag = /^(h[1-6]|div|span|p)$/.test(str(s.titleTag)) ? str(s.titleTag) : "h3";
     const svg = iconOrImage(ctx, s);
+    // Description is a rich-text value (HTML sanitized on save, like the text widget).
     const body = `<div class="b-iconbox__body"><${tag} class="b-iconbox__title">${esc(
       str(s.title, "Title"),
-    )}</${tag}><p class="b-iconbox__desc">${esc(str(s.description))}</p></div>`;
+    )}</${tag}><div class="b-iconbox__desc">${str(s.description)}</div></div>`;
     const inner = `<div class="b-iconbox b-iconbox--${pos}"><div class="b-iconbox__icon">${svg}</div>${body}</div>`;
     return hasLink(s.link) ? `<a class="b-iconbox__link" ${linkAttrs(s.link)}>${inner}</a>` : inner;
   },
@@ -222,9 +223,10 @@ const render: Record<string, (s: S, ctx: WidgetContext) => string> = {
     const tag = /^(h[1-6]|div|span|p)$/.test(str(s.titleTag)) ? str(s.titleTag) : "h3";
     const boxImg = imgHtml(ctx, s, "image", { alt: str(s.title) });
     const img = boxImg ? `<div class="b-imagebox__img">${boxImg}</div>` : "";
+    // Description is a rich-text value (HTML sanitized on save, like the text widget).
     const inner = `<div class="b-imagebox">${img}<div class="b-imagebox__body"><${tag} class="b-imagebox__title">${esc(
       str(s.title, "Title"),
-    )}</${tag}><p class="b-imagebox__desc">${esc(str(s.description))}</p></div></div>`;
+    )}</${tag}><div class="b-imagebox__desc">${str(s.description)}</div></div></div>`;
     return hasLink(s.link) ? `<a class="b-imagebox__link" ${linkAttrs(s.link)}>${inner}</a>` : inner;
   },
 
@@ -330,8 +332,9 @@ const render: Record<string, (s: S, ctx: WidgetContext) => string> = {
       cls: "b-testimonial__img",
       lazy: false,
     });
-    return `<div class="b-testimonial"><div class="b-testimonial__content">${esc(
-      str(s.content),
+    // Content is a rich-text value (HTML sanitized on save, like the text widget).
+    return `<div class="b-testimonial"><div class="b-testimonial__content">${str(
+      s.content,
     )}</div><div class="b-testimonial__meta">${img}<div><div class="b-testimonial__name">${esc(
       str(s.name),
     )}</div><div class="b-testimonial__role">${esc(str(s.role))}</div></div></div></div>`;
@@ -388,9 +391,10 @@ const render: Record<string, (s: S, ctx: WidgetContext) => string> = {
     const type = ["success", "warning", "danger"].includes(str(s.alertType))
       ? str(s.alertType)
       : "info";
+    // Description is a rich-text value (HTML sanitized on save, like the text widget).
     return `<div class="b-alert b-alert--${type}"><div class="b-alert__title">${esc(
       str(s.title, "Alert"),
-    )}</div><div class="b-alert__desc">${esc(str(s.description))}</div></div>`;
+    )}</div><div class="b-alert__desc">${str(s.description)}</div></div>`;
   },
 
   html(s) {

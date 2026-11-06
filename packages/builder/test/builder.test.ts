@@ -68,6 +68,33 @@ describe('builder schema', () => {
     expect(clean.body[1]?.settings.items).toEqual([{ title: 'A', content: '' }]);
   });
 
+  it('sanitizes the rich descriptions of icon box, image box, testimonial and alert', () => {
+    const evil = 'ciao<script>x</script>';
+    const d = doc([
+      node('ib', 'icon-box', { description: evil }),
+      node('xb', 'image-box', { description: evil }),
+      node('ts', 'testimonial', { content: evil }),
+      node('al', 'alert', { description: evil }),
+    ]);
+    const clean = sanitizeBuilderDocument(d, (html) => html.replace(/<script>.*?<\/script>/g, ''));
+    expect(clean.body.map((n) => n.settings.description ?? n.settings.content)).toEqual([
+      'ciao',
+      'ciao',
+      'ciao',
+      'ciao',
+    ]);
+  });
+
+  it('renders the rich descriptions as HTML', () => {
+    const d = doc([
+      node('ib', 'icon-box', { title: 'T', description: '<p>riga <strong>bold</strong></p>' }),
+      node('al', 'alert', { title: 'A', description: 'testo <em>corsivo</em>' }),
+    ]);
+    const { html } = renderBuilderPage(d, {});
+    expect(html).toContain('<div class="b-iconbox__desc"><p>riga <strong>bold</strong></p></div>');
+    expect(html).toContain('<div class="b-alert__desc">testo <em>corsivo</em></div>');
+  });
+
   it('ships an Italian dictionary keyed by the English labels', () => {
     expect(builderLabel('Heading', 'it')).toBe('Titolo');
     expect(builderLabel('Heading', 'en')).toBe('Heading');

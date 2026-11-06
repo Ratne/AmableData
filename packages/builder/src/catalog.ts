@@ -737,7 +737,7 @@ const iconBox: WidgetDef = {
         description: "When set it replaces the library icon.",
       }),
       text("title", "Title"),
-      textarea("description", "Description"),
+      richtext("description", "Description"),
       select("titleTag", "Title tag", H_TAGS),
       url("link", "Link"),
       choose("position", "Icon position", [
@@ -776,7 +776,7 @@ const imageBox: WidgetDef = {
     content("imagebox_content", "Content", [
       media("image", "Image", { responsive: true, description: RESPONSIVE_MEDIA_HINT }),
       text("title", "Title"),
-      textarea("description", "Description"),
+      richtext("description", "Description"),
       select("titleTag", "Title tag", H_TAGS),
       url("link", "Link"),
     ]),
@@ -1043,7 +1043,7 @@ const testimonial: WidgetDef = {
   },
   sections: [
     content("testimonial_content", "Testimonial", [
-      textarea("content", "Text"),
+      richtext("content", "Text"),
       media("image", "Photo", { responsive: true, description: RESPONSIVE_MEDIA_HINT }),
       text("name", "Name"),
       text("role", "Role"),
@@ -1181,7 +1181,7 @@ const alert: WidgetDef = {
         { value: "danger", label: "Error" },
       ]),
       text("title", "Title"),
-      textarea("description", "Description"),
+      richtext("description", "Description"),
     ]),
     style("alert_style", "Style", [
       color("bgColor", "Background color", "{{WRAPPER}} .b-alert", "background-color"),

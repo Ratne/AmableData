@@ -67,6 +67,10 @@ h1,h2,h3,h4,h5,h6{font-family:var(--b-font-heading,Poppins),system-ui,sans-serif
 .b-text{color:inherit}
 .b-text :first-child{margin-top:0}.b-text :last-child{margin-bottom:0}
 .b-text a{color:var(--b-color-primary);text-decoration:underline}
+/* Rich-text descriptions (icon box, image box, testimonial, alert): the
+   editor emits <p>/<ul>; their outer margins must not add to the box. */
+.b-iconbox__desc :first-child,.b-imagebox__desc :first-child,.b-testimonial__content :first-child,.b-alert__desc :first-child{margin-top:0}
+.b-iconbox__desc :last-child,.b-imagebox__desc :last-child,.b-testimonial__content :last-child,.b-alert__desc :last-child{margin-bottom:0}
 /* button */
 .b-btn{display:inline-flex;align-items:center;gap:.5em;text-decoration:none;font-weight:600;border-radius:var(--b-radius);background:var(--b-color-primary);color:#fff;border:0;cursor:pointer;transition:transform .15s,box-shadow .15s;line-height:1}
 .b-btn:hover{transform:translateY(-1px)}
@@ -84,10 +88,12 @@ h1,h2,h3,h4,h5,h6{font-family:var(--b-font-heading,Poppins),system-ui,sans-serif
 /* picture only picks the source per resolution: it must not create a box
    that alters flex/grid or the percentages of the image inside. */
 picture{display:contents}
-.b-image{margin:0}
-.b-image img{border-radius:var(--b-radius)}
-.b-image__ph{background:var(--b-color-muted);border-radius:var(--b-radius);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--b-color-text);opacity:.6}
-.b-image__cap{font-size:.85rem;opacity:.7;margin-top:8px;text-align:center}
+/* line-height:0 + img inline-block: the Align control (text-align on the
+   wrapper) actually moves the image, without the inline baseline gap. */
+.b-image{margin:0;line-height:0}
+.b-image img{border-radius:var(--b-radius);display:inline-block}
+.b-image__ph{background:var(--b-color-muted);border-radius:var(--b-radius);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--b-color-text);opacity:.6;line-height:1.4}
+.b-image__cap{font-size:.85rem;opacity:.7;margin-top:8px;text-align:center;line-height:1.5}
 /* icon */
 .b-icon{display:inline-flex;font-size:2.5rem;color:var(--b-color-primary);line-height:1}
 .b-icon--stacked{background:var(--b-color-primary);color:#fff;padding:.5em;border-radius:var(--b-radius)}

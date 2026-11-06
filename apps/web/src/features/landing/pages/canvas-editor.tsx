@@ -717,29 +717,32 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
                 openCtxMenu(id, x, y, prev);
               }}
             />
-            {selected ? (
-              <nav
-                aria-label={t('landing.editor.breadcrumb')}
-                className="absolute right-0 bottom-0 left-0 z-10 flex items-center gap-0.5 overflow-x-auto border-t bg-background/95 px-2 py-1 text-xs backdrop-blur"
-              >
-                <button type="button" className="rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted" onClick={() => setSelectedId(null)}>
-                  {t('landing.editor.page')}
-                </button>
-                {nodeChain(scopeBody, selected.id).map((n) => (
-                  <span key={n.id} className="flex items-center gap-0.5 whitespace-nowrap">
-                    <span className="text-muted-foreground">›</span>
-                    <button
-                      type="button"
-                      className={cn('rounded px-1.5 py-0.5 hover:bg-muted', n.id === selected.id ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground')}
-                      onClick={() => setSelectedId(n.id)}
-                    >
-                      {titleOf(n.type)}
-                    </button>
-                  </span>
-                ))}
-              </nav>
-            ) : null}
           </div>
+          {/* In flow below the canvas (not an overlay): an absolute bar would
+              cover the bottom of the iframe and the end of the page would stay
+              hidden even at max scroll. */}
+          {selected ? (
+            <nav
+              aria-label={t('landing.editor.breadcrumb')}
+              className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-t bg-background px-2 py-1 text-xs"
+            >
+              <button type="button" className="rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted" onClick={() => setSelectedId(null)}>
+                {t('landing.editor.page')}
+              </button>
+              {nodeChain(scopeBody, selected.id).map((n) => (
+                <span key={n.id} className="flex items-center gap-0.5 whitespace-nowrap">
+                  <span className="text-muted-foreground">›</span>
+                  <button
+                    type="button"
+                    className={cn('rounded px-1.5 py-0.5 hover:bg-muted', n.id === selected.id ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground')}
+                    onClick={() => setSelectedId(n.id)}
+                  >
+                    {titleOf(n.type)}
+                  </button>
+                </span>
+              ))}
+            </nav>
+          ) : null}
         </section>
 
         <aside className={cn('flex min-h-0 flex-col overflow-hidden border-l', fullView && 'hidden')}>

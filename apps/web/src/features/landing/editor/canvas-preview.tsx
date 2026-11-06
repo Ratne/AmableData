@@ -80,12 +80,14 @@ export function CanvasPreview({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
-    // Hysteresis: a scrollbar appearing (~15px) must not re-trigger the fit scale.
+    // Width hysteresis: a scrollbar appearing (~15px) must not re-trigger the
+    // fit scale. Height follows exactly: a stale height would push the bottom
+    // of the frame (the end of the page) under the breadcrumb bar.
     const ro = new ResizeObserver(() => {
       setSize((prev) => {
         const w = el.clientWidth;
         const h = el.clientHeight;
-        if (Math.abs(w - prev.w) < 17 && Math.abs(h - prev.h) < 17) return prev;
+        if (Math.abs(w - prev.w) < 17 && Math.abs(h - prev.h) < 2) return prev;
         return { w, h };
       });
     });
