@@ -142,8 +142,6 @@ interface EventRow {
   occurred_at: number;
 }
 
-export const ACTIVE_STATUSES = ['sent', 'partially_signed'] as const;
-
 export function isActive(row: Pick<RequestRow, 'status'>): boolean {
   return row.status === 'sent' || row.status === 'partially_signed';
 }

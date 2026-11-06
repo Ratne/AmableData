@@ -2,7 +2,7 @@ import { verifyWebhook, type ReplayGuard } from '@amable/auth';
 import type { EmailSendSource } from '@amable/core';
 import { MailError, normalizeEmail, parseJson, type MailDeps } from './context';
 import { emitEmailEvent } from './outbox';
-import { evaluateHealth, suspension } from './settings';
+import { evaluateHealth } from './settings';
 import { suppress, type MessageRow } from './suppressions';
 
 /**
@@ -318,8 +318,4 @@ export function applyProviderEvent(deps: MailDeps, event: ProviderEvent): Applie
     };
   }
   return { applied: true, contactStatus: null };
-}
-
-export function isSuspended(deps: MailDeps): boolean {
-  return suspension(deps).suspended;
 }

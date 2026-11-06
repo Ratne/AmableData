@@ -320,16 +320,3 @@ export function TagPicker({
     </Popover>
   );
 }
-
-/** Single-tag variant: `value` is one id or ''. */
-export function TagSelect({
-  value,
-  onChange,
-  ...rest
-}: Omit<TagPickerProps, 'value' | 'onChange' | 'multiple' | 'max'> & {
-  readonly value: string;
-  readonly onChange: (id: string) => void;
-}) {
-  const ids = useMemo(() => (value === '' ? [] : [value]), [value]);
-  return <TagPicker {...rest} multiple={false} value={ids} onChange={(next) => onChange(next[0] ?? '')} />;
-}

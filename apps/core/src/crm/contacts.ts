@@ -6,7 +6,6 @@ import type {
   CreateContactInput,
   ListContactsQuery,
   MarketableStatus,
-  Page,
   SourceType,
   UpdateContactInput,
 } from '@amable/api-types';
@@ -628,5 +627,3 @@ export function listContactsConditions(input: ListContactsQuery): FilterLeaf[] {
   }
   return conditions;
 }
-
-export type ContactPage = Page<Contact>;

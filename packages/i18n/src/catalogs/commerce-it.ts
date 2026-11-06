@@ -381,7 +381,6 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.bank.deleted': 'Conto bancario eliminato',
   'commerce.bank.deleteConfirm': 'Eliminare “{label}”?',
   'commerce.bank.deleteBody': 'I checkout che usano questo conto smettono di proporre il bonifico. Gli ordini già fatti mantengono le coordinate ricevute.',
-  'commerce.paymentMethod.card': 'Carta',
   'commerce.paymentMethod.bank_transfer': 'Bonifico',
   'commerce.field.stripeTaxCode': 'Tax code Stripe',
   'commerce.products.stripeTaxCodeHint': 'Solo con Stripe Managed Payments (txcd_…). Vuoto: il tax code predefinito delle impostazioni Stripe.',

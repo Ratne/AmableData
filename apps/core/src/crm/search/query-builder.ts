@@ -118,10 +118,6 @@ const OPERATORS_BY_KIND: Record<Kind, readonly FieldOperator[]> = {
   multi: ['contains', 'not_contains', 'in', 'not_in', 'is_empty', 'is_not_empty'],
 };
 
-export function operatorsForKind(kind: Kind): readonly FieldOperator[] {
-  return OPERATORS_BY_KIND[kind];
-}
-
 // ---------------------------------------------------------------- registry
 
 function col(

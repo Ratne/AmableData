@@ -54,17 +54,6 @@ export interface BookingSource {
   page_id: string | null;
 }
 
-export const EMPTY_SOURCE: BookingSource = {
-  utm_source: null,
-  utm_medium: null,
-  utm_campaign: null,
-  utm_term: null,
-  utm_content: null,
-  referrer: null,
-  page_url: null,
-  page_id: null,
-};
-
 export interface BookingRow extends BookingSource {
   id: string;
   event_type_id: string;

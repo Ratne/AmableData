@@ -141,11 +141,6 @@ export function contactPartition(contactId: string): string {
   return `c-${(ascii.codePointAt(0) ?? 0).toString(16)}`;
 }
 
-/** Partition of messages and clicks: the broadcast, or `tx` for every other email. */
-export function mailPartition(broadcastId: string | null): string {
-  return broadcastId === null || broadcastId === '' ? 'tx' : broadcastId;
-}
-
 export function archivePrefix(tenantId: string): string {
   return `archive/${keySegment(tenantId)}/`;
 }

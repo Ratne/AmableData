@@ -293,12 +293,3 @@ tenantAdminRoutes.get('/audit', requirePermission('audit:read'), async (c) => {
   });
   return c.json({ entries });
 });
-
-/** Route → permission table, used by the authorization tests and for documentation. */
-export const TENANT_ADMIN_ROUTE_PERMISSIONS = [
-  { method: 'GET', path: '/members', permission: 'users:manage' },
-  { method: 'GET', path: '/invites', permission: 'users:manage' },
-  { method: 'GET', path: '/api-keys', permission: 'api_keys:manage' },
-  { method: 'GET', path: '/audit', permission: 'audit:read' },
-] as const;
-

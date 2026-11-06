@@ -55,11 +55,6 @@ export function readStripeAccount(ctx: CrmContext): StoredStripeAccount | null {
   };
 }
 
-/** Managed Payments is on: card payments are redirects to Stripe Checkout, no saved cards. */
-export function managedPayments(ctx: CrmContext): boolean {
-  return readStripeAccount(ctx)?.managed === true;
-}
-
 export function stripeAccount(ctx: CrmContext, _input: Record<string, never> = {}): StoredStripeAccount | null {
   return readStripeAccount(ctx);
 }

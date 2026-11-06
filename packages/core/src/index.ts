@@ -87,7 +87,6 @@ export {
   POSTSHIBA_DEFAULT_INJECT_URL,
   POSTSHIBA_PLANS,
 } from './providers/postshiba-api';
-export { FakePostShibaAccount } from './providers/postshiba-fake';
 export type {
   PostShibaAccountApi,
   PostShibaAccountConfig,

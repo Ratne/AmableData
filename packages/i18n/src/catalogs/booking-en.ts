@@ -101,7 +101,6 @@ export const bookingEn = {
   'booking.editor.dailyCapHint': 'Per host; empty for no limit.',
   'booking.editor.minutesHint': '1440 = one day.',
   'booking.editor.tagsHint': 'Tags applied to the contact on every booking.',
-  'booking.editor.noTags': 'No tags in this workspace.',
   'booking.editor.messagesHint':
     'Leave empty for the default text. Variables: {{ contact.first_name }}, {{ booking.event_title }}, {{ booking.start_date }}, {{ booking.start_time }}, {{ booking.end_time }}, {{ booking.time_zone }}, {{ booking.location }}, {{ booking.host_name }}, {{ booking.manage_url }}, {{ booking.manage_line }} (the cancel / reschedule sentence allowed below).',
   'booking.editor.confirmationSubject': 'Confirmation subject',

@@ -1,6 +1,5 @@
 import {
   collectsValue,
-  CONTACT_MAP_TARGETS,
   formFieldSchema,
   OPTION_KINDS,
   type FieldKind,
@@ -63,10 +62,6 @@ export function newField(kind: FieldKind, definition: FormDefinition, label: str
       : [],
     map_to: mapping !== null && !usedTargets.has(mapping) ? mapping : null,
   });
-}
-
-export function mappableTargets(): readonly string[] {
-  return CONTACT_MAP_TARGETS;
 }
 
 export { collectsValue, OPTION_KINDS };

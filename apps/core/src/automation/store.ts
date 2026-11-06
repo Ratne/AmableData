@@ -15,14 +15,6 @@ export type EnrollmentStatusValue = 'active' | 'completed' | 'removed' | 'failed
 export type TokenStatus =
   'scheduled' | 'running' | 'paused' | 'waiting' | 'suspended' | 'done' | 'cancelled' | 'failed';
 
-/** Token statuses that keep an enrollment active. */
-export const LIVE_TOKEN_STATUSES: readonly TokenStatus[] = [
-  'scheduled',
-  'running',
-  'paused',
-  'waiting',
-  'suspended',
-];
 export const LIVE_SQL = `('scheduled', 'running', 'paused', 'waiting', 'suspended')`;
 
 export interface AutomationRow {

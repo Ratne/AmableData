@@ -8,7 +8,7 @@ import {
   type FunnelNodeOf,
 } from '@amable/api-types';
 import { describe, expect, it } from 'vitest';
-import { mockFunnelGraph, mockHeatmap } from '../src/features/analytics/funnel-builder/mock';
+import { mockFunnelGraph, mockHeatmap } from './funnel-builder-mock';
 import {
   blankFunnelInput,
   builderReducer,

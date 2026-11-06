@@ -371,20 +371,12 @@ function controlPlaneDeployer(env: Env): AppDeployer | null {
   };
 }
 
-let deployerOverride: ((env: Env, provider: DeployProvider) => AppDeployer) | null = null;
-
-/** Test hook (pass `null` to restore). */
-export function overrideAppDeployer(next: ((env: Env, provider: DeployProvider) => AppDeployer) | null): void {
-  deployerOverride = next;
-}
-
 /** Where this installation's apps are deployed from: the control plane on the managed offering. */
 export async function deployProvider(env: Env): Promise<DeployProvider> {
   return (await isManagedOffering(env)) ? 'control_plane' : 'direct';
 }
 
 async function deployerFor(env: Env, provider: DeployProvider, nowMs: number): Promise<AppDeployer> {
-  if (deployerOverride !== null) return deployerOverride(env, provider);
   if (provider === 'control_plane') {
     const deployer = controlPlaneDeployer(env);
     if (deployer !== null) return deployer;

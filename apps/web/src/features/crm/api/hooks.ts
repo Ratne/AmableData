@@ -1,6 +1,6 @@
 import type { CustomFieldEntityPath, SearchEntity } from '@amable/api-types/crm';
 import type { Permission } from '@amable/core';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 import { useI18n } from '../../../i18n';
@@ -12,7 +12,6 @@ import {
   useGrantedPermissions,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
-import { fetchAllPages } from '../../../lib/api';
 import { crmClient, type CrmClient } from './client';
 
 /** Query keys: everything of a tenant lives under ['crm', slug, …] so one invalidation refreshes it. */
@@ -89,18 +88,6 @@ export function useDirectory() {
     [byId],
   );
   return { members, nameOf, isPending: query.isPending };
-}
-
-export function useTags() {
-  const { slug, api } = useCrm();
-  const query = useQuery({
-    queryKey: crmKeys.tags(slug),
-    queryFn: () => fetchAllPages((cursor) => api.tags.list({ cursor })),
-    staleTime: REFERENCE_STALE_MS,
-  });
-  const tags = useMemo(() => query.data ?? [], [query.data]);
-  const byId = useMemo(() => new Map(tags.map((tag) => [tag.id, tag])), [tags]);
-  return { ...query, tags, byId };
 }
 
 export function useTagCategories() {

@@ -116,11 +116,6 @@ export async function currentWebhookSecret(env: Env, installId: string): Promise
   return (await getAuthServices(env)).secretBox.decrypt(row.webhook_secret, appSecretAd(installId, 'current'));
 }
 
-export async function storeWebhookSecret(env: Env, installId: string, secret: string): Promise<void> {
-  const sealed = await (await getAuthServices(env)).secretBox.encrypt(secret, appSecretAd(installId, 'current'));
-  await env.DB.prepare(`UPDATE app_installs SET webhook_secret = ? WHERE id = ?`).bind(sealed, installId).run();
-}
-
 /**
  * New webhook secret; the previous one keeps signing (as a second `v1`) for
  * SECRET_OVERLAP_MS so the app can switch without losing deliveries.
@@ -143,23 +138,6 @@ export async function rotateWebhookSecret(env: Env, install: AppInstall, nowMs: 
     .run();
   await upsertAppEndpoint(env, install, { secret, nowMs });
   return secret;
-}
-
-/** Current and, during a rotation, previous secret (to verify requests signed by the app). */
-export async function verificationSecrets(env: Env, installId: string, nowMs: number): Promise<string[]> {
-  const row = await env.DB.prepare(
-    `SELECT webhook_secret, webhook_secret_prev, webhook_secret_prev_until FROM app_installs WHERE id = ?`,
-  )
-    .bind(installId)
-    .first<{ webhook_secret: string | null; webhook_secret_prev: string | null; webhook_secret_prev_until: number | null }>();
-  if (row === null) return [];
-  const box = (await getAuthServices(env)).secretBox;
-  const out: string[] = [];
-  if (row.webhook_secret !== null) out.push(await box.decrypt(row.webhook_secret, appSecretAd(installId, 'current')));
-  if (row.webhook_secret_prev !== null && (row.webhook_secret_prev_until ?? 0) > nowMs) {
-    out.push(await box.decrypt(row.webhook_secret_prev, appSecretAd(installId, 'previous')));
-  }
-  return out;
 }
 
 export interface AppEventRecord {

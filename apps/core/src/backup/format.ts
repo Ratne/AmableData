@@ -60,8 +60,6 @@ export interface BackupEndLine {
   rows: number;
 }
 
-export type BackupLine = BackupHeaderLine | BackupRowLine | BackupEndLine;
-
 const ID_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-(scheduled|manual)-[0-9A-Za-z]{6,32}$/;
 
 export interface BackupObjectInfo {

@@ -19,7 +19,6 @@ vi.mock('../src/features/crm/api/hooks', () => ({
     nameOf: (id: string) => ({ u1: 'Ada Lovelace', u2: 'Alan Turing' })[id] ?? id,
     isPending: false,
   }),
-  useTags: () => ({ tags: [], byId: new Map() }),
 }));
 
 const OPTIONS = [

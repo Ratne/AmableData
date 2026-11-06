@@ -383,7 +383,6 @@ export const commerceEn = {
   'commerce.bank.deleted': 'Bank account deleted',
   'commerce.bank.deleteConfirm': 'Delete “{label}”?',
   'commerce.bank.deleteBody': 'Checkouts using this account stop offering bank transfer. Orders already placed keep the coordinates they were given.',
-  'commerce.paymentMethod.card': 'Card',
   'commerce.paymentMethod.bank_transfer': 'Bank transfer',
   'commerce.field.stripeTaxCode': 'Stripe tax code',
   'commerce.products.stripeTaxCodeHint': 'Only with Stripe Managed Payments (txcd_…). Empty: the default tax code of the Stripe settings.',

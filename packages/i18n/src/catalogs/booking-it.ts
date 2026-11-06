@@ -103,7 +103,6 @@ export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
   'booking.editor.dailyCapHint': 'Per organizzatore; vuoto per nessun limite.',
   'booking.editor.minutesHint': '1440 = un giorno.',
   'booking.editor.tagsHint': 'Tag applicati al contatto a ogni prenotazione.',
-  'booking.editor.noTags': 'Nessun tag in questo workspace.',
   'booking.editor.messagesHint':
     'Lascia vuoto per il testo predefinito. Variabili: {{ contact.first_name }}, {{ booking.event_title }}, {{ booking.start_date }}, {{ booking.start_time }}, {{ booking.end_time }}, {{ booking.time_zone }}, {{ booking.location }}, {{ booking.host_name }}, {{ booking.manage_url }}, {{ booking.manage_line }} (la frase per annullare / spostare consentita qui sotto).',
   'booking.editor.confirmationSubject': 'Oggetto della conferma',

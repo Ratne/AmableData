@@ -738,14 +738,6 @@ export async function listMembers(db: D1Database, tenantId: string): Promise<Mem
   );
 }
 
-export async function countOwners(db: D1Database, tenantId: string) {
-  const row = await db
-    .prepare(`SELECT COUNT(*) AS n FROM memberships WHERE tenant_id = ? AND role = 'owner'`)
-    .bind(tenantId)
-    .first<{ n: number }>();
-  return row?.n ?? 0;
-}
-
 export async function addMembership(
   db: D1Database,
   input: { userId: string; tenantId: string; role: Role; invitedBy: string | null; now: number },

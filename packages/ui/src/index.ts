@@ -3,7 +3,7 @@
  * the ObsidianUI palette, the app shell, the standard list table and the theme.
  *
  * Generic components are imported by path: `@amable/ui/ui/button`,
- * `@amable/ui/ui/dialog`, … and blocks with `@amable/ui/blocks/status-bars`.
+ * `@amable/ui/ui/dialog`, … and blocks with `@amable/ui/blocks/searchable-select`.
  * Stylesheet: `@import "@amable/ui/theme.css";` after Tailwind.
  */
 

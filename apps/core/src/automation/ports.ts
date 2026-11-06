@@ -79,11 +79,3 @@ export async function crmCall<K extends CrmOpName>(
   if (!result.ok) throw new CrmCallError(result.error);
   return result.value as CrmOpOutput<K>;
 }
-
-export function isUnknownOp(error: unknown): boolean {
-  return (
-    error instanceof CrmCallError &&
-    error.shape.code === 'bad_request' &&
-    error.shape.message.startsWith('unknown CRM operation')
-  );
-}

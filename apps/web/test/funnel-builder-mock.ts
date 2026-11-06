@@ -5,7 +5,7 @@ import type {
   FunnelNode,
   HeatmapMetric,
 } from '@amable/api-types';
-import { liveEdges, liveNodes, weightShare } from './state';
+import { liveEdges, liveNodes, weightShare } from '../src/features/analytics/funnel-builder/state';
 
 /**
  * Sample data for tests and local previews (the builder itself runs on the
