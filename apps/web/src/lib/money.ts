@@ -36,6 +36,11 @@ function currencyFormat(locale: string, currency: string): Intl.NumberFormat | n
   }
 }
 
+/** Minor units → major units as a float (charts, axes); use `minorToDecimal` for exact text. */
+export function minorToMajor(minor: number, currency: string): number {
+  return minor / 10 ** currencyExponent(currency);
+}
+
 /** Integer minor units → decimal string with `.` (exact, no floats). */
 export function minorToDecimal(minor: number, currency: string): string {
   const exponent = currencyExponent(currency);

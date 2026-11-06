@@ -32,7 +32,7 @@ import {
   usePermissions,
 } from '../api/hooks';
 import { ChoiceSelect, ErrorNotice, FormField, Pill, SearchInput } from '../components/common';
-import { formatBps } from '../lib/money';
+import { formatBps } from '../../../lib/money';
 import { useQueryClient } from '@tanstack/react-query';
 
 type Tab = 'products' | 'categories';

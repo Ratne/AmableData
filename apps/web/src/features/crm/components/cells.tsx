@@ -1,6 +1,7 @@
 import type { CustomFieldValueInput, Tag } from '@amable/api-types/crm';
 import { Badge } from '@amable/ui/ui/badge';
 import type { ReactNode } from 'react';
+import { formatMoney } from '../../../lib/money';
 import { formatCustomValue } from '../custom-fields/display';
 import type { FieldMeta } from '../field-catalog';
 
@@ -26,14 +27,6 @@ export function formatDate(
   ).format(ms);
 }
 
-export function formatMoney(locale: string, minor: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(minor / 100);
-  } catch {
-    return `${(minor / 100).toFixed(2)} ${currency}`;
-  }
-}
-
 /** Sum of amounts per currency (largest first), never mixing currencies. */
 export function totalsByCurrency(
   items: readonly { value_minor: number; currency: string }[],
@@ -51,8 +44,8 @@ export function formatTotals(
   fallbackCurrency: string,
 ): string {
   const totals = totalsByCurrency(items);
-  if (totals.length === 0) return formatMoney(locale, 0, fallbackCurrency);
-  return totals.map((total) => formatMoney(locale, total.minor, total.currency)).join(' + ');
+  if (totals.length === 0) return formatMoney(0, fallbackCurrency, locale);
+  return totals.map((total) => formatMoney(total.minor, total.currency, locale)).join(' + ');
 }
 
 export function TagBadges({

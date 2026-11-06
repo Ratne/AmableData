@@ -9,7 +9,8 @@ import { tenantRoute } from '../../../routes/tenant';
 import { useLtvReport } from '../api-reports-ads';
 import { AnalyticsFrame } from '../components/analytics-layout';
 import { EmptyNote, ErrorState, ListSkeleton, Panel } from '../components/ui';
-import { currencyDigits, minorToMajor, useFormatters } from '../lib/format';
+import { currencyExponent, minorToMajor } from '../../../lib/money';
+import { useFormatters } from '../lib/format';
 import type { AnalyticsState } from '../lib/query-state';
 import { groupLabel, rowLabel } from '../reports-ads/labels';
 import { LTV_GROUPS, LTV_MODELS, validateLtvSearch, type LtvGroup, type LtvSearch } from '../reports-ads/search';
@@ -40,7 +41,7 @@ function LtvChart({ report, group }: { report: LtvReport; group: LtvGroup }) {
     ]),
   ) satisfies ChartConfig;
   const money = (major: number) =>
-    f.money(Math.round(major * 10 ** currencyDigits(report.currency)), report.currency);
+    f.money(Math.round(major * 10 ** currencyExponent(report.currency)), report.currency);
   return (
     <ChartContainer config={config} className="aspect-auto h-[280px] w-full">
       <LineChart data={data} margin={{ top: 12, right: 12, left: 8, bottom: 0 }}>

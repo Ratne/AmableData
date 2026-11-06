@@ -11,7 +11,7 @@ import {
   minorToInput,
   parseBpsInput,
   parseMoneyInput,
-} from '../lib/money';
+} from '../../../lib/money';
 import { ApiErrorNotice, Pill, type Tone, QueryPageState } from '../../../components/feature-kit';
 
 export {

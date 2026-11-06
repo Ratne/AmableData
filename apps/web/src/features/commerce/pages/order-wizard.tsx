@@ -33,7 +33,7 @@ import {
 } from '../components/common';
 import { ContactPicker, contactLabel, type PickedContact } from '../components/contact-picker';
 import { TotalsTable } from '../components/totals-table';
-import { formatBps } from '../lib/money';
+import { formatBps } from '../../../lib/money';
 import {
   buildDraftCreate,
   buildDraftUpdate,

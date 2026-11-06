@@ -37,7 +37,7 @@ import {
   SubscriptionStatusPill,
   intervalText,
 } from '../components/common';
-import { formatBps } from '../lib/money';
+import { formatBps } from '../../../lib/money';
 import { subscriptionDetailRoute } from '../routes';
 
 export function canPause(s: Pick<Subscription, 'status'>): boolean {

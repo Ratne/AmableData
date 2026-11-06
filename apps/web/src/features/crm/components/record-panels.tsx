@@ -25,7 +25,8 @@ import {
   usePermissions,
   usePipelines,
 } from '../api/hooks';
-import { formatDate, formatMoney } from './cells';
+import { formatMoney } from '../../../lib/money';
+import { formatDate } from './cells';
 import { DatePicker, DateTimePicker } from './inputs';
 import { ErrorNotice } from './states';
 import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
@@ -631,7 +632,7 @@ export function DealsPanel({ contactId, companyId }: { contactId?: string; compa
               {stageName(deal.stage_id)}
             </Badge>
             <span className="tabular-nums text-muted-foreground">
-              {formatMoney(locale, deal.value_minor, deal.currency)}
+              {formatMoney(deal.value_minor, deal.currency, locale)}
             </span>
           </li>
         ))}

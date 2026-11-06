@@ -38,7 +38,8 @@ import {
   usePermissions,
   usePipelines,
 } from '../api/hooks';
-import { formatDate, formatMoney, formatTotals } from '../components/cells';
+import { formatMoney } from '../../../lib/money';
+import { formatDate, formatTotals } from '../components/cells';
 import { ChoiceSelect, DatePicker, UserSelect } from '../components/inputs';
 import { PageState } from '../components/states';
 import { RequiredCustomFields, useRequiredCustomFields } from '../custom-fields/required-fields';
@@ -91,7 +92,7 @@ function DealCard({
       >
         {deal.title}
       </Link>
-      <p className="mt-0.5 tabular-nums">{formatMoney(locale, deal.value_minor, deal.currency)}</p>
+      <p className="mt-0.5 tabular-nums">{formatMoney(deal.value_minor, deal.currency, locale)}</p>
       <div className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
         {deal.contact_id && contactName ? (
           <Link
@@ -433,7 +434,7 @@ export function DealsPage() {
     {
       id: 'value',
       header: t('crm.deals.value'),
-      cell: (d) => formatMoney(locale, d.value_minor, d.currency),
+      cell: (d) => formatMoney(d.value_minor, d.currency, locale),
       sortable: true,
       sortValue: (d) => d.value_minor,
       firstDirection: 'desc',

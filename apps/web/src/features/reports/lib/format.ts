@@ -1,5 +1,5 @@
 import type { MeasureKind, ReportResult } from '@amable/api-types/reports';
-import { currencyExponent } from '../../commerce/lib/money';
+import { currencyExponent } from '../../../lib/money';
 
 /** Formatting of report values by measure kind (money = integer minor units of the result currency). */
 

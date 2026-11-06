@@ -24,7 +24,8 @@ import {
   usePermissions,
   usePipelines,
 } from '../api/hooks';
-import { formatDate, formatMoney } from '../components/cells';
+import { formatMoney } from '../../../lib/money';
+import { formatDate } from '../components/cells';
 import { CompanyPicker } from '../components/company-picker';
 import { contactName } from '../components/contact-dialogs';
 import {
@@ -215,7 +216,7 @@ function DealView({ deal }: { deal: Opportunity }) {
           <h2 className="truncate text-lg font-semibold">{deal.title}</h2>
           <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span className="tabular-nums text-foreground">
-              {formatMoney(locale, deal.value_minor, deal.currency)}
+              {formatMoney(deal.value_minor, deal.currency, locale)}
             </span>
             {pipeline ? <span>{pipeline.name}</span> : null}
             {stage ? (

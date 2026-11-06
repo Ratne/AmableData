@@ -11,7 +11,7 @@ import {
   useGrantedPermissions,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
-import { formatMoney } from '../lib/money';
+import { formatMoney } from '../../../lib/money';
 import { fetchAllPages } from '../../../lib/api';
 import { commerceClient, type CommerceClient } from './client';
 

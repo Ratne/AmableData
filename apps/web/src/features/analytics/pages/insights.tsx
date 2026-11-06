@@ -15,7 +15,8 @@ import { KpiCard } from '../components/kpi-row';
 import { useReportScope } from '../components/scope';
 import { EmptyNote, ErrorState, Flag, Panel, Segmented } from '../components/ui';
 import { countryName } from '../lib/countries';
-import { currencyDigits, minorToMajor, useFormatters } from '../lib/format';
+import { currencyExponent, minorToMajor } from '../../../lib/money';
+import { useFormatters } from '../lib/format';
 
 type Metric = 'revenue' | 'conversion';
 
@@ -43,7 +44,7 @@ function SegmentChart({ rows, metric }: { rows: readonly InsightsSegmentRow[]; m
           axisLine={false}
           tickFormatter={(value: number) =>
             metric === 'revenue'
-              ? f.moneyCompact(Math.round(value * 10 ** currencyDigits(currency)), currency)
+              ? f.moneyCompact(Math.round(value * 10 ** currencyExponent(currency)), currency)
               : `${f.number(value, 1)}%`
           }
         />
@@ -335,7 +336,7 @@ function RpvChart({ insights }: { insights: AnalyticsInsights }) {
           axisLine={false}
           width={56}
           tickFormatter={(value: number) =>
-            f.money(Math.round(value * 10 ** currencyDigits(currency)), currency)
+            f.money(Math.round(value * 10 ** currencyExponent(currency)), currency)
           }
         />
         <Tooltip

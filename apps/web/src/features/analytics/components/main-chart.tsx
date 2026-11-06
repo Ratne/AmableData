@@ -15,12 +15,11 @@ import {
   type TooltipContentProps,
 } from 'recharts';
 import { useI18n } from '../../../i18n';
+import { currencyExponent, minorToMajor } from '../../../lib/money';
 import { usePurchases, useTimeseries } from '../api';
 import {
   avatarHue,
-  currencyDigits,
   initials,
-  minorToMajor,
   useFormatters,
   type Formatters,
 } from '../lib/format';
@@ -286,7 +285,7 @@ export function MainChart() {
               axisLine={false}
               width={52}
               tickFormatter={(value: number) =>
-                f.moneyCompact(Math.round(value * 10 ** currencyDigits(cur)), cur)
+                f.moneyCompact(Math.round(value * 10 ** currencyExponent(cur)), cur)
               }
             />
             <YAxis yAxisId="avatars" hide orientation="right" width={0} domain={[0, 1]} />

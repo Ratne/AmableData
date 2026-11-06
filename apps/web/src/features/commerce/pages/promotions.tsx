@@ -36,7 +36,7 @@ import {
   usePermissions,
 } from '../api/hooks';
 import { ChoiceSelect, ErrorNotice, FormField, MoneyInput, PercentInput, Pill } from '../components/common';
-import { formatBps } from '../lib/money';
+import { formatBps } from '../../../lib/money';
 
 /** `YYYY-MM-DD` (local) of an ISO timestamp, for date inputs. */
 function toDateInput(iso: string | null): string {

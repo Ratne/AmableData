@@ -2,7 +2,7 @@ import { cn } from '@amable/ui';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
 import { useMoney } from '../api/hooks';
-import { formatBps } from '../lib/money';
+import { formatBps } from '../../../lib/money';
 import { previewFromOrder, type PricedDocument } from '../lib/order-draft';
 
 /** Lines + subtotal, discount, tax per rate, shipping and total of a priced document. */

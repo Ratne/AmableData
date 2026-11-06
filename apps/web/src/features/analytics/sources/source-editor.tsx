@@ -24,7 +24,7 @@ import { useAnalyticsMutation } from '../api';
 import { errorDetails, funnelKeys, funnelsApi, useAdConnections } from '../api-funnels';
 import { Segmented } from '../components/ui';
 import { Field, selectClass, SwitchRow } from '../funnel-builder/panels/form-bits';
-import { currencyDigits } from '../lib/format';
+import { currencyExponent } from '../../../lib/money';
 import { TrackingFieldsTable } from './fields-table';
 import {
   conversionMode,
@@ -129,7 +129,7 @@ export function SourceEditorDialog({
   const [attempted, setAttempted] = useState(false);
   const [serverErrors, setServerErrors] = useState<Map<string, string>>(new Map());
   const connections = useAdConnections(tenant, site.id);
-  const digits = currencyDigits(site.currency);
+  const digits = currencyExponent(site.currency);
 
   const paramMessages = useMemo(() => {
     const out = new Map<string, string>();

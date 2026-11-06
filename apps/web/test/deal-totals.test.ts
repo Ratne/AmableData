@@ -18,4 +18,10 @@ describe('board column totals', () => {
   it('shows zero in the fallback currency for an empty column', () => {
     expect(formatTotals('en-US', [], 'EUR')).toBe('€0.00');
   });
+
+  it('respects the minor-unit exponent of zero- and three-decimal currencies', () => {
+    expect(formatTotals('en-US', [{ value_minor: 1_500, currency: 'JPY' }], 'EUR')).toBe('¥1,500');
+    const kwd = formatTotals('en-US', [{ value_minor: 1_234, currency: 'KWD' }], 'EUR');
+    expect(kwd.replace(/[\u00a0\u202f]/g, ' ')).toBe('KWD 1.234');
+  });
 });

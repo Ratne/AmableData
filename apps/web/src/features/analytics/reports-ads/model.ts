@@ -11,7 +11,8 @@ import {
   type PerformanceRow,
   type ReportBasis,
 } from '@amable/api-types';
-import { currencyDigits, type Formatters } from '../lib/format';
+import { currencyExponent } from '../../../lib/money';
+import type { Formatters } from '../lib/format';
 import { searchString } from '../lib/search';
 
 /*
@@ -376,7 +377,7 @@ export function toCsv(rows: readonly (readonly (string | number | null)[])[]): s
 export function csvValue(column: PerformanceColumn, value: number | null, currency: string): number | null {
   if (value === null || !Number.isFinite(value)) return null;
   if (PERFORMANCE_COLUMNS[column] === 'money') {
-    const digits = currencyDigits(currency);
+    const digits = currencyExponent(currency);
     return Number((value / 10 ** digits).toFixed(digits));
   }
   return Number(value.toFixed(4));

@@ -31,7 +31,8 @@ import {
   User,
   type LucideIcon,
 } from 'lucide-react';
-import { formatDate, formatMoney } from './components/cells';
+import { formatMoney } from '../../lib/money';
+import { formatDate } from './components/cells';
 
 const ACTIVITY_LABELS: Readonly<Record<string, MessageKey>> = {
   'contact.created': 'crm.activity.contactCreated',
@@ -217,7 +218,7 @@ export function activityDetail(activity: Activity, ctx: ActivityDetailContext): 
   const amount = data['amountMinor'];
   const currency = str(data['currency']);
   if (typeof amount === 'number' && currency !== null) {
-    const money = formatMoney(ctx.locale, amount, currency);
+    const money = formatMoney(amount, currency, ctx.locale);
     const orderNumber = str(data['orderNumber']);
     return orderNumber === null ? money : `${orderNumber} · ${money}`;
   }

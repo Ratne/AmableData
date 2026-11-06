@@ -8,7 +8,7 @@ import {
   minorToInput,
   parseBpsInput,
   parseMoneyInput,
-} from '../../src/features/commerce/lib/money';
+} from '../../src/lib/money';
 
 /** Intl uses (narrow) no-break spaces; compare with plain spaces. */
 const plain = (text: string) => text.replace(/[\u00a0\u202f]/g, ' ');

@@ -1,22 +1,7 @@
 import type { Locale } from '@amable/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
-
-/** Fraction digits of an ISO currency (EUR 2, JPY 0, …); 2 when unknown. */
-export function currencyDigits(currency: string): number {
-  try {
-    return (
-      new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
-        .maximumFractionDigits ?? 2
-    );
-  } catch {
-    return 2;
-  }
-}
-
-export function minorToMajor(minor: number, currency: string): number {
-  return minor / 10 ** currencyDigits(currency);
-}
+import { currencyExponent, minorToMajor } from '../../../lib/money';
 
 function safeCurrency(currency: string): string {
   return /^[A-Za-z]{3}$/.test(currency) ? currency.toUpperCase() : 'EUR';
@@ -87,7 +72,7 @@ export function createFormatters(locale: Locale): Formatters {
         return nf(`mc0${code}`, {
           style: 'currency',
           currency: code,
-          maximumFractionDigits: Math.abs(major) < 100 ? currencyDigits(code) : 0,
+          maximumFractionDigits: Math.abs(major) < 100 ? currencyExponent(code) : 0,
         }).format(major);
       return nf(`mcc${code}`, {
         style: 'currency',

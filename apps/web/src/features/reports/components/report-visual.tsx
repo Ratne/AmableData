@@ -24,7 +24,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useI18n } from '../../../i18n';
-import { currencyExponent } from '../../commerce/lib/money';
+import { currencyExponent } from '../../../lib/money';
 import {
   chartValue,
   createValueFormatter,
