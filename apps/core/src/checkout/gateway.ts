@@ -27,6 +27,7 @@ import {
   parseStripeEvent,
   verifyStripeSignature,
 } from '../commerce/stripe/webhook';
+import type { CrmOpOutput } from '../crm/ops';
 import type { IntentFacts } from './sessions';
 
 type Output<K extends keyof CheckoutGatewayOps> = CheckoutGatewayOps[K]['output'];
@@ -167,6 +168,94 @@ function intentMetadata(sessionId: string, checkoutId: string, orderId: string |
   };
 }
 
+type Prepared = Awaited<CrmOpOutput<'checkout.prepare'>>;
+
+/** Stripe-hosted page (managed accounts), replacing the session's previous one; returns its URL. */
+async function openHostedCheckout(
+  ctx: GatewayContext,
+  stripe: OpenStripe,
+  prepared: Prepared,
+  checkoutId: string,
+  back: string,
+  activeToken: string,
+): Promise<string | null> {
+  if (prepared.previousIntentKind === 'checkout' && prepared.intentId !== null) {
+    await stripe.client.expireCheckoutSession(prepared.intentId).catch(() => undefined);
+  }
+  const hosted = await stripe.client.createManagedCheckoutSession(
+    {
+      lines: prepared.lines,
+      currency: prepared.currency,
+      email: prepared.email,
+      successUrl: withParams(back, { [SESSION_PARAM]: activeToken, redirect_status: 'succeeded' }),
+      cancelUrl: back,
+      expiresAt: Math.floor((await commerceRuntime(ctx.env)).now() / 1000) + CHECKOUT_SESSION_TTL_S,
+      metadata: intentMetadata(prepared.sessionId, checkoutId, prepared.orderId),
+    },
+    `checkout-hosted:${prepared.sessionId}:${String(prepared.amountMinor)}:${randomToken(6)}`,
+  );
+  await ctx.crm('checkout.attachIntent', {
+    sessionId: prepared.sessionId,
+    contactId: prepared.contactId,
+    customerId: null,
+    intentKind: 'checkout',
+    intentId: hosted.id,
+  });
+  return hosted.url;
+}
+
+/** The session's payment intent: the previous one while still confirmable (amount updated), else a new one. */
+async function paymentIntentFor(
+  stripe: OpenStripe,
+  prepared: Prepared,
+  customerId: string,
+  metadata: Record<string, string>,
+): Promise<StripePaymentIntent> {
+  if (prepared.intentId !== null && prepared.previousIntentKind === 'payment') {
+    const current = await stripe.client.retrievePaymentIntent(prepared.intentId);
+    if (current.status === 'requires_payment_method' || current.status === 'requires_confirmation') {
+      return current.amount === prepared.amountMinor
+        ? current
+        : await stripe.client.updatePaymentIntent(current.id, {
+            amount: prepared.amountMinor,
+            save: prepared.save,
+            receiptEmail: prepared.email,
+            description: prepared.description,
+            metadata,
+          });
+    }
+  }
+  return stripe.client.createPaymentIntent(
+    {
+      amount: prepared.amountMinor,
+      currency: prepared.currency,
+      customer: customerId,
+      save: prepared.save,
+      receiptEmail: prepared.email,
+      description: prepared.description,
+      metadata,
+    },
+    `checkout:${prepared.sessionId}:${String(prepared.amountMinor)}:${randomToken(6)}`,
+  );
+}
+
+/** The session's setup intent (card saved for later): the previous one while still confirmable, else a new one. */
+async function setupIntentFor(
+  stripe: OpenStripe,
+  prepared: Prepared,
+  customerId: string,
+  metadata: Record<string, string>,
+): Promise<StripeSetupIntent> {
+  if (prepared.intentId !== null && prepared.previousIntentKind === 'setup') {
+    const current = await stripe.client.retrieveSetupIntent(prepared.intentId);
+    if (current.status === 'requires_payment_method' || current.status === 'requires_confirmation') return current;
+  }
+  return stripe.client.createSetupIntent(
+    { customer: customerId, metadata },
+    `checkout-setup:${prepared.sessionId}:${randomToken(6)}`,
+  );
+}
+
 /**
  * Opens (or refreshes) the purchase: the TenantDb validates and drafts the
  * order, the worker creates the Stripe customer and intent. A re-submit with
@@ -226,31 +315,10 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
   try {
     if (prepared.intentKind === 'redirect') {
       if (back === null) throw new GatewayError(422, 'validation_failed', 'invalid input', [{ path: 'return_url', message: 'required' }]);
-      if (prepared.previousIntentKind === 'checkout' && prepared.intentId !== null) {
-        await stripe.client.expireCheckoutSession(prepared.intentId).catch(() => undefined);
-      }
-      const hosted = await stripe.client.createManagedCheckoutSession(
-        {
-          lines: prepared.lines,
-          currency: prepared.currency,
-          email: prepared.email,
-          successUrl: withParams(back, { [SESSION_PARAM]: activeToken, redirect_status: 'succeeded' }),
-          cancelUrl: back,
-          expiresAt: Math.floor((await commerceRuntime(ctx.env)).now() / 1000) + CHECKOUT_SESSION_TTL_S,
-          metadata: intentMetadata(prepared.sessionId, checkoutId, prepared.orderId),
-        },
-        `checkout-hosted:${prepared.sessionId}:${String(prepared.amountMinor)}:${randomToken(6)}`,
-      );
-      await ctx.crm('checkout.attachIntent', {
-        sessionId: prepared.sessionId,
-        contactId: prepared.contactId,
-        customerId: null,
-        intentKind: 'checkout',
-        intentId: hosted.id,
-      });
+      const url = await openHostedCheckout(ctx, stripe, prepared, checkoutId, back, activeToken);
       return {
         session_token: activeToken,
-        intent: { kind: 'redirect', client_secret: null, redirect_url: hosted.url },
+        intent: { kind: 'redirect', client_secret: null, redirect_url: url },
         quote: prepared.quote,
       };
     }
@@ -265,47 +333,11 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
     const metadata = intentMetadata(prepared.sessionId, checkoutId, prepared.orderId);
     let clientSecret: string | null = null;
     let intentId: string | null = null;
-    if (prepared.intentKind === 'payment') {
-      let intent: StripePaymentIntent | null = null;
-      if (prepared.intentId !== null && prepared.previousIntentKind === 'payment') {
-        const current = await stripe.client.retrievePaymentIntent(prepared.intentId);
-        if (current.status === 'requires_payment_method' || current.status === 'requires_confirmation') {
-          intent =
-            current.amount === prepared.amountMinor
-              ? current
-              : await stripe.client.updatePaymentIntent(current.id, {
-                  amount: prepared.amountMinor,
-                  save: prepared.save,
-                  receiptEmail: prepared.email,
-                  description: prepared.description,
-                  metadata,
-                });
-        }
-      }
-      intent ??= await stripe.client.createPaymentIntent(
-        {
-          amount: prepared.amountMinor,
-          currency: prepared.currency,
-          customer: customerId,
-          save: prepared.save,
-          receiptEmail: prepared.email,
-          description: prepared.description,
-          metadata,
-        },
-        `checkout:${prepared.sessionId}:${String(prepared.amountMinor)}:${randomToken(6)}`,
-      );
-      clientSecret = intent.client_secret;
-      intentId = intent.id;
-    } else if (prepared.intentKind === 'setup') {
-      let intent: StripeSetupIntent | null = null;
-      if (prepared.intentId !== null && prepared.previousIntentKind === 'setup') {
-        const current = await stripe.client.retrieveSetupIntent(prepared.intentId);
-        if (current.status === 'requires_payment_method' || current.status === 'requires_confirmation') intent = current;
-      }
-      intent ??= await stripe.client.createSetupIntent(
-        { customer: customerId, metadata },
-        `checkout-setup:${prepared.sessionId}:${randomToken(6)}`,
-      );
+    if (prepared.intentKind === 'payment' || prepared.intentKind === 'setup') {
+      const intent =
+        prepared.intentKind === 'payment'
+          ? await paymentIntentFor(stripe, prepared, customerId, metadata)
+          : await setupIntentFor(stripe, prepared, customerId, metadata);
       clientSecret = intent.client_secret;
       intentId = intent.id;
     }

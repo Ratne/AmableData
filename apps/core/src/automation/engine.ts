@@ -13,7 +13,6 @@ import type {
   Enrollment,
   EnrollmentDetail,
   EnrollContactInput,
-  ExecutionLogEntry,
   GoalNode,
   ListAutomationsQuery,
   ListContactEnrollmentsQuery,
@@ -73,8 +72,31 @@ import {
   type TokenRow,
   type TokenStatus,
 } from './store';
-import { addDays, formatDate, isLeap, isValidTimeZone, parseTimeOfDay, wallClock } from './time';
+import { isValidTimeZone } from './time';
 import { validateGraph, type AppActionCatalog, type EsignTemplateCatalog } from './validate';
+import {
+  ANNIVERSARY_LOOKUP_CONCURRENCY,
+  CONCURRENCY,
+  JOBS_PER_ROUND,
+  LEASE_MS,
+  MAX_ATTEMPTS,
+  OUTBOX_BATCH,
+  POLL_INTERVAL_MS,
+  STEPS_PER_RUN,
+  backoffMs,
+  describe,
+  dueAnniversaryGoals,
+  isPermanent,
+  pruneEngineTables,
+} from './scheduler';
+import {
+  automationView,
+  enrollmentViews,
+  toLogEntry,
+  versionSummaryView,
+  type LogRow,
+  type VersionSummaryRow,
+} from './serialize';
 import { randomHex } from '@amable/auth';
 
 /** Who performs an engine API operation (user id from the verified context). */
@@ -89,27 +111,6 @@ export interface EngineActor {
 }
 
 type LogKind = (typeof LOG_KINDS)[number];
-
-export const MAX_ATTEMPTS = 5;
-export const LEASE_MS = 5 * 60_000;
-export const POLL_INTERVAL_MS = 5 * 60_000;
-/** Durable Object SQLite binds at most 100 parameters per statement (pending/ack use one per id). */
-const OUTBOX_BATCH = 90;
-const JOBS_PER_ROUND = 100;
-const STEPS_PER_RUN = 25;
-const CONCURRENCY = 8;
-/** CRM lookups in flight during the hourly anniversary scan. */
-const ANNIVERSARY_LOOKUP_CONCURRENCY = 4;
-const PROCESSED_EVENTS_TTL_MS = 7 * 24 * 60 * 60_000;
-/** Execution logs older than this are deleted by the daily prune job. */
-export const LOG_RETENTION_MS = 90 * 24 * 60 * 60_000;
-const LOG_PRUNE_BATCH_SIZE = 2_000;
-const LOG_PRUNE_BATCHES = 10;
-
-/** Retry delay after the n-th failed attempt: 30 s, 2 min, 8 min, 32 min (capped at 6 h). */
-export function backoffMs(attempt: number): number {
-  return Math.min(30_000 * 4 ** Math.max(attempt - 1, 0), 6 * 60 * 60_000);
-}
 
 /** SecretBox ciphertext format (`v1.<iv>.<ciphertext>`); plaintext secrets are hex. */
 const SEALED_PREFIX = 'v1.';
@@ -182,7 +183,7 @@ export class AutomationEngine implements StepHost {
     const page = rows.slice(0, input.limit);
     const last = page[page.length - 1];
     return {
-      data: page.map((row) => this.toAutomation(row)),
+      data: page.map((row) => automationView(this.db, row)),
       next_cursor:
         rows.length > input.limit && last !== undefined
           ? encodeCursor({ v: null, id: last.id })
@@ -192,7 +193,7 @@ export class AutomationEngine implements StepHost {
 
   getAutomation(input: { id: string }): AutomationDetail {
     const row = this.automationOrThrow(input.id);
-    return { ...this.toAutomation(row), draft_graph: parseGraph(row.draft_graph) };
+    return { ...automationView(this.db, row), draft_graph: parseGraph(row.draft_graph) };
   }
 
   createAutomation(actor: EngineActor, input: CreateAutomationInput): AutomationDetail {
@@ -364,8 +365,8 @@ export class AutomationEngine implements StepHost {
     if (version === undefined)
       throw new CrmError('internal_error', 'version missing after publish');
     return {
-      automation: this.toAutomation(this.automationOrThrow(row.id)),
-      version: this.toVersionSummary(version),
+      automation: automationView(this.db, this.automationOrThrow(row.id)),
+      version: versionSummaryView(version),
       issues: result.issues,
     };
   }
@@ -393,7 +394,7 @@ export class AutomationEngine implements StepHost {
       row.id,
     );
     this.invalidate();
-    return this.toAutomation(this.automationOrThrow(row.id));
+    return automationView(this.db, this.automationOrThrow(row.id));
   }
 
   listVersions(input: { id: string }): AutomationVersionSummary[] {
@@ -404,14 +405,14 @@ export class AutomationEngine implements StepHost {
            FROM eng_versions WHERE automation_id = ? ORDER BY number DESC`,
         input.id,
       )
-      .map((v) => this.toVersionSummary(v));
+      .map((v) => versionSummaryView(v));
   }
 
   getVersion(input: { id: string; versionId: string }): AutomationVersion {
     const version = getVersionRow(this.db, input.versionId);
     if (version === undefined || version.automation_id !== input.id)
       throw notFound('version', input.versionId);
-    return { ...this.toVersionSummary(version), graph: parseGraph(version.graph) };
+    return { ...versionSummaryView(version), graph: parseGraph(version.graph) };
   }
 
   restoreVersion(input: { id: string; versionId: string }): AutomationDetail {
@@ -465,7 +466,7 @@ export class AutomationEngine implements StepHost {
     const page = rows.slice(0, q.limit);
     const last = page[page.length - 1];
     return {
-      data: this.toEnrollments(page),
+      data: enrollmentViews(this.db, page, (id) => this.versionOrNull(id)),
       next_cursor:
         rows.length > q.limit && last !== undefined ? encodeCursor({ v: null, id: last.id }) : null,
     };
@@ -475,7 +476,7 @@ export class AutomationEngine implements StepHost {
     const row = getEnrollmentRow(this.db, input.enrollmentId);
     if (row === undefined || row.automation_id !== input.id)
       throw notFound('enrollment', input.enrollmentId);
-    const [enrollment] = this.toEnrollments([row]);
+    const [enrollment] = enrollmentViews(this.db, [row], (id) => this.versionOrNull(id));
     if (enrollment === undefined) throw notFound('enrollment', input.enrollmentId);
     const log = this.db
       .all<LogRow>(
@@ -534,7 +535,7 @@ export class AutomationEngine implements StepHost {
     await this.arm();
     const enrollment = getEnrollmentRow(this.db, enrollmentId);
     if (enrollment === undefined) throw notFound('enrollment', enrollmentId);
-    return this.toEnrollments([enrollment])[0] as Enrollment;
+    return enrollmentViews(this.db, [enrollment], (id) => this.versionOrNull(id))[0] as Enrollment;
   }
 
   removeContact(input: { id: string; contactId: string }): {
@@ -1227,7 +1228,9 @@ export class AutomationEngine implements StepHost {
           } else if (job.kind === 'anniversary') {
             await this.anniversaryScan();
           } else if (job.kind === 'prune') {
-            this.prune();
+            const at = this.now();
+            const more = pruneEngineTables(this.db, at);
+            scheduleNoLaterThan(this.db, this.ports.newId(), 'prune', '', more ? at + 60_000 : at + 24 * 60 * 60_000);
           }
         } catch (error) {
           console.error(`[engine] ${job.kind} job failed: ${describe(error)}`);
@@ -1263,34 +1266,6 @@ export class AutomationEngine implements StepHost {
     if (hasAnniversary) scheduleNoLaterThan(this.db, this.ports.newId(), 'anniversary', '', now);
   }
 
-  private prune(): void {
-    const now = this.now();
-    this.db.run(
-      `DELETE FROM eng_processed_events WHERE processed_at < ?`,
-      now - PROCESSED_EVENTS_TTL_MS,
-    );
-    this.db.run(
-      `DELETE FROM eng_step_runs WHERE at < ? AND key NOT IN (
-         SELECT t.id || ':' || t.step_index FROM eng_tokens t WHERE t.status IN ${LIVE_SQL})`,
-      now - PROCESSED_EVENTS_TTL_MS,
-    );
-    // Execution logs: bounded batches so one alarm never runs a huge delete.
-    let more = false;
-    for (let batch = 0; batch < LOG_PRUNE_BATCHES; batch += 1) {
-      this.db.run(
-        `DELETE FROM eng_logs WHERE id IN (SELECT id FROM eng_logs WHERE at < ? LIMIT ?)`,
-        now - LOG_RETENTION_MS,
-        LOG_PRUNE_BATCH_SIZE,
-      );
-      more =
-        this.db.all(`SELECT 1 FROM eng_logs WHERE at < ? LIMIT 1`, now - LOG_RETENTION_MS).length >
-        0;
-      if (!more) break;
-    }
-    const next = more ? now + 60_000 : now + 24 * 60 * 60_000;
-    scheduleNoLaterThan(this.db, this.ports.newId(), 'prune', '', next);
-  }
-
   /**
    * Hourly scan for date-anniversary goals: once the local time of the goal is
    * reached, every contact whose date field (shifted by the offset) is today
@@ -1298,38 +1273,13 @@ export class AutomationEngine implements StepHost {
    */
   async anniversaryScan(): Promise<number> {
     const now = this.now();
-    const due: Array<{
-      automationId: string;
-      nodeId: string;
-      triggerIndex: number;
-      today: string;
-      lookup: { field: string; monthDay: string; includeLeapDay: boolean };
-    }> = [];
-    for (const automation of this.activeAutomations()) {
-      if (automation.published_version_id === null) continue;
-      const version = this.version(automation.published_version_id);
-      for (const ref of version.compiled.goalsByEvent.get('automation.date_anniversary') ?? []) {
-        if (ref.trigger.type !== 'date_anniversary') continue;
-        const trigger = ref.trigger;
-        const zone =
-          trigger.time_zone === undefined || trigger.time_zone === 'tenant'
-            ? (version.settings.time_zone ?? this.tenantTimeZone())
-            : trigger.time_zone;
-        const local = wallClock(now, zone);
-        const [h, m] = parseTimeOfDay(trigger.time, '09:00');
-        if (local.hour * 60 + local.minute < h * 60 + m) continue;
-        const today = { year: local.year, month: local.month, day: local.day };
-        const target = addDays(today, -(trigger.offset_days ?? 0));
-        const monthDay = formatDate(target).slice(5);
-        due.push({
-          automationId: automation.id,
-          nodeId: ref.node.id,
-          triggerIndex: ref.triggerIndex,
-          today: formatDate(today),
-          lookup: { field: trigger.field, monthDay, includeLeapDay: monthDay === '02-28' && !isLeap(target.year) },
-        });
-      }
-    }
+    const due = dueAnniversaryGoals(
+      this.activeAutomations().flatMap((a) =>
+        a.published_version_id === null ? [] : [{ automationId: a.id, version: this.version(a.published_version_id) }],
+      ),
+      now,
+      this.tenantTimeZone(),
+    );
     const contactIds = await mapLimited(due, ANNIVERSARY_LOOKUP_CONCURRENCY, (goal) =>
       crmCall(this.ports.crm, 'automation.contactIdsByMonthDay', goal.lookup),
     );
@@ -1789,125 +1739,8 @@ export class AutomationEngine implements StepHost {
     );
   }
 
-  private toAutomation(row: AutomationRow): Automation {
-    const version =
-      row.published_version_id === null
-        ? undefined
-        : getVersionRow(this.db, row.published_version_id);
-    const active =
-      first<{ n: number }>(
-        this.db,
-        `SELECT COUNT(*) AS n FROM eng_enrollments WHERE automation_id = ? AND status = 'active'`,
-        row.id,
-      )?.n ?? 0;
-    return {
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      status: row.status,
-      folder_id: row.folder_id,
-      settings: parseSettings(row.settings),
-      draft_revision: row.draft_revision,
-      has_unpublished_changes:
-        version === undefined ||
-        version.graph !== row.draft_graph ||
-        version.settings !== row.settings,
-      published_version:
-        version === undefined
-          ? null
-          : { id: version.id, number: version.number, published_at: toIso(version.published_at) },
-      active_enrollments: active,
-      created_by: row.created_by,
-      created_at: toIso(row.created_at),
-      updated_at: toIso(row.updated_at),
-    };
-  }
-
-  private toVersionSummary(row: VersionSummaryRow): AutomationVersionSummary {
-    return {
-      id: row.id,
-      automation_id: row.automation_id,
-      number: row.number,
-      settings: parseSettings(row.settings),
-      published_by: row.published_by,
-      published_at: toIso(row.published_at),
-    };
-  }
-
-  private toEnrollments(rows: readonly EnrollmentRow[]): Enrollment[] {
-    if (rows.length === 0) return [];
-    const tokens = chunks(rows.map((r) => r.id)).flatMap((ids) =>
-      this.db.all<TokenRow & { due_at: number | null }>(
-        `SELECT t.*, j.due_at FROM eng_tokens t LEFT JOIN eng_jobs j ON j.kind = 'token' AND j.ref = t.id
-         WHERE t.enrollment_id IN (${placeholders(ids.length)}) AND t.status NOT IN ('done', 'cancelled')
-         ORDER BY t.id`,
-        ...ids,
-      ),
-    );
-    return rows.map((row) => ({
-      id: row.id,
-      automation_id: row.automation_id,
-      version_id: row.version_id,
-      contact_id: row.contact_id,
-      status: row.status,
-      source: row.source,
-      entry_node_id: row.entry_node_id,
-      started_at: toIso(row.started_at),
-      ended_at: toIso(row.ended_at),
-      positions: tokens
-        .filter((t) => t.enrollment_id === row.id)
-        .map((t) => {
-          const node = this.versionOrNull(t.version_id)?.compiled.nodes.get(t.node_id);
-          return {
-            id: t.id,
-            node_id: t.node_id,
-            step_id: isSequence(node) ? (node.steps[t.step_index]?.id ?? null) : null,
-            step_index: t.step_index,
-            status: t.status,
-            due_at: toIso(t.due_at),
-            attempts: t.attempts,
-            last_error: t.last_error,
-          };
-        }),
-    }));
-  }
-}
-
-type VersionSummaryRow = Pick<
-  NonNullable<ReturnType<typeof getVersionRow>>,
-  'id' | 'automation_id' | 'number' | 'settings' | 'published_by' | 'published_at'
->;
-
-interface LogRow {
-  id: string;
-  kind: LogKind;
-  node_id: string | null;
-  step_id: string | null;
-  message: string;
-  data: string;
-  at: number;
-}
-
-function toLogEntry(row: LogRow): ExecutionLogEntry {
-  return {
-    id: row.id,
-    kind: row.kind,
-    node_id: row.node_id,
-    step_id: row.step_id,
-    message: row.message,
-    data: parseJson<Record<string, unknown>>(row.data, {}),
-    at: new Date(row.at).toISOString(),
-  };
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isPermanent(error: unknown): boolean {
-  if (error instanceof StepFailure) return error.permanent;
-  return error instanceof CrmCallError;
 }
 
 export type { SqlValue };
+export { backoffMs, LEASE_MS, LOG_RETENTION_MS, MAX_ATTEMPTS, POLL_INTERVAL_MS } from './scheduler';
 export { EMAIL_PAUSE_RECHECK_MS };

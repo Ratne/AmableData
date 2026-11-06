@@ -688,70 +688,8 @@ export class WebhookService {
     const secret = await box.decrypt(endpoint.secret, secretAd(endpoint.tenant_id, endpoint.id));
     const attempts = delivery.attempts + 1;
     const started = this.deps.now();
-    let signature = await signWebhook(secret, delivery.payload, started);
-    if (endpoint.app_install_id !== null) {
-      // During a secret rotation the app may still verify with the previous secret.
-      const install = await this.deps.db
-        .prepare(`SELECT webhook_secret_prev, webhook_secret_prev_until FROM app_installs WHERE id = ?`)
-        .bind(endpoint.app_install_id)
-        .first<{ webhook_secret_prev: string | null; webhook_secret_prev_until: number | null }>();
-      if (install?.webhook_secret_prev != null && (install.webhook_secret_prev_until ?? 0) > started) {
-        const previous = await box.decrypt(
-          install.webhook_secret_prev,
-          appSecretAd(endpoint.app_install_id, 'previous'),
-        );
-        const extra = (await signWebhook(previous, delivery.payload, started)).split(',')[1];
-        if (extra !== undefined) signature = `${signature},${extra}`;
-      }
-    }
-    let statusCode: number | null = null;
-    let error: string | null = null;
-    let snippet: string | null = null;
-    let permanent = false;
-    try {
-      const headers: Record<string, string> = {
-        'content-type': 'application/json',
-        'user-agent': 'amabledata-webhooks/1',
-        [WEBHOOK_SIGNATURE_HEADER]: signature,
-        'amable-event': delivery.event_type,
-        'amable-event-id': delivery.event_id,
-        'amable-delivery': delivery.id,
-        'amable-attempt': String(attempts),
-        ...(endpoint.app_install_id === null ? {} : { 'amable-installation': endpoint.app_install_id }),
-      };
-      const init = { method: 'POST', headers, body: delivery.payload };
-      if (this.deps.allowLoopback === true && isLoopback(endpoint.url)) {
-        const response = await this.deps.fetch(endpoint.url, {
-          ...init,
-          redirect: 'manual',
-          signal: AbortSignal.timeout(10_000),
-        });
-        statusCode = response.status;
-        snippet = (await response.text()).slice(0, RESPONSE_SNIPPET_BYTES);
-      } else {
-        const response = await safeFetch(endpoint.url, init, {
-          fetchFn: this.deps.fetch,
-          timeoutMs: 10_000,
-          maxBytes: 64 * 1024,
-          maxRedirects: 0,
-        });
-        statusCode = response.status;
-        snippet = new TextDecoder().decode(response.body.slice(0, RESPONSE_SNIPPET_BYTES));
-      }
-      if (statusCode < 200 || statusCode >= 300) {
-        error = `HTTP ${String(statusCode)}`;
-        permanent = statusCode === 410;
-      }
-    } catch (caught) {
-      if (caught instanceof SsrfBlockedError) {
-        error = `blocked URL: ${caught.message}`;
-        permanent = true;
-      } else if (caught instanceof ResponseTooLargeError) {
-        error = 'response too large';
-      } else {
-        error = caught instanceof Error ? caught.message.slice(0, 200) : 'network error';
-      }
-    }
+    const signature = await this.signatureFor(box, endpoint, secret, delivery.payload, started);
+    const { statusCode, error, snippet, permanent } = await this.performHttpAttempt(endpoint, delivery, attempts, signature);
     const finished = this.deps.now();
     const duration = Math.max(0, finished - started);
     if (endpoint.app_install_id !== null) {
@@ -819,6 +757,84 @@ export class WebhookService {
       await this.deps.enqueue({ kind: 'webhooks.deliver', version: 1, deliveryId }, delay);
     }
     return status;
+  }
+
+  /** `amable-signature` value: the current secret, plus the previous one while an app's rotation is in its grace window. */
+  private async signatureFor(
+    box: Awaited<ReturnType<WebhookDeps['box']>>,
+    endpoint: EndpointRow,
+    secret: string,
+    payload: string,
+    at: number,
+  ): Promise<string> {
+    const signature = await signWebhook(secret, payload, at);
+    if (endpoint.app_install_id === null) return signature;
+    const install = await this.deps.db
+      .prepare(`SELECT webhook_secret_prev, webhook_secret_prev_until FROM app_installs WHERE id = ?`)
+      .bind(endpoint.app_install_id)
+      .first<{ webhook_secret_prev: string | null; webhook_secret_prev_until: number | null }>();
+    if (install?.webhook_secret_prev == null || (install.webhook_secret_prev_until ?? 0) <= at) return signature;
+    const previous = await box.decrypt(install.webhook_secret_prev, appSecretAd(endpoint.app_install_id, 'previous'));
+    const extra = (await signWebhook(previous, payload, at)).split(',')[1];
+    return extra === undefined ? signature : `${signature},${extra}`;
+  }
+
+  /** The signed POST of one attempt; `error` is null on a 2xx, `permanent` stops the retries. */
+  private async performHttpAttempt(
+    endpoint: EndpointRow,
+    delivery: DeliveryRow,
+    attempts: number,
+    signature: string,
+  ): Promise<{ statusCode: number | null; error: string | null; snippet: string | null; permanent: boolean }> {
+    let statusCode: number | null = null;
+    let error: string | null = null;
+    let snippet: string | null = null;
+    let permanent = false;
+    try {
+      const headers: Record<string, string> = {
+        'content-type': 'application/json',
+        'user-agent': 'amabledata-webhooks/1',
+        [WEBHOOK_SIGNATURE_HEADER]: signature,
+        'amable-event': delivery.event_type,
+        'amable-event-id': delivery.event_id,
+        'amable-delivery': delivery.id,
+        'amable-attempt': String(attempts),
+        ...(endpoint.app_install_id === null ? {} : { 'amable-installation': endpoint.app_install_id }),
+      };
+      const init = { method: 'POST', headers, body: delivery.payload };
+      if (this.deps.allowLoopback === true && isLoopback(endpoint.url)) {
+        const response = await this.deps.fetch(endpoint.url, {
+          ...init,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(10_000),
+        });
+        statusCode = response.status;
+        snippet = (await response.text()).slice(0, RESPONSE_SNIPPET_BYTES);
+      } else {
+        const response = await safeFetch(endpoint.url, init, {
+          fetchFn: this.deps.fetch,
+          timeoutMs: 10_000,
+          maxBytes: 64 * 1024,
+          maxRedirects: 0,
+        });
+        statusCode = response.status;
+        snippet = new TextDecoder().decode(response.body.slice(0, RESPONSE_SNIPPET_BYTES));
+      }
+      if (statusCode < 200 || statusCode >= 300) {
+        error = `HTTP ${String(statusCode)}`;
+        permanent = statusCode === 410;
+      }
+    } catch (caught) {
+      if (caught instanceof SsrfBlockedError) {
+        error = `blocked URL: ${caught.message}`;
+        permanent = true;
+      } else if (caught instanceof ResponseTooLargeError) {
+        error = 'response too large';
+      } else {
+        error = caught instanceof Error ? caught.message.slice(0, 200) : 'network error';
+      }
+    }
+    return { statusCode, error, snippet, permanent };
   }
 
   /** Drops delivery rows older than the retention window. */

@@ -4,6 +4,7 @@ import {
   tenantSitesStub,
   type AnalyticsNamespace,
   type ContactActivity,
+  type ContactVisitor,
 } from '@amable/app-edge/analytics';
 import { mapLimited } from '../concurrency';
 import type { CrmJourneyFacts } from './crm-ops';
@@ -77,7 +78,18 @@ export async function contactJourney(
     sites.push(entry.site);
     if (entry.activity !== null) activities.push(entry.activity);
   }
+  return buildContactJourney(contactId, sites, activities, links, crm, limit);
+}
 
+/** Merges the per-site activity of a contact's visitors with its CRM facts (pure). */
+export function buildContactJourney(
+  contactId: string,
+  sites: ContactJourney['sites'],
+  activities: readonly ContactActivity[],
+  links: readonly ContactVisitor[],
+  crm: CrmJourneyFacts,
+  limit: number,
+): ContactJourney {
   const touches = activities.flatMap((a) => a.touches).sort((a, b) => a.ts - b.ts);
   const firstTouch = touches[0];
   const lastNonDirect = [...touches].reverse().find((t) => t.channel !== DIRECT) ?? touches.at(-1);
