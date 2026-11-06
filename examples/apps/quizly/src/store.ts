@@ -428,9 +428,21 @@ export async function eraseInstall(db: SqlDb, installId: string): Promise<void> 
 export async function cleanup(db: SqlDb, at: number): Promise<void> {
   const stale = 'contact_id IS NULL AND (finished_at IS NULL AND updated_at < ? OR preview = 1 AND updated_at < ?)';
   const bounds = [at - ANONYMOUS_TTL_MS, at - PENDING_LINK_TTL_MS];
+  // Chunked: one run clears up to 2000 stale sessions, the rest go to the next
+  // cron tick (an unbounded DELETE over years of sessions could time out).
+  const ids = (
+    await db
+      .prepare(`SELECT id FROM sessions WHERE ${stale} LIMIT 2000`)
+      .bind(...bounds)
+      .all<{ id: string }>()
+  ).results.map((row) => row.id);
   await db.batch([
-    db.prepare(`DELETE FROM session_answers WHERE session_id IN (SELECT id FROM sessions WHERE ${stale})`).bind(...bounds),
-    db.prepare(`DELETE FROM sessions WHERE ${stale}`).bind(...bounds),
-    db.prepare('DELETE FROM pending_links WHERE created_at < ?').bind(at - PENDING_LINK_TTL_MS),
+    ...(ids.length === 0
+      ? []
+      : [
+          db.prepare(`DELETE FROM session_answers WHERE session_id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)),
+          db.prepare(`DELETE FROM sessions WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)),
+        ]),
+    db.prepare('DELETE FROM pending_links WHERE rowid IN (SELECT rowid FROM pending_links WHERE created_at < ? LIMIT 5000)').bind(at - PENDING_LINK_TTL_MS),
   ]);
 }

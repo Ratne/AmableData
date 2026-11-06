@@ -11,6 +11,7 @@ import { m0009TrackingDomainKinds } from './0009_tracking_domain_kinds';
 import { m0010DomainDnsChanges } from './0010_domain_dns_changes';
 import { m0011AppDeployments } from './0011_app_deployments';
 import { m0012AppEventsCreatedIndex } from './0012_app_events_created_index';
+import { m0013PlatformUsageHourIndex } from './0013_platform_usage_hour_index';
 
 /**
  * Ordered list of installation D1 migrations.
@@ -29,4 +30,5 @@ export const installationMigrations: readonly Migration[] = [
   m0010DomainDnsChanges,
   m0011AppDeployments,
   m0012AppEventsCreatedIndex,
+  m0013PlatformUsageHourIndex,
 ];

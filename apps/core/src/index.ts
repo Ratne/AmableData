@@ -19,6 +19,7 @@ import { withErrorReporting } from './platform/telemetry';
 import { runUpdateCheck } from './platform/updates';
 import { handleGoogleOAuthCallback } from './providers/oauth-callback';
 import { GOOGLE_OAUTH_CALLBACK_PATH } from './providers/select';
+import { runRetention } from './platform/retention';
 import { forwardToDevEdge, isDevEdgeRequest } from './public/dev-edge';
 import { EDGE_GATEWAY_PREFIX, handleEdgeGateway } from './public/gateway';
 import { consumeWebhooks, webhookService, WEBHOOKS_QUEUE } from './webhooks/runtime';
@@ -84,6 +85,9 @@ const handler = {
     await job('tracking-domains', () => runScheduledTrackingDomains(env, controller.scheduledTime));
     // Outgoing webhooks: delivery log retention.
     await job('webhooks', () => webhookService(env).prune());
+    // Expired sessions/auth rows and reported usage meters, once an hour.
+    if (new Date(controller.scheduledTime).getUTCMinutes() === 0)
+      await job('retention', () => runRetention(env, controller.scheduledTime));
     // R2 backups: installation D1 + each tenant's DOs, once a day, a few per tick.
     const backups = await job('backups', () => runScheduledBackups(backupDeps(env)));
     // Event archive: rows past the retention window to R2, once a day per tenant.

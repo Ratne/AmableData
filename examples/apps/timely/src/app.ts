@@ -562,7 +562,9 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
       if (deferred > before) break;
       if (started.length < limit && expired.length < limit) break;
     }
-    await env.DB.prepare('DELETE FROM action_runs WHERE created_at < ?').bind(at - ACTION_TTL_MS).run();
+    await env.DB.prepare('DELETE FROM action_runs WHERE rowid IN (SELECT rowid FROM action_runs WHERE created_at < ? LIMIT 5000)')
+      .bind(at - ACTION_TTL_MS)
+      .run();
     return sent;
   }
 

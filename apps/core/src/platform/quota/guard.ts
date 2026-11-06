@@ -92,9 +92,15 @@ export async function localUsage(db: D1Database, snapshot: QuotaSnapshot, nowMs:
          COALESCE(SUM(CASE WHEN reported_at IS NULL AND hour_start >= ? THEN count END), 0) AS unreported,
          COALESCE(SUM(CASE WHEN hour_start = ? THEN count END), 0) AS this_hour,
          COALESCE(SUM(CASE WHEN hour_start >= ? THEN count END), 0) AS today
-       FROM platform_usage WHERE channel = 'email'`,
+       FROM platform_usage WHERE channel = 'email' AND hour_start >= ?`,
     )
-    .bind(Number.isNaN(periodStart) ? 0 : periodStart, hourStart(nowMs), dayStart(nowMs))
+    .bind(
+      Number.isNaN(periodStart) ? 0 : periodStart,
+      hourStart(nowMs),
+      dayStart(nowMs),
+      // Every summed bucket starts at or after this (indexed; old reported rows are skipped).
+      Number.isNaN(periodStart) ? 0 : Math.min(periodStart, dayStart(nowMs)),
+    )
     .first<{ unreported: number; this_hour: number; today: number }>();
   return {
     unreported: row?.unreported ?? 0,
