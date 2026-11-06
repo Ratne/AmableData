@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { apiFetch } from '../../lib/api';
+import { request } from '../../lib/tenant-api';
 
 export interface LocalizedText {
   readonly en: string;
@@ -198,33 +198,31 @@ export interface AuthorizeInput {
 
 export function appsApi(slug: string) {
   const base = `/api/t/${encodeURIComponent(slug)}/apps`;
-  const post = <T>(path: string, body: unknown = {}) => apiFetch<T>(`${base}${path}`, { method: 'POST', body: JSON.stringify(body) });
+  const post = <T>(path: string, body: unknown = {}) => request<T>(`${base}${path}`, { method: 'POST', json: body, idempotent: false });
   return {
     catalog: () =>
-      apiFetch<{ enabled: boolean; synced_at: string | null; sync_error: string | null; data: CatalogItem[] }>(`${base}/catalog`),
-    app: (appId: string) => apiFetch<CatalogItem>(`${base}/catalog/${encodeURIComponent(appId)}`),
+      request<{ enabled: boolean; synced_at: string | null; sync_error: string | null; data: CatalogItem[] }>(`${base}/catalog`),
+    app: (appId: string) => request<CatalogItem>(`${base}/catalog/${encodeURIComponent(appId)}`),
     refresh: () => post<{ state: unknown }>('/catalog/refresh'),
     preview: (manifestUrl: string) =>
       post<{ manifest: AppManifestView; verified: false }>('/private/preview', { manifest_url: manifestUrl }),
     authorize: (input: AuthorizeInput) => post<{ redirect_url: string; install: AppInstallView }>('/authorize', input),
-    cloudflare: () => apiFetch<CloudflareStatus>(`${base}/cloudflare`),
+    cloudflare: () => request<CloudflareStatus>(`${base}/cloudflare`),
     cloudflareAccounts: (token: string) => post<{ data: Array<{ id: string; name: string }> }>('/cloudflare/accounts', { token }),
     connectCloudflare: (token: string, accountId: string) =>
       post<{ credentials: CloudflareCredentialsView }>('/cloudflare', { token, account_id: accountId }),
-    disconnectCloudflare: () => apiFetch<{ ok: true }>(`${base}/cloudflare`, { method: 'DELETE' }),
-    deployment: (appId: string) => apiFetch<AppDeploymentState>(`${base}/deployments/${encodeURIComponent(appId)}`),
+    disconnectCloudflare: () => request<{ ok: true }>(`${base}/cloudflare`, { method: 'DELETE' }),
+    deployment: (appId: string) => request<AppDeploymentState>(`${base}/deployments/${encodeURIComponent(appId)}`),
     deploy: (appId: string) => post<AppDeploymentState>(`/deployments/${encodeURIComponent(appId)}`),
-    installs: () => apiFetch<{ data: AppInstallView[] }>(`${base}/installs`),
-    extensions: () => apiFetch<{ data: InstalledExtensions[] }>(`${base}/extensions`),
+    installs: () => request<{ data: AppInstallView[] }>(`${base}/installs`),
+    extensions: () => request<{ data: InstalledExtensions[] }>(`${base}/extensions`),
     options: (source: AppInputSource, property: string) =>
-      apiFetch<{ data: AppInputOption[]; unavailable: boolean }>(
-        `${base}/extensions/${encodeURIComponent(source.appId)}/options?${new URLSearchParams({ kind: source.kind, key: source.key, property }).toString()}`,
-      ),
+      request<{ data: AppInputOption[]; unavailable: boolean }>(`${base}/extensions/${encodeURIComponent(source.appId)}/options?${new URLSearchParams({ kind: source.kind, key: source.key, property }).toString()}`),
     frame: (input: { app_id: string; key: string; contact_id?: string; theme: 'light' | 'dark' }) => post<FrameSession>('/frames', input),
     install: (id: string, hours = 24) =>
-      apiFetch<{ install: AppInstallView; health: AppHealth }>(`${base}/installs/${id}?hours=${String(hours)}`),
+      request<{ install: AppInstallView; health: AppHealth }>(`${base}/installs/${id}?hours=${String(hours)}`),
     events: (id: string) =>
-      apiFetch<{ data: AppEventRecord[]; next_since: number | null }>(`${base}/installs/${id}/events?limit=50`),
+      request<{ data: AppEventRecord[]; next_since: number | null }>(`${base}/installs/${id}/events?limit=50`),
     approveScopes: (id: string) => post<{ install: AppInstallView }>(`/installs/${id}/approve-scopes`),
     pause: (id: string) => post<{ install: AppInstallView }>(`/installs/${id}/pause`),
     resume: (id: string) => post<{ install: AppInstallView }>(`/installs/${id}/resume`),

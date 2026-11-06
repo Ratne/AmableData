@@ -11,7 +11,6 @@ import { useParams } from '@tanstack/react-router';
 import { Download, Paperclip, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../i18n';
-import { apiFetch } from '../../lib/api';
 import {
   base,
   errorKey,
@@ -27,6 +26,7 @@ import {
 } from './api';
 import { AssistPanel } from './assist-panel';
 import { ErrorText, Pill, UnavailableNotice, type Tone } from './components';
+import { request } from '../../lib/tenant-api';
 
 const STATUS_TONE: Record<TicketStatus, Tone> = { open: 'info', waiting_customer: 'warning', resolved: 'success' };
 
@@ -65,7 +65,7 @@ function TicketsView({ slug }: { slug: string }) {
   const [creating, setCreating] = useState(false);
   const tickets = useQuery({
     queryKey: supportKeys.tickets(slug),
-    queryFn: () => apiFetch<{ tickets: Ticket[] }>(`${base(slug)}/support/tickets`),
+    queryFn: () => request<{ tickets: Ticket[] }>(`${base(slug)}/support/tickets`),
     retry: false,
   });
   if (isUnavailable(tickets.error)) return <UnavailableNotice />;
@@ -221,7 +221,7 @@ function TicketThread({ slug, id }: { slug: string; id: string }) {
   const [reply, setReply] = useState('');
   const detail = useQuery({
     queryKey: supportKeys.ticket(slug, id),
-    queryFn: () => apiFetch<TicketDetail>(`${base(slug)}/support/tickets/${id}`),
+    queryFn: () => request<TicketDetail>(`${base(slug)}/support/tickets/${id}`),
   });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: supportKeys.ticket(slug, id) });

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Lock, Search } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useI18n } from '../../i18n';
-import { apiFetch } from '../../lib/api';
+import { request } from '../../lib/tenant-api';
 
 /*
  * Self-contained OpenAPI 3.1 reference (no third-party script, CSP friendly):
@@ -228,7 +228,7 @@ export function ApiReference() {
   const { t } = useI18n();
   const spec = useQuery({
     queryKey: ['openapi', 'all'],
-    queryFn: () => apiFetch<JsonObject>('/api/v2/openapi/all.json'),
+    queryFn: () => request<JsonObject>('/api/v2/openapi/all.json'),
     staleTime: 5 * 60_000,
   });
   const [query, setQuery] = useState('');

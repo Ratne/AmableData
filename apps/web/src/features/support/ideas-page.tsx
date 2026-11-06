@@ -10,7 +10,6 @@ import { useParams } from '@tanstack/react-router';
 import { ChevronUp, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../i18n';
-import { apiFetch } from '../../lib/api';
 import {
   base,
   errorKey,
@@ -23,6 +22,7 @@ import {
   type Idea,
 } from './api';
 import { ErrorText, Pill, Section, UnavailableNotice, type Tone } from './components';
+import { request } from '../../lib/tenant-api';
 
 const STATUS_TONE: Record<IdeaStatus, Tone> = { under_review: 'neutral', planned: 'info', released: 'success' };
 
@@ -45,12 +45,15 @@ export function IdeasPage() {
   });
   const board = useQuery({
     queryKey: supportKeys.ideas(slug),
-    queryFn: () => apiFetch<{ ideas: Idea[]; changelog: ChangelogEntry[] }>(`${base(slug)}/ideas`),
+    queryFn: () => request<{ ideas: Idea[]; changelog: ChangelogEntry[] }>(`${base(slug)}/ideas`),
     retry: false,
   });
   const vote = useMutation({
     mutationFn: (idea: Idea) =>
-      apiFetch(`${base(slug)}/ideas/${idea.id}/vote`, { method: idea.votedByMe ? 'DELETE' : 'POST' }),
+      request(`${base(slug)}/ideas/${idea.id}/vote`, {
+        method: idea.votedByMe ? 'DELETE' : 'POST',
+        idempotent: false,
+      }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: supportKeys.ideas(slug) }),
   });
 

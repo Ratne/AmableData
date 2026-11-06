@@ -5,8 +5,8 @@ import type {
   RealtimeServerMessage,
 } from '@amable/api-types';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiFetch } from '../../../lib/api';
 import { realtimeSocketUrl, reportUrl, sourceKey, type AnalyticsSource } from '../api';
+import { request } from '../../../lib/tenant-api';
 
 const MAX_EVENTS = 80;
 const PING_MS = 30_000;
@@ -113,7 +113,7 @@ export function useRealtimeFeed(source: AnalyticsSource | null): RealtimeFeed {
 
     const poll = async () => {
       try {
-        const data = await apiFetch<AnalyticsRealtime>(reportUrl(current, 'realtime'));
+        const data = await request<AnalyticsRealtime>(reportUrl(current, 'realtime'));
         if (!disposed) setSnapshot(data);
       } catch {
         if (!disposed && failures > POLL_AFTER_FAILURES + 3) setStatus('offline');

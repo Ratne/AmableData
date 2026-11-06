@@ -37,12 +37,12 @@ import {
   type QueryKey,
 } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { apiFetch, ApiError } from '../../lib/api';
+import { ApiError } from '../../lib/api';
+import { request } from '../../lib/tenant-api';
 
 /** Typed client of the email + broadcast REST v2 routes (and the CRM lookups their pickers need). */
 export function emailApi(slug: string) {
   const v2 = `/api/v2/t/${encodeURIComponent(slug)}`;
-  const json = (body: unknown) => JSON.stringify(body);
   const qs = (params: Record<string, string | number | undefined>) => {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') search.set(key, String(value));
@@ -51,71 +51,68 @@ export function emailApi(slug: string) {
   };
   return {
     templates: {
-      list: (cursor?: string) => apiFetch<Page<EmailTemplateSummary>>(`${v2}/emailTemplates${qs({ limit: 100, cursor })}`),
-      get: (id: string) => apiFetch<EmailTemplate>(`${v2}/emailTemplates/${id}`),
+      list: (cursor?: string) => request<Page<EmailTemplateSummary>>(`${v2}/emailTemplates${qs({ limit: 100, cursor })}`),
+      get: (id: string) => request<EmailTemplate>(`${v2}/emailTemplates/${id}`),
       create: (input: CreateEmailTemplateInput) =>
-        apiFetch<EmailTemplate>(`${v2}/emailTemplates`, { method: 'POST', body: json(input) }),
+        request<EmailTemplate>(`${v2}/emailTemplates`, { method: 'POST', json: input, idempotent: false }),
       update: (id: string, input: UpdateEmailTemplateInput) =>
-        apiFetch<EmailTemplate>(`${v2}/emailTemplates/${id}`, { method: 'PATCH', body: json(input) }),
-      remove: (id: string) => apiFetch(`${v2}/emailTemplates/${id}`, { method: 'DELETE' }),
+        request<EmailTemplate>(`${v2}/emailTemplates/${id}`, { method: 'PATCH', json: input }),
+      remove: (id: string) => request(`${v2}/emailTemplates/${id}`, { method: 'DELETE' }),
       test: (id: string, input: TestSendInput) =>
-        apiFetch<{ sent: { email: string }[] }>(`${v2}/emailTemplates/${id}/test`, { method: 'POST', body: json(input) }),
+        request<{ sent: { email: string }[] }>(`${v2}/emailTemplates/${id}/test`, { method: 'POST', json: input, idempotent: false }),
     },
     snippets: {
-      list: () => apiFetch<{ data: Snippet[] }>(`${v2}/emailSnippets`),
-      create: (input: CreateSnippetInput) => apiFetch<Snippet>(`${v2}/emailSnippets`, { method: 'POST', body: json(input) }),
+      list: () => request<{ data: Snippet[] }>(`${v2}/emailSnippets`),
+      create: (input: CreateSnippetInput) => request<Snippet>(`${v2}/emailSnippets`, { method: 'POST', json: input, idempotent: false }),
       update: (id: string, input: UpdateSnippetInput) =>
-        apiFetch<Snippet>(`${v2}/emailSnippets/${id}`, { method: 'PATCH', body: json(input) }),
-      remove: (id: string) => apiFetch(`${v2}/emailSnippets/${id}`, { method: 'DELETE' }),
+        request<Snippet>(`${v2}/emailSnippets/${id}`, { method: 'PATCH', json: input }),
+      remove: (id: string) => request(`${v2}/emailSnippets/${id}`, { method: 'DELETE' }),
     },
     suppressions: {
-      list: (q: string, cursor?: string) => apiFetch<Page<Suppression>>(`${v2}/suppressions${qs({ limit: 100, q, cursor })}`),
-      add: (input: AddSuppressionInput) => apiFetch<Suppression>(`${v2}/suppressions`, { method: 'POST', body: json(input) }),
-      remove: (email: string) => apiFetch(`${v2}/suppressions/${encodeURIComponent(email)}`, { method: 'DELETE' }),
+      list: (q: string, cursor?: string) => request<Page<Suppression>>(`${v2}/suppressions${qs({ limit: 100, q, cursor })}`),
+      add: (input: AddSuppressionInput) => request<Suppression>(`${v2}/suppressions`, { method: 'POST', json: input, idempotent: false }),
+      remove: (email: string) => request(`${v2}/suppressions/${encodeURIComponent(email)}`, { method: 'DELETE' }),
     },
     settings: {
-      get: () => apiFetch<EmailSettings>(`${v2}/email/settings`),
+      get: () => request<EmailSettings>(`${v2}/email/settings`),
       update: (input: UpdateEmailSettingsInput) =>
-        apiFetch<EmailSettings>(`${v2}/email/settings`, { method: 'PATCH', body: json(input) }),
-      resume: () => apiFetch<EmailSettings>(`${v2}/email/settings/resume`, { method: 'POST', body: '{}' }),
+        request<EmailSettings>(`${v2}/email/settings`, { method: 'PATCH', json: input }),
+      resume: () => request<EmailSettings>(`${v2}/email/settings/resume`, { method: 'POST', json: {}, idempotent: false }),
     },
     previewContext: (contactId: string) =>
-      apiFetch<{ context: Record<string, unknown> }>(`${v2}/email/previewContext${qs({ contact_id: contactId })}`),
+      request<{ context: Record<string, unknown> }>(`${v2}/email/previewContext${qs({ contact_id: contactId })}`),
     liquid: {
-      schema: () => apiFetch<LiquidSchema>(`${v2}/liquid/schema`),
+      schema: () => request<LiquidSchema>(`${v2}/liquid/schema`),
       preview: (input: LiquidPreviewInput) =>
-        apiFetch<LiquidPreview>(`${v2}/liquid/preview`, { method: 'POST', body: json(input) }),
+        request<LiquidPreview>(`${v2}/liquid/preview`, { method: 'POST', json: input, idempotent: false }),
     },
     broadcasts: {
-      list: (cursor?: string) => apiFetch<Page<BroadcastSummary>>(`${v2}/broadcasts${qs({ limit: 100, cursor })}`),
-      get: (id: string) => apiFetch<Broadcast>(`${v2}/broadcasts/${id}`),
-      create: (input: CreateBroadcastInput) => apiFetch<Broadcast>(`${v2}/broadcasts`, { method: 'POST', body: json(input) }),
+      list: (cursor?: string) => request<Page<BroadcastSummary>>(`${v2}/broadcasts${qs({ limit: 100, cursor })}`),
+      get: (id: string) => request<Broadcast>(`${v2}/broadcasts/${id}`),
+      create: (input: CreateBroadcastInput) => request<Broadcast>(`${v2}/broadcasts`, { method: 'POST', json: input, idempotent: false }),
       update: (id: string, input: UpdateBroadcastInput) =>
-        apiFetch<Broadcast>(`${v2}/broadcasts/${id}`, { method: 'PATCH', body: json(input) }),
-      remove: (id: string) => apiFetch(`${v2}/broadcasts/${id}`, { method: 'DELETE' }),
-      estimate: (id: string) => apiFetch<BroadcastEstimate>(`${v2}/broadcasts/${id}/estimate`),
-      stats: (id: string) => apiFetch<BroadcastStats>(`${v2}/broadcasts/${id}/stats`),
+        request<Broadcast>(`${v2}/broadcasts/${id}`, { method: 'PATCH', json: input }),
+      remove: (id: string) => request(`${v2}/broadcasts/${id}`, { method: 'DELETE' }),
+      estimate: (id: string) => request<BroadcastEstimate>(`${v2}/broadcasts/${id}/estimate`),
+      stats: (id: string) => request<BroadcastStats>(`${v2}/broadcasts/${id}/stats`),
       test: (id: string, input: TestSendInput) =>
-        apiFetch<{ sent: { email: string }[] }>(`${v2}/broadcasts/${id}/test`, { method: 'POST', body: json(input) }),
+        request<{ sent: { email: string }[] }>(`${v2}/broadcasts/${id}/test`, { method: 'POST', json: input, idempotent: false }),
       schedule: (id: string, schedule: BroadcastSchedule) =>
-        apiFetch<{ broadcast: Broadcast; buckets: ScheduleBucket[] }>(`${v2}/broadcasts/${id}/schedule`, {
-          method: 'POST',
-          body: json(schedule),
-        }),
+        request<{ broadcast: Broadcast; buckets: ScheduleBucket[] }>(`${v2}/broadcasts/${id}/schedule`, { method: 'POST', json: schedule, idempotent: false }),
       action: (id: string, action: 'pause' | 'resume' | 'cancel') =>
-        apiFetch<Broadcast>(`${v2}/broadcasts/${id}/${action}`, { method: 'POST', body: '{}' }),
+        request<Broadcast>(`${v2}/broadcasts/${id}/${action}`, { method: 'POST', json: {}, idempotent: false }),
     },
     crm: {
-      savedSearches: () => apiFetch<{ data: SavedSearch[] }>(`${v2}/savedSearches`),
-      tags: () => apiFetch<Page<Tag>>(`${v2}/tags${qs({ limit: 200 })}`),
-      customFields: () => apiFetch<{ data: CustomField[] }>(`${v2}/customFields/contacts`),
-      searchContacts: (q: string) => apiFetch<Page<Contact>>(`${v2}/contacts${qs({ limit: 8, q })}`),
+      savedSearches: () => request<{ data: SavedSearch[] }>(`${v2}/savedSearches`),
+      tags: () => request<Page<Tag>>(`${v2}/tags${qs({ limit: 200 })}`),
+      customFields: () => request<{ data: CustomField[] }>(`${v2}/customFields/contacts`),
+      searchContacts: (q: string) => request<Page<Contact>>(`${v2}/contacts${qs({ limit: 8, q })}`),
       contactsPage: (q: string, cursor?: string) =>
-        apiFetch<Page<Contact>>(`${v2}/contacts${qs({ limit: 20, q, cursor })}`),
+        request<Page<Contact>>(`${v2}/contacts${qs({ limit: 20, q, cursor })}`),
     },
     tenant: {
-      me: () => apiFetch<{ permissions: Permission[] }>(`/api/t/${encodeURIComponent(slug)}/me`),
-      directory: () => apiFetch<{ members: { id: string; name: string }[] }>(`/api/t/${encodeURIComponent(slug)}/directory`),
+      me: () => request<{ permissions: Permission[] }>(`/api/t/${encodeURIComponent(slug)}/me`),
+      directory: () => request<{ members: { id: string; name: string }[] }>(`/api/t/${encodeURIComponent(slug)}/directory`),
     },
   };
 }

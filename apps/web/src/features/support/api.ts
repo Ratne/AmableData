@@ -3,8 +3,9 @@ import { formatDateTime, type MessageKey } from '@amable/i18n/client';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useI18n } from '../../i18n';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError } from '../../lib/api';
 import { stepUpFetch } from '../../lib/step-up';
+import { request, responseError } from '../../lib/tenant-api';
 
 export const TICKET_CATEGORIES: readonly TicketCategory[] = ['question', 'bug', 'billing', 'feature', 'other'];
 export const IDEA_STATUSES: readonly IdeaStatus[] = ['under_review', 'planned', 'released'];
@@ -101,11 +102,11 @@ export function base(slug: string): string {
   return `/api/t/${encodeURIComponent(slug)}/platform`;
 }
 
-export function postJson<T>(path: string, body: unknown, method = 'POST'): Promise<T> {
-  return apiFetch<T>(path, { method, body: JSON.stringify(body) });
+export function postJson<T>(path: string, body: unknown, method: 'POST' | 'PATCH' | 'PUT' = 'POST'): Promise<T> {
+  return request<T>(path, { method, json: body, idempotent: false });
 }
 
-/** Multipart upload (apiFetch would force a JSON content type). */
+/** Multipart upload (`request` would replace the multipart content type). */
 export async function uploadAttachment(slug: string, ticketId: string, file: File): Promise<void> {
   const form = new FormData();
   form.set('file', file);
@@ -115,10 +116,7 @@ export async function uploadAttachment(slug: string, ticketId: string, file: Fil
     credentials: 'same-origin',
     headers: { 'x-amable-csrf': '1' },
   });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new ApiError(response.status, body?.error ?? null);
-  }
+  if (!response.ok) throw await responseError(response);
 }
 
 export function isUnavailable(error: unknown): boolean {
@@ -146,7 +144,7 @@ export function useDate() {
 export function useAssistStatus(slug: string) {
   return useQuery({
     queryKey: supportKeys.status(slug),
-    queryFn: () => apiFetch<AssistStatus>(`${base(slug)}/assist/status`),
+    queryFn: () => request<AssistStatus>(`${base(slug)}/assist/status`),
     refetchInterval: 60_000,
     retry: false,
     staleTime: 30_000,

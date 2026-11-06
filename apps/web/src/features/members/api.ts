@@ -1,6 +1,7 @@
 import type { Permission, Role } from '@amable/core';
 import { useParams } from '@tanstack/react-router';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError } from '../../lib/api';
+import { request } from '../../lib/tenant-api';
 
 export interface Member {
   readonly userId: string;
@@ -40,22 +41,22 @@ export interface TenantMe {
 
 export function membersApi(slug: string) {
   const base = `/api/t/${encodeURIComponent(slug)}`;
-  const send = <T>(method: string, path: string, body?: unknown) =>
-    apiFetch<T>(`${base}${path}`, { method, body: JSON.stringify(body ?? {}) });
+  const send = <T>(method: 'POST' | 'PATCH' | 'PUT', path: string, body?: unknown) =>
+    request<T>(`${base}${path}`, { method, json: body ?? {}, idempotent: false });
   return {
-    members: () => apiFetch<{ members: Member[] }>(`${base}/members`),
+    members: () => request<{ members: Member[] }>(`${base}/members`),
     changeRole: (userId: string, role: Role) =>
       send<{ ok: true }>('PATCH', `/members/${encodeURIComponent(userId)}`, { role }),
     remove: (userId: string) =>
-      apiFetch<{ ok: true }>(`${base}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
+      request<{ ok: true }>(`${base}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
     leave: () => send<{ ok: true }>('POST', '/leave'),
-    invites: () => apiFetch<{ invites: PendingInvite[] }>(`${base}/invites`),
+    invites: () => request<{ invites: PendingInvite[] }>(`${base}/invites`),
     invite: (input: { email: string; role: Role }) =>
       send<{ id: string }>('POST', '/invites', input),
     revokeInvite: (id: string) =>
-      apiFetch<{ ok: true }>(`${base}/invites/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+      request<{ ok: true }>(`${base}/invites/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     audit: (before: number | null, limit = 50) =>
-      apiFetch<{ entries: AuditEntry[] }>(
+      request<{ entries: AuditEntry[] }>(
         `${base}/audit?limit=${limit}${before === null ? '' : `&before=${before}`}`,
       ),
   };

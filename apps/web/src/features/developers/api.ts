@@ -10,8 +10,9 @@ import type { Permission } from '@amable/core';
 import { toast } from '@amable/ui';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError } from '../../lib/api';
 import { useTenantMeQuery } from '../../lib/feature-hooks';
+import { request } from '../../lib/tenant-api';
 
 export interface ApiKey {
   readonly id: string;
@@ -51,39 +52,37 @@ export function developersApi(slug: string) {
   const admin = `/api/t/${encodeURIComponent(slug)}`;
   const v2 = `/api/v2/t/${encodeURIComponent(slug)}`;
   const post = <T>(path: string, body: unknown = {}) =>
-    apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) });
+    request<T>(path, { method: 'POST', json: body, idempotent: false });
   return {
     apiKeys: {
-      list: () => apiFetch<{ apiKeys: ApiKey[] }>(`${admin}/api-keys`),
+      list: () => request<{ apiKeys: ApiKey[] }>(`${admin}/api-keys`),
       create: (input: { name: string; scopes: Permission[] }) =>
         post<{ id: string; key: string; prefix: string; scopes: Permission[] }>(`${admin}/api-keys`, input),
-      revoke: (id: string) => apiFetch<{ ok: true }>(`${admin}/api-keys/${id}`, { method: 'DELETE' }),
+      revoke: (id: string) => request<{ ok: true }>(`${admin}/api-keys/${id}`, { method: 'DELETE' }),
     },
     webhooks: {
-      eventTypes: () => apiFetch<{ data: string[] }>(`${v2}/webhooks/event-types`),
-      list: () => apiFetch<{ data: WebhookEndpoint[] }>(`${v2}/webhooks`),
+      eventTypes: () => request<{ data: string[] }>(`${v2}/webhooks/event-types`),
+      list: () => request<{ data: WebhookEndpoint[] }>(`${v2}/webhooks`),
       create: (input: { url: string; description?: string; event_types: string[] }) =>
         post<{ endpoint: WebhookEndpoint; secret: string }>(`${v2}/webhooks`, input),
       update: (id: string, input: Partial<Pick<WebhookEndpoint, 'url' | 'description' | 'event_types' | 'status'>>) =>
-        apiFetch<WebhookEndpoint>(`${v2}/webhooks/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
-      remove: (id: string) => apiFetch<{ ok: true }>(`${v2}/webhooks/${id}`, { method: 'DELETE' }),
+        request<WebhookEndpoint>(`${v2}/webhooks/${id}`, { method: 'PATCH', json: input }),
+      remove: (id: string) => request<{ ok: true }>(`${v2}/webhooks/${id}`, { method: 'DELETE' }),
       rotate: (id: string) => post<{ secret: string }>(`${v2}/webhooks/${id}/rotate-secret`),
       test: (id: string) => post<WebhookDelivery>(`${v2}/webhooks/${id}/test`),
       deliveries: (id: string, status?: DeliveryStatus) =>
-        apiFetch<{ data: WebhookDelivery[] }>(
-          `${v2}/webhooks/${id}/deliveries?limit=100${status ? `&status=${status}` : ''}`,
-        ),
-      delivery: (id: string) => apiFetch<WebhookDeliveryDetail>(`${v2}/webhooks/deliveries/${id}`),
+        request<{ data: WebhookDelivery[] }>(`${v2}/webhooks/${id}/deliveries?limit=100${status ? `&status=${status}` : ''}`),
+      delivery: (id: string) => request<WebhookDeliveryDetail>(`${v2}/webhooks/deliveries/${id}`),
       replay: (id: string) => post<WebhookDelivery>(`${v2}/webhooks/deliveries/${id}/replay`),
     },
     domains: {
-      list: () => apiFetch<DomainList>(`${v2}/domains`),
+      list: () => request<DomainList>(`${v2}/domains`),
       add: (input: { kind: DomainKind; hostname: string; paths?: string[] }) =>
         post<TenantDomain>(`${v2}/domains`, input),
       applyDns: (id: string) => post<TenantDomain>(`${v2}/domains/${id}/apply-dns`),
       verify: (id: string) => post<TenantDomain>(`${v2}/domains/${id}/verify`),
-      remove: (id: string) => apiFetch<{ ok: true }>(`${v2}/domains/${id}`, { method: 'DELETE' }),
-      sendingStatus: () => apiFetch<SendingStatus>(`${v2}/domains/sending-status`),
+      remove: (id: string) => request<{ ok: true }>(`${v2}/domains/${id}`, { method: 'DELETE' }),
+      sendingStatus: () => request<SendingStatus>(`${v2}/domains/sending-status`),
     },
   };
 }
@@ -129,7 +128,8 @@ export function useSendingStatus(slug: string) {
 }
 
 export function apiErrorCode(error: unknown): string {
-  if (error instanceof ApiError) return error.code ?? `HTTP ${String(error.status)}`;
+  if (error instanceof ApiError)
+    return error.code === 'http_error' ? `HTTP ${String(error.status)}` : error.code;
   return error instanceof Error ? error.message : String(error);
 }
 

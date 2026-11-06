@@ -7,7 +7,8 @@ import type {
   TrackingQuality,
 } from '@amable/api-types';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError } from '../../lib/api';
+import { request } from '../../lib/tenant-api';
 import { analyticsKeys, tenantBase } from './api';
 import {
   performanceQueryString,
@@ -41,20 +42,18 @@ export interface JourneyRequest extends ReportRange {
 const base = (tenant: string) => `${tenantBase(tenant)}/ads-reports`;
 
 export const adsReportsApi = {
-  performance: (tenant: string, request: PerformanceRequest) =>
-    apiFetch<PerformanceReport>(`${base(tenant)}/performance?${performanceQueryString(request)}`),
-  ltv: (tenant: string, siteId: string, request: LtvRequest) =>
-    apiFetch<LtvReport>(`${base(tenant)}/ltv?${queryString({ site_id: siteId, ...request })}`),
-  cohorts: (tenant: string, siteId: string, request: CohortRequest) =>
-    apiFetch<CohortReport>(
-      `${base(tenant)}/cohorts?${queryString({ site_id: siteId, ...request })}`,
-    ),
-  journeys: (tenant: string, siteId: string, request: JourneyRequest) =>
-    apiFetch<JourneyReport>(
-      `${base(tenant)}/journeys?${queryString({ site_id: siteId, ...request })}`,
+  performance: (tenant: string, params: PerformanceRequest) =>
+    request<PerformanceReport>(`${base(tenant)}/performance?${performanceQueryString(params)}`),
+  ltv: (tenant: string, siteId: string, params: LtvRequest) =>
+    request<LtvReport>(`${base(tenant)}/ltv?${queryString({ site_id: siteId, ...params })}`),
+  cohorts: (tenant: string, siteId: string, params: CohortRequest) =>
+    request<CohortReport>(`${base(tenant)}/cohorts?${queryString({ site_id: siteId, ...params })}`),
+  journeys: (tenant: string, siteId: string, params: JourneyRequest) =>
+    request<JourneyReport>(
+      `${base(tenant)}/journeys?${queryString({ site_id: siteId, ...params })}`,
     ),
   trackingQuality: (tenant: string, siteId: string, range: ReportRange) =>
-    apiFetch<TrackingQuality>(
+    request<TrackingQuality>(
       `${base(tenant)}/tracking-quality?${queryString({ site_id: siteId, ...range })}`,
     ),
 };

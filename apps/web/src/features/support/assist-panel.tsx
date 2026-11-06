@@ -7,10 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../i18n';
-import { apiFetch } from '../../lib/api';
 import { isStepUpRequired } from '../../lib/step-up';
 import { base, errorKey, postJson, supportKeys, useDate, type AssistGrant, type AssistSession, type Ticket } from './api';
 import { ErrorText, Pill, Section, type Tone } from './components';
+import { request } from '../../lib/tenant-api';
 
 const STATE_TONE: Record<AssistGrant['state'], Tone> = { active: 'success', revoked: 'neutral', expired: 'neutral' };
 const NO_TICKET = '__none__';
@@ -26,11 +26,11 @@ export function AssistPanel({ slug }: { slug: string }) {
 
   const data = useQuery({
     queryKey: supportKeys.grants(slug),
-    queryFn: () => apiFetch<{ grants: AssistGrant[]; sessions: AssistSession[] }>(`${base(slug)}/assist/grants`),
+    queryFn: () => request<{ grants: AssistGrant[]; sessions: AssistSession[] }>(`${base(slug)}/assist/grants`),
   });
   const tickets = useQuery({
     queryKey: supportKeys.tickets(slug),
-    queryFn: () => apiFetch<{ tickets: Ticket[] }>(`${base(slug)}/support/tickets`),
+    queryFn: () => request<{ tickets: Ticket[] }>(`${base(slug)}/support/tickets`),
     retry: false,
   });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: supportKeys.root(slug) });
@@ -49,7 +49,7 @@ export function AssistPanel({ slug }: { slug: string }) {
     },
   });
   const revoke = useMutation({
-    mutationFn: (id: string) => apiFetch(`${base(slug)}/assist/grants/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => request(`${base(slug)}/assist/grants/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       toast.success(t('sup.assist.revoked'));
       refresh();

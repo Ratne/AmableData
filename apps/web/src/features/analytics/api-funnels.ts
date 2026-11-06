@@ -21,8 +21,8 @@ import type {
 } from '@amable/api-types';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ApiError } from '../../lib/api';
-import { stepUpFetch } from '../../lib/step-up';
 import { analyticsKeys, tenantBase } from './api';
+import { request, type RequestOptions } from '../../lib/tenant-api';
 
 /*
  * Client of the funnel tracking surface under `/api/v2/t/{slug}/analytics`:
@@ -30,23 +30,10 @@ import { analyticsKeys, tenantBase } from './api';
  * templates, ad platform connections and the outbound conversion log.
  */
 
-/** API error keeping the JSON body (422 details, `invalid_graph` errors). */
-export class ApiBodyError extends ApiError {
-  constructor(
-    status: number,
-    code: string | null,
-    readonly body: unknown,
-  ) {
-    super(status, code);
-  }
-}
-
 /** `validation_failed` field details of an error, if any. */
 export function errorDetails(error: unknown): { path: string; message: string }[] {
-  if (!(error instanceof ApiBodyError)) return [];
-  const body = error.body as { details?: unknown } | null;
-  if (!body || !Array.isArray(body.details)) return [];
-  return body.details.filter(
+  if (!(error instanceof ApiError)) return [];
+  return error.details.filter(
     (d): d is { path: string; message: string } =>
       typeof d === 'object' &&
       d !== null &&
@@ -68,25 +55,10 @@ function withQuery(path: string, params: Params): string {
   return text ? `${path}?${text}` : path;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body !== undefined) headers.set('content-type', 'application/json');
-  if (init.method && init.method !== 'GET') headers.set('x-amable-csrf', '1');
-  const response = await stepUpFetch(path, { ...init, headers, credentials: 'same-origin' });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-    throw new ApiBodyError(
-      response.status,
-      typeof body?.error === 'string' ? body.error : null,
-      body,
-    );
-  }
-  return (await response.json()) as T;
-}
-
-const send = (method: string, body: unknown = {}): RequestInit => ({
+const send = (method: 'POST' | 'PUT' | 'PATCH', body: unknown = {}): RequestOptions => ({
   method,
-  body: JSON.stringify(body),
+  json: body,
+  idempotent: false,
 });
 
 export interface FunnelLinksParams {

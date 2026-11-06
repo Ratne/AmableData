@@ -4,8 +4,8 @@ import type {
   TrackingDomainOptions,
 } from '@amable/api-types';
 import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '../../lib/api';
 import { analyticsKeys, tenantBase } from './api';
+import { request } from '../../lib/tenant-api';
 
 /* Custom tracking domains of a site (`/api/v2/t/{slug}/analytics/tracking-domains`). */
 
@@ -19,16 +19,20 @@ export function trackingDomainsApi(tenant: string) {
   const base = `${tenantBase(tenant)}/tracking-domains`;
   return {
     list: (siteId: string) =>
-      apiFetch<{ data: TrackingDomain[]; options: TrackingDomainOptions }>(
+      request<{ data: TrackingDomain[]; options: TrackingDomainOptions }>(
         `${base}?site_id=${enc(siteId)}`,
       ),
-    get: (id: string) => apiFetch<TrackingDomain>(`${base}/${enc(id)}`),
+    get: (id: string) => request<TrackingDomain>(`${base}/${enc(id)}`),
     create: (input: CreateTrackingDomainInput) =>
-      apiFetch<TrackingDomain>(base, { method: 'POST', body: JSON.stringify(input) }),
+      request<TrackingDomain>(base, { method: 'POST', json: input, idempotent: false }),
     check: (id: string) =>
-      apiFetch<TrackingDomain>(`${base}/${enc(id)}/check`, { method: 'POST', body: '{}' }),
+      request<TrackingDomain>(`${base}/${enc(id)}/check`, {
+        method: 'POST',
+        json: {},
+        idempotent: false,
+      }),
     remove: (id: string) =>
-      apiFetch<{ id: string; deleted: true }>(`${base}/${enc(id)}`, { method: 'DELETE' }),
+      request<{ id: string; deleted: true }>(`${base}/${enc(id)}`, { method: 'DELETE' }),
   };
 }
 

@@ -38,7 +38,6 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { analyticsErrorMessage } from '../api';
 import {
-  ApiBodyError,
   funnelKeys,
   funnelsApi,
   useAmablePages,
@@ -78,6 +77,7 @@ import {
 } from '../funnel-builder/state';
 import { useAnalyticsQueryState, type AnalyticsState } from '../lib/query-state';
 import { analyticsFunnelBuilderRoute, type FunnelBuilderSearch } from '../routes';
+import { ApiError } from '../../../lib/api';
 
 const ALL_SOURCES = 'all';
 const NO_SOURCES: readonly TrafficSource[] = [];
@@ -188,7 +188,7 @@ function Builder({
       toast.success(t('analytics.funnelBuilder.saved'));
     },
     onError: async (error) => {
-      if (!(error instanceof ApiBodyError)) {
+      if (!(error instanceof ApiError)) {
         toast.error(analyticsErrorMessage(t, error));
         return;
       }

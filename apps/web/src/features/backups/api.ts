@@ -1,8 +1,9 @@
 import type { ArchiveSettings, UpdateArchiveRetentionInput } from '@amable/api-types';
 import type { MessageKey } from '@amable/i18n';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError } from '../../lib/api';
 import { stepUpFetch } from '../../lib/step-up';
 import { downloadResponse } from '../../lib/download';
+import { request, responseError } from '../../lib/tenant-api';
 
 export type BackupKind = 'scheduled' | 'manual';
 
@@ -34,26 +35,20 @@ export const backupKeys = {
 const base = (slug: string) => `/api/t/${encodeURIComponent(slug)}/backups`;
 
 export const backupsApi = {
-  list: (slug: string) => apiFetch<BackupList>(base(slug)),
+  list: (slug: string) => request<BackupList>(base(slug)),
   create: (slug: string) =>
-    apiFetch<{ backup: BackupItem }>(base(slug), { method: 'POST', body: '{}' }),
+    request<{ backup: BackupItem }>(base(slug), { method: 'POST', json: {}, idempotent: false }),
   restore: (slug: string, id: string, confirm: string) =>
-    apiFetch<{ ok: true }>(`${base(slug)}/${encodeURIComponent(id)}/restore`, {
-      method: 'POST',
-      body: JSON.stringify({ confirm }),
-    }),
-  archive: (slug: string) => apiFetch<ArchiveOverview>(`${base(slug)}/archive`),
+    request<{ ok: true }>(`${base(slug)}/${encodeURIComponent(id)}/restore`, { method: 'POST', json: { confirm }, idempotent: false }),
+  archive: (slug: string) => request<ArchiveOverview>(`${base(slug)}/archive`),
   saveArchive: (slug: string, input: UpdateArchiveRetentionInput) =>
-    apiFetch<ArchiveOverview>(`${base(slug)}/archive`, { method: 'PUT', body: JSON.stringify(input) }),
+    request<ArchiveOverview>(`${base(slug)}/archive`, { method: 'PUT', json: input }),
   /** Streams the file into a blob and saves it (the GET needs the session and a fresh step-up). */
   async download(slug: string, id: string): Promise<void> {
     const response = await stepUpFetch(`${base(slug)}/${encodeURIComponent(id)}/download`, {
       credentials: 'same-origin',
     });
-    if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      throw new ApiError(response.status, body?.error ?? null);
-    }
+    if (!response.ok) throw await responseError(response);
     await downloadResponse(response, `${id}.jsonl.gz`);
   },
 };
@@ -69,10 +64,7 @@ const ERROR_KEYS: Readonly<Record<string, MessageKey>> = {
 };
 
 export function backupErrorKey(error: unknown): MessageKey {
-  if (error instanceof ApiError && error.code !== null) {
-    return ERROR_KEYS[error.code] ?? 'backups.error.generic';
-  }
-  return 'backups.error.generic';
+  return (error instanceof ApiError ? ERROR_KEYS[error.code] : undefined) ?? 'backups.error.generic';
 }
 
 export { isStepUpRequired } from '../../lib/step-up';

@@ -20,6 +20,8 @@ export class TenantApiError extends Error {
     readonly code: string,
     readonly detail: string | null,
     readonly details: readonly ApiErrorDetail[],
+    /** Parsed JSON body of the failed response (`null` when there was none). */
+    readonly body: unknown = null,
   ) {
     super(detail ?? `API ${String(status)} ${code}`);
   }
@@ -31,6 +33,22 @@ export class TenantApiError extends Error {
   get isNotFound(): boolean {
     return this.status === 404;
   }
+}
+
+/** The error of a failed response, from its JSON body (`error`, `message`, `details`). */
+export async function responseError(response: Response): Promise<TenantApiError> {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+    message?: unknown;
+    details?: unknown;
+  } | null;
+  return new TenantApiError(
+    response.status,
+    typeof payload?.error === 'string' ? payload.error : 'http_error',
+    typeof payload?.message === 'string' ? payload.message : null,
+    Array.isArray(payload?.details) ? (payload.details as ApiErrorDetail[]) : [],
+    payload,
+  );
 }
 
 let redirecting = false;
@@ -98,18 +116,9 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
     keepalive: options.keepalive,
   });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-      message?: string;
-      details?: ApiErrorDetail[];
-    } | null;
+    const error = await responseError(response);
     if (response.status === 401) onUnauthorized();
-    throw new TenantApiError(
-      response.status,
-      payload?.error ?? 'http_error',
-      payload?.message ?? null,
-      payload?.details ?? [],
-    );
+    throw error;
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

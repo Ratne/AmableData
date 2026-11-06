@@ -12,13 +12,13 @@ const ok = () => new Response(JSON.stringify({ ok: true }), { status: 200 });
 
 describe('isStepUpRequired', () => {
   it('recognises the code on every feature client error and on raw bodies', () => {
-    expect(isStepUpRequired(new ApiError(403, 'step_up_required'))).toBe(true);
+    expect(isStepUpRequired(new ApiError(403, 'step_up_required', null, []))).toBe(true);
     expect(isStepUpRequired(new FormsApiError(403, 'step_up_required', null, []))).toBe(true);
     expect(isStepUpRequired({ error: 'step_up_required' })).toBe(true);
   });
 
   it('ignores other errors', () => {
-    expect(isStepUpRequired(new ApiError(403, 'forbidden'))).toBe(false);
+    expect(isStepUpRequired(new ApiError(403, 'forbidden', null, []))).toBe(false);
     expect(isStepUpRequired(new FormsApiError(403, 'session_required', null, []))).toBe(false);
     expect(isStepUpRequired(new Error('step_up_required'))).toBe(false);
     expect(isStepUpRequired(null)).toBe(false);

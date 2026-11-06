@@ -51,7 +51,8 @@ import {
   type QueryKey,
 } from '@tanstack/react-query';
 import { useI18n } from '../../i18n';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError } from '../../lib/api';
+import { request, type RequestOptions } from '../../lib/tenant-api';
 
 /*
  * Client of the analytics REST surface (`/api/v2/t/{slug}/analytics`) and of
@@ -133,10 +134,13 @@ function siteUrl(tenant: string, siteId: string, path: string, params: Params = 
   return `${tenantBase(tenant)}/${path}${buildSearch({ site_id: siteId, ...params })}`;
 }
 
-const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
-const post = (body: unknown = {}): RequestInit => ({ method: 'POST', ...json(body) });
-const patch = (body: unknown): RequestInit => ({ method: 'PATCH', ...json(body) });
-const del: RequestInit = { method: 'DELETE' };
+const post = (body: unknown = {}): RequestOptions => ({
+  method: 'POST',
+  json: body,
+  idempotent: false,
+});
+const patch = (body: unknown): RequestOptions => ({ method: 'PATCH', json: body });
+const del: RequestOptions = { method: 'DELETE' };
 
 // ------------------------------------------------------------------ query keys
 
@@ -189,7 +193,7 @@ const REPORT_STALE_MS = 30_000;
 export function useSites(tenant: string) {
   return useQuery({
     queryKey: analyticsKeys.sites(tenant),
-    queryFn: () => apiFetch<{ data: Site[] }>(`${tenantBase(tenant)}/sites`),
+    queryFn: () => request<{ data: Site[] }>(`${tenantBase(tenant)}/sites`),
     select: (result) => result.data,
     staleTime: 60_000,
     retry: false,
@@ -207,7 +211,7 @@ function useReport<T>(
     queryKey: source
       ? analyticsKeys.report(source, name, ...keyParts)
       : ['analytics', 'none', name],
-    queryFn: () => apiFetch<T>(url(source!)),
+    queryFn: () => request<T>(url(source!)),
     enabled: source !== null && options.enabled !== false,
     staleTime: REPORT_STALE_MS,
     placeholderData: keepPreviousData,
@@ -361,7 +365,7 @@ export function useVisitors(
       ? analyticsKeys.report(source, 'visitors', query, params)
       : ['analytics', 'none', 'visitors'],
     queryFn: ({ pageParam }) =>
-      apiFetch<VisitorsList>(
+      request<VisitorsList>(
         reportUrl(
           source!,
           'visitors',
@@ -381,7 +385,7 @@ export function useVisitorProfile(tenant: string, siteId: string | null, visitor
   return useQuery({
     queryKey: analyticsKeys.site(tenant, siteId ?? '', 'visitor', visitorId),
     queryFn: () =>
-      apiFetch<VisitorProfile>(siteUrl(tenant, siteId ?? '', `visitors/${enc(visitorId)}`)),
+      request<VisitorProfile>(siteUrl(tenant, siteId ?? '', `visitors/${enc(visitorId)}`)),
     enabled: siteId !== null,
     retry: false,
   });
@@ -391,7 +395,7 @@ export function useContactJourney(tenant: string, contactId: string, limit = 100
   return useQuery({
     queryKey: analyticsKeys.journey(tenant, contactId),
     queryFn: () =>
-      apiFetch<ContactJourney>(
+      request<ContactJourney>(
         `${tenantBase(tenant)}/contacts/${enc(contactId)}/journey${buildSearch({ limit })}`,
       ),
     staleTime: 60_000,
@@ -410,7 +414,7 @@ function useSiteResource<T>(
 ) {
   return useQuery({
     queryKey: analyticsKeys.site(tenant, siteId ?? '', name, options.params ?? {}),
-    queryFn: () => apiFetch<T>(siteUrl(tenant, siteId ?? '', path, options.params)),
+    queryFn: () => request<T>(siteUrl(tenant, siteId ?? '', path, options.params)),
     enabled: siteId !== null && options.enabled !== false,
     staleTime: 30_000,
     retry: false,
@@ -429,7 +433,7 @@ export function useFunnelResult(
   return useQuery({
     queryKey: analyticsKeys.site(tenant, siteId ?? '', 'funnels', 'result', funnelId, query),
     queryFn: () =>
-      apiFetch<FunnelResult>(
+      request<FunnelResult>(
         `${tenantBase(tenant)}/funnels/${enc(funnelId ?? '')}/results${buildSearch({ site_id: siteId }, query)}`,
       ),
     enabled: siteId !== null && funnelId !== null,
@@ -453,7 +457,7 @@ export const usePrediction = (tenant: string, siteId: string | null) =>
 function useSiteSub<T>(tenant: string, siteId: string | null, name: string) {
   return useQuery({
     queryKey: analyticsKeys.site(tenant, siteId ?? '', name),
-    queryFn: () => apiFetch<T>(`${tenantBase(tenant)}/sites/${enc(siteId ?? '')}/${name}`),
+    queryFn: () => request<T>(`${tenantBase(tenant)}/sites/${enc(siteId ?? '')}/${name}`),
     enabled: siteId !== null,
     retry: false,
   });
@@ -471,7 +475,7 @@ export const useSiteKeys = (tenant: string, siteId: string | null) =>
 export function usePublicShareInfo(token: string) {
   return useQuery({
     queryKey: ['analytics', `public:${token}`, 'info'],
-    queryFn: () => apiFetch<PublicShareInfo>(`/api/public/analytics/${enc(token)}`),
+    queryFn: () => request<PublicShareInfo>(`/api/public/analytics/${enc(token)}`),
     retry: false,
     staleTime: 5 * 60_000,
   });
@@ -487,64 +491,64 @@ export function analyticsApi(tenant: string) {
   return {
     sites: {
       create: (input: Partial<CreateSiteInput> & Pick<CreateSiteInput, 'name' | 'hostnames'>) =>
-        apiFetch<SiteWithSecret>(`${base}/sites`, post(input)),
+        request<SiteWithSecret>(`${base}/sites`, post(input)),
       update: (id: string, input: UpdateSiteInput) =>
-        apiFetch<Site>(`${base}/sites/${enc(id)}`, patch(input)),
-      remove: (id: string) => apiFetch<unknown>(`${base}/sites/${enc(id)}`, del),
+        request<Site>(`${base}/sites/${enc(id)}`, patch(input)),
+      remove: (id: string) => request<unknown>(`${base}/sites/${enc(id)}`, del),
       rollSecret: (id: string) =>
-        apiFetch<{ secret: string }>(`${base}/sites/${enc(id)}/secret`, post()),
+        request<{ secret: string }>(`${base}/sites/${enc(id)}/secret`, post()),
       createKey: (id: string, input: { name: string; scopes: SiteKeyScope[] }) =>
-        apiFetch<{ key: SiteKey; secret: string }>(`${base}/sites/${enc(id)}/keys`, post(input)),
+        request<{ key: SiteKey; secret: string }>(`${base}/sites/${enc(id)}/keys`, post(input)),
       revokeKey: (id: string, keyId: string) =>
-        apiFetch<unknown>(`${base}/sites/${enc(id)}/keys/${enc(keyId)}`, del),
+        request<unknown>(`${base}/sites/${enc(id)}/keys/${enc(keyId)}`, del),
     },
     funnels: {
       create: (siteId: string, input: CreateFunnelInput) =>
-        apiFetch<Funnel>(sited(siteId, 'funnels'), post(input)),
+        request<Funnel>(sited(siteId, 'funnels'), post(input)),
       update: (siteId: string, id: string, input: UpdateFunnelInput) =>
-        apiFetch<Funnel>(sited(siteId, `funnels/${enc(id)}`), patch(input)),
+        request<Funnel>(sited(siteId, `funnels/${enc(id)}`), patch(input)),
       remove: (siteId: string, id: string) =>
-        apiFetch<unknown>(sited(siteId, `funnels/${enc(id)}`), del),
+        request<unknown>(sited(siteId, `funnels/${enc(id)}`), del),
     },
     segments: {
       create: (siteId: string, input: { name: string; filters: AnalyticsFilter[] }) =>
-        apiFetch<Segment>(sited(siteId, 'segments'), post(input)),
+        request<Segment>(sited(siteId, 'segments'), post(input)),
       remove: (siteId: string, id: string) =>
-        apiFetch<unknown>(sited(siteId, `segments/${enc(id)}`), del),
+        request<unknown>(sited(siteId, `segments/${enc(id)}`), del),
     },
     alerts: {
       create: (
         siteId: string,
         input: Partial<CreateAlertInput> & Pick<CreateAlertInput, 'name' | 'goal'>,
       ) =>
-        apiFetch<{ alert: Alert; webhook_secret: string | null }>(
+        request<{ alert: Alert; webhook_secret: string | null }>(
           sited(siteId, 'alerts'),
           post(input),
         ),
       update: (siteId: string, id: string, input: UpdateAlertInput) =>
-        apiFetch<{ alert: Alert; webhook_secret: string | null }>(
+        request<{ alert: Alert; webhook_secret: string | null }>(
           sited(siteId, `alerts/${enc(id)}`),
           patch(input),
         ),
       remove: (siteId: string, id: string) =>
-        apiFetch<unknown>(sited(siteId, `alerts/${enc(id)}`), del),
+        request<unknown>(sited(siteId, `alerts/${enc(id)}`), del),
       test: (siteId: string, id: string) =>
-        apiFetch<{ queued: true }>(sited(siteId, `alerts/${enc(id)}/test`), post()),
+        request<{ queued: true }>(sited(siteId, `alerts/${enc(id)}/test`), post()),
       rotateSecret: (siteId: string, id: string) =>
-        apiFetch<{ alert: Alert; webhook_secret: string }>(
+        request<{ alert: Alert; webhook_secret: string }>(
           sited(siteId, `alerts/${enc(id)}/webhook-secret`),
           post(),
         ),
     },
     shares: {
       create: (siteId: string, name: string) =>
-        apiFetch<Share>(sited(siteId, 'shares'), post({ name })),
+        request<Share>(sited(siteId, 'shares'), post({ name })),
       revoke: (siteId: string, id: string) =>
-        apiFetch<unknown>(sited(siteId, `shares/${enc(id)}`), del),
+        request<unknown>(sited(siteId, `shares/${enc(id)}`), del),
     },
     integrations: {
       connect: (siteId: string, provider: IntegrationProvider) =>
-        apiFetch<{ authorize_url: string }>(
+        request<{ authorize_url: string }>(
           sited(siteId, `integrations/${provider}/connect`),
           post(),
         ),
@@ -552,15 +556,15 @@ export function analyticsApi(tenant: string) {
         siteId: string,
         provider: IntegrationProvider,
         input: { state: string; code: string },
-      ) => apiFetch<Integration>(sited(siteId, `integrations/${provider}/callback`), post(input)),
+      ) => request<Integration>(sited(siteId, `integrations/${provider}/callback`), post(input)),
       sync: (siteId: string, provider: IntegrationProvider) =>
-        apiFetch<Integration>(sited(siteId, `integrations/${provider}/sync`), post()),
+        request<Integration>(sited(siteId, `integrations/${provider}/sync`), post()),
       disconnect: (siteId: string, provider: IntegrationProvider) =>
-        apiFetch<unknown>(sited(siteId, `integrations/${provider}`), del),
+        request<unknown>(sited(siteId, `integrations/${provider}`), del),
     },
     prediction: {
       train: (siteId: string) =>
-        apiFetch<PredictionModelInfo>(sited(siteId, 'prediction/train'), post()),
+        request<PredictionModelInfo>(sited(siteId, 'prediction/train'), post()),
     },
   };
 }

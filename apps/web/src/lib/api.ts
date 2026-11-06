@@ -2,29 +2,23 @@ import type { Page } from '@amable/api-types';
 import type { Permission, Role } from '@amable/core';
 import { useQuery } from '@tanstack/react-query';
 import { stepUpFetch } from './step-up';
+import { responseError, TenantApiError } from './tenant-api';
 
 /** Header the core worker's CSRF guard requires on every state-changing cookie request. */
 const CSRF_HEADER = 'x-amable-csrf';
 
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string | null,
-  ) {
-    super(`API ${String(status)}${code ? ` ${code}` : ''}`);
-  }
-}
+/** Same class as the tenant clients' error, so `instanceof` checks hold whichever client failed. */
+export { TenantApiError as ApiError };
 
+/** Session-level calls (`/api/me`, sign-out, edit locks): a 401 reaches the caller, no sign-in redirect. */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body !== undefined && !headers.has('content-type'))
     headers.set('content-type', 'application/json');
   if (init.method && init.method !== 'GET' && init.method !== 'HEAD') headers.set(CSRF_HEADER, '1');
   const response = await stepUpFetch(path, { ...init, headers, credentials: 'same-origin' });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new ApiError(response.status, body?.error ?? null);
-  }
+  if (!response.ok) throw await responseError(response);
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -72,7 +66,7 @@ export function useMe() {
       try {
         return await apiFetch<MeResponse>('/api/me');
       } catch (error) {
-        if (error instanceof ApiError && (error.status === 401 || error.status === 403))
+        if (error instanceof TenantApiError && (error.status === 401 || error.status === 403))
           return null;
         throw error;
       }

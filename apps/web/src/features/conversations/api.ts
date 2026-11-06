@@ -9,8 +9,8 @@ import type {
 } from '@amable/api-types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { apiFetch } from '../../lib/api';
 import { useCursorQuery } from '../../lib/feature-hooks';
+import { request } from '../../lib/tenant-api';
 
 /** Shared inbox: REST v2 `/conversations` of the active workspace. */
 
@@ -48,19 +48,18 @@ function viewQuery(view: InboxView): Record<string, string> {
 
 export function conversationsApi(slug: string) {
   const base = `/api/v2/t/${encodeURIComponent(slug)}/conversations`;
-  const send = <T>(method: string, path: string, body: unknown) => apiFetch<T>(`${base}${path}`, { method, body: JSON.stringify(body) });
+  const send = <T>(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body: unknown) =>
+    request<T>(`${base}${path}`, { method, json: body, idempotent: false });
   return {
     list: (view: InboxView, cursor?: string) =>
-      apiFetch<Page<Conversation>>(`${base}?${new URLSearchParams({ ...viewQuery(view), limit: '50', ...(cursor === undefined ? {} : { cursor }) }).toString()}`),
-    ofContact: (contactId: string) => apiFetch<Page<Conversation>>(`${base}?${new URLSearchParams({ contact_id: contactId, limit: '20' }).toString()}`),
-    counts: () => apiFetch<InboxCounts>(`${base}/counts`),
-    channels: () => apiFetch<{ data: ConversationChannel[] }>(`${base}/channels`),
-    templates: (channel: string) => apiFetch<{ data: ChannelTemplate[]; notice?: string | null }>(`${base}/channels/${encodeURIComponent(channel)}/templates`),
-    get: (id: string) => apiFetch<{ data: Conversation }>(`${base}/${encodeURIComponent(id)}`),
+      request<Page<Conversation>>(`${base}?${new URLSearchParams({ ...viewQuery(view), limit: '50', ...(cursor === undefined ? {} : { cursor }) }).toString()}`),
+    ofContact: (contactId: string) => request<Page<Conversation>>(`${base}?${new URLSearchParams({ contact_id: contactId, limit: '20' }).toString()}`),
+    counts: () => request<InboxCounts>(`${base}/counts`),
+    channels: () => request<{ data: ConversationChannel[] }>(`${base}/channels`),
+    templates: (channel: string) => request<{ data: ChannelTemplate[]; notice?: string | null }>(`${base}/channels/${encodeURIComponent(channel)}/templates`),
+    get: (id: string) => request<{ data: Conversation }>(`${base}/${encodeURIComponent(id)}`),
     messages: (id: string, cursor?: string) =>
-      apiFetch<Page<ConversationMessage>>(
-        `${base}/${encodeURIComponent(id)}/messages?${new URLSearchParams({ limit: '50', ...(cursor === undefined ? {} : { cursor }) }).toString()}`,
-      ),
+      request<Page<ConversationMessage>>(`${base}/${encodeURIComponent(id)}/messages?${new URLSearchParams({ limit: '50', ...(cursor === undefined ? {} : { cursor }) }).toString()}`),
     update: (id: string, data: { status?: ConversationStatus; assigned_to?: string | null }) =>
       send<{ data: Conversation }>('PATCH', `/${encodeURIComponent(id)}`, data),
     read: (id: string) => send<{ data: Conversation }>('POST', `/${encodeURIComponent(id)}/read`, {}),
