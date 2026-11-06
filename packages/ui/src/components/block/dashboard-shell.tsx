@@ -31,11 +31,11 @@ import type {
   Ref,
   RefObject,
 } from 'react';
+import { EASE_OUT, useControllableState } from '../../lib/controllable';
 import { cn } from '../../lib/utils';
 import { inertProps } from '../../lib/inert';
 import './dashboard-shell.css';
 
-const EASE_OUT = [0.25, 1, 0.5, 1] as const;
 /** The hover highlight glides after the pointer. */
 const FOLLOW_SPRING = { type: 'spring', stiffness: 650, damping: 45, mass: 0.5 } as const;
 /** The active pill slides to the chosen item. */
@@ -614,23 +614,6 @@ export type DashboardShellProps = Omit<ComponentProps<'div'>, 'title' | 'childre
 };
 
 const ShellLinkContext = createContext<ElementType>('a');
-
-function useControllableState<T>(
-  value: T | undefined,
-  defaultValue: T,
-  onChange?: (next: T) => void,
-) {
-  const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue);
-  const isControlled = value !== undefined;
-  const setValue = useCallback(
-    (next: T) => {
-      if (!isControlled) setUncontrolledValue(next);
-      onChange?.(next);
-    },
-    [isControlled, onChange],
-  );
-  return [isControlled ? value : uncontrolledValue, setValue] as const;
-}
 
 /** Wraps Tab and Shift+Tab inside the drawer, since the page around the shell is not inert. */
 function keepFocusInside(event: KeyboardEvent<HTMLElement>) {

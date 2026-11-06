@@ -1,3 +1,10 @@
+import type {
+  WebhookDelivery,
+  WebhookDeliveryDetail,
+  WebhookDeliveryStatus,
+  WebhookEndpoint,
+  WebhookEndpointStatus,
+} from '@amable/api-types';
 import { randomToken } from '@amable/auth';
 import {
   assertSafeUrl,
@@ -64,8 +71,8 @@ export interface WebhookDeps {
   readonly onAppEndpointDisabled?: (installId: string) => Promise<void>;
 }
 
-export type EndpointStatus = 'active' | 'disabled';
-export type DeliveryStatus = 'pending' | 'retrying' | 'succeeded' | 'failed';
+export type EndpointStatus = WebhookEndpointStatus;
+export type DeliveryStatus = WebhookDeliveryStatus;
 
 interface EndpointRow {
   id: string;
@@ -106,41 +113,7 @@ interface DeliveryRow {
   completed_at: number | null;
 }
 
-export interface WebhookEndpoint {
-  readonly id: string;
-  readonly url: string;
-  readonly description: string;
-  readonly event_types: string[];
-  readonly status: EndpointStatus;
-  readonly disabled_reason: string | null;
-  readonly consecutive_failures: number;
-  readonly secret_hint: string;
-  readonly created_at: string;
-  readonly updated_at: string;
-  readonly last_success_at: string | null;
-  readonly last_failure_at: string | null;
-}
-
-export interface WebhookDelivery {
-  readonly id: string;
-  readonly endpoint_id: string;
-  readonly event_id: string;
-  readonly event_type: string;
-  readonly status: DeliveryStatus;
-  readonly attempts: number;
-  readonly next_attempt_at: string | null;
-  readonly last_status: number | null;
-  readonly last_error: string | null;
-  readonly duration_ms: number | null;
-  readonly replay_of: string | null;
-  readonly created_at: string;
-  readonly completed_at: string | null;
-}
-
-export interface WebhookDeliveryDetail extends WebhookDelivery {
-  readonly payload: unknown;
-  readonly last_response: string | null;
-}
+export type { WebhookDelivery, WebhookDeliveryDetail, WebhookEndpoint };
 
 export class WebhookError extends Error {
   constructor(

@@ -34,7 +34,11 @@ export function formatDate(locale: string, value: DateInput, withTime = false): 
 }
 
 /** Medium date and time; '—' when empty. */
-export function formatDateTime(locale: string, value: DateInput, options: { seconds?: boolean } = {}): string {
+export function formatDateTime(
+  locale: string,
+  value: DateInput,
+  options: { seconds?: boolean } = {},
+): string {
   if (value === null || value === undefined || value === '') return '—';
   const ms = toMs(value);
   if (Number.isNaN(ms)) return String(value);

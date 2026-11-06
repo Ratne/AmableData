@@ -1,3 +1,5 @@
+import type { BillingInterval } from '@amable/api-types';
+
 /**
  * Subscription revenue math (MRR, ARR, churn) over subscription facts. Money is
  * integer minor units; each subscription's monthly amount is rounded half-up
@@ -10,8 +12,6 @@
  * - churn rate = churned / active at window start; revenue churn = churned MRR
  *   / MRR at window start.
  */
-
-export type BillingInterval = 'day' | 'week' | 'month' | 'year';
 
 export interface SubscriptionFact {
   id: string;

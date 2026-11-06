@@ -689,6 +689,9 @@ importers:
 
   packages/tracker:
     devDependencies:
+      '@amable/api-types':
+        specifier: workspace:*
+        version: link:../api-types
       '@types/jsdom':
         specifier: ^30.0.0
         version: 30.0.0
@@ -704,6 +707,9 @@ importers:
       typescript:
         specifier: ~7.0.2
         version: 7.0.2
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
   packages/ui:
     dependencies:

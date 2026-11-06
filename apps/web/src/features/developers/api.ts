@@ -1,3 +1,11 @@
+import type {
+  DomainKind,
+  TenantDomain,
+  WebhookDelivery,
+  WebhookDeliveryDetail,
+  WebhookDeliveryStatus as DeliveryStatus,
+  WebhookEndpoint,
+} from '@amable/api-types';
 import type { Permission } from '@amable/core';
 import { toast } from '@amable/ui';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
@@ -16,65 +24,14 @@ export interface ApiKey {
   readonly revokedAt: number | null;
 }
 
-export interface WebhookEndpoint {
-  readonly id: string;
-  readonly url: string;
-  readonly description: string;
-  readonly event_types: string[];
-  readonly status: 'active' | 'disabled';
-  readonly disabled_reason: string | null;
-  readonly consecutive_failures: number;
-  readonly secret_hint: string;
-  readonly created_at: string;
-  readonly last_success_at: string | null;
-  readonly last_failure_at: string | null;
-}
-
-export type DeliveryStatus = 'pending' | 'retrying' | 'succeeded' | 'failed';
-
-export interface WebhookDelivery {
-  readonly id: string;
-  readonly endpoint_id: string;
-  readonly event_id: string;
-  readonly event_type: string;
-  readonly status: DeliveryStatus;
-  readonly attempts: number;
-  readonly next_attempt_at: string | null;
-  readonly last_status: number | null;
-  readonly last_error: string | null;
-  readonly duration_ms: number | null;
-  readonly replay_of: string | null;
-  readonly created_at: string;
-}
-
-export interface WebhookDeliveryDetail extends WebhookDelivery {
-  readonly payload: unknown;
-  readonly last_response: string | null;
-}
-
-export interface DnsRecord {
-  readonly type: 'TXT' | 'CNAME' | 'MX';
-  readonly name: string;
-  readonly value: string;
-}
-
-export type DomainKind = 'sending' | 'tracking' | 'app' | 'shortlink';
-
-export interface TenantDomain {
-  readonly id: string;
-  readonly hostname: string;
-  readonly kind: DomainKind;
-  readonly status: 'pending' | 'verified' | 'failed';
-  readonly records: DnsRecord[];
-  readonly paths: string[];
-  readonly routes: string[];
-  readonly zone_id: string | null;
-  readonly dns_applied_at: string | null;
-  readonly verified_at: string | null;
-  readonly checked_at: string | null;
-  readonly last_error: string | null;
-  readonly dns_changed_at: string | null;
-}
+export type {
+  DeliveryStatus,
+  DomainKind,
+  TenantDomain,
+  WebhookDelivery,
+  WebhookDeliveryDetail,
+  WebhookEndpoint,
+};
 
 export interface DomainList {
   readonly automation: 'cloudflare' | 'fake' | 'manual';

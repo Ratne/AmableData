@@ -4,7 +4,6 @@ import {
   forwardRef,
   Fragment,
   memo,
-  useCallback,
   useEffect,
   useMemo,
   useLayoutEffect,
@@ -24,6 +23,7 @@ import {
   DashboardMenuTrigger,
 } from '../components/block/dashboard-shell';
 import { cn } from '../lib/utils';
+import { EASE_OUT, useControllableState } from '../lib/controllable';
 
 /**
  * The standard list page table (contacts, companies, orders, products,
@@ -159,7 +159,6 @@ export interface ListTableProps<T> {
   readonly className?: string;
 }
 
-const EASE_OUT = [0.25, 1, 0.5, 1] as const;
 const TOAST_MS = 6000;
 const cell = 'px-3 py-2.5 align-middle @lg/table:px-4';
 const hideBelowClass = {
@@ -178,19 +177,6 @@ function compareValues(a: unknown, b: unknown): number {
   if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
   if (typeof a === 'number' && typeof b === 'number') return a - b;
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
-}
-
-function useControllable<T>(value: T | undefined, initial: T, onChange?: (next: T) => void) {
-  const [inner, setInner] = useState(initial);
-  const controlled = value !== undefined;
-  const set = useCallback(
-    (next: T) => {
-      if (!controlled) setInner(next);
-      onChange?.(next);
-    },
-    [controlled, onChange],
-  );
-  return [controlled ? value : inner, set] as const;
 }
 
 export function ListTable<T>({
@@ -217,12 +203,12 @@ export function ListTable<T>({
 }: ListTableProps<T>) {
   const labels = { ...DEFAULT_LIST_TABLE_LABELS, ...labelOverrides };
   const reduceMotion = useReducedMotion();
-  const [sort, setSort] = useControllable<ListTableSort | null>(
+  const [sort, setSort] = useControllableState<ListTableSort | null>(
     sortProp,
     defaultSort,
     onSortChange as ((next: ListTableSort | null) => void) | undefined,
   );
-  const [selectedIds, setSelectedIds] = useControllable<readonly string[]>(
+  const [selectedIds, setSelectedIds] = useControllableState<readonly string[]>(
     selectedProp,
     [],
     onSelectedIdsChange as ((next: readonly string[]) => void) | undefined,

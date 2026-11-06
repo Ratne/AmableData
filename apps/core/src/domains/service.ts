@@ -1,9 +1,9 @@
 import { EmailProviderError, type DnsRecord, type EmailMarketingProvider } from '@amable/core';
+import type { DomainKind, DomainStatus, TenantDomain } from '@amable/api-types';
 import { ZoneAutomationError, type ZoneAutomation } from './zone';
 import { toIso } from '../crm/util';
 
-export type DomainKind = 'sending' | 'tracking' | 'app' | 'shortlink';
-export type DomainStatus = 'pending' | 'verified' | 'failed';
+export type { DomainKind, DomainStatus, TenantDomain };
 
 /** Edge paths a site on the customer's own hostname needs besides its landing paths. */
 export const SITE_EDGE_PATHS = ['/health', '/m/*', '/b/*'] as const;
@@ -37,25 +37,6 @@ interface DomainRow {
   last_error: string | null;
   dns_changed_at: number | null;
   created_at: number;
-}
-
-export interface TenantDomain {
-  readonly id: string;
-  readonly hostname: string;
-  readonly kind: DomainKind;
-  readonly status: DomainStatus;
-  readonly records: DnsRecord[];
-  readonly paths: string[];
-  /** Workers Routes patterns (site with paths). */
-  readonly routes: string[];
-  readonly zone_id: string | null;
-  readonly dns_applied_at: string | null;
-  readonly verified_at: string | null;
-  readonly checked_at: string | null;
-  readonly last_error: string | null;
-  /** Sending: the provider changed the records (cluster move); publish them and verify again. */
-  readonly dns_changed_at: string | null;
-  readonly created_at: string;
 }
 
 export class DomainError extends Error {
