@@ -6,7 +6,7 @@ import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { emailKeys, useEmailApi } from '../api';
-import { contactLabel } from '../components';
+import { contactLabel } from '../format';
 
 /** Server-side contact search with cursor pagination ("load more"), for previews against a real contact. */
 export function ContactSelect({

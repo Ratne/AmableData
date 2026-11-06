@@ -1,10 +1,10 @@
-import { isLocale, resolveLocale, t as translate, type Locale, type MessageKey } from '@amable/i18n';
-import { useCallback } from 'react';
+import { isLocale, resolveLocale, type Locale } from '@amable/i18n/client';
+import { useI18n } from '../../i18n';
 import { stepUpFetch } from '../../lib/step-up';
 
 /**
- * Minimal API client + i18n accessor for the auth pages. Self-contained on
- * purpose (works before/without the app shell providers).
+ * Minimal API client + i18n accessor for the auth pages (no tenant or shell
+ * providers needed; only the root I18nProvider).
  */
 
 export class AuthApiError extends Error {
@@ -59,11 +59,7 @@ export function turnstileSiteKey(): string | null {
 }
 
 export function useT() {
-  const locale = currentLocale();
-  return useCallback(
-    (key: MessageKey, vars?: Readonly<Record<string, string | number>>) => translate(locale, key, vars),
-    [locale],
-  );
+  return useI18n().t;
 }
 
 /** Tokens travel in the URL fragment (never sent to servers or logs); read and scrub it. */

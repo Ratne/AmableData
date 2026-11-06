@@ -1,4 +1,4 @@
-import { LOCALES, type Locale } from '@amable/i18n';
+import { LOCALES, type Locale } from '@amable/i18n/client';
 import {
   DashboardButton,
   DashboardMenu,

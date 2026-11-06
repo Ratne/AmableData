@@ -1,5 +1,5 @@
 import type { Permission } from '@amable/core';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
@@ -10,6 +10,7 @@ import {
   REFERENCE_STALE_MS,
   useApiMutation,
   useGrantedPermissions,
+  useTenantMeQuery,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { landingClient, type LandingClient } from './client';
@@ -17,7 +18,6 @@ import { landingClient, type LandingClient } from './client';
 /** Every landing query of a tenant lives under ['landing', slug, …]. */
 export const landingKeys = {
   root: (slug: string) => ['landing', slug] as const,
-  me: (slug: string) => ['landing', slug, 'me'] as const,
   list: (slug: string, status: string, q: string) => ['landing', slug, 'list', status, q] as const,
   page: (slug: string, id: string) => ['landing', slug, 'page', id] as const,
   versions: (slug: string, id: string) => ['landing', slug, 'page', id, 'versions'] as const,
@@ -39,13 +39,8 @@ export function usePermissions(): {
   ready: boolean;
   userId: string | null;
 } {
-  const { slug, api } = useLanding();
-  const me = useQuery({
-    queryKey: landingKeys.me(slug),
-    queryFn: () => api.me(),
-    staleTime: REFERENCE_STALE_MS,
-    retry: false,
-  });
+  const { slug } = useLanding();
+  const me = useTenantMeQuery(slug);
   return { ...useGrantedPermissions(me.data), userId: me.data?.user?.id ?? null };
 }
 

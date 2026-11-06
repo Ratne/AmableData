@@ -20,11 +20,13 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { Archive, ArrowLeft, Download, Pause, Play, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
-import { blockText, BroadcastStatusBadge, formatDateTime, percent } from '../../email/components';
-import { BroadcastWizard } from './broadcast-wizard';
+import { blockText, BroadcastStatusBadge, formatDateTime, percent } from '../../email/format';
+
+// Drafts only: sent broadcasts show the report without loading the email editor.
+const BroadcastWizard = lazy(() => import('./broadcast-wizard').then((m) => ({ default: m.BroadcastWizard })));
 
 export function BroadcastDetailPage() {
   const { broadcastId } = useParams({ strict: false });
@@ -39,7 +41,9 @@ export function BroadcastDetailPage() {
   usePageChrome({ title: broadcast.data?.name ?? t('broadcasts.title') });
   if (broadcast.data === undefined) return null;
   return broadcast.data.status === 'draft' ? (
-    <BroadcastWizard key={broadcast.data.id} broadcast={broadcast.data} />
+    <Suspense fallback={null}>
+      <BroadcastWizard key={broadcast.data.id} broadcast={broadcast.data} />
+    </Suspense>
   ) : (
     <Report broadcast={broadcast.data} />
   );

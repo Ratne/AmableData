@@ -1,5 +1,5 @@
 import type { Permission } from '@amable/core';
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
@@ -9,6 +9,7 @@ import {
   type ApiMutationOptions,
   useApiMutation,
   useGrantedPermissions,
+  useTenantMeQuery,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { esignClient, type EsignClient, type ListRequestsParams } from './client';
@@ -16,7 +17,6 @@ import { esignClient, type EsignClient, type ListRequestsParams } from './client
 /** Every e-signature query of a tenant lives under ['esign', slug, …]. */
 export const esignKeys = {
   root: (slug: string) => ['esign', slug] as const,
-  me: (slug: string) => ['esign', slug, 'me'] as const,
   templates: (slug: string) => ['esign', slug, 'templates'] as const,
   template: (slug: string, id: string) => ['esign', slug, 'template', id] as const,
   requests: (slug: string, filter: string) => ['esign', slug, 'requests', filter] as const,
@@ -35,13 +35,8 @@ export function useEsignPermissions(): {
   can: (permission: Permission) => boolean;
   ready: boolean;
 } {
-  const { slug, api } = useEsign();
-  const me = useQuery({
-    queryKey: esignKeys.me(slug),
-    queryFn: () => api.me(),
-    staleTime: 60_000,
-    retry: false,
-  });
+  const { slug } = useEsign();
+  const me = useTenantMeQuery(slug);
   return useGrantedPermissions(me.data);
 }
 

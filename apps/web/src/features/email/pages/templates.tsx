@@ -27,7 +27,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../api';
-import { formatDateTime } from '../components';
+import { formatDateTime } from '../format';
 import { CodeEditor, insertAtCursor } from '../liquid/code-editor';
 import { GuideDialog } from '../liquid/guide';
 import { LiquidHelperPanel } from '../liquid/panel';

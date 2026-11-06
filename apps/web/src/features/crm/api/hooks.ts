@@ -10,6 +10,7 @@ import {
   REFERENCE_STALE_MS,
   useApiMutation,
   useGrantedPermissions,
+  useTenantMeQuery,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { crmClient, type CrmClient } from './client';
@@ -17,7 +18,6 @@ import { crmClient, type CrmClient } from './client';
 /** Query keys: everything of a tenant lives under ['crm', slug, …] so one invalidation refreshes it. */
 export const crmKeys = {
   root: (slug: string) => ['crm', slug] as const,
-  me: (slug: string) => ['crm', slug, 'me'] as const,
   directory: (slug: string) => ['crm', slug, 'directory'] as const,
   tags: (slug: string) => ['crm', slug, 'tags'] as const,
   tagCategories: (slug: string) => ['crm', slug, 'tagCategories'] as const,
@@ -56,13 +56,8 @@ export function useCrm(): { slug: string; api: CrmClient } {
 }
 
 export function useTenantMe() {
-  const { slug, api } = useCrm();
-  return useQuery({
-    queryKey: crmKeys.me(slug),
-    queryFn: () => api.me(),
-    staleTime: REFERENCE_STALE_MS,
-    retry: false,
-  });
+  const { slug } = useCrm();
+  return useTenantMeQuery(slug);
 }
 
 /**

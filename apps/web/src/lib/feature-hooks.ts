@@ -1,15 +1,28 @@
 import type { Permission } from '@amable/core';
 import type { MessageKey } from '@amable/i18n';
 import { toast } from '@amable/ui';
-import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useI18n } from '../i18n';
-import { TenantApiError, type TenantMe } from './tenant-api';
+import { request, TenantApiError, type TenantMe } from './tenant-api';
 
 /** Shared building blocks of the per-feature `api/hooks.ts` modules. */
 
 /** Reference data (members, custom fields, the membership): refetched at most once a minute. */
 export const REFERENCE_STALE_MS = 60_000;
+
+/** One cache entry for the active membership, shared by every feature of the workspace. */
+export const tenantMeKey = (slug: string) => ['tenant', slug, 'me'] as const;
+
+/** Active membership: tenant, role and permissions (`GET /api/t/:slug/me`). */
+export function useTenantMeQuery(slug: string) {
+  return useQuery({
+    queryKey: tenantMeKey(slug),
+    queryFn: () => request<TenantMe>(`/api/t/${encodeURIComponent(slug)}/me`),
+    staleTime: REFERENCE_STALE_MS,
+    retry: false,
+  });
+}
 
 type Translate = ReturnType<typeof useI18n>['t'];
 

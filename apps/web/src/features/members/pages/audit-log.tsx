@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
 import { SectionCard } from '../../../components/feature-kit';
+import { useTenantMeQuery } from '../../../lib/feature-hooks';
 import { PageState } from '../../commerce/components/common';
 import { memberKeys, useMembersApi, type AuditEntry } from '../api';
 
@@ -35,7 +36,7 @@ export function AuditLogPage() {
   const { t, locale } = useI18n();
   const { slug, api } = useMembersApi();
   usePageChrome({ title: t('nav.auditLog') });
-  const me = useQuery({ queryKey: memberKeys.me(slug), queryFn: api.me, staleTime: 60_000 });
+  const me = useTenantMeQuery(slug);
   const allowed = me.data?.permissions.includes('audit:read') ?? false;
   const canListMembers = me.data?.permissions.includes('users:manage') ?? false;
   const entries = useInfiniteQuery({

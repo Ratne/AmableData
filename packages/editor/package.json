@@ -5,7 +5,8 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./liquid-slot": "./src/amable/liquid-slot.tsx"
   },
   "scripts": {
     "typecheck": "tsc -p ."

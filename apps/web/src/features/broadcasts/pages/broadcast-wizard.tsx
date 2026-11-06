@@ -42,7 +42,8 @@ import { MultiChoice } from '../../crm/components/inputs';
 import { TagPicker } from '../../crm/components/tag-picker';
 import { SendingDomainBanner } from '../../developers/components';
 import { emailKeys, errorMessage, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
-import { blockText, EmailPreviewPanel, formatDateTime, TestSendDialog, useLiquidFields } from '../../email/components';
+import { EmailPreviewPanel, TestSendDialog, useLiquidFields } from '../../email/components';
+import { blockText, formatDateTime } from '../../email/format';
 import {
   audienceFromSegment,
   buildChecklist,

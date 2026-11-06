@@ -6,7 +6,7 @@ import { Plus } from 'lucide-react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
-import { BroadcastStatusBadge, formatDateTime, percent } from '../../email/components';
+import { BroadcastStatusBadge, formatDateTime, percent } from '../../email/format';
 
 const BLANK_DOC = {
   type: 'doc' as const,

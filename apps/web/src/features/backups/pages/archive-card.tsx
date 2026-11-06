@@ -1,5 +1,5 @@
 import { ARCHIVE_RETENTION_FAMILIES, type ArchiveRetention, type ArchiveRetentionFamily } from '@amable/api-types';
-import { formatNumber, type MessageKey } from '@amable/i18n';
+import { formatNumber, type MessageKey } from '@amable/i18n/client';
 import { toast } from '@amable/ui';
 import { Alert, AlertDescription } from '@amable/ui/ui/alert';
 import { Button } from '@amable/ui/ui/button';

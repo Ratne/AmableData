@@ -1,4 +1,4 @@
-import { formatDateTime, formatNumber, type MessageKey } from '@amable/i18n';
+import { formatDateTime, formatNumber, type MessageKey } from '@amable/i18n/client';
 import { DashboardButton, PageBody, PageToolbar, toast, usePageChrome } from '@amable/ui';
 import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
 import { Badge } from '@amable/ui/ui/badge';
@@ -20,6 +20,7 @@ import { useParams } from '@tanstack/react-router';
 import { DatabaseBackup, Download, Info, RotateCcw, ShieldAlert } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
+import { useTenantMeQuery } from '../../../lib/feature-hooks';
 import {
   backupErrorKey,
   backupKeys,
@@ -55,7 +56,7 @@ export function BackupsPage() {
   const [restoring, setRestoring] = useState<BackupItem | null>(null);
   const [confirm, setConfirm] = useState('');
 
-  const me = useQuery({ queryKey: backupKeys.me(slug), queryFn: () => backupsApi.me(slug), staleTime: 60_000 });
+  const me = useTenantMeQuery(slug);
   const isOwner = me.data?.role === 'owner';
   const list = useQuery({
     queryKey: backupKeys.list(slug),

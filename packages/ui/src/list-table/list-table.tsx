@@ -3,9 +3,11 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   forwardRef,
   Fragment,
+  memo,
   useCallback,
   useEffect,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentType,
@@ -342,6 +344,19 @@ export function ListTable<T>({
   const actionsFor = (row: T): readonly ListTableRowAction<T>[] =>
     typeof rowActions === 'function' ? rowActions(row) : (rowActions ?? []);
   const hasRowMenu = rowActions !== undefined || deletion !== undefined;
+  const latest = useRef({ toggleRow, onRowClick, requestDelete, actionsFor });
+  useLayoutEffect(() => {
+    latest.current = { toggleRow, onRowClick, requestDelete, actionsFor };
+  });
+  const rowHandlers = useMemo<RowHandlers<T>>(
+    () => ({
+      toggle: (index, shiftKey) => latest.current.toggleRow(index, shiftKey),
+      click: (event, row, index) => latest.current.onRowClick(event, row, index),
+      remove: (row) => latest.current.requestDelete([row]),
+      actions: (row) => latest.current.actionsFor(row),
+    }),
+    [],
+  );
   const colSpan = columns.length + (selectable ? 1 : 0) + (hasRowMenu ? 1 : 0);
 
   return (
@@ -394,110 +409,23 @@ export function ListTable<T>({
             {visibleRows.map((row, index) => {
               const id = getRowId(row);
               const label = getRowLabel(row);
-              const isSelected = selectedSet.has(id);
-              const actions = actionsFor(row);
               return (
-                <motion.tr
+                <ListTableRow
                   key={id}
-                  layout={reduceMotion ? false : 'position'}
-                  initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, x: 0, y: 0, filter: 'blur(0px)' }}
-                  exit={
-                    reduceMotion
-                      ? { opacity: 0, transition: { duration: 0 } }
-                      : {
-                          opacity: 0,
-                          x: 28,
-                          filter: 'blur(3px)',
-                          transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
-                        }
-                  }
-                  transition={
-                    reduceMotion
-                      ? { duration: 0 }
-                      : {
-                          duration: 0.22,
-                          ease: EASE_OUT,
-                          layout: { type: 'spring', stiffness: 500, damping: 40 },
-                        }
-                  }
-                  data-selected={isSelected}
-                  onClick={(event) => onRowClick(event, row, index)}
-                  className={cn(
-                    'group/row border-b border-(--obsidian-dashboard-shell-border) transition-colors duration-200 last:border-b-0 hover:bg-(--obsidian-dashboard-shell-hover) data-[selected=true]:bg-[color-mix(in_oklab,var(--obsidian-dashboard-shell-accent)_9%,transparent)] motion-reduce:transition-none',
-                    (onRowOpen || selectable) && 'cursor-pointer',
-                  )}
-                >
-                  {selectable && (
-                    <td className="relative w-10 py-2.5 pr-0 pl-3 align-middle before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:scale-y-0 before:rounded-full before:bg-(--obsidian-dashboard-shell-accent) before:transition-[scale] before:duration-200 before:ease-[cubic-bezier(0.25,1,0.5,1)] group-data-[selected=true]/row:before:scale-y-100 motion-reduce:before:transition-none @lg/table:pl-4">
-                      <Checkbox
-                        checked={isSelected}
-                        onChange={(shiftKey) => toggleRow(index, shiftKey)}
-                        label={labels.selectRow(label)}
-                      />
-                    </td>
-                  )}
-                  {columns.map((column) => (
-                    <td
-                      key={column.id}
-                      className={cn(
-                        cell,
-                        column.hideBelow && hideBelowClass[column.hideBelow],
-                        column.align === 'right' && 'text-right',
-                        column.className,
-                      )}
-                    >
-                      {column.cell(row)}
-                    </td>
-                  ))}
-                  {hasRowMenu && (
-                    <td className="w-10 py-2.5 pr-3 pl-0 text-right align-middle @lg/table:pr-4">
-                      {actions.length > 0 || deletion ? (
-                        <DashboardMenu>
-                          <DashboardMenuTrigger asChild>
-                            <DashboardButton
-                              variant="ghost"
-                              size="icon"
-                              aria-label={labels.rowActions(label)}
-                              className="size-7"
-                            >
-                              <Ellipsis aria-hidden />
-                            </DashboardButton>
-                          </DashboardMenuTrigger>
-                          <DashboardMenuContent align="end" className="min-w-48">
-                            {actions.map((action) => (
-                              <Fragment key={action.id}>
-                                {action.separatorBefore ? <DashboardMenuSeparator /> : null}
-                                <DashboardMenuItem
-                                  onSelect={() => action.onSelect(row)}
-                                  className={cn(
-                                    action.tone === 'danger' &&
-                                      'text-(--obsidian-dashboard-shell-danger) data-[highlighted]:text-(--obsidian-dashboard-shell-danger)',
-                                  )}
-                                >
-                                  {action.icon ? <action.icon aria-hidden /> : null}
-                                  {action.label}
-                                </DashboardMenuItem>
-                              </Fragment>
-                            ))}
-                            {deletion ? (
-                              <>
-                                {actions.length > 0 ? <DashboardMenuSeparator /> : null}
-                                <DashboardMenuItem
-                                  onSelect={() => requestDelete([row])}
-                                  className="text-(--obsidian-dashboard-shell-danger) data-[highlighted]:text-(--obsidian-dashboard-shell-danger)"
-                                >
-                                  <Trash2 aria-hidden />
-                                  {labels.delete}
-                                </DashboardMenuItem>
-                              </>
-                            ) : null}
-                          </DashboardMenuContent>
-                        </DashboardMenu>
-                      ) : null}
-                    </td>
-                  )}
-                </motion.tr>
+                  row={row}
+                  index={index}
+                  selected={selectedSet.has(id)}
+                  columns={columns}
+                  selectable={selectable}
+                  clickable={onRowOpen !== undefined || selectable}
+                  menu={hasRowMenu ? actionsFor(row).length > 0 || deletion !== undefined : null}
+                  canDelete={deletion !== undefined}
+                  reduceMotion={reduceMotion === true}
+                  selectLabel={labels.selectRow(label)}
+                  actionsLabel={labels.rowActions(label)}
+                  deleteLabel={labels.delete}
+                  handlers={rowHandlers}
+                />
               );
             })}
           </AnimatePresence>
@@ -640,6 +568,178 @@ interface CheckboxProps {
   readonly onChange: (shiftKey: boolean) => void;
   readonly label: string;
   readonly disabled?: boolean;
+}
+
+/** Stable callbacks into the table; they always reach its latest props and state. */
+interface RowHandlers<T> {
+  readonly toggle: (index: number, shiftKey: boolean) => void;
+  readonly click: (event: MouseEvent<HTMLTableRowElement>, row: T, index: number) => void;
+  readonly remove: (row: T) => void;
+  readonly actions: (row: T) => readonly ListTableRowAction<T>[];
+}
+
+interface ListTableRowProps<T> {
+  readonly row: T;
+  readonly index: number;
+  readonly selected: boolean;
+  readonly columns: readonly ListTableColumn<T>[];
+  readonly selectable: boolean;
+  readonly clickable: boolean;
+  /** `null`: no menu column; `false`: the column with an empty cell. */
+  readonly menu: boolean | null;
+  readonly canDelete: boolean;
+  readonly reduceMotion: boolean;
+  readonly selectLabel: string;
+  readonly actionsLabel: string;
+  readonly deleteLabel: string;
+  readonly handlers: RowHandlers<T>;
+}
+
+/**
+ * One row, memoized: toggling a selection re-renders only that row. The menu
+ * items are read when the menu opens, so they never come from a stale render.
+ */
+const ListTableRow = memo(function ListTableRow<T>({
+  row,
+  index,
+  selected,
+  columns,
+  selectable,
+  clickable,
+  menu,
+  canDelete,
+  reduceMotion,
+  selectLabel,
+  actionsLabel,
+  deleteLabel,
+  handlers,
+}: ListTableRowProps<T>) {
+  return (
+    <motion.tr
+      layout={reduceMotion ? false : 'position'}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+      animate={{ opacity: 1, x: 0, y: 0, filter: 'blur(0px)' }}
+      exit={
+        reduceMotion
+          ? { opacity: 0, transition: { duration: 0 } }
+          : {
+              opacity: 0,
+              x: 28,
+              filter: 'blur(3px)',
+              transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
+            }
+      }
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : {
+              duration: 0.22,
+              ease: EASE_OUT,
+              layout: { type: 'spring', stiffness: 500, damping: 40 },
+            }
+      }
+      data-selected={selected}
+      onClick={(event) => handlers.click(event, row, index)}
+      className={cn(
+        'group/row border-b border-(--obsidian-dashboard-shell-border) transition-colors duration-200 last:border-b-0 hover:bg-(--obsidian-dashboard-shell-hover) data-[selected=true]:bg-[color-mix(in_oklab,var(--obsidian-dashboard-shell-accent)_9%,transparent)] motion-reduce:transition-none',
+        clickable && 'cursor-pointer',
+      )}
+    >
+      {selectable && (
+        <td className="relative w-10 py-2.5 pr-0 pl-3 align-middle before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:scale-y-0 before:rounded-full before:bg-(--obsidian-dashboard-shell-accent) before:transition-[scale] before:duration-200 before:ease-[cubic-bezier(0.25,1,0.5,1)] group-data-[selected=true]/row:before:scale-y-100 motion-reduce:before:transition-none @lg/table:pl-4">
+          <Checkbox
+            checked={selected}
+            onChange={(shiftKey) => handlers.toggle(index, shiftKey)}
+            label={selectLabel}
+          />
+        </td>
+      )}
+      {columns.map((column) => (
+        <td
+          key={column.id}
+          className={cn(
+            cell,
+            column.hideBelow && hideBelowClass[column.hideBelow],
+            column.align === 'right' && 'text-right',
+            column.className,
+          )}
+        >
+          {column.cell(row)}
+        </td>
+      ))}
+      {menu !== null && (
+        <td className="w-10 py-2.5 pr-3 pl-0 text-right align-middle @lg/table:pr-4">
+          {menu ? (
+            <DashboardMenu>
+              <DashboardMenuTrigger asChild>
+                <DashboardButton
+                  variant="ghost"
+                  size="icon"
+                  aria-label={actionsLabel}
+                  className="size-7"
+                >
+                  <Ellipsis aria-hidden />
+                </DashboardButton>
+              </DashboardMenuTrigger>
+              <DashboardMenuContent align="end" className="min-w-48">
+                <RowMenuItems
+                  row={row}
+                  canDelete={canDelete}
+                  deleteLabel={deleteLabel}
+                  handlers={handlers}
+                />
+              </DashboardMenuContent>
+            </DashboardMenu>
+          ) : null}
+        </td>
+      )}
+    </motion.tr>
+  );
+}) as <T>(props: ListTableRowProps<T>) => ReactNode;
+
+function RowMenuItems<T>({
+  row,
+  canDelete,
+  deleteLabel,
+  handlers,
+}: {
+  row: T;
+  canDelete: boolean;
+  deleteLabel: string;
+  handlers: RowHandlers<T>;
+}) {
+  const actions = handlers.actions(row);
+  return (
+    <>
+      {actions.map((action) => (
+        <Fragment key={action.id}>
+          {action.separatorBefore ? <DashboardMenuSeparator /> : null}
+          <DashboardMenuItem
+            onSelect={() => action.onSelect(row)}
+            className={cn(
+              action.tone === 'danger' &&
+                'text-(--obsidian-dashboard-shell-danger) data-[highlighted]:text-(--obsidian-dashboard-shell-danger)',
+            )}
+          >
+            {action.icon ? <action.icon aria-hidden /> : null}
+            {action.label}
+          </DashboardMenuItem>
+        </Fragment>
+      ))}
+      {canDelete ? (
+        <>
+          {actions.length > 0 ? <DashboardMenuSeparator /> : null}
+          <DashboardMenuItem
+            onSelect={() => handlers.remove(row)}
+            className="text-(--obsidian-dashboard-shell-danger) data-[highlighted]:text-(--obsidian-dashboard-shell-danger)"
+          >
+            <Trash2 aria-hidden />
+            {deleteLabel}
+          </DashboardMenuItem>
+        </>
+      ) : null}
+    </>
+  );
 }
 
 // A native input underneath keeps keyboard, form, and screen reader behavior; the marks on top only draw the state.

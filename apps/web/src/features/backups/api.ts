@@ -28,7 +28,6 @@ export type ArchiveOverview = ArchiveSettings & { storage: DatabaseSizes };
 export const backupKeys = {
   list: (slug: string) => ['backups', slug] as const,
   archive: (slug: string) => ['backups', slug, 'archive'] as const,
-  me: (slug: string) => ['tenant-me', slug] as const,
 };
 
 const base = (slug: string) => `/api/t/${encodeURIComponent(slug)}/backups`;
@@ -45,8 +44,6 @@ export const backupsApi = {
   archive: (slug: string) => apiFetch<ArchiveOverview>(`${base(slug)}/archive`),
   saveArchive: (slug: string, input: UpdateArchiveRetentionInput) =>
     apiFetch<ArchiveOverview>(`${base(slug)}/archive`, { method: 'PUT', body: JSON.stringify(input) }),
-  me: (slug: string) =>
-    apiFetch<{ role: string }>(`/api/t/${encodeURIComponent(slug)}/me`),
   /** Streams the file into a blob and saves it (the GET needs the session and a fresh step-up). */
   async download(slug: string, id: string): Promise<void> {
     const response = await stepUpFetch(`${base(slug)}/${encodeURIComponent(id)}/download`, {

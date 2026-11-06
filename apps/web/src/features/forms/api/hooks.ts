@@ -1,5 +1,5 @@
 import type { Permission } from '@amable/core';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
@@ -9,6 +9,7 @@ import {
   REFERENCE_STALE_MS,
   useApiMutation,
   useGrantedPermissions,
+  useTenantMeQuery,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { formsClient, type FormsClient } from './client';
@@ -16,7 +17,6 @@ import { formsClient, type FormsClient } from './client';
 /** Every forms query of a tenant lives under ['forms', slug, …]. */
 export const formsKeys = {
   root: (slug: string) => ['forms', slug] as const,
-  me: (slug: string) => ['forms', slug, 'me'] as const,
   list: (slug: string, status: string) => ['forms', slug, 'list', status] as const,
   form: (slug: string, id: string) => ['forms', slug, 'form', id] as const,
   embed: (slug: string, id: string) => ['forms', slug, 'form', id, 'embed'] as const,
@@ -34,13 +34,8 @@ export function useForms(): { slug: string; api: FormsClient } {
 
 /** Permissions of the active membership; actions stay hidden until known (the server enforces them). */
 export function usePermissions(): { can: (permission: Permission) => boolean; ready: boolean } {
-  const { slug, api } = useForms();
-  const me = useQuery({
-    queryKey: formsKeys.me(slug),
-    queryFn: () => api.me(),
-    staleTime: REFERENCE_STALE_MS,
-    retry: false,
-  });
+  const { slug } = useForms();
+  const me = useTenantMeQuery(slug);
   return useGrantedPermissions(me.data);
 }
 

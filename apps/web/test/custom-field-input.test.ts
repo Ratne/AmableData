@@ -1,7 +1,8 @@
 import { CUSTOM_FIELD_TYPES, type CustomFieldType } from '@amable/api-types/crm';
+import { loadCatalog } from '@amable/i18n/client';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { formatCustomValue } from '../src/features/crm/custom-fields/display';
 import {
   CustomFieldInput,
@@ -52,6 +53,11 @@ function render(definition: FieldInputDefinition, value: WidgetValue): string {
 }
 
 describe('custom field inputs', () => {
+  // The provider renders once the catalog is loaded; static rendering needs it ready.
+  beforeAll(async () => {
+    await loadCatalog('en');
+  });
+
   it.each([...CUSTOM_FIELD_TYPES])('%s renders an accessible control', (type) => {
     const html = render(field(type), null);
     expect(html).toContain(`Field ${type}`);

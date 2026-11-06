@@ -1,5 +1,5 @@
 import { renderEmailLayout, type EmailBlock } from './email-layout';
-import type { Locale } from './index';
+import type { Locale } from './locale';
 
 export { escapeHtml } from './email-layout';
 

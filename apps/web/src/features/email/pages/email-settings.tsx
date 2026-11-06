@@ -13,7 +13,7 @@ import { Globe, Save, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../api';
-import { blockText, percent } from '../components';
+import { blockText, percent } from '../format';
 
 const STATE_KEYS: Readonly<Record<EmailSettings['sending']['state'], MessageKey>> = {
   verified: 'email.settings.state.verified',

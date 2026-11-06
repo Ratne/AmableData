@@ -34,6 +34,7 @@ import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { useMe } from '../../../lib/api';
 import { FormField, SectionCard } from '../../../components/feature-kit';
+import { useTenantMeQuery } from '../../../lib/feature-hooks';
 import { PageState } from '../../commerce/components/common';
 import {
   memberErrorCode,
@@ -84,7 +85,7 @@ export function MembersPage() {
   const { t } = useI18n();
   const { slug, api } = useMembersApi();
   usePageChrome({ title: t('nav.members') });
-  const me = useQuery({ queryKey: memberKeys.me(slug), queryFn: api.me, staleTime: 60_000 });
+  const me = useTenantMeQuery(slug);
   const allowed = me.data?.permissions.includes('users:manage') ?? false;
   const members = useQuery({
     queryKey: memberKeys.members(slug),

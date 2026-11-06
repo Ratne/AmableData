@@ -27,4 +27,4 @@ export {
   type LiquidHelperHost,
   type LiquidHelperRenderProps,
   type LiquidHelperSlot,
-} from './amable/liquid-helper';
+} from './amable/liquid-slot';

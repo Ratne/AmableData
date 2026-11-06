@@ -1,10 +1,5 @@
-import { createRoute, type AnyRoute } from '@tanstack/react-router';
-import type { JSX } from 'react';
-import { ChallengePage } from './pages/challenge';
-import { InvitePage } from './pages/invite';
+import { createRoute, lazyRouteComponent, type AnyRoute, type RouteComponent } from '@tanstack/react-router';
 import { LoginPage } from './pages/login';
-import { SecurityPage } from './pages/security';
-import { EmailConfirmPage, ForgotPasswordPage, MagicLinkPage, ResetPasswordPage } from './pages/tokens';
 
 /**
  * Auth routes, attached to the app's root route by the router:
@@ -13,22 +8,22 @@ import { EmailConfirmPage, ForgotPasswordPage, MagicLinkPage, ResetPasswordPage 
  *
  * Paths are fixed: the server builds email links to /auth/magic, /auth/reset,
  * /auth/email and /invite (token in the URL fragment).
+ *
+ * Only the login page is in the entry chunk; the others load on demand.
  */
 export function createAuthRoutes(parent: AnyRoute): AnyRoute[] {
-  const route = (path: string, component: () => JSX.Element) =>
+  const route = (path: string, component: RouteComponent) =>
     createRoute({ getParentRoute: () => parent, path, component });
+  const tokens = () => import('./pages/tokens');
   return [
     route('/login', LoginPage),
-    route('/auth/challenge', ChallengePage),
-    route('/auth/magic', MagicLinkPage),
-    route('/auth/forgot', ForgotPasswordPage),
-    route('/auth/reset', ResetPasswordPage),
-    route('/auth/email', EmailConfirmPage),
-    route('/invite', InvitePage),
+    route('/auth/challenge', lazyRouteComponent(() => import('./pages/challenge'), 'ChallengePage')),
+    route('/auth/magic', lazyRouteComponent(tokens, 'MagicLinkPage')),
+    route('/auth/forgot', lazyRouteComponent(tokens, 'ForgotPasswordPage')),
+    route('/auth/reset', lazyRouteComponent(tokens, 'ResetPasswordPage')),
+    route('/auth/email', lazyRouteComponent(tokens, 'EmailConfirmPage')),
+    route('/invite', lazyRouteComponent(() => import('./pages/invite'), 'InvitePage')),
     // Standalone for now; the shell can re-parent it under its settings layout.
-    route('/account/security', SecurityPage),
+    route('/account/security', lazyRouteComponent(() => import('./pages/security'), 'SecurityPage')),
   ];
 }
-
-export { SecurityPage, LoginPage, ChallengePage, InvitePage };
-export { SecondFactorForm } from './pages/challenge';

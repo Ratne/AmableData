@@ -4,7 +4,7 @@ import type {
   BillingWallet,
   ServiceState,
 } from '@amable/api-types';
-import { formatDateTime, formatNumber, type Locale, type MessageKey } from '@amable/i18n';
+import { formatDateTime, formatNumber, type Locale, type MessageKey } from '@amable/i18n/client';
 import { PageBody, usePageChrome } from '@amable/ui';
 import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
 import { Button } from '@amable/ui/ui/button';

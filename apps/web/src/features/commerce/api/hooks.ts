@@ -1,5 +1,5 @@
 import type { Permission } from '@amable/core';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 import { useI18n } from '../../../i18n';
@@ -9,6 +9,7 @@ import {
   REFERENCE_STALE_MS,
   useApiMutation,
   useGrantedPermissions,
+  useTenantMeQuery,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { formatMoney } from '../../../lib/money';
@@ -18,7 +19,6 @@ import { commerceClient, type CommerceClient } from './client';
 /** Every commerce query of a tenant lives under ['commerce', slug, …]. */
 export const commerceKeys = {
   root: (slug: string) => ['commerce', slug] as const,
-  me: (slug: string) => ['commerce', slug, 'me'] as const,
   settings: (slug: string) => ['commerce', slug, 'settings'] as const,
   categories: (slug: string) => ['commerce', slug, 'categories'] as const,
   products: (slug: string) => ['commerce', slug, 'products'] as const,
@@ -52,13 +52,8 @@ export function useCommerce(): { slug: string; api: CommerceClient } {
 
 /** Active membership: tenant, role and permissions (`GET /api/t/:slug/me`). */
 export function useTenantMe() {
-  const { slug, api } = useCommerce();
-  return useQuery({
-    queryKey: commerceKeys.me(slug),
-    queryFn: () => api.me(),
-    staleTime: REFERENCE_STALE_MS,
-    retry: false,
-  });
+  const { slug } = useCommerce();
+  return useTenantMeQuery(slug);
 }
 
 /**

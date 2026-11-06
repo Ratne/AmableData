@@ -18,7 +18,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../api';
-import { formatDateTime } from '../components';
+import { formatDateTime } from '../format';
 
 const REASON_KEYS: Readonly<Record<SuppressionReason, MessageKey>> = {
   unsubscribe: 'email.suppressions.reason.unsubscribe',

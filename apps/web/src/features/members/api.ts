@@ -43,7 +43,6 @@ export function membersApi(slug: string) {
   const send = <T>(method: string, path: string, body?: unknown) =>
     apiFetch<T>(`${base}${path}`, { method, body: JSON.stringify(body ?? {}) });
   return {
-    me: () => apiFetch<TenantMe>(`${base}/me`),
     members: () => apiFetch<{ members: Member[] }>(`${base}/members`),
     changeRole: (userId: string, role: Role) =>
       send<{ ok: true }>('PATCH', `/members/${encodeURIComponent(userId)}`, { role }),
@@ -63,7 +62,6 @@ export function membersApi(slug: string) {
 }
 
 export const memberKeys = {
-  me: (slug: string) => ['members', slug, 'me'] as const,
   members: (slug: string) => ['members', slug, 'list'] as const,
   invites: (slug: string) => ['members', slug, 'invites'] as const,
   audit: (slug: string) => ['members', slug, 'audit'] as const,

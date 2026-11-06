@@ -1,4 +1,4 @@
-import { LOCALES, THEMES, type Locale, type Theme } from '@amable/i18n';
+import { LOCALES, THEMES, type Locale, type Theme } from '@amable/i18n/client';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { isStepUpRequired } from '../../../lib/step-up';
 import { authApi, currentLocale, errorMessage, useT, type ChallengeState } from '../api';

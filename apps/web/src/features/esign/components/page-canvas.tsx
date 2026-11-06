@@ -1,7 +1,7 @@
 import type { EsignField, EsignFieldType, EsignPage, EsignParty } from '@amable/api-types';
 import { cn } from '@amable/ui';
 import { Calendar, CalendarCheck, CircleDot, Hash, ImageIcon, List, PenLine, Signature, SquareCheck, Type, type LucideIcon } from 'lucide-react';
-import { useRef, type DragEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useRef, type DragEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useI18n } from '../../../i18n';
 import { clamp, MIN_SIZE, partyColor, round } from '../lib/fields';
 
@@ -26,8 +26,9 @@ type Mode = 'move' | 'resize';
 /**
  * One page of the template with its fields. Geometry is normalized to the
  * page (0..1), so the overlay works at whatever width the page is shown.
+ * Memoized: editing a field re-renders only the page that holds it.
  */
-export function PageCanvas({
+export const PageCanvas = memo(function PageCanvas({
   page,
   imageUrl,
   fields,
@@ -173,4 +174,4 @@ export function PageCanvas({
       })}
     </div>
   );
-}
+});

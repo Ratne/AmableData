@@ -1,4 +1,4 @@
-import { LiquidHelperProvider, type LiquidHelperSlot } from '@amable/editor';
+import { LiquidHelperProvider, type LiquidHelperSlot } from '@amable/editor/liquid-slot';
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { useI18n } from '../../../i18n';
 

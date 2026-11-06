@@ -1,5 +1,5 @@
 import type { IdeaStatus, TicketCategory, TicketStatus } from '@amable/core/platform';
-import { formatDateTime, type MessageKey } from '@amable/i18n';
+import { formatDateTime, type MessageKey } from '@amable/i18n/client';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useI18n } from '../../i18n';

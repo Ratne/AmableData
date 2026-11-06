@@ -1,5 +1,5 @@
 import type { Permission } from '@amable/core';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
@@ -9,6 +9,7 @@ import {
   REFERENCE_STALE_MS,
   useApiMutation,
   useGrantedPermissions,
+  useTenantMeQuery,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { bookingClient, type BookingClient } from './client';
@@ -16,7 +17,6 @@ import { bookingClient, type BookingClient } from './client';
 /** Every booking query of a tenant lives under ['booking', slug, …]. */
 export const bookingKeys = {
   root: (slug: string) => ['booking', slug] as const,
-  me: (slug: string) => ['booking', slug, 'me'] as const,
   calendars: (slug: string) => ['booking', slug, 'calendars'] as const,
   calendarSync: (slug: string, calendarId: string) =>
     ['booking', slug, 'calendars', calendarId, 'sync'] as const,
@@ -37,13 +37,8 @@ export function useBooking(): { slug: string; api: BookingClient } {
 
 /** Permissions of the active membership; actions stay hidden until known (the server enforces them). */
 export function usePermissions(): { can: (permission: Permission) => boolean; ready: boolean } {
-  const { slug, api } = useBooking();
-  const me = useQuery({
-    queryKey: bookingKeys.me(slug),
-    queryFn: () => api.me(),
-    staleTime: REFERENCE_STALE_MS,
-    retry: false,
-  });
+  const { slug } = useBooking();
+  const me = useTenantMeQuery(slug);
   return useGrantedPermissions(me.data);
 }
 

@@ -10,6 +10,7 @@ import {
   useGrantedPermissions,
   type ApiErrorMessages,
   type ApiMutationOptions,
+  useTenantMeQuery,
 } from '../../../lib/feature-hooks';
 import { tenantRoute } from '../../../routes/tenant';
 import { shortlinksClient, type ShortlinksClient } from './client';
@@ -17,7 +18,6 @@ import { shortlinksClient, type ShortlinksClient } from './client';
 /** Every short link query of a tenant lives under ['shortlinks', slug, …]. */
 export const shortlinkKeys = {
   root: (slug: string) => ['shortlinks', slug] as const,
-  me: (slug: string) => ['shortlinks', slug, 'me'] as const,
   links: (slug: string, archived: boolean) => ['shortlinks', slug, 'links', archived] as const,
   folders: (slug: string) => ['shortlinks', slug, 'folders'] as const,
   domains: (slug: string) => ['shortlinks', slug, 'domains'] as const,
@@ -31,13 +31,8 @@ export function useShortlinks(): { slug: string; api: ShortlinksClient } {
 }
 
 export function useShortlinkPermissions(): { can: (permission: Permission) => boolean; ready: boolean } {
-  const { slug, api } = useShortlinks();
-  const me = useQuery({
-    queryKey: shortlinkKeys.me(slug),
-    queryFn: () => api.me(),
-    staleTime: REFERENCE_STALE_MS,
-    retry: false,
-  });
+  const { slug } = useShortlinks();
+  const me = useTenantMeQuery(slug);
   return useGrantedPermissions(me.data);
 }
 

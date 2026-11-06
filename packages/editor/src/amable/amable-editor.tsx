@@ -22,7 +22,8 @@ import { Toolbar, ToolbarGroup, ToolbarSeparator } from '../components/tiptap-ui
 import { createExtensions, type UploadImage } from './extensions';
 import type { LiquidFieldGroup } from './fields';
 import { DEFAULT_EDITOR_LABELS, type EditorLabels } from './labels';
-import { documentLiquidSource, insertLiquid, useLiquidHelperSlot, type LiquidHelperHost } from './liquid-helper';
+import { documentLiquidSource, insertLiquid } from './liquid-helper';
+import { useLiquidHelperSlot, type LiquidHelperHost } from './liquid-slot';
 import { InsertMenu } from './ui/insert-menu';
 
 import '../styles/_variables.scss';

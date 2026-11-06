@@ -72,6 +72,9 @@ interface Draft {
   readonly settings: EsignSettings;
 }
 
+const NO_FIELDS: readonly EsignField[] = [];
+
+
 function draftOf(template: EsignTemplate): Draft {
   return {
     name: template.name,
@@ -188,13 +191,40 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
     },
     [update],
   );
-  const place = (type: EsignFieldType, page: EsignPage, cx: number, cy: number) => {
-    if (party === undefined) return;
-    const field = newField(type, party.id, page, cx, cy);
-    update((current) => ({ fields: [...current.fields, field] }));
-    setSelectedId(field.id);
-    setArmed(null);
-  };
+  const place = useCallback(
+    (type: EsignFieldType, page: EsignPage, cx: number, cy: number) => {
+      if (party === undefined) return;
+      const field = newField(type, party.id, page, cx, cy);
+      update((current) => ({ fields: [...current.fields, field] }));
+      setSelectedId(field.id);
+      setArmed(null);
+    },
+    [party, update],
+  );
+  const pageFields = useRef(new Map<number, readonly EsignField[]>());
+  const fieldsByPage = useMemo(() => {
+    const next = new Map<number, EsignField[]>();
+    for (const field of draft.fields) {
+      const list = next.get(field.page);
+      if (list === undefined) next.set(field.page, [field]);
+      else list.push(field);
+    }
+    // Keep the previous array of untouched pages so their memoized canvas skips the render.
+    const stable = new Map<number, readonly EsignField[]>();
+    for (const [index, list] of next) {
+      const previous = pageFields.current.get(index);
+      stable.set(
+        index,
+        previous !== undefined &&
+          previous.length === list.length &&
+          previous.every((f, i) => f === list[i])
+          ? previous
+          : list,
+      );
+    }
+    pageFields.current = stable;
+    return stable;
+  }, [draft.fields]);
 
   // Keyboard: delete, nudge with the arrows (Shift: bigger steps), Escape to deselect.
   useEffect(() => {
@@ -495,7 +525,7 @@ function TemplateEditor({ template: initial }: { template: EsignTemplate }) {
                           )
                         : null
                     }
-                    fields={draft.fields.filter((f) => f.page === page.index)}
+                    fields={fieldsByPage.get(page.index) ?? NO_FIELDS}
                     parties={draft.parties}
                     selectedId={selectedId}
                     armed={armed}

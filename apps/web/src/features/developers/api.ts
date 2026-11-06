@@ -1,8 +1,9 @@
-import type { Permission, Role } from '@amable/core';
+import type { Permission } from '@amable/core';
 import { toast } from '@amable/ui';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { ApiError, apiFetch } from '../../lib/api';
+import { useTenantMeQuery } from '../../lib/feature-hooks';
 
 export interface ApiKey {
   readonly id: string;
@@ -95,7 +96,6 @@ export function developersApi(slug: string) {
   const post = <T>(path: string, body: unknown = {}) =>
     apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) });
   return {
-    me: () => apiFetch<{ role: Role; permissions: Permission[] }>(`${admin}/me`),
     apiKeys: {
       list: () => apiFetch<{ apiKeys: ApiKey[] }>(`${admin}/api-keys`),
       create: (input: { name: string; scopes: Permission[] }) =>
@@ -135,7 +135,6 @@ export type DevelopersApi = ReturnType<typeof developersApi>;
 
 export const devKeys = {
   root: (slug: string) => ['developers', slug] as const,
-  me: (slug: string) => ['developers', slug, 'me'] as const,
   apiKeys: (slug: string) => ['developers', slug, 'api-keys'] as const,
   webhooks: (slug: string) => ['developers', slug, 'webhooks'] as const,
   eventTypes: (slug: string) => ['developers', slug, 'event-types'] as const,
@@ -151,8 +150,8 @@ export function useDevelopersApi(): { slug: string; api: DevelopersApi } {
 }
 
 export function useTenantAccess() {
-  const { slug, api } = useDevelopersApi();
-  const me = useQuery({ queryKey: devKeys.me(slug), queryFn: api.me, staleTime: 60_000 });
+  const { slug } = useDevelopersApi();
+  const me = useTenantMeQuery(slug);
   const set = new Set(me.data?.permissions ?? []);
   return {
     role: me.data?.role ?? null,
