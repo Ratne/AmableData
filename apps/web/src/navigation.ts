@@ -51,6 +51,7 @@ import {
   TrendingUp,
   Users,
   Wallet,
+  Waypoints,
   Webhook,
   Workflow,
   type LucideIcon,
@@ -173,6 +174,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         labelKey: 'nav.landingPages',
         icon: LayoutTemplate,
         permission: 'pages:read',
+      },
+      {
+        id: 'shortlinks',
+        path: 'shortlinks',
+        labelKey: 'nav.shortlinks',
+        icon: Waypoints,
+        permission: 'shortlinks:read',
       },
       {
         id: 'bookings',

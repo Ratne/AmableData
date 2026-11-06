@@ -56,3 +56,6 @@ export * from './esign/index';
 
 /** Event archive: old timeline events, submissions and email messages kept in R2. */
 export * from './archive/index';
+
+/** Short links on dedicated domains: links, folders, click statistics, edge gateway ops. */
+export * from './shortlinks/index';

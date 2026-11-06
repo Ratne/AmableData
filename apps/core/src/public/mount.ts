@@ -5,13 +5,15 @@ import { registerFormsRoutes } from '../forms/api';
 import { registerEsignRoutes } from '../esign/api';
 import { requireAuth, requireTenant, type AppEnv } from '../middleware';
 import { registerPagesRoutes } from '../pages/api';
+import { registerShortlinksRoutes } from '../shortlinks/api';
 
-/** Forms, calendars & bookings, landing pages and e-signatures REST v2, relative to `/api/v2/t/{slug}`. */
+/** Forms, calendars & bookings, landing pages, e-signatures and short links REST v2, relative to `/api/v2/t/{slug}`. */
 export const publishingApi = createCrmRouter();
 registerFormsRoutes(publishingApi);
 registerBookingRoutes(publishingApi);
 registerPagesRoutes(publishingApi);
 registerEsignRoutes(publishingApi);
+registerShortlinksRoutes(publishingApi);
 
 publishingApi.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
   type: 'http',
@@ -29,10 +31,10 @@ export function publishingOpenApiDocument(): ReturnType<typeof publishingApi.get
   return publishingApi.getOpenAPI31Document({
     openapi: '3.1.0',
     info: {
-      title: 'amabledata forms, bookings, landing pages & signatures API',
+      title: 'amabledata forms, bookings, landing pages, signatures & short links API',
       version: '2.0.0',
       description:
-        'Forms (submissions, connections), calendars and bookings, landing pages (versions, publish, saved sections, media), e-signature templates and requests. Same authentication, permissions (`x-amable-permission`), pagination and idempotency rules as the CRM API.',
+        'Forms (submissions, connections), calendars and bookings, landing pages (versions, publish, saved sections, media), e-signature templates and requests, short links (folders, click statistics). Same authentication, permissions (`x-amable-permission`), pagination and idempotency rules as the CRM API.',
     },
     servers: [{ url: '/api/v2/t/{slug}', variables: { slug: { default: 'demo' } } }],
   });

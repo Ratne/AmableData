@@ -42,6 +42,9 @@ export const PERMISSIONS = [
   'pages:read',
   'pages:write',
   'pages:publish',
+  // Short links (dedicated shortlink domains, folders, click statistics)
+  'shortlinks:read',
+  'shortlinks:write',
   // Calendars & bookings
   'booking:read',
   /** Calendars, event types and availability. */
@@ -119,6 +122,7 @@ const READ_ALL: readonly Permission[] = [
   'forms:read',
   'forms:submissions_read',
   'pages:read',
+  'shortlinks:read',
   'booking:read',
   'esign:read',
   'conversations:read',
@@ -178,6 +182,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'pages:read',
     'pages:write',
     'pages:publish',
+    'shortlinks:read',
+    'shortlinks:write',
     'booking:read',
     'booking:write',
     'booking:manage_bookings',

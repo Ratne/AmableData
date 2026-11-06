@@ -6,13 +6,13 @@ import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amable/ui/ui/table';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Circle, Cloud, Globe, Link2, Mail, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Circle, Cloud, Globe, Link2, Mail, ShieldCheck, Trash2, TriangleAlert, Waypoints } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { apiErrorCode, devKeys, useDevelopersApi, useDevMutation, useTenantAccess, type DomainKind, type TenantDomain } from '../api';
 import { CopyButton, formatDateTime, Pill, SendingDomainBanner, useStepUp } from '../components';
 
-const KIND_ICON = { sending: Mail, tracking: Link2, app: Globe } as const;
+const KIND_ICON = { sending: Mail, tracking: Link2, app: Globe, shortlink: Waypoints } as const;
 
 function Step({ done, label }: { done: boolean; label: string }) {
   return (
@@ -194,8 +194,8 @@ export function DomainsPage() {
             {t(`dev.domains.automation.${automation}`)}
             {list ? ` ${t('dev.domains.edgeHost', { host: list.edge_hostname })}` : ''}
           </p>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {(['sending', 'tracking', 'app'] as const).map((k) => {
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {(['sending', 'tracking', 'app', 'shortlink'] as const).map((k) => {
               const Icon = KIND_ICON[k];
               return (
                 <button
@@ -226,7 +226,15 @@ export function DomainsPage() {
                 id="domain-host"
                 value={hostname}
                 onChange={(e) => setHostname(e.target.value)}
-                placeholder={kind === 'sending' ? 'mail.example.com' : kind === 'tracking' ? 'links.example.com' : 'www.example.com'}
+                placeholder={
+                  kind === 'sending'
+                    ? 'mail.example.com'
+                    : kind === 'tracking'
+                      ? 'links.example.com'
+                      : kind === 'shortlink'
+                        ? 'go.example.com'
+                        : 'www.example.com'
+                }
               />
             </div>
             {kind === 'app' ? (

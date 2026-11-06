@@ -7,6 +7,7 @@ import {
   EDGE_GATEWAY_RAW_PATH,
   EDGE_GATEWAY_SIGNATURE_HEADER,
   EDGE_GATEWAY_TOLERANCE_SECONDS,
+  SHORTLINK_HOST_GATEWAY_OP,
   type GatewayClientInfo,
   type GatewayResponse,
   type GatewayTenantInfo,
@@ -30,6 +31,7 @@ import {
   pagesGatewayRawHandlers,
 } from '../pages/gateway';
 import { reportError } from '../platform/telemetry';
+import { findShortlinkHost, shortlinksGatewayHandlers } from '../shortlinks/gateway';
 import {
   createGatewayContext,
   GatewayError,
@@ -53,6 +55,7 @@ const handlers: GatewayHandlers = {
   ...pagesGatewayHandlers,
   ...esignGatewayHandlers,
   ...checkoutGatewayHandlers,
+  ...shortlinksGatewayHandlers,
 };
 const rawHandlers: GatewayRawHandlers = {
   ...formsGatewayRawHandlers,
@@ -142,7 +145,7 @@ export async function resolveTenant(env: Env, ref: GatewayTenantRef): Promise<Ga
       : await env.DB.prepare(
           `SELECT t.id AS id, t.slug AS slug, t.name AS name
            FROM domains d JOIN tenants t ON t.id = d.tenant_id
-           WHERE d.hostname = ? AND (d.status = 'verified' OR ? = 'dev')`,
+           WHERE d.hostname = ? AND d.kind != 'shortlink' AND (d.status = 'verified' OR ? = 'dev')`,
         )
           .bind(ref.host.toLowerCase(), env.ENVIRONMENT ?? '')
           .first<GatewayTenantInfo>();
@@ -178,6 +181,14 @@ async function trackingHost(env: Env, ref: GatewayTenantRef): Promise<Response> 
   const found = 'host' in ref ? await findTrackingHost(env.DB, ref.host) : null;
   if (found === null) return failure(new GatewayError(404, 'not_found', 'tracking domain not found'));
   return reply({ ok: true, tenant: found.tenant, value: { site_id: found.site_id } });
+}
+
+/** Shortlink domains answer every path with links: resolved before (and instead of) `resolveTenant`. */
+async function shortlinkHost(env: Env, ref: GatewayTenantRef): Promise<Response> {
+  await ensureInstallationMigrated(env.DB);
+  const found = 'host' in ref ? await findShortlinkHost(env, ref.host) : null;
+  if (found === null) return failure(new GatewayError(404, 'not_found', 'shortlink domain not found'));
+  return reply({ ok: true, tenant: found.tenant, value: { domainId: found.domainId } });
 }
 
 /** Ad platform token for the edge outbound queue: the tenant travels in the input, not in the envelope. */
@@ -246,6 +257,7 @@ export async function handleEdgeGateway(
   }
   if (!raw && op === EDGE_ERROR_REPORT_OP) return reportEdgeError(env, executionCtx, input);
   if (!raw && op === TRACKING_HOST_GATEWAY_OP) return trackingHost(env, ref);
+  if (!raw && op === SHORTLINK_HOST_GATEWAY_OP) return shortlinkHost(env, ref);
   if (!raw && op === ADS_TOKEN_GATEWAY_OP) return adsToken(env, input);
   if (!raw && op === PAGE_PUBLIC_URL_GATEWAY_OP) return pagePublicUrl(env, executionCtx, client, input);
   const handler = raw ? rawHandlers[op] : handlers[op];

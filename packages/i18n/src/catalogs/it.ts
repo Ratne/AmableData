@@ -18,6 +18,7 @@ import { foldersIt } from './folders-it';
 import { billingIt } from './billing-it';
 import { membersIt } from './members-it';
 import { generalIt } from './general-it';
+import { shortlinksIt } from './shortlinks-it';
 import type { MessageKey } from './en';
 
 /** Italian catalog — must cover every key of the English catalog. */
@@ -42,6 +43,7 @@ export const it: Readonly<Record<MessageKey, string>> = {
   ...billingIt,
   ...membersIt,
   ...generalIt,
+  ...shortlinksIt,
   'common.appName': 'amabledata',
   'common.loading': 'Caricamento…',
   'common.error': 'Qualcosa è andato storto',

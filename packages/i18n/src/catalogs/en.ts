@@ -18,6 +18,7 @@ import { foldersEn } from './folders-en';
 import { billingEn } from './billing-en';
 import { membersEn } from './members-en';
 import { generalEn } from './general-en';
+import { shortlinksEn } from './shortlinks-en';
 
 /** English catalog — the default language and the source of truth for message keys. */
 export const en = {
@@ -41,6 +42,7 @@ export const en = {
   ...billingEn,
   ...membersEn,
   ...generalEn,
+  ...shortlinksEn,
   'common.appName': 'amabledata',
   'common.loading': 'Loading…',
   'common.error': 'Something went wrong',

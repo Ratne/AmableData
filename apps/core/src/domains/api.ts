@@ -1,5 +1,5 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi';
-import { createCrmRouter, crmRoute, json, jsonBody } from '../crm/api/core';
+import { callCrm, createCrmRouter, crmRoute, json, jsonBody } from '../crm/api/core';
 import { sendingState } from '../email/runtime';
 import { audit, getTenant, handleError, type AppEnv } from '../middleware';
 import { domainService, edgeHostname } from './runtime';
@@ -13,7 +13,7 @@ const domainSchema = z
   .object({
     id: z.string(),
     hostname: z.string(),
-    kind: z.enum(['sending', 'tracking', 'app']),
+    kind: z.enum(['sending', 'tracking', 'app', 'shortlink']),
     status: z.enum(['pending', 'verified', 'failed']),
     records: z.array(recordSchema).describe('DNS records to create on the zone (manual mode)'),
     paths: z.array(z.string()).describe('Site only: landing paths served on an existing hostname'),
@@ -39,7 +39,7 @@ const listSchema = z.object({
 
 const createSchema = z
   .strictObject({
-    kind: z.enum(['sending', 'tracking', 'app']),
+    kind: z.enum(['sending', 'tracking', 'app', 'shortlink']),
     hostname: z.string().min(4).max(253),
     paths: z.array(z.string().max(64)).max(10).optional(),
   })
@@ -114,7 +114,7 @@ export function registerDomainRoutes(app: OpenAPIHono<AppEnv>): void {
       tags,
       summary: 'Connect a domain',
       description:
-        '`sending`: registered with the email provider, returns its SPF / DKIM / DMARC records. `tracking`: click / open / tracker hostname (CNAME or Workers custom domain to the edge). `app`: landing pages and booking pages on a hostname — whole host, or only `paths` of an existing site via Workers Routes.',
+        '`sending`: registered with the email provider, returns its SPF / DKIM / DMARC records. `tracking`: click / open / tracker hostname (CNAME or Workers custom domain to the edge). `app`: landing pages and booking pages on a hostname — whole host, or only `paths` of an existing site via Workers Routes. `shortlink`: dedicated short link hostname (`go.example.com/<key>`), every path answered by the edge with the link redirect.',
       request: { body: jsonBody(createSchema) },
       responses: { 201: json(domainSchema, 'The connected domain') },
     }, { stepUp: true }),
@@ -169,12 +169,14 @@ export function registerDomainRoutes(app: OpenAPIHono<AppEnv>): void {
       path: '/domains/{id}',
       tags,
       summary: 'Disconnect a domain',
+      description: 'Disconnecting a `shortlink` domain deletes its short links.',
       request: { params: idParam },
       responses: { 200: json(z.object({ ok: z.literal(true) }), 'Removed') },
     }, { stepUp: true }),
     async (c) => {
       const { id } = c.req.valid('param');
-      await domainService(c.env).remove(getTenant(c).tenant.id, id);
+      const removed = await domainService(c.env).remove(getTenant(c).tenant.id, id);
+      if (removed.kind === 'shortlink') await callCrm(c, 'shortlinks.domain_deleted', { domainId: removed.id });
       await audit(c, 'domain.removed', { target: id });
       return c.json({ ok: true as const }, 200);
     },

@@ -1,7 +1,7 @@
 import { EmailProviderError, type DnsRecord, type EmailMarketingProvider } from '@amable/core';
 import { ZoneAutomationError, type ZoneAutomation } from './zone';
 
-export type DomainKind = 'sending' | 'tracking' | 'app';
+export type DomainKind = 'sending' | 'tracking' | 'app' | 'shortlink';
 export type DomainStatus = 'pending' | 'verified' | 'failed';
 
 /** Edge paths a site on the customer's own hostname needs besides its landing paths. */
@@ -196,8 +196,11 @@ export class DomainService {
       if (paths.length > MAX_SITE_PATHS) throw new DomainError(422, 'invalid_path', 'too many paths');
     }
     const taken = await this.deps.db
-      .prepare(`SELECT tenant_id FROM domains WHERE hostname = ?`)
-      .bind(hostname)
+      .prepare(
+        `SELECT tenant_id FROM domains WHERE hostname = ?
+         UNION ALL SELECT tenant_id FROM tracking_domains WHERE hostname = ? LIMIT 1`,
+      )
+      .bind(hostname, hostname)
       .first<{ tenant_id: string }>();
     if (taken !== null) throw new DomainError(409, 'hostname_taken', 'hostname already connected');
 
@@ -258,7 +261,7 @@ export class DomainService {
     return this.toDomain(await this.row(tenantId, id));
   }
 
-  /** Checks a domain: provider verification (sending) or an edge probe (tracking / site). */
+  /** Checks a domain: provider verification (sending) or an edge probe (tracking / site / shortlink). */
   async verify(tenantId: string, id: string): Promise<TenantDomain> {
     const row = await this.row(tenantId, id);
     const now = this.deps.now();
@@ -287,7 +290,8 @@ export class DomainService {
     return this.toDomain(await this.row(tenantId, id));
   }
 
-  async remove(tenantId: string, id: string): Promise<void> {
+  /** Returns the removed domain (callers cascade per kind, e.g. the short links of a shortlink domain). */
+  async remove(tenantId: string, id: string): Promise<TenantDomain> {
     const row = await this.row(tenantId, id);
     const removeDomain = this.deps.provider.removeDomain?.bind(this.deps.provider);
     if (row.kind === 'sending' && removeDomain !== undefined) {
@@ -298,6 +302,7 @@ export class DomainService {
       if (providerTenant !== null) await providerCall(() => removeDomain(row.hostname, providerTenant.value));
     }
     await this.deps.db.prepare(`DELETE FROM domains WHERE id = ? AND tenant_id = ?`).bind(id, tenantId).run();
+    return this.toDomain(row);
   }
 }
 

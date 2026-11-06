@@ -42,6 +42,7 @@ import { reportTenantOps } from '../reports/tenant-ops';
 import { appTenantOps } from '../apps/tenant-ops';
 import { conversationOps } from '../conversations/ops';
 import { esignOps } from '../esign/ops';
+import { shortlinksOps } from '../shortlinks/ops';
 
 function listContacts(ctx: CrmContext, input: ListContactsQuery): Page<Contact> {
   const result = executeSearch(
@@ -242,6 +243,8 @@ export const crmOps = {
   ...conversationOps,
   // electronic signatures (apps/core/src/esign)
   ...esignOps,
+  // short links on dedicated domains (apps/core/src/shortlinks)
+  ...shortlinksOps,
 } satisfies Record<string, (ctx: CrmContext, input: never) => unknown>;
 
 export type CrmOps = typeof crmOps;

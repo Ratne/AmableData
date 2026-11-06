@@ -13,6 +13,7 @@ import { esignEdgeRoutes } from './esign/routes';
 import type { Env } from './env';
 import { reportEdgeError, withEdgeErrorReporting } from './errors';
 import { httpsRedirect } from './https';
+import { shortlinkHostMiddleware } from './shortlinks/redirect';
 
 export type { Env } from './env';
 export { AnalyticsDO } from './analytics/do';
@@ -49,6 +50,9 @@ app.use('*', async (c, next) => {
     c.res = copy;
   }
 });
+
+/** Dedicated shortlink hostnames: `/<key>` redirects, everything else 404 (`/health` passes). */
+app.use('*', shortlinkHostMiddleware);
 
 /** Web analytics: `POST /e`, `POST /e/server`, tracker scripts `/s.js` and variants. */
 app.use('/e', directLinkViews);

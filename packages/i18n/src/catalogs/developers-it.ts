@@ -108,7 +108,9 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.domains.kind.app': 'Sito landing e prenotazioni',
   'dev.domains.kindHelp.sending': 'Necessario prima di inviare qualsiasi email marketing (SPF, DKIM, DMARC).',
   'dev.domains.kindHelp.tracking': 'Il tuo hostname per i link tracciati di click/aperture e per il tracker web.',
+  'dev.domains.kind.shortlink': 'Short link',
   'dev.domains.kindHelp.app': 'Landing page e pagine di prenotazione sul tuo hostname, o su alcuni percorsi del tuo sito.',
+  'dev.domains.kindHelp.shortlink': "Hostname dedicato ai link brevi (go.example.com/promo) con QR code e statistiche dei click.",
   'dev.domains.hostname': 'Hostname',
   'dev.domains.paths': 'Percorsi (facoltativi)',
   'dev.domains.pathsHelp':
@@ -141,6 +143,7 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.domains.help.sending': "Crea questi record sulla zona, poi verifica. L'invio resta bloccato finché il dominio non è verificato.",
   'dev.domains.help.tracking': "Punta l'hostname al worker edge (CNAME, o dominio personalizzato Workers se automatico), poi verifica.",
   'dev.domains.help.app': "Punta l'hostname al worker edge; le landing pubblicate rispondono sul loro percorso.",
+  'dev.domains.help.shortlink': "Punta l'hostname al worker edge (CNAME, o dominio personalizzato Workers se automatico), poi verifica: ogni percorso risponde con i tuoi short link. Scollegandolo i suoi link vengono eliminati.",
   'dev.domains.help.paths': 'Queste Workers Routes mandano i percorsi indicati del tuo sito al worker edge.',
   'dev.domains.type': 'Tipo',
   'dev.domains.name': 'Nome',

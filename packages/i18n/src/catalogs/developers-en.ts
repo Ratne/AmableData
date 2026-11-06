@@ -106,7 +106,9 @@ export const developersEn = {
   'dev.domains.kind.app': 'Landing & booking site',
   'dev.domains.kindHelp.sending': 'Required before any marketing email can be sent (SPF, DKIM, DMARC).',
   'dev.domains.kindHelp.tracking': 'Your own hostname for click/open tracking links and the web tracker.',
+  'dev.domains.kind.shortlink': 'Short links',
   'dev.domains.kindHelp.app': 'Landing pages and booking pages on your hostname, or on some paths of your site.',
+  'dev.domains.kindHelp.shortlink': "Dedicated hostname for short links (go.example.com/promo) with QR codes and click stats.",
   'dev.domains.hostname': 'Hostname',
   'dev.domains.paths': 'Paths (optional)',
   'dev.domains.pathsHelp':
@@ -139,6 +141,7 @@ export const developersEn = {
   'dev.domains.help.sending': 'Create these records on the zone, then verify. Sending stays blocked until the domain is verified.',
   'dev.domains.help.tracking': 'Point the hostname at the edge worker (CNAME, or a Workers custom domain when automated), then verify.',
   'dev.domains.help.app': 'Point the hostname at the edge worker; published landing pages answer on their path.',
+  'dev.domains.help.shortlink': "Point the hostname at the edge worker (CNAME, or a Workers custom domain when automated), then verify: every path answers with your short links. Disconnecting it deletes its links.",
   'dev.domains.help.paths': 'These Workers Routes send the listed paths of your site to the edge worker.',
   'dev.domains.type': 'Type',
   'dev.domains.name': 'Name',

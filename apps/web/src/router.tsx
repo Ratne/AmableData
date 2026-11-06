@@ -20,6 +20,7 @@ import { developerPublicRoutes, developerRoutes } from './features/developers/ro
 import { emailRoutes } from './features/email/routes';
 import { bookingRoutes } from './features/booking/routes';
 import { esignRoutes } from './features/esign/routes';
+import { shortlinksRoutes } from './features/shortlinks/routes';
 import { formsRoutes } from './features/forms/routes';
 import { integrationsRoutes } from './features/integrations/routes';
 import { landingRoutes } from './features/landing/routes';
@@ -105,6 +106,7 @@ const featureRoutes = [
   ...formsRoutes,
   ...bookingRoutes,
   ...esignRoutes,
+  ...shortlinksRoutes,
   ...landingRoutes,
   ...commerceRoutes,
   ...emailRoutes,

@@ -57,7 +57,7 @@ export interface DnsRecord {
   readonly value: string;
 }
 
-export type DomainKind = 'sending' | 'tracking' | 'app';
+export type DomainKind = 'sending' | 'tracking' | 'app' | 'shortlink';
 
 export interface TenantDomain {
   readonly id: string;
