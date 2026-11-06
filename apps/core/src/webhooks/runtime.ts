@@ -27,6 +27,9 @@ export function webhookDeps(env: Env): WebhookDeps {
         delaySeconds === undefined ? undefined : { delaySeconds },
       );
     },
+    enqueueMany: async (messages) => {
+      await env.WEBHOOKS_OUT.sendBatch(messages.map((body) => ({ body })));
+    },
     fetch: (input, init) => fetch(input, init),
     now: () => Date.now(),
     newId: () => nextId(),
@@ -37,7 +40,10 @@ export function webhookDeps(env: Env): WebhookDeps {
       if (install !== null) await pauseInstall(env, install, 'webhook_endpoint_disabled', Date.now());
     },
   };
-  return override === null ? base : override(base, env);
+  if (override === null) return base;
+  const deps = override(base, env);
+  // A replaced `enqueue` must also receive the batched messages.
+  return deps.enqueue === base.enqueue ? deps : { ...deps, enqueueMany: undefined };
 }
 
 export function webhookService(env: Env): WebhookService {

@@ -53,12 +53,17 @@ class ShimStatement {
 
   execute() {
     const stmt = this.db.prepare(this.sql);
-    if (/\bRETURNING\b/i.test(this.sql)) {
-      const rows = stmt.all(...this.params);
-      return { success: true as const, meta: { changes: rows.length, last_row_id: 0 } };
+    if (/\bRETURNING\b/i.test(this.sql) || /^\s*(SELECT|WITH)\b/i.test(this.sql)) {
+      const rows = (stmt.all(...this.params) as Record<string, unknown>[]).map((r) => ({ ...r }));
+      return {
+        results: rows,
+        success: true as const,
+        meta: { changes: /\bRETURNING\b/i.test(this.sql) ? rows.length : 0, last_row_id: 0 },
+      };
     }
     const result = stmt.run(...this.params);
     return {
+      results: [] as Record<string, unknown>[],
       success: true as const,
       meta: { changes: Number(result.changes), last_row_id: Number(result.lastInsertRowid) },
     };

@@ -303,10 +303,27 @@ function setFolderDomains(ctx: CrmContext, folderId: string, domainIds: readonly
 }
 
 export function listFolders(ctx: CrmContext, _input: Record<string, never>): { data: ShortlinkFolder[] } {
-  const rows = ctx.db.all<{ id: string; name: string; created_at: number }>(
-    `SELECT id, name, created_at FROM short_link_folders ORDER BY name COLLATE NOCASE, id`,
+  const rows = ctx.db.all<{ id: string; name: string; created_at: number; link_count: number }>(
+    `SELECT f.id, f.name, f.created_at, (SELECT COUNT(*) FROM short_links l WHERE l.folder_id = f.id) AS link_count
+     FROM short_link_folders f ORDER BY f.name COLLATE NOCASE, f.id`,
   );
-  return { data: rows.map((row) => serializeFolder(ctx, row)) };
+  const domains = new Map<string, string[]>();
+  for (const r of ctx.db.all<{ folder_id: string; domain_id: string }>(
+    `SELECT folder_id, domain_id FROM short_link_folder_domains ORDER BY domain_id`,
+  )) {
+    const list = domains.get(r.folder_id);
+    if (list === undefined) domains.set(r.folder_id, [r.domain_id]);
+    else list.push(r.domain_id);
+  }
+  return {
+    data: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      domain_ids: domains.get(row.id) ?? [],
+      link_count: row.link_count,
+      created_at: toIso(row.created_at),
+    })),
+  };
 }
 
 export function createFolder(ctx: CrmContext, input: CreateShortlinkFolderInput): ShortlinkFolder {
@@ -447,11 +464,16 @@ export function linkStats(ctx: CrmContext, input: { id: string; days: number }):
 
 /** Cascade of a removed (or re-kinded) shortlink domain. */
 export function domainDeleted(ctx: CrmContext, input: { domainId: string }): { deleted_links: number } {
-  const ids = ctx.db.all<{ id: string }>(`SELECT id FROM short_links WHERE domain_id = ?`, input.domainId);
-  for (const { id } of ids) ctx.db.run(`DELETE FROM short_link_clicks_daily WHERE link_id = ?`, id);
-  ctx.db.run(`DELETE FROM short_links WHERE domain_id = ?`, input.domainId);
+  ctx.db.run(
+    `DELETE FROM short_link_clicks_daily WHERE link_id IN (SELECT id FROM short_links WHERE domain_id = ?)`,
+    input.domainId,
+  );
+  const deleted = ctx.db.all<{ id: string }>(
+    `DELETE FROM short_links WHERE domain_id = ? RETURNING id`,
+    input.domainId,
+  );
   ctx.db.run(`DELETE FROM short_link_folder_domains WHERE domain_id = ?`, input.domainId);
-  return { deleted_links: ids.length };
+  return { deleted_links: deleted.length };
 }
 
 export const shortlinksOps = {

@@ -5,6 +5,7 @@ import {
   type AnalyticsNamespace,
   type ContactActivity,
 } from '@amable/app-edge/analytics';
+import { mapLimited } from '../concurrency';
 import type { CrmJourneyFacts } from './crm-ops';
 
 /**
@@ -15,6 +16,7 @@ import type { CrmJourneyFacts } from './crm-ops';
  */
 
 const DIRECT = 'Direct';
+const SITE_CONCURRENCY = 6;
 const iso = (ts: number): string => new Date(ts).toISOString();
 
 type RawTouch = ContactActivity['touches'][number];
@@ -58,17 +60,23 @@ export async function contactJourney(
   limit: number,
 ): Promise<ContactJourney> {
   const tenant = tenantSitesStub(ns, tenantId);
-  const siteIds = await tenant.indexList();
-  const links = await tenant.visitorsOfContact(contactId);
-  const sites: ContactJourney['sites'] = [];
-  const activities: ContactActivity[] = [];
-  for (const id of siteIds) {
+  const [siteIds, links] = await Promise.all([
+    tenant.indexList(),
+    tenant.visitorsOfContact(contactId),
+  ]);
+  const perSite = await mapLimited(siteIds, SITE_CONCURRENCY, async (id) => {
     const stub = siteStub(ns, id);
     const record = await stub.getSite();
-    if (record === null || record.deleted || record.tenantId !== tenantId) continue;
-    sites.push({ site_id: id, name: record.site.name, currency: record.site.currency });
-    const activity = await stub.contactActivity(contactId, limit);
-    if (activity !== null) activities.push(activity);
+    if (record === null || record.deleted || record.tenantId !== tenantId) return null;
+    const site = { site_id: id, name: record.site.name, currency: record.site.currency };
+    return { site, activity: await stub.contactActivity(contactId, limit) };
+  });
+  const sites: ContactJourney['sites'] = [];
+  const activities: ContactActivity[] = [];
+  for (const entry of perSite) {
+    if (entry === null) continue;
+    sites.push(entry.site);
+    if (entry.activity !== null) activities.push(entry.activity);
   }
 
   const touches = activities.flatMap((a) => a.touches).sort((a, b) => a.ts - b.ts);

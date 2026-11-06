@@ -292,6 +292,20 @@ export async function findSessionByHash(db: D1Database, hash: string) {
   return raw === null ? null : mapSession(raw);
 }
 
+/** The session and its user in one round trip (the auth middleware's hot path). */
+export async function findSessionWithUser(db: D1Database, hash: string) {
+  const [sessions, users] = await db.batch([
+    db.prepare(`SELECT * FROM sessions WHERE id = ?`).bind(hash),
+    db.prepare(`SELECT * FROM users WHERE id = (SELECT user_id FROM sessions WHERE id = ?)`).bind(hash),
+  ]);
+  const session = (sessions?.results[0] as RawSession | undefined) ?? null;
+  const user = (users?.results[0] as RawUser | undefined) ?? null;
+  return {
+    session: session === null ? null : mapSession(session),
+    user: user === null ? null : mapUser(user),
+  };
+}
+
 export async function listSessions(db: D1Database, userId: string, now: number) {
   const result = await db
     .prepare(
@@ -688,6 +702,30 @@ export async function findTenantBySlug(db: D1Database, slug: string) {
     )
     .bind(slug, slug)
     .first<TenantRow>();
+}
+
+/** {@link findTenantBySlug} plus the role of `userId` there (`null`: not a member). */
+export async function findTenantWithRole(
+  db: D1Database,
+  slug: string,
+  userId: string | null,
+): Promise<{ tenant: TenantRow; role: Role | null } | null> {
+  const row = await db
+    .prepare(
+      `SELECT x.id, x.slug, x.name, m.role FROM (
+         SELECT id, slug, name FROM tenants WHERE slug = ?
+         UNION ALL
+         SELECT t.id, t.slug, t.name FROM tenant_slug_aliases a JOIN tenants t ON t.id = a.tenant_id WHERE a.slug = ?
+         LIMIT 1
+       ) x LEFT JOIN memberships m ON m.tenant_id = x.id AND m.user_id = ?`,
+    )
+    .bind(slug, slug, userId)
+    .first<TenantRow & { role: string | null }>();
+  if (row === null) return null;
+  return {
+    tenant: { id: row.id, slug: row.slug, name: row.name },
+    role: row.role !== null && isRole(row.role) ? row.role : null,
+  };
 }
 
 export async function findTenantById(db: D1Database, id: string) {

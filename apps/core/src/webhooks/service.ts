@@ -34,6 +34,8 @@ export const MAX_ENDPOINTS_PER_TENANT = 20;
 export const DELIVERY_RETENTION_MS = 30 * 24 * 3600 * 1000;
 const RESPONSE_SNIPPET_BYTES = 1024;
 const FANOUT_CHUNK = 20;
+/** D1 batch and Queues `sendBatch` limits stay well above this. */
+const INSERT_CHUNK = 50;
 
 export interface WebhookEvent {
   readonly id: string;
@@ -50,6 +52,8 @@ export interface WebhookDeps {
   readonly db: D1Database;
   readonly box: () => Promise<SecretBox>;
   readonly enqueue: (message: WebhookMessage, delaySeconds?: number) => Promise<void>;
+  /** Several messages in one call; falls back to `enqueue` one by one. */
+  readonly enqueueMany?: (messages: readonly WebhookMessage[]) => Promise<void>;
   readonly fetch: (input: string, init?: RequestInit) => Promise<Response>;
   readonly now: () => number;
   readonly newId: () => string;
@@ -370,14 +374,14 @@ export class WebhookService {
 
   async remove(tenantId: string, id: string): Promise<void> {
     await this.endpointRow(tenantId, id);
-    await this.deps.db
-      .prepare(`DELETE FROM webhook_deliveries WHERE endpoint_id = ? AND tenant_id = ?`)
-      .bind(id, tenantId)
-      .run();
-    await this.deps.db
-      .prepare(`DELETE FROM webhook_endpoints WHERE id = ? AND tenant_id = ?`)
-      .bind(id, tenantId)
-      .run();
+    await this.deps.db.batch([
+      this.deps.db
+        .prepare(`DELETE FROM webhook_deliveries WHERE endpoint_id = ? AND tenant_id = ?`)
+        .bind(id, tenantId),
+      this.deps.db
+        .prepare(`DELETE FROM webhook_endpoints WHERE id = ? AND tenant_id = ?`)
+        .bind(id, tenantId),
+    ]);
   }
 
   async rotateSecret(tenantId: string, id: string): Promise<{ secret: string }> {
@@ -485,7 +489,20 @@ export class WebhookService {
     payload: string;
     replayOf: string | null;
   }): Promise<boolean> {
-    const result = await this.deps.db
+    const result = await this.insertStatement(input).run();
+    return (result.meta.changes ?? 0) > 0;
+  }
+
+  private insertStatement(input: {
+    id: string;
+    tenantId: string;
+    endpointId: string;
+    eventId: string;
+    eventType: string;
+    payload: string;
+    replayOf: string | null;
+  }): D1PreparedStatement {
+    return this.deps.db
       .prepare(
         `INSERT OR IGNORE INTO webhook_deliveries (id, tenant_id, endpoint_id, event_id, event_type, payload,
            status, attempts, replay_of, created_at)
@@ -500,9 +517,40 @@ export class WebhookService {
         input.payload,
         input.replayOf,
         this.deps.now(),
-      )
-      .run();
-    return (result.meta.changes ?? 0) > 0;
+      );
+  }
+
+  /** Plain (non-app) deliveries: inserted and queued in chunks; returns how many were new. */
+  private async queuePlainDeliveries(
+    tenantId: string,
+    tenantSlug: string,
+    pairs: readonly { endpoint: EndpointRow; event: WebhookEvent }[],
+  ): Promise<number> {
+    let created = 0;
+    for (let i = 0; i < pairs.length; i += INSERT_CHUNK) {
+      const chunk = pairs.slice(i, i + INSERT_CHUNK).map((pair) => ({ ...pair, id: this.deps.newId() }));
+      const results = await this.deps.db.batch(
+        chunk.map(({ endpoint, event, id }) =>
+          this.insertStatement({
+            id,
+            tenantId,
+            endpointId: endpoint.id,
+            eventId: event.id,
+            eventType: event.type,
+            payload: deliveryBody(tenantSlug, event),
+            replayOf: null,
+          }),
+        ),
+      );
+      const messages: WebhookMessage[] = chunk
+        .filter((_, index) => (results[index]?.meta.changes ?? 0) > 0)
+        .map(({ id }) => ({ kind: 'webhooks.deliver', version: 1, deliveryId: id }));
+      if (messages.length === 0) continue;
+      if (this.deps.enqueueMany !== undefined) await this.deps.enqueueMany(messages);
+      else for (const message of messages) await this.deps.enqueue(message);
+      created += messages.length;
+    }
+    return created;
   }
 
   /** True when at least one active endpoint exists (cheap guard before queueing events). */
@@ -545,6 +593,7 @@ export class WebhookService {
         .all<EndpointRow & { app_api_version: string | null; app_status: string | null }>()
     ).results;
     let created = 0;
+    const plain: { endpoint: EndpointRow; event: WebhookEvent }[] = [];
     for (const endpoint of endpoints) {
       const app: AppEndpointInfo | null =
         endpoint.app_install_id === null
@@ -558,10 +607,11 @@ export class WebhookService {
       const types = parseTypes(endpoint.event_types);
       for (const event of events) {
         if (!subscribes(types, event.type)) continue;
-        if (await this.queueDelivery(tenantId, tenant.slug, endpoint, app, event)) created += 1;
+        if (app === null) plain.push({ endpoint, event });
+        else if (await this.queueDelivery(tenantId, tenant.slug, endpoint, app, event)) created += 1;
       }
     }
-    return created;
+    return created + (await this.queuePlainDeliveries(tenantId, tenant.slug, plain));
   }
 
   /**

@@ -32,6 +32,7 @@ import {
 } from '@amable/app-edge/analytics';
 import type { OAuthKeyValueStore, OAuthSealer, SystemEmail } from '@amable/core';
 import { renderEmailLayout } from '@amable/i18n';
+import { mapLimited } from '../concurrency';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
 import { authSealer, d1OAuthStore } from '../providers/select';
@@ -580,16 +581,20 @@ export interface AdsSyncReport {
   errors: number;
 }
 
+/** Sites synced at once: connections of one site stay sequential, within the providers' rate limits. */
+const SITE_SYNC_CONCURRENCY = 3;
+
 /** Every connection of the given sites (sites of other tenants or deleted ones are skipped). */
 export async function syncAdsOfTenant(
   ports: AdsSyncPorts,
   tenantId: string,
   report: AdsSyncReport = { connections: 0, synced: 0, retry: 0, authExpired: 0, errors: 0 },
 ): Promise<AdsSyncReport> {
-  for (const siteId of await tenantSitesStub(ports.ns, tenantId).indexList()) {
+  const siteIds = await tenantSitesStub(ports.ns, tenantId).indexList();
+  await mapLimited(siteIds, SITE_SYNC_CONCURRENCY, async (siteId) => {
     try {
       const record = await siteStub(ports.ns, siteId).getSite();
-      if (record === null || record.deleted || record.tenantId !== tenantId) continue;
+      if (record === null || record.deleted || record.tenantId !== tenantId) return;
       const site: SiteRef = { tenantId, id: siteId, name: record.site.name };
       for (const conn of await adsStub(ports.ns, siteId).listAdConnections()) {
         if (conn.status === 'disconnected') continue;
@@ -604,7 +609,7 @@ export async function syncAdsOfTenant(
       report.errors += 1;
       console.error(`[analytics] ads sync of site ${siteId} failed: ${errorText(error)}`);
     }
-  }
+  });
   return report;
 }
 

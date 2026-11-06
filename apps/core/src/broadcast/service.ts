@@ -36,6 +36,7 @@ import {
 import { fromAddress, getSetting, sendGate, suspension, tenantTimeZone, warmupState, sentToday } from '../email/settings';
 import { suppressedSet } from '../email/suppressions';
 import { frozenStats, liveLinks, liveTotals } from './frozen';
+import { placeholders } from '../crm/db/sql';
 import { getBroadcastRow, type BroadcastRow } from './store';
 import { bucketize, scheduleRecipients } from './tz';
 
@@ -50,6 +51,8 @@ import { bucketize, scheduleRecipients } from './tz';
 const UNMARKETABLE = new Set(['unsubscribed', 'bounced', 'complained', 'non_marketable']);
 const UNTHROTTLED_PER_TICK = 1_000;
 const QUEUE_BATCH = 100;
+/** SQLite in Durable Objects binds at most 100 parameters per statement. */
+const MAX_IN_PARAMS = 90;
 
 // ------------------------------------------------------------------ shapes
 
@@ -552,11 +555,13 @@ async function tickOne(deps: MailDeps, b: BroadcastRow, now: number): Promise<nu
     }));
     await deps.queue.send(requests);
     deps.db.transaction(() => {
-      for (const r of chunk) {
+      for (let j = 0; j < chunk.length; j += MAX_IN_PARAMS) {
+        const ids = chunk.slice(j, j + MAX_IN_PARAMS).map((r) => r.contact_id);
         deps.db.run(
-          `UPDATE mail_broadcast_recipients SET status = 'enqueued' WHERE broadcast_id = ? AND contact_id = ?`,
+          `UPDATE mail_broadcast_recipients SET status = 'enqueued'
+            WHERE broadcast_id = ? AND contact_id IN (${placeholders(ids.length)})`,
           b.id,
-          r.contact_id,
+          ...ids,
         );
       }
     });

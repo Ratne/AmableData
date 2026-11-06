@@ -17,9 +17,8 @@ import { clearSessionCookie, readSessionToken } from '../auth/sessions';
 import {
   deleteSessionByHash,
   findApiKeyByHash,
-  findMembership,
-  findSessionByHash,
-  findTenantBySlug,
+  findSessionWithUser,
+  findTenantWithRole,
   findUserById,
   setLastTenant,
   touchApiKey,
@@ -136,20 +135,19 @@ async function resolveSession(c: Context<AppEnv>): Promise<SessionResolution> {
     return { ok: false, code: 'unauthenticated' };
   }
   const hash = await sha256Hex(token);
-  const session = await findSessionByHash(c.env.DB, hash);
+  const { session, user } = await findSessionWithUser(c.env.DB, hash);
   if (session === null) return { ok: false, code: 'unauthenticated' };
   const now = c.get('services').now();
   if (sessionState(session, now) !== 'valid') {
     await deleteSessionByHash(c.env.DB, hash);
     return { ok: false, code: 'session_expired' };
   }
-  const user = await findUserById(c.env.DB, session.userId);
   if (user === null || user.disabledAt !== null) {
     await deleteSessionByHash(c.env.DB, hash);
     return { ok: false, code: 'unauthenticated' };
   }
   const slide = slideSession(session, now);
-  if (slide !== null) await touchSession(c.env.DB, hash, slide.lastSeenAt, slide.expiresAt);
+  if (slide !== null) await defer(c, touchSession(c.env.DB, hash, slide.lastSeenAt, slide.expiresAt));
   return {
     ok: true,
     auth: {
@@ -244,8 +242,10 @@ export function requireTenant(): MiddlewareHandler<AppEnv> {
     if (auth === undefined) throw new Error('requireTenant() used without requireAuth()');
     const slug = c.req.param('slug');
     if (slug === undefined || !SLUG_RE.test(slug)) return jsonError(c, 404, 'tenant_not_found');
-    const tenant = await findTenantBySlug(c.env.DB, slug);
-    if (tenant === null) return jsonError(c, 404, 'tenant_not_found');
+    const userId = auth.kind === 'app' ? null : auth.kind === 'api_key' ? auth.apiKey.createdBy : auth.user.id;
+    const found = await findTenantWithRole(c.env.DB, slug, userId);
+    if (found === null) return jsonError(c, 404, 'tenant_not_found');
+    const { tenant, role } = found;
 
     if (auth.kind === 'app') {
       if (auth.app.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
@@ -256,7 +256,7 @@ export function requireTenant(): MiddlewareHandler<AppEnv> {
 
     if (auth.kind === 'api_key') {
       if (auth.apiKey.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
-      const creatorRole = await findMembership(c.env.DB, auth.apiKey.createdBy, tenant.id);
+      const creatorRole = role;
       if (creatorRole === null) return jsonError(c, 401, 'invalid_api_key');
       const permissions = effectiveKeyPermissions(
         auth.apiKey.scopes as readonly Permission[],
@@ -266,7 +266,6 @@ export function requireTenant(): MiddlewareHandler<AppEnv> {
       return next();
     }
 
-    const role = await findMembership(c.env.DB, auth.user.id, tenant.id);
     if (role === null) return jsonError(c, 404, 'tenant_not_found');
     c.set('tenant', buildTenantContext(tenant, role, new Set(ROLE_PERMISSIONS[role])));
     if (auth.user.lastTenantId !== tenant.id) {
