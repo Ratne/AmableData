@@ -12,12 +12,12 @@
     "typecheck": "tsc -p . && tsc -p test"
   },
   "devDependencies": {
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.5",
     "typescript": "~5.9.3"
   },
   "dependencies": {
-    "@phi-ag/argon2": "^0.6.1",
+    "@phi-ag/argon2": "^0.6.2",
     "htmlparser2": "^12.0.0",
-    "liquidjs": "^10.30.0"
+    "liquidjs": "^10.30.1"
   }
 }
