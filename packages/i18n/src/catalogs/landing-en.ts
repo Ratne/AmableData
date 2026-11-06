@@ -260,6 +260,8 @@ export const landingEn = {
   'landing.editor.rt.numbers': 'Numbered list',
   'landing.editor.rt.link': 'Link',
   'landing.editor.rt.clear': 'Clear formatting',
+  'landing.editor.rt.html': 'Edit HTML source',
+  'landing.editor.rt.visual': 'Back to visual editing',
   'landing.editor.chooseForm': '— Choose a form —',
   'landing.editor.noForms': 'No forms yet: create one in Forms first.',
   'landing.editor.missingForm': 'Missing form ({id})',

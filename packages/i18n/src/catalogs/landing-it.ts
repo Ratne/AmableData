@@ -262,6 +262,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.editor.rt.numbers': 'Elenco numerato',
   'landing.editor.rt.link': 'Link',
   'landing.editor.rt.clear': 'Rimuovi formattazione',
+  'landing.editor.rt.html': 'Modifica sorgente HTML',
+  'landing.editor.rt.visual': 'Torna alla vista visuale',
   'landing.editor.chooseForm': '— Scegli un form —',
   'landing.editor.noForms': 'Nessun form: creane prima uno in Form.',
   'landing.editor.missingForm': 'Form mancante ({id})',
