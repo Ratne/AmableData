@@ -34,7 +34,7 @@ import {
   usePermissions,
 } from '../api/hooks';
 import { CheckoutPreview, previewCheckoutConfig } from '../components/checkout-preview';
-import { BumpsSection, ItemsSection, OffersSection } from '../components/checkout-sections';
+import { BumpsSection, DiscountsSection, ItemsSection, OffersSection } from '../components/checkout-sections';
 import { ChoiceSelect, ErrorNotice, FormField, PageState, SectionCard } from '../components/common';
 
 type EditorTab = 'products' | 'fields' | 'bumps' | 'offers' | 'design' | 'settings';
@@ -251,8 +251,9 @@ function Editor({ checkout }: { checkout: Checkout }) {
                 </TabsTrigger>
               ))}
             </TabsList>
-            <TabsContent value="products" className="pt-3">
+            <TabsContent value="products" className="grid gap-4 pt-3">
               <ItemsSection {...sectionProps} />
+              <DiscountsSection {...sectionProps} />
             </TabsContent>
             <TabsContent value="fields" className="grid gap-4 pt-3">
               <SectionCard title={t('checkout.contact.title')}>

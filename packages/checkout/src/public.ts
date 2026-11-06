@@ -92,7 +92,7 @@ export interface BankTransferDetails {
 // --------------------------------------------------------------- selection
 
 export const selectionSchema = z.object({
-  /** Picked item ids (`item_selection: one`: exactly one; `all`: ignored). */
+  /** Picked item ids (`item_selection: one`: exactly one; `any`: the checked ones; `all`: ignored). */
   items: z.array(z.string().max(64)).max(20).default([]),
   /** Item id → quantity (`allow_quantity`). */
   quantities: z.record(z.string().max(64), z.number().int().min(1).max(999)).default({}),
@@ -129,6 +129,8 @@ export interface Quote {
     readonly discounted_amount_minor: number | null;
   } | null;
   readonly promo: { readonly code: string; readonly applied: boolean; readonly message: string | null } | null;
+  /** Automatic discounts applied (part of `discount_minor`, the rest is the promo code). */
+  readonly discounts: ReadonlyArray<{ readonly label: string; readonly amount_minor: number }>;
 }
 
 // ----------------------------------------------------------------- session

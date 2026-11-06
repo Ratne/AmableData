@@ -39,6 +39,8 @@ export interface LineDraft {
   quantity: number;
   unitPriceMinor: number;
   taxRateBps: number;
+  /** Discount granted before the promo code (checkout automatic discounts). */
+  discountMinor?: number;
 }
 
 /** Internal options for orders not created through the REST surface. */
@@ -142,6 +144,7 @@ function priceLines(
         unitPriceMinor: l.unitPriceMinor,
         taxRateBps: l.taxRateBps,
         discountable: true,
+        lineDiscountMinor: l.discountMinor ?? 0,
       })),
       input.discount,
       input.shippingMinor,
@@ -158,7 +161,7 @@ function priceLines(
           orderId: input.orderId,
           lines: input.lines.map((l) => ({
             productId: l.productId,
-            subtotalMinor: l.quantity * l.unitPriceMinor,
+            subtotalMinor: l.quantity * l.unitPriceMinor - (l.discountMinor ?? 0),
           })),
           at: input.at,
         });
@@ -168,6 +171,7 @@ function priceLines(
       unitPriceMinor: l.unitPriceMinor,
       taxRateBps: l.taxRateBps,
       discountable: promo === null ? false : promo.appliesTo(l.productId),
+      lineDiscountMinor: l.discountMinor ?? 0,
     })),
     promo === null ? null : promo.rule,
     input.shippingMinor,

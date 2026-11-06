@@ -24,6 +24,41 @@ describe('checkout definition', () => {
     expect(d.contact).toMatchObject({ name: 'required', address: 'hidden', address_autocomplete: true });
   });
 
+  it('checks the automatic discounts and the free selection', () => {
+    const items = [
+      { id: 'a', kind: 'product' as const, ref_id: 'p1' },
+      { id: 'b', kind: 'product' as const, ref_id: 'p2' },
+      { id: 'm', kind: 'plan' as const, ref_id: 'pl1' },
+      { id: 'y', kind: 'plan' as const, ref_id: 'pl2' },
+    ];
+    expect(
+      issues({
+        items: items.slice(0, 2),
+        settings: { item_selection: 'any' },
+        discounts: [{ id: 'd1', label: 'Bundle', conditions: [{ item_id: 'a' }, { item_id: 'b', min_quantity: 2 }], percent_bps: 1000 }],
+      }),
+    ).toEqual([]);
+    expect(
+      issues({
+        items,
+        settings: { item_selection: 'one' },
+        discounts: [
+          { id: 'd1', label: 'Plan', conditions: [{ item_id: 'm' }, { item_id: 'nope' }], percent_bps: 1000 },
+          { id: 'd1', label: 'Fixed', kind: 'fixed', conditions: [{ item_id: 'a' }, { item_id: 'a' }] },
+        ],
+      }),
+    ).toEqual([
+      'discounts.1.id: duplicate discount id',
+      'discounts.0.conditions.0.item_id: pick a product of this checkout',
+      'discounts.0.conditions.1.item_id: pick a product of this checkout',
+      'discounts.1.conditions.1.item_id: duplicate condition item',
+      'discounts.1.amount_minor: set the amount',
+    ]);
+    expect(issues({ items, settings: { item_selection: 'any' } })).toEqual([
+      'items: only one subscription plan can be bought at a time (use "pick one")',
+    ]);
+  });
+
   it('checks the offer chain and the unique ids', () => {
     expect(
       issues({

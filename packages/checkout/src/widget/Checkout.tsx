@@ -62,7 +62,9 @@ function initialSelection(config: PublicCheckoutConfig): Selection {
   const items =
     config.settings.item_selection === 'one'
       ? [(config.items.find((i) => i.preselected) ?? config.items[0])?.id ?? ''].filter((id) => id !== '')
-      : config.items.map((i) => i.id);
+      : config.settings.item_selection === 'any'
+        ? config.items.filter((i) => i.preselected).map((i) => i.id)
+        : config.items.map((i) => i.id);
   return { items, quantities: {}, bumps: config.bumps.filter((b) => b.checked).map((b) => b.id) };
 }
 
@@ -127,6 +129,7 @@ function localQuote(config: PublicCheckoutConfig, selection: Selection): Quote {
     total_minor: total,
     recurring,
     promo: null,
+    discounts: [],
   };
 }
 
@@ -321,6 +324,10 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
     event.preventDefault();
     if (busy) return;
     setAlert('');
+    if (config.settings.item_selection === 'any' && selection.items.length === 0) {
+      setAlert(strings.pickAtLeastOne);
+      return;
+    }
     const found = localCheck();
     if (Object.keys(found).length > 0) {
       showErrors(found);
@@ -683,6 +690,7 @@ function Items({
   strings: CheckoutStrings;
 }) {
   const pickOne = config.settings.item_selection === 'one';
+  const pickAny = config.settings.item_selection === 'any';
   const price = (item: PublicCheckoutItem) => {
     const base = money(item.unit_price_minor);
     if (item.recurring === null) return base;
@@ -691,6 +699,7 @@ function Items({
   return (
     <section class="ac-section">
       {pickOne && config.items.length > 1 ? <div class="ac-section-title">{strings.chooseOne}</div> : null}
+      {pickAny ? <div class="ac-section-title">{strings.chooseAny}</div> : null}
       <div class="ac-items" role={pickOne ? 'radiogroup' : undefined}>
         {config.items.map((item) => {
           const on = selection.items.includes(item.id);
@@ -702,6 +711,20 @@ function Items({
                   name="ac-item"
                   checked={on}
                   onChange={() => setSelection((prev) => ({ ...prev, items: [item.id] }))}
+                />
+              ) : pickAny ? (
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={(e) => {
+                    const checked = (e.target as HTMLInputElement).checked;
+                    setSelection((prev) => ({
+                      ...prev,
+                      items: checked
+                        ? config.items.map((i) => i.id).filter((id) => id === item.id || prev.items.includes(id))
+                        : prev.items.filter((id) => id !== item.id),
+                    }));
+                  }}
                 />
               ) : null}
               {item.image_url !== '' ? <img class="ac-thumb" src={item.image_url} alt="" loading="lazy" /> : null}
@@ -735,7 +758,7 @@ function Items({
               <span class="ac-price">{price(item)}</span>
             </>
           );
-          return pickOne ? (
+          return pickOne || pickAny ? (
             <label key={item.id} class={`ac-item${on ? ' ac-item-on' : ''}`}>
               {body}
             </label>
@@ -911,6 +934,8 @@ function Summary({
   apply: (code: string) => void;
 }) {
   const r = quote.recurring;
+  const automatic = quote.discounts;
+  const promoDiscount = quote.discount_minor - automatic.reduce((sum, d) => sum + d.amount_minor, 0);
   return (
     <aside class="ac-summary">
       <div class="ac-section-title">{strings.summaryTitle}</div>
@@ -923,10 +948,16 @@ function Summary({
           <span>{line.kind === 'trial' ? fill(strings.trial, { n: r?.trial_days ?? 0 }) : money(line.subtotal_minor)}</span>
         </div>
       ))}
-      {quote.discount_minor > 0 ? (
+      {automatic.map((d, i) => (
+        <div class="ac-line ac-ok" key={`auto-${String(i)}`}>
+          <span>{d.label}</span>
+          <span>−{money(d.amount_minor)}</span>
+        </div>
+      ))}
+      {promoDiscount > 0 ? (
         <div class="ac-line ac-ok">
           <span>{strings.discount}</span>
-          <span>−{money(quote.discount_minor)}</span>
+          <span>−{money(promoDiscount)}</span>
         </div>
       ) : null}
       {quote.tax_minor > 0 ? (

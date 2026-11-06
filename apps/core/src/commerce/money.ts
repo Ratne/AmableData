@@ -49,6 +49,8 @@ export interface LineInput {
   taxRateBps: number;
   /** Whether the order discount applies to this line. */
   discountable: boolean;
+  /** Discount the line already carries (checkout automatic discounts), capped at its subtotal. */
+  lineDiscountMinor?: number;
 }
 
 export interface DiscountRule {
@@ -78,11 +80,13 @@ export interface OrderTotals {
 /**
  * Order totals:
  * - line subtotal = quantity × unit price;
- * - discount: percent of the eligible subtotal (rounded half up) or a fixed
- *   amount capped at the eligible subtotal, allocated to eligible lines in
- *   proportion to their subtotal (largest remainder, so shares sum exactly);
- * - line tax = (line subtotal − line discount) × rate, rounded half up per line;
- * - total = subtotal − discount + tax + shipping (shipping is neither taxed nor discounted).
+ * - the line's own discount (`lineDiscountMinor`) comes off first;
+ * - discount: percent of the eligible subtotal net of the own discounts
+ *   (rounded half up) or a fixed amount capped at it, allocated to eligible
+ *   lines in proportion to their net subtotal (largest remainder, so shares
+ *   sum exactly);
+ * - line tax = (line subtotal − line discounts) × rate, rounded half up per line;
+ * - total = subtotal − discounts + tax + shipping (shipping is neither taxed nor discounted).
  */
 export function computeTotals(
   lines: LineInput[],
@@ -90,19 +94,21 @@ export function computeTotals(
   shippingMinor: number,
 ): OrderTotals {
   const subtotals = lines.map((l) => l.quantity * l.unitPriceMinor);
-  const eligible = subtotals.map((s, i) => (lines[i]?.discountable === true ? s : 0));
+  const own = lines.map((l, i) => Math.min(Math.max(l.lineDiscountMinor ?? 0, 0), subtotals[i] ?? 0));
+  const eligible = subtotals.map((s, i) => (lines[i]?.discountable === true ? s - (own[i] ?? 0) : 0));
   const eligibleMinor = eligible.reduce((a, b) => a + b, 0);
-  let discountMinor = 0;
+  let orderDiscountMinor = 0;
   if (discount !== null && eligibleMinor > 0) {
-    discountMinor =
+    orderDiscountMinor =
       discount.kind === 'percent'
         ? mulDivRound(eligibleMinor, discount.percentBps ?? 0, 10_000)
         : Math.min(discount.amountMinor ?? 0, eligibleMinor);
   }
-  const shares = allocate(discountMinor, eligible);
+  const shares = allocate(orderDiscountMinor, eligible);
+  const discountMinor = orderDiscountMinor + own.reduce((a, b) => a + b, 0);
   const lineTotals = lines.map((line, i) => {
     const subtotalMinor = subtotals[i] ?? 0;
-    const discountShare = shares[i] ?? 0;
+    const discountShare = (shares[i] ?? 0) + (own[i] ?? 0);
     const taxMinor = taxOf(subtotalMinor - discountShare, line.taxRateBps);
     return {
       subtotalMinor,

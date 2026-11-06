@@ -40,7 +40,7 @@ export const checkoutItemSchema = z.object({
   label: z.string().max(200).default(''),
   description: z.string().max(1000).default(''),
   image_url: httpUrl,
-  /** `item_selection: one`: the item selected when the page opens. */
+  /** `item_selection: one`: the item selected when the page opens; `any`: checked when the page opens. */
   preselected: z.boolean().default(false),
 });
 export type CheckoutItem = z.infer<typeof checkoutItemSchema>;
@@ -108,11 +108,46 @@ export const checkoutContactSchema = z.object({
 });
 export type CheckoutContact = z.infer<typeof checkoutContactSchema>;
 
+export const ITEM_SELECTIONS = ['all', 'one', 'any'] as const;
+export type ItemSelection = (typeof ITEM_SELECTIONS)[number];
+
+export const AUTO_DISCOUNT_SCOPES = ['matching', 'order'] as const;
+export type AutoDiscountScope = (typeof AUTO_DISCOUNT_SCOPES)[number];
+
+/**
+ * Automatic discount: applies when the cart holds every listed item with at
+ * least its quantity. `matching` discounts the listed items, `order` every
+ * product line (items and bumps). Subscription plans are never discounted
+ * (renewals would not keep it). When several rules match, the largest wins.
+ */
+export const autoDiscountSchema = z.object({
+  id,
+  /** Shown in the order summary. */
+  label: z.string().trim().min(1).max(100),
+  conditions: z
+    .array(
+      z.object({
+        item_id: id,
+        min_quantity: z.number().int().min(1).max(999).default(1),
+      }),
+    )
+    .min(1)
+    .max(10),
+  kind: z.enum(['percent', 'fixed']).default('percent'),
+  percent_bps: z.number().int().min(1).max(10_000).nullable().default(null),
+  /** Checkout currency. */
+  amount_minor: z.number().int().min(1).max(100_000_000_00).nullable().default(null),
+  scope: z.enum(AUTO_DISCOUNT_SCOPES).default('matching'),
+});
+export type AutoDiscount = z.infer<typeof autoDiscountSchema>;
+
 export const checkoutSettingsSchema = z.object({
-  /** `all`: every item is bought; `one`: the buyer picks one (e.g. plans). */
-  item_selection: z.enum(['all', 'one']).default('all'),
+  /** `all`: every item is bought; `one`: the buyer picks one (e.g. plans); `any`: the buyer checks the items to buy. */
+  item_selection: z.enum(ITEM_SELECTIONS).default('all'),
   allow_quantity: z.boolean().default(false),
   promo_codes: z.boolean().default(true),
+  /** A valid promo code adds to the automatic discounts; off: the promo code replaces them. */
+  discounts_stack_promo: z.boolean().default(false),
   /** Query parameter that applies a promo code on load (empty: disabled). */
   promo_param: z
     .string()
@@ -197,6 +232,7 @@ export const checkoutDefinitionSchema = z
     items: z.array(checkoutItemSchema).max(20).default([]),
     bumps: z.array(bumpSchema).max(5).default([]),
     offers: z.array(offerSchema).max(10).default([]),
+    discounts: z.array(autoDiscountSchema).max(10).default([]),
     /** Extra fields (same builder as forms); `prefill_param` reads them from the URL. */
     fields: z.array(formFieldSchema).max(50).default([]),
     contact: checkoutContactSchema.default(() => checkoutContactSchema.parse({})),
@@ -223,7 +259,23 @@ export const checkoutDefinitionSchema = z
         ctx.addIssue({ code: 'custom', path: ['fields', i, 'key'], message: 'reserved for the buyer fields' });
       }
     });
-    if (d.settings.item_selection === 'all' && d.items.filter((i) => i.kind === 'plan').length > 1) {
+    unique(d.discounts.map((r) => r.id), (i) => ['discounts', i, 'id'], 'duplicate discount id');
+    const products = new Set(d.items.filter((i) => i.kind === 'product').map((i) => i.id));
+    d.discounts.forEach((rule, i) => {
+      rule.conditions.forEach((c, j) => {
+        if (!products.has(c.item_id)) {
+          ctx.addIssue({ code: 'custom', path: ['discounts', i, 'conditions', j, 'item_id'], message: 'pick a product of this checkout' });
+        }
+      });
+      unique(rule.conditions.map((c) => c.item_id), (j) => ['discounts', i, 'conditions', j, 'item_id'], 'duplicate condition item');
+      if (rule.kind === 'percent' && rule.percent_bps === null) {
+        ctx.addIssue({ code: 'custom', path: ['discounts', i, 'percent_bps'], message: 'set the percentage' });
+      }
+      if (rule.kind === 'fixed' && rule.amount_minor === null) {
+        ctx.addIssue({ code: 'custom', path: ['discounts', i, 'amount_minor'], message: 'set the amount' });
+      }
+    });
+    if (d.settings.item_selection !== 'one' && d.items.filter((i) => i.kind === 'plan').length > 1) {
       ctx.addIssue({
         code: 'custom',
         path: ['items'],

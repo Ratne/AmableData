@@ -1,5 +1,6 @@
 import {
   CHECKOUT_STRINGS,
+  type AutoDiscount,
   type CheckoutDefinition,
   type CheckoutLocale,
   type Offer,
@@ -11,7 +12,7 @@ import {
 import type { CrmContext } from '../crm/context';
 import { CrmError, invalid } from '../crm/errors';
 import type { PlanRow, ProductRow } from '../commerce/catalog';
-import { computeTotals, type DiscountRule } from '../commerce/money';
+import { allocate, computeTotals, mulDivRound, type DiscountRule } from '../commerce/money';
 import { quoteLines, type LineDraft } from '../commerce/orders';
 import { evaluatePromo, type AppliedPromo } from '../commerce/promo';
 
@@ -38,6 +39,8 @@ export interface ResolvedCatalog {
 /** A line of the cart, with what it stands for. */
 export interface CartLine extends LineDraft {
   kind: QuoteLine['kind'];
+  /** Checkout item or bump id the line comes from. */
+  entryId: string;
 }
 
 export interface Cart {
@@ -167,6 +170,7 @@ export function recurringOf(entry: ResolvedEntry): PublicRecurring | null {
 function line(entry: ResolvedEntry, quantity: number, kind: CartLine['kind']): CartLine {
   return {
     kind,
+    entryId: entry.id,
     productId: entry.product.id,
     planId: entry.plan?.id ?? null,
     name: entry.name,
@@ -205,7 +209,11 @@ export function buildCart(
   locale: CheckoutLocale,
 ): Cart {
   let chosen: ResolvedEntry[];
-  if (d.settings.item_selection === 'one') {
+  if (d.settings.item_selection === 'any') {
+    const picked = new Set(selection.items);
+    chosen = catalog.items.filter((i) => picked.has(i.id));
+    if (chosen.length === 0 && catalog.items.length > 0) throw invalid('selection.items', 'pick at least one item');
+  } else if (d.settings.item_selection === 'one') {
     const picked =
       catalog.items.find((i) => i.id === selection.items[0]) ??
       catalog.items.find((i) => i.preselected) ??
@@ -235,40 +243,95 @@ export function buildCart(
   return { lines, plan, planQuantity };
 }
 
+export interface AppliedAutoDiscount {
+  id: string;
+  label: string;
+  amountMinor: number;
+}
+
+/**
+ * Applies the automatic discount rules to the cart lines: of the rules whose
+ * conditions the cart meets, the one worth the most is spread over its lines
+ * (`discountMinor`). Plan lines, setup fees and trials are never discounted.
+ */
+export function applyAutoDiscounts(
+  rules: readonly AutoDiscount[],
+  lines: readonly CartLine[],
+): { lines: CartLine[]; applied: AppliedAutoDiscount | null } {
+  const quantities = new Map<string, number>();
+  for (const l of lines) {
+    if (l.kind === 'item' && l.planId === null) quantities.set(l.entryId, (quantities.get(l.entryId) ?? 0) + l.quantity);
+  }
+  let best: { rule: AutoDiscount; amount: number; shares: number[] } | null = null;
+  for (const rule of rules) {
+    if (!rule.conditions.every((c) => (quantities.get(c.item_id) ?? 0) >= c.min_quantity)) continue;
+    const listed = new Set(rule.conditions.map((c) => c.item_id));
+    const weights = lines.map((l) => {
+      const product = l.planId === null && (l.kind === 'item' || l.kind === 'bump');
+      const inScope = rule.scope === 'order' || (l.kind === 'item' && listed.has(l.entryId));
+      return product && inScope ? l.quantity * l.unitPriceMinor : 0;
+    });
+    const base = weights.reduce((a, b) => a + b, 0);
+    const amount =
+      rule.kind === 'percent' ? mulDivRound(base, rule.percent_bps ?? 0, 10_000) : Math.min(rule.amount_minor ?? 0, base);
+    if (amount > 0 && (best === null || amount > best.amount)) best = { rule, amount, shares: allocate(amount, weights) };
+  }
+  if (best === null) return { lines: [...lines], applied: null };
+  const { rule, amount, shares } = best;
+  return {
+    lines: lines.map((l, i) => ({ ...l, discountMinor: shares[i] ?? 0 })),
+    applied: { id: rule.id, label: rule.label, amountMinor: amount },
+  };
+}
+
 export interface PricedCart {
   quote: Quote;
+  /** The lines as priced (automatic discounts included): what the order is written with. */
+  lines: CartLine[];
   promo: AppliedPromo | null;
   /** Promo discount the subscription keeps on its renewals. */
   subscriptionDiscount: { rule: DiscountRule; periodsLeft: number | null; promo: AppliedPromo } | null;
 }
 
-/** Prices a cart. An invalid promo code never fails the quote: it comes back with its reason. */
+/**
+ * Prices a cart. An invalid promo code never fails the quote: it comes back with its reason.
+ * A valid promo code adds to the automatic discounts when `stackPromo`, otherwise replaces them.
+ */
 export function priceCart(
   ctx: CrmContext,
-  input: { cart: Cart; currency: string; contactId: string; promoCode: string; at: number; strictPromo: boolean },
+  input: {
+    cart: Cart;
+    currency: string;
+    contactId: string;
+    promoCode: string;
+    at: number;
+    strictPromo: boolean;
+    discounts: readonly AutoDiscount[];
+    stackPromo: boolean;
+  },
 ): PricedCart {
   const code = input.promoCode.trim();
+  const auto = applyAutoDiscounts(input.discounts, input.cart.lines);
+  const price = (lines: CartLine[], promoCode: string | null) =>
+    quoteLines(ctx, { lines, currency: input.currency, contactId: input.contactId, promoCode, at: input.at });
   let promoNote: Quote['promo'] = null;
+  let pricedLines = auto.lines;
+  let autoApplied = auto.applied;
   let priced;
-  try {
-    priced = quoteLines(ctx, {
-      lines: input.cart.lines,
-      currency: input.currency,
-      contactId: input.contactId,
-      promoCode: code === '' ? null : code,
-      at: input.at,
-    });
-    if (code !== '') promoNote = { code: priced.promo?.code ?? code.toUpperCase(), applied: true, message: null };
-  } catch (error) {
-    if (!(error instanceof CrmError) || code === '' || input.strictPromo) throw error;
-    promoNote = { code: code.toUpperCase(), applied: false, message: error.message };
-    priced = quoteLines(ctx, {
-      lines: input.cart.lines,
-      currency: input.currency,
-      contactId: input.contactId,
-      promoCode: null,
-      at: input.at,
-    });
+  if (code === '') {
+    priced = price(pricedLines, null);
+  } else {
+    const promoLines = input.stackPromo ? auto.lines : input.cart.lines;
+    try {
+      priced = price(promoLines, code);
+      pricedLines = promoLines;
+      if (!input.stackPromo) autoApplied = null;
+      promoNote = { code: priced.promo?.code ?? code.toUpperCase(), applied: true, message: null };
+    } catch (error) {
+      if (!(error instanceof CrmError) || input.strictPromo) throw error;
+      promoNote = { code: code.toUpperCase(), applied: false, message: error.message };
+      priced = price(pricedLines, null);
+    }
   }
   const { totals } = priced;
   let promo = priced.promo;
@@ -352,7 +415,9 @@ export function priceCart(
       total_minor: totals.totalMinor,
       recurring,
       promo: promoNote,
+      discounts: autoApplied === null ? [] : [{ label: autoApplied.label, amount_minor: autoApplied.amountMinor }],
     },
+    lines: pricedLines,
     promo,
     subscriptionDiscount,
   };

@@ -282,6 +282,8 @@ export function checkoutQuote(
     promoCode: d.settings.promo_codes ? input.promoCode : '',
     at: ctx.now(),
     strictPromo: false,
+    discounts: d.discounts,
+    stackPromo: d.settings.discounts_stack_promo,
   }).quote;
 }
 
@@ -461,7 +463,16 @@ export function prepareCheckoutSession(
   }
   const contactId = upsertBuyer(ctx, d, fields, checked.values, tracking);
   const promoCode = d.settings.promo_codes ? payload.promo_code : '';
-  const priced = priceCart(ctx, { cart, currency: catalog.currency, contactId, promoCode, at: now, strictPromo: true });
+  const priced = priceCart(ctx, {
+    cart,
+    currency: catalog.currency,
+    contactId,
+    promoCode,
+    at: now,
+    strictPromo: true,
+    discounts: d.discounts,
+    stackPromo: d.settings.discounts_stack_promo,
+  });
 
   const sessionId = existing?.id ?? ctx.newId();
   const orderId = writeDraft(ctx, { row, cart, priced, contactId, sessionId, existing, payload, promoCode, tracking });
@@ -619,7 +630,7 @@ function writeDraft(
   if (previous !== null) {
     const draft = getOrderRow(ctx, previous);
     if (draft.status === 'draft') {
-      return replaceDraftLines(ctx, draft, { lines: input.cart.lines, promoCode: promo, contactId: input.contactId }).id;
+      return replaceDraftLines(ctx, draft, { lines: input.priced.lines, promoCode: promo, contactId: input.contactId }).id;
     }
   }
   return createOrderRow(
@@ -634,7 +645,7 @@ function writeDraft(
     },
     {
       source: 'checkout',
-      lines: input.cart.lines,
+      lines: input.priced.lines,
       checkout: {
         checkoutId: input.row.id,
         sessionId: input.sessionId,

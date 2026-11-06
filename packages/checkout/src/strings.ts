@@ -16,6 +16,8 @@ export interface CheckoutStrings {
   paymentTitle: string;
   summaryTitle: string;
   chooseOne: string;
+  chooseAny: string;
+  pickAtLeastOne: string;
   quantity: string;
   subtotal: string;
   discount: string;
@@ -95,6 +97,8 @@ const en: CheckoutStrings = {
   paymentTitle: 'Payment',
   summaryTitle: 'Order summary',
   chooseOne: 'Choose an option',
+  chooseAny: 'Choose what to buy',
+  pickAtLeastOne: 'Pick at least one item.',
   quantity: 'Qty',
   subtotal: 'Subtotal',
   discount: 'Discount',
@@ -179,6 +183,8 @@ const it: CheckoutStrings = {
   paymentTitle: 'Pagamento',
   summaryTitle: 'Riepilogo ordine',
   chooseOne: 'Scegli un’opzione',
+  chooseAny: 'Scegli cosa acquistare',
+  pickAtLeastOne: 'Seleziona almeno un prodotto.',
   quantity: 'Q.tà',
   subtotal: 'Subtotale',
   discount: 'Sconto',

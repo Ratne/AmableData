@@ -56,6 +56,25 @@ describe('integer money math', () => {
     expect(totals.totalMinor).toBe(0);
   });
 
+  it('takes the line discounts off first, then the order discount on what is left', () => {
+    const totals = computeTotals(
+      [
+        { quantity: 2, unitPriceMinor: 1000, taxRateBps: 2200, discountable: true, lineDiscountMinor: 400 },
+        { quantity: 1, unitPriceMinor: 500, taxRateBps: 1000, discountable: true, lineDiscountMinor: 9_999 },
+        { quantity: 1, unitPriceMinor: 1000, taxRateBps: 0, discountable: false },
+      ],
+      { kind: 'percent', percentBps: 1000, amountMinor: null },
+      0,
+    );
+    // own discounts: 400 and 500 (capped); eligible = 1600 + 0 -> 10% = 160
+    expect(totals.eligibleMinor).toBe(1600);
+    expect(totals.lines.map((l) => l.discountMinor)).toEqual([560, 500, 0]);
+    expect(totals.discountMinor).toBe(1060);
+    // tax: (2000-560)*22% = 316.8 -> 317; 0; 0
+    expect(totals.lines.map((l) => l.taxMinor)).toEqual([317, 0, 0]);
+    expect(totals.totalMinor).toBe(3500 - 1060 + 317);
+  });
+
   it('adds calendar months clamped to the month end', () => {
     const jan31 = Date.UTC(2026, 0, 31, 10);
     expect(new Date(addInterval(jan31, 'month', 1)).toISOString()).toBe('2026-02-28T10:00:00.000Z');
