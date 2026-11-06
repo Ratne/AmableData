@@ -1,5 +1,4 @@
 import {
-  cloneNodeWithNewIds,
   findNode,
   getStyleValue,
   getWidgetDef,
@@ -7,7 +6,6 @@ import {
   listAnchors,
   listPopups,
   locateNode,
-  sectionsForType,
   setStyleValue,
   type BuilderDocument,
   type ElementNode,
@@ -15,35 +13,17 @@ import {
 import { cn, DashboardConfirmDialog, toast } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from '@tanstack/react-router';
-import {
-  ArrowLeft,
-  ClipboardCopy,
-  ClipboardPaste,
-  ExternalLink,
-  Eye,
-  Layers,
-  LayoutGrid,
-  Library,
-  Maximize2,
-  Minimize2,
-  Redo2,
-  Rocket,
-  Save,
-  Settings,
-  SquareStack,
-  Undo2,
-} from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useParams } from '@tanstack/react-router';
+import { ArrowLeft, Layers, LayoutGrid, Library, SquareStack } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { EditLockBanner } from '../../../lib/edit-lock/edit-lock-banner';
 import { editLockPath, useEditLock, type EditLockStatus } from '../../../lib/edit-lock/use-edit-lock';
 import { errorMessage, landingKeys, useLanding, usePage, usePermissions } from '../api/hooks';
 import { isCanvasPage, isHtmlPage, type CanvasPageWithDraft, type LandingPage } from '../api/types';
-import { Choice, PageState, Pill } from '../components/common';
+import { PageState } from '../components/common';
 import { useLandingChrome } from '../components/page-chrome';
 import { PublishDialog } from '../components/publish';
-import { SaveIndicator } from '../components/save-indicator';
 import { CanvasPreview, type ColumnResize } from '../editor/canvas-preview';
 import { ControlsPanel } from '../editor/controls-panel';
 import { Navigator } from '../editor/navigator';
@@ -52,13 +32,19 @@ import { PopupsDialog } from '../editor/popups-dialog';
 import { PreviewDialog } from '../editor/preview-dialog';
 import { SavedSectionsPicker, SaveSectionDialog } from '../editor/saved-sections';
 import { TokensPanel } from '../editor/tokens-panel';
-import { ClipboardTray } from '../editor/clipboard-tray';
-import { clipAge, countNodes, insertClonesAt, readStyleClip, useStyleClipboard, type ClipEntry } from '../hooks/use-block-clipboard';
-import { useCanvasClipboard } from '../hooks/use-canvas-clipboard';
+import { CtxMenu, type ContextMenuState, type CtxMenuItem } from '../editor/context-menu';
+import { DragOverlay } from '../editor/drag-overlay';
+import { EditorToolbar } from '../editor/editor-toolbar';
+import { useClipboardActions } from '../hooks/use-clipboard-actions';
 import { useBuilderDocument } from '../hooks/use-builder-document';
 import { useCanvasDnd } from '../hooks/use-canvas-dnd';
 import { useBuilderLabel } from '../lib/builder-i18n';
-import { breakpointForWidth, DEVICES, ZOOMS, type CanvasZoom, type DeviceKey } from '../lib/devices';
+import {
+  breakpointForWidth,
+  DEVICES,
+  type CanvasZoom,
+  type DeviceKey,
+} from '../lib/devices';
 import { HtmlEditor } from './html-editor';
 
 export function CanvasEditorPage() {
@@ -96,20 +82,11 @@ function typingInField(): boolean {
   return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || (el as HTMLElement).isContentEditable;
 }
 
-interface ContextMenuState {
-  id: string;
-  x: number;
-  y: number;
-  /** Selection before the right click (the canvas re-targets the node under the cursor). */
-  prevSelectedId?: string | null;
-}
-
 function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: LandingPage }) {
   const { t } = useI18n();
   const label = useBuilderLabel();
   const { slug, api } = useLanding();
   const { can } = usePermissions();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const lock = useEditLock(can('pages:write') ? editLockPath(slug, 'pages', initial.id) : null, {
     onLost: (holder) =>
@@ -170,14 +147,7 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
   const [publishing, setPublishing] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ElementNode | null>(null);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
-  const ctxMenuRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const styleClipboard = useStyleClipboard();
-  const clipboard = useCanvasClipboard();
-  const latestClip = clipboard.latest;
-  const [trayOpen, setTrayOpen] = useState(false);
-  const [trayHighlight, setTrayHighlight] = useState<string | null>(null);
-  const trayTimer = useRef<number | null>(null);
 
   const doc = b.doc;
   const selected = selectedId ? findNode(doc.body, selectedId) : null;
@@ -205,19 +175,13 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
     if (selectedId && !findNode(doc.body, selectedId)) setSelectedId(null);
   }, [selectedId, doc.body]);
 
-  useLayoutEffect(() => {
-    const el = ctxMenuRef.current;
-    if (!el || !ctxMenu) return;
-    const r = el.getBoundingClientRect();
-    const nx = Math.max(8, Math.min(ctxMenu.x, window.innerWidth - r.width - 8));
-    const ny = Math.max(8, Math.min(ctxMenu.y, window.innerHeight - r.height - 8));
-    if (nx !== ctxMenu.x || ny !== ctxMenu.y) setCtxMenu({ ...ctxMenu, x: nx, y: ny });
-  }, [ctxMenu]);
-
   const select = useCallback((id: string | null) => {
     setSelectedId(id);
     if (id) setRightMode('element');
   }, []);
+
+  const clip = useClipboardActions({ b, editable, pageTitle: meta.title, titleOf, select, editingPopupId, setEditingPopupId });
+  const { copyBlock, copyPage, pasteBlock, copyStyle, pasteStyle, clipLabelOf, describeClip, latestClip } = clip;
 
   const parentForInsert = useCallback((): string | null => {
     if (selected && findNode(scopeBody, selected.id)) {
@@ -239,7 +203,7 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
     addNode: b.addNode,
     moveNode: b.moveNode,
     insertNodes: (nodes, parentId, index) => {
-      if (insertClipNodes(nodes, parentId, index) && nodes.length > 1)
+      if (clip.insertClipNodes(nodes, parentId, index) && nodes.length > 1)
         toast.success(t('landing.clipboard.inserted', { count: nodes.length }));
     },
     onAdded: select,
@@ -275,149 +239,6 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
     if (nid) select(nid);
   };
 
-  /** "Container (14 elementi)" — the toast/menu label for one node. */
-  const clipLabelOf = (node: ElementNode): string => {
-    const inner = countNodes(node.children);
-    return inner > 0 ? t('landing.editor.blockLabel', { name: titleOf(node.type), count: inner }) : titleOf(node.type);
-  };
-
-  /** Menu entry description: label + source page + age. */
-  const describeClip = (clip: ClipEntry): string => {
-    const from = clip.sourcePageName ? ` — ${t('landing.editor.fromPage', { name: clip.sourcePageName })}` : '';
-    const age = clipAge(clip.createdAt);
-    return `${clip.label}${from}${age ? `, ${age}` : ''}`;
-  };
-
-  /** Shows the tray for a few seconds with the entry just copied on top. */
-  const flashTray = (entryId: string) => {
-    setTrayHighlight(entryId);
-    setTrayOpen(true);
-    if (trayTimer.current) window.clearTimeout(trayTimer.current);
-    trayTimer.current = window.setTimeout(() => {
-      setTrayOpen(false);
-      setTrayHighlight(null);
-    }, 3500);
-  };
-
-  /** Saves on the server; the "copied" toast only appears once it is stored. */
-  const storeClip = async (nodes: readonly ElementNode[], label: string, wholePage: boolean) => {
-    const toastId = toast.loading(t('landing.clipboard.copying', { name: label }));
-    try {
-      const entry = await clipboard.add({ label, nodes, wholePage, sourcePageName: meta.title });
-      toast.success(t('landing.editor.copied', { name: label }), { id: toastId });
-      flashTray(entry.id);
-    } catch {
-      toast.error(t('landing.editor.copyFailed'), { id: toastId });
-    }
-  };
-
-  const copyBlock = (id: string) => {
-    const node = findNode(doc.body, id);
-    if (!node) return;
-    void storeClip([node], clipLabelOf(node), false);
-  };
-
-  /** Copies every root block of the page (popups included), in order. */
-  const copyPage = () => {
-    if (doc.body.length === 0) {
-      toast.error(t('landing.editor.pageEmpty'));
-      return;
-    }
-    const label = t('landing.editor.pageLabel', { name: meta.title || t('landing.untitled'), count: doc.body.length });
-    void storeClip(doc.body, label, true);
-  };
-
-  /** Inserts fresh copies at parentId/index in ONE operation (a single undo reverts it). */
-  const insertClipNodes = (nodes: readonly ElementNode[], parentId: string | null, index: number): boolean => {
-    if (!editable) return false;
-    const current = doc;
-    if (nodes.length === 1) {
-      const first = nodes[0];
-      if (!first) return false;
-      const copy = cloneNodeWithNewIds(first);
-      if (copy.type === 'popup') b.insertNode(copy, null, current.body.length);
-      else b.insertNode(copy, parentId, index);
-      select(copy.id);
-      return true;
-    }
-    const res = insertClonesAt(current.body, nodes, parentId, index);
-    b.replaceDocument({ ...current, body: res.body });
-    select(res.ids[0] ?? null);
-    return true;
-  };
-
-  /**
-   * Pastes a clipboard entry (default: the newest). After the target (inside
-   * when it is an empty container or `inside`), else at the end of the scope.
-   * A whole page always goes to the end of the page.
-   */
-  const pasteBlock = async (targetId: string | null, mode: 'after' | 'inside' = 'after', entry?: ClipEntry) => {
-    if (!editable) return;
-    let clip = entry ?? null;
-    if (!clip) {
-      const fresh = await clipboard.refresh();
-      clip = fresh ? (fresh[0] ?? null) : latestClip;
-    }
-    if (!clip) {
-      toast.error(t('landing.editor.clipboardEmpty'));
-      return;
-    }
-    const current = doc;
-    if (clip.nodes.length > 1) {
-      if (editingPopupId) setEditingPopupId(null);
-      if (insertClipNodes(clip.nodes, null, current.body.length))
-        toast.success(t('landing.editor.pastedMany', { count: clip.nodes.length }), { description: describeClip(clip) });
-      return;
-    }
-    const target = targetId ? findNode(current.body, targetId) : null;
-    const inside = target && isContainerType(target.type) && (mode === 'inside' || target.children.length === 0);
-    let ok: boolean;
-    if (target && inside) ok = insertClipNodes(clip.nodes, target.id, target.children.length);
-    else if (target) {
-      const loc = locateNode(current.body, target.id);
-      if (!loc) return;
-      ok = insertClipNodes(clip.nodes, loc.parentId, loc.index + 1);
-    } else {
-      const popup = editingPopupId ? findNode(current.body, editingPopupId) : null;
-      ok = insertClipNodes(clip.nodes, editingPopupId, popup ? popup.children.length : current.body.length);
-    }
-    if (ok) toast.success(t('landing.editor.pasted', { name: clip.label }), { description: describeClip(clip) });
-  };
-
-  const copyStyle = (id: string) => {
-    const node = findNode(doc.body, id);
-    if (!node) return;
-    if (!styleClipboard.copyStyle(node)) {
-      toast.error(t('landing.editor.copyFailed'));
-      return;
-    }
-    toast.success(t('landing.editor.styleCopied'));
-  };
-
-  const pasteStyle = (id: string) => {
-    const clip = readStyleClip();
-    const target = findNode(doc.body, id);
-    if (!clip || !target) {
-      toast.error(t('landing.editor.clipboardEmpty'));
-      return;
-    }
-    // Same type: everything. Different type: only style keys the target knows.
-    const validKeys = new Set(
-      sectionsForType(target.type)
-        .flatMap((s) => s.controls)
-        .filter((c) => c.group === 'style')
-        .map((c) => c.key),
-    );
-    const styles = clip.styles
-      .map((v) => ({
-        ...v,
-        props: clip.type === target.type ? { ...v.props } : Object.fromEntries(Object.entries(v.props).filter(([k]) => validKeys.has(k))),
-      }))
-      .filter((v) => Object.keys(v.props).length > 0);
-    b.replaceNode(id, { ...target, styles });
-    toast.success(clip.type === target.type ? t('landing.editor.stylePasted') : t('landing.editor.stylePastedPartial'));
-  };
-
   const insertSection = (node: ElementNode) => {
     if (!editable) return;
     const container = selected && isContainerType(selected.type) ? selected.id : (scopeBody.find((n) => isContainerType(n.type))?.id ?? editingPopupId);
@@ -450,8 +271,7 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
   };
 
   const openCtxMenu = (id: string, x: number, y: number, prevSelectedId?: string | null) => {
-    void clipboard.refresh();
-    styleClipboard.refresh();
+    clip.refresh();
     setCtxMenu({ id, x, y, prevSelectedId });
   };
 
@@ -520,7 +340,7 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
   }, []);
 
   const ctxNode = ctxMenu ? findNode(doc.body, ctxMenu.id) : null;
-  const ctxItems: { id: string; label: string; sub?: string; run: () => void; danger?: boolean }[] = ctxNode
+  const ctxItems: CtxMenuItem[] = ctxNode
     ? [
         { id: 'up', label: t('landing.editor.moveUp'), run: () => moveWithinParent(ctxNode.id, -1) },
         { id: 'down', label: t('landing.editor.moveDown'), run: () => moveWithinParent(ctxNode.id, 1) },
@@ -546,7 +366,7 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
               ]
           : []),
         { id: 'copyStyle', label: t('landing.editor.copyStyle'), run: () => copyStyle(ctxNode.id) },
-        ...(styleClipboard.style ? [{ id: 'pasteStyle', label: t('landing.editor.pasteStyle'), run: () => pasteStyle(ctxNode.id) }] : []),
+        ...(clip.hasStyle ? [{ id: 'pasteStyle', label: t('landing.editor.pasteStyle'), run: () => pasteStyle(ctxNode.id) }] : []),
         { id: 'save', label: t('landing.sections.save'), run: () => setSavingSection(ctxNode) },
         { id: 'lock', label: ctxNode.locked ? t('landing.editor.unlock') : t('landing.editor.lock'), run: () => b.toggleLock(ctxNode.id) },
         { id: 'delete', label: t('landing.editor.delete'), run: () => requestDelete(ctxNode.id), danger: true },
@@ -554,149 +374,31 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
     : [];
 
   const canPublish = can('pages:publish');
-  const publicUrl = meta.status === 'published' ? meta.public_url : null;
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="canvas-editor">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title={t('landing.editor.backToList')}
-          aria-label={t('landing.editor.backToList')}
-          onClick={() => void navigate({ to: '/t/$tenant/landing-pages', params: { tenant: slug } })}
-          data-testid="editor-back"
-        >
-          <ArrowLeft aria-hidden /> <span className="hidden lg:inline">{t('nav.landingPages')}</span>
-        </Button>
-        <div className="flex min-w-0 max-w-64 flex-col leading-tight">
-          <span className="truncate text-sm font-medium">{meta.title || t('landing.untitled')}</span>
-          <code className="truncate text-[11px] text-muted-foreground">{meta.path}</code>
-        </div>
-        <Pill tone={meta.status === 'published' ? 'success' : 'neutral'}>{t(`landing.status.${meta.status}`)}</Pill>
-        <div className="flex items-center gap-0.5">
-          <Button type="button" variant="ghost" size="icon" aria-label={t('landing.editor.undo')} title={t('landing.editor.undo')} disabled={!b.canUndo} onClick={b.undo}>
-            <Undo2 aria-hidden />
-          </Button>
-          <Button type="button" variant="ghost" size="icon" aria-label={t('landing.editor.redo')} title={t('landing.editor.redo')} disabled={!b.canRedo} onClick={b.redo}>
-            <Redo2 aria-hidden />
-          </Button>
-        </div>
-        <Choice
-          className="h-8 w-44 text-xs"
-          value={deviceKey}
-          options={DEVICES.map((d) => ({ value: d.key, label: `${t(`landing.device.${d.key}`)} · ${String(d.width)}` }))}
-          onChange={(value) => setDeviceKey((DEVICES.find((d) => d.key === value)?.key ?? 'desktop'))}
-        />
-        <span
-          className={cn(
-            'rounded-full px-2 py-0.5 text-xs font-medium',
-            breakpoint === 'desktop' ? 'bg-muted text-muted-foreground' : 'bg-amber-500/15 text-amber-800 dark:text-amber-200',
-          )}
-          title={t('landing.editor.breakpointHint')}
-        >
-          {t(`landing.device.${breakpoint}`)}
-        </span>
-        <Choice
-          className="h-8 w-24 text-xs"
-          value={zoom === 'fit' ? 'fit' : String(zoom * 100)}
-          options={ZOOMS.map((z) => ({ value: z.key, label: z.value === 'fit' ? t('landing.editor.zoomFit') : `${z.key}%` }))}
-          onChange={(value) => setZoom(ZOOMS.find((z) => z.key === value)?.value ?? 'fit')}
-        />
-        <Button
-          type="button"
-          variant={fullView ? 'secondary' : 'ghost'}
-          size="icon"
-          aria-label={fullView ? t('landing.editor.showPanels') : t('landing.editor.fullView')}
-          title={fullView ? t('landing.editor.showPanels') : t('landing.editor.fullView')}
-          onClick={() => setFullView((v) => !v)}
-        >
-          {fullView ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
-        </Button>
-        <Button type="button" variant="ghost" size="icon" aria-label={t('landing.editor.copyPage')} title={t('landing.editor.copyPage')} onClick={copyPage}>
-          <ClipboardCopy aria-hidden />
-        </Button>
-        {latestClip ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={t('landing.editor.pasteAtEnd', { count: latestClip.nodes.length })}
-            title={`${t('landing.editor.pasteAtEnd', { count: latestClip.nodes.length })} — ${describeClip(latestClip)}`}
-            disabled={!editable}
-            onClick={() => void pasteBlock(null)}
-          >
-            <ClipboardPaste aria-hidden />
-          </Button>
-        ) : null}
-        <ClipboardTray
-          items={clipboard.items}
-          open={trayOpen}
-          onOpenChange={(open) => {
-            if (trayTimer.current) window.clearTimeout(trayTimer.current);
-            setTrayOpen(open);
-            if (!open) setTrayHighlight(null);
-            else void clipboard.refresh();
-          }}
-          highlightId={trayHighlight}
-          disabled={!editable}
-          onPaste={(entry) => {
-            setTrayOpen(false);
-            void pasteBlock(selectedId, 'after', entry);
-          }}
-          onStartDrag={(entry) => {
-            if (trayTimer.current) window.clearTimeout(trayTimer.current);
-            setTrayOpen(false);
-            dnd.startDrag({ kind: 'insert', nodes: entry.nodes, label: entry.label });
-          }}
-          onRemove={(id) => void clipboard.remove(id)}
-          onClear={() => void clipboard.clear()}
-        />
-        <Button type="button" variant={editingPopupId ? 'secondary' : 'outline'} size="sm" onClick={() => setShowPopups(true)}>
-          <SquareStack aria-hidden /> {t('landing.popups.button', { count: popupList.length })}
-        </Button>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <SaveIndicator state={b.saveState} dirty={b.dirty} editable={editable} />
-          {editable ? (
-            <Button type="button" variant="ghost" size="icon" aria-label={t('landing.editor.saveNow')} title={t('landing.editor.saveNow')} disabled={!b.dirty || b.saveState === 'saving'} onClick={() => void b.saveNow()}>
-              <Save aria-hidden />
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={t('landing.action.settings')}
-            title={t('landing.action.settings')}
-            onClick={() => void navigate({ to: '/t/$tenant/landing-pages/$pageId/settings', params: { tenant: slug, pageId: meta.id } })}
-          >
-            <Settings aria-hidden />
-          </Button>
-          {publicUrl ? (
-            <Button asChild variant="ghost" size="icon" aria-label={t('landing.action.viewLive')} title={t('landing.action.viewLive')}>
-              <a href={publicUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink aria-hidden />
-              </a>
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void b.saveNow().then(() => setShowPreview(true));
-            }}
-          >
-            <Eye aria-hidden /> {t('landing.preview.button')}
-          </Button>
-          {canPublish ? (
-            <Button type="button" size="sm" disabled={!editable} onClick={() => setPublishing(true)}>
-              <Rocket aria-hidden /> {t('landing.publish.action')}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      <EditorToolbar
+        meta={meta}
+        slug={slug}
+        b={b}
+        editable={editable}
+        canPublish={canPublish}
+        deviceKey={deviceKey}
+        onDeviceChange={setDeviceKey}
+        breakpoint={breakpoint}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        fullView={fullView}
+        onToggleFullView={() => setFullView((v) => !v)}
+        clip={clip}
+        selectedId={selectedId}
+        onDragClip={(entry) => dnd.startDrag({ kind: 'insert', nodes: entry.nodes, label: entry.label })}
+        popupCount={popupList.length}
+        editingPopup={editingPopupId !== null}
+        onOpenPopups={() => setShowPopups(true)}
+        onPreview={() => void b.saveNow().then(() => setShowPreview(true))}
+        onPublish={() => setPublishing(true)}
+      />
 
       <EditLockBanner lock={lock} canTakeover={canPublish} />
 
@@ -860,86 +562,21 @@ function Editor({ initial, meta }: { initial: CanvasPageWithDraft; meta: Landing
         </aside>
       </div>
 
-      {dnd.outline ? (
-        <div
-          className="pointer-events-none fixed z-[59] rounded-md"
-          style={{
-            left: dnd.outline.left,
-            top: dnd.outline.top,
-            width: dnd.outline.width,
-            height: dnd.outline.height,
-            outline: '1.5px dashed rgba(37,99,235,0.6)',
-            outlineOffset: -1.5,
-            background: 'rgba(37,99,235,0.04)',
-          }}
-        />
-      ) : null}
-      {dnd.indicator ? (
-        <div
-          className="pointer-events-none fixed z-[60] rounded"
-          style={
-            dnd.indicator.type === 'box'
-              ? {
-                  left: dnd.indicator.left,
-                  top: dnd.indicator.top,
-                  width: dnd.indicator.width,
-                  height: dnd.indicator.height,
-                  outline: '2px solid #2563eb',
-                  background: 'rgba(37,99,235,0.10)',
-                }
-              : dnd.indicator.type === 'h'
-                ? { left: dnd.indicator.left, top: dnd.indicator.top, width: dnd.indicator.width, height: 4, background: '#2563eb', boxShadow: '0 0 0 1px rgba(255,255,255,0.9)' }
-                : { left: dnd.indicator.left, top: dnd.indicator.top, width: 4, height: dnd.indicator.height, background: '#2563eb', boxShadow: '0 0 0 1px rgba(255,255,255,0.9)' }
-          }
-        />
-      ) : null}
-      {dnd.chip ? (
-        <div
-          className="pointer-events-none fixed z-[61] flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-white shadow-lg"
-          style={{ left: dnd.chip.x + 14, top: dnd.chip.y + 14, background: dnd.chip.valid ? '#2563eb' : '#94a3b8' }}
-        >
-          {dnd.chip.label}
-          {!dnd.chip.valid ? <span className="font-normal opacity-80">— {t('landing.editor.dropNotAllowed')}</span> : null}
-        </div>
-      ) : null}
+      <DragOverlay outline={dnd.outline} indicator={dnd.indicator} chip={dnd.chip} />
 
       {ctxMenu && ctxNode ? (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setCtxMenu(null)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setCtxMenu(null);
-            }}
-          />
-          <div
-            ref={ctxMenuRef}
-            role="menu"
-            className="fixed z-50 w-72 overflow-hidden rounded-md border bg-popover py-1 text-sm text-popover-foreground shadow-lg"
-            style={{ top: ctxMenu.y, left: ctxMenu.x }}
-          >
-            <div className="border-b px-3 pt-1 pb-1.5 text-xs text-muted-foreground">
+        <CtxMenu
+          menu={ctxMenu}
+          onMove={setCtxMenu}
+          onClose={() => setCtxMenu(null)}
+          header={
+            <>
               {t('landing.editor.ctxTarget')} <span className="font-semibold text-foreground">{clipLabelOf(ctxNode)}</span>
-            </div>
-            {ctxItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="menuitem"
-                disabled={!editable}
-                className={cn('block w-full truncate px-3 py-1.5 text-left hover:bg-muted disabled:opacity-50', item.danger && 'text-destructive')}
-                onClick={() => {
-                  item.run();
-                  setCtxMenu(null);
-                }}
-              >
-                <span className="block truncate">{item.label}</span>
-                {item.sub ? <span className="block truncate text-xs text-muted-foreground">{item.sub}</span> : null}
-              </button>
-            ))}
-          </div>
-        </>
+            </>
+          }
+          items={ctxItems}
+          disabled={!editable}
+        />
       ) : null}
 
       <DashboardConfirmDialog

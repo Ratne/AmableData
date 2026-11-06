@@ -1,22 +1,16 @@
 'use client';
 
-import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
-import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
-import { cva, type VariantProps } from 'class-variance-authority';
-import { Check, ChevronDown, Menu, X } from 'lucide-react';
-import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion } from 'motion/react';
+import { ChevronDown, Menu, X } from 'lucide-react';
+import { animate, AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   createContext,
   createElement,
-  forwardRef,
   memo,
   useCallback,
   useContext,
   useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -24,526 +18,22 @@ import type {
   ComponentProps,
   CSSProperties,
   ElementType,
-  FocusEvent,
   KeyboardEvent,
   PointerEvent,
   ReactNode,
   Ref,
-  RefObject,
 } from 'react';
-import { EASE_OUT, useControllableState } from '../../lib/controllable';
-import { cn } from '../../lib/utils';
-import { inertProps } from '../../lib/inert';
-import './dashboard-shell.css';
+import { EASE_OUT, useControllableState } from '../../../lib/controllable';
+import { cn } from '../../../lib/utils';
+import { inertProps } from '../../../lib/inert';
+import { DashboardButton } from './button';
+import { HoverHighlightContext, HoverHighlightList } from './highlight';
+import { PILL_SPRING, ShellDarkContext, useScopedDark } from './lib';
 
-/** The hover highlight glides after the pointer. */
-const FOLLOW_SPRING = { type: 'spring', stiffness: 650, damping: 45, mass: 0.5 } as const;
-/** The active pill slides to the chosen item. */
-const PILL_SPRING = { type: 'spring', stiffness: 520, damping: 38, mass: 0.7 } as const;
-/** Menus and popovers settle from a slight squash with a small overshoot. */
-const LAYER_SPRING = { type: 'spring', stiffness: 560, damping: 26, mass: 0.7 } as const;
 const RESIZE_STEP = 10;
 const NO_SECTIONS: readonly string[] = [];
 /** The sidebar docks beside the content from this container width, in rem. Keep in sync with `@2xl/dashboard-shell`. */
 const DOCKED_SIDEBAR_REM = 42;
-
-export const dashboardButtonVariants = cva(
-  'inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium leading-none outline-none select-none transition-[background-color,color,box-shadow] duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] focus-visible:ring-2 focus-visible:ring-(--obsidian-dashboard-shell-ring) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0',
-  {
-    variants: {
-      variant: {
-        primary:
-          'bg-(--obsidian-dashboard-shell-accent) text-(--obsidian-dashboard-shell-accent-foreground) shadow-(--obsidian-dashboard-shell-accent-shadow) hover:bg-(--obsidian-dashboard-shell-accent-hover)',
-        secondary:
-          'bg-(--obsidian-dashboard-shell-control) text-(--obsidian-dashboard-shell-foreground) shadow-(--obsidian-dashboard-shell-control-shadow) hover:bg-(--obsidian-dashboard-shell-muted) data-[state=open]:bg-(--obsidian-dashboard-shell-muted)',
-        muted:
-          'bg-(--obsidian-dashboard-shell-muted) text-(--obsidian-dashboard-shell-foreground) shadow-(--obsidian-dashboard-shell-control-shadow) hover:bg-(--obsidian-dashboard-shell-muted-hover)',
-        ghost:
-          'text-(--obsidian-dashboard-shell-text-subtle) hover:bg-(--obsidian-dashboard-shell-muted) hover:text-(--obsidian-dashboard-shell-foreground)',
-        danger:
-          'bg-(--obsidian-dashboard-shell-danger-solid) text-white shadow-[0_1px_2px_rgb(0_0_0/0.16),inset_0_1px_0_rgb(255_255_255/0.16),0_0_0_1px_rgb(0_0_0/0.08)] hover:bg-(--obsidian-dashboard-shell-danger-solid-hover)',
-      },
-      size: {
-        sm: 'h-[30px] px-[9px] text-xs [&_svg]:size-3',
-        md: 'h-8 px-2.5 text-sm [&_svg]:size-4',
-        icon: 'size-[30px] [&_svg]:size-4',
-      },
-    },
-    defaultVariants: { variant: 'secondary', size: 'sm' },
-  },
-);
-
-export type DashboardButtonProps = ComponentProps<'button'> &
-  VariantProps<typeof dashboardButtonVariants>;
-
-// React 18 only hands refs to function components through forwardRef; Radix triggers need it to anchor popovers.
-export const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>(
-  function DashboardButton({ variant, size, className, type = 'button', ...props }, ref) {
-    return (
-      <button
-        ref={ref}
-        type={type}
-        className={cn(dashboardButtonVariants({ variant, size }), className)}
-        {...props}
-      />
-    );
-  },
-);
-
-// Menus and popovers portal to the body, outside the shell, so they carry the layer class that holds the palette.
-const layerClassName =
-  'obsidian-dashboard-shell-layer z-50 rounded-[10px] bg-(--obsidian-dashboard-shell-menu) p-1 text-(--obsidian-dashboard-shell-foreground) shadow-(--obsidian-dashboard-shell-menu-shadow) outline-none backdrop-blur-xl backdrop-saturate-150';
-
-function layerMotion(reduceMotion: boolean) {
-  if (reduceMotion) {
-    return {
-      initial: { opacity: 0 },
-      animate: { opacity: 1 },
-      exit: { opacity: 0 },
-      transition: { duration: 0 },
-    };
-  }
-  return {
-    initial: { opacity: 0, scaleX: 0.92, scaleY: 0.86, filter: 'blur(8px)' },
-    animate: {
-      opacity: 1,
-      scaleX: 1,
-      scaleY: 1,
-      filter: 'blur(0px)',
-      transition: {
-        ...LAYER_SPRING,
-        opacity: { duration: 0.16, ease: EASE_OUT },
-        filter: { duration: 0.24, ease: EASE_OUT },
-      },
-    },
-    exit: {
-      opacity: 0,
-      scaleX: 0.96,
-      scaleY: 0.94,
-      filter: 'blur(4px)',
-      transition: { duration: 0.14, ease: EASE_OUT },
-    },
-  };
-}
-
-// Exit animations need the open state, since the content stays mounted until it has animated out.
-const LayerOpenContext = createContext(false);
-
-// Portaled layers leave a scoped `.dark` wrapper behind, so the shell passes its theme down to them.
-const ShellDarkContext = createContext(false);
-
-function useScopedDark(ref: RefObject<HTMLElement | null>, className?: string) {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const update = () => setIsDark(element.closest('.dark') !== null);
-    update();
-    if (typeof MutationObserver === 'undefined') return;
-    const observer = new MutationObserver(update);
-    for (let node: HTMLElement | null = element; node; node = node.parentElement) {
-      observer.observe(node, { attributes: true, attributeFilter: ['class'] });
-    }
-    return () => observer.disconnect();
-  }, [ref, className]);
-
-  return isDark;
-}
-
-export type DashboardMenuProps = ComponentProps<typeof DropdownMenuPrimitive.Root>;
-
-export function DashboardMenu({
-  open,
-  defaultOpen = false,
-  onOpenChange,
-  ...props
-}: DashboardMenuProps) {
-  const [isOpen, setIsOpen] = useControllableState(open, defaultOpen, onOpenChange);
-  return (
-    <LayerOpenContext.Provider value={isOpen}>
-      <DropdownMenuPrimitive.Root open={isOpen} onOpenChange={setIsOpen} {...props} />
-    </LayerOpenContext.Provider>
-  );
-}
-
-export const DashboardMenuTrigger = DropdownMenuPrimitive.Trigger;
-
-export type DashboardMenuContentProps = Omit<
-  ComponentProps<typeof DropdownMenuPrimitive.Content>,
-  'asChild' | 'forceMount'
->;
-
-export function DashboardMenuContent({
-  className,
-  children,
-  sideOffset = 6,
-  ...props
-}: DashboardMenuContentProps) {
-  const isOpen = useContext(LayerOpenContext);
-  const isDark = useContext(ShellDarkContext);
-  const reduceMotion = !!useReducedMotion();
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <DropdownMenuPrimitive.Portal forceMount>
-          <DropdownMenuPrimitive.Content forceMount asChild sideOffset={sideOffset} {...props}>
-            <motion.div
-              {...layerMotion(reduceMotion)}
-              className={cn(
-                layerClassName,
-                isDark && 'dark',
-                'obsidian-dashboard-shell-scroll max-h-(--radix-dropdown-menu-content-available-height) min-w-40 origin-(--radix-dropdown-menu-content-transform-origin) overflow-y-auto overscroll-contain',
-                className,
-              )}
-            >
-              <HoverHighlightList highlightClassName="rounded-md bg-(--obsidian-dashboard-shell-menu-highlight)">
-                {children}
-              </HoverHighlightList>
-            </motion.div>
-          </DropdownMenuPrimitive.Content>
-        </DropdownMenuPrimitive.Portal>
-      )}
-    </AnimatePresence>
-  );
-}
-
-const menuItemClassName =
-  'relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2.5 text-xs leading-none text-(--obsidian-dashboard-shell-text-muted) outline-none transition-[color,scale] duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] active:scale-[0.97] active:duration-75 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:text-(--obsidian-dashboard-shell-foreground) [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
-
-// Radix focuses items on hover and with the arrow keys, so following focus moves the highlight for both.
-function useHighlightOnFocus(
-  onFocus?: (event: FocusEvent<HTMLDivElement>) => void,
-  onBlur?: (event: FocusEvent<HTMLDivElement>) => void,
-) {
-  const highlight = useContext(HoverHighlightContext);
-  return {
-    onFocus: (event: FocusEvent<HTMLDivElement>) => {
-      onFocus?.(event);
-      highlight?.show(event.currentTarget);
-    },
-    onBlur: (event: FocusEvent<HTMLDivElement>) => {
-      onBlur?.(event);
-      highlight?.hide();
-    },
-  };
-}
-
-export function DashboardMenuItem({
-  className,
-  onFocus,
-  onBlur,
-  ...props
-}: ComponentProps<typeof DropdownMenuPrimitive.Item>) {
-  const focusHandlers = useHighlightOnFocus(onFocus, onBlur);
-  return (
-    <DropdownMenuPrimitive.Item
-      className={cn(menuItemClassName, className)}
-      {...focusHandlers}
-      {...props}
-    />
-  );
-}
-
-export const DashboardMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
-
-export function DashboardMenuRadioItem({
-  className,
-  children,
-  onFocus,
-  onBlur,
-  ...props
-}: ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
-  const focusHandlers = useHighlightOnFocus(onFocus, onBlur);
-  return (
-    <DropdownMenuPrimitive.RadioItem
-      className={cn(
-        menuItemClassName,
-        'pr-8 data-[state=checked]:font-medium data-[state=checked]:text-(--obsidian-dashboard-shell-foreground)',
-        className,
-      )}
-      {...focusHandlers}
-      {...props}
-    >
-      {children}
-      <DropdownMenuPrimitive.ItemIndicator className="absolute right-2.5 flex">
-        <Check aria-hidden className="size-3.5!" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </DropdownMenuPrimitive.RadioItem>
-  );
-}
-
-export function DashboardMenuLabel({
-  className,
-  ...props
-}: ComponentProps<typeof DropdownMenuPrimitive.Label>) {
-  return (
-    <DropdownMenuPrimitive.Label
-      className={cn(
-        'px-2.5 pb-2 pt-2.5 text-[11px] font-medium uppercase leading-none tracking-[1px] text-(--obsidian-dashboard-shell-text-subtle)',
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-export function DashboardMenuSeparator({
-  className,
-  ...props
-}: ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
-  return (
-    <DropdownMenuPrimitive.Separator
-      className={cn('-mx-1 my-1 h-px bg-(--obsidian-dashboard-shell-border)', className)}
-      {...props}
-    />
-  );
-}
-
-export type DashboardPopoverProps = ComponentProps<typeof PopoverPrimitive.Root>;
-
-export function DashboardPopover({
-  open,
-  defaultOpen = false,
-  onOpenChange,
-  ...props
-}: DashboardPopoverProps) {
-  const [isOpen, setIsOpen] = useControllableState(open, defaultOpen, onOpenChange);
-  return (
-    <LayerOpenContext.Provider value={isOpen}>
-      <PopoverPrimitive.Root open={isOpen} onOpenChange={setIsOpen} {...props} />
-    </LayerOpenContext.Provider>
-  );
-}
-
-export const DashboardPopoverTrigger = PopoverPrimitive.Trigger;
-
-export type DashboardPopoverContentProps = Omit<
-  ComponentProps<typeof PopoverPrimitive.Content>,
-  'asChild' | 'forceMount'
->;
-
-export function DashboardPopoverContent({
-  className,
-  children,
-  align = 'center',
-  sideOffset = 6,
-  ...props
-}: DashboardPopoverContentProps) {
-  const isOpen = useContext(LayerOpenContext);
-  const isDark = useContext(ShellDarkContext);
-  const reduceMotion = !!useReducedMotion();
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <PopoverPrimitive.Portal forceMount>
-          <PopoverPrimitive.Content
-            forceMount
-            asChild
-            align={align}
-            sideOffset={sideOffset}
-            {...props}
-          >
-            <motion.div
-              {...layerMotion(reduceMotion)}
-              className={cn(
-                layerClassName,
-                isDark && 'dark',
-                'w-72 origin-(--radix-popover-content-transform-origin)',
-                className,
-              )}
-            >
-              {children}
-            </motion.div>
-          </PopoverPrimitive.Content>
-        </PopoverPrimitive.Portal>
-      )}
-    </AnimatePresence>
-  );
-}
-
-export type DashboardConfirmDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: ReactNode;
-  description?: ReactNode;
-  confirmLabel?: ReactNode;
-  cancelLabel?: ReactNode;
-  /** "danger" paints the confirm button red, for deleting and other actions that remove things. */
-  tone?: 'default' | 'danger';
-  onConfirm: () => void;
-};
-
-export function DashboardConfirmDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
-  tone = 'default',
-  onConfirm,
-}: DashboardConfirmDialogProps) {
-  const isDark = useContext(ShellDarkContext);
-  const reduceMotion = !!useReducedMotion();
-
-  return (
-    <AlertDialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <AnimatePresence>
-        {open && (
-          <AlertDialogPrimitive.Portal forceMount>
-            <AlertDialogPrimitive.Overlay forceMount asChild>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: reduceMotion ? 0 : 0.18, ease: EASE_OUT }}
-                className={cn(
-                  'fixed inset-0 z-50 backdrop-blur-[2px]',
-                  isDark ? 'bg-black/50' : 'bg-black/25',
-                )}
-              />
-            </AlertDialogPrimitive.Overlay>
-            <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
-              <AlertDialogPrimitive.Content forceMount asChild>
-                <motion.div
-                  initial={
-                    reduceMotion
-                      ? { opacity: 0 }
-                      : { opacity: 0, scale: 0.94, y: 6, filter: 'blur(6px)' }
-                  }
-                  animate={{
-                    opacity: 1,
-                    scale: 1,
-                    y: 0,
-                    filter: 'blur(0px)',
-                    transition: reduceMotion
-                      ? { duration: 0 }
-                      : {
-                          ...LAYER_SPRING,
-                          opacity: { duration: 0.16, ease: EASE_OUT },
-                          filter: { duration: 0.2, ease: EASE_OUT },
-                        },
-                  }}
-                  exit={
-                    reduceMotion
-                      ? { opacity: 0, transition: { duration: 0 } }
-                      : {
-                          opacity: 0,
-                          scale: 0.97,
-                          y: 4,
-                          filter: 'blur(4px)',
-                          transition: { duration: 0.14, ease: EASE_OUT },
-                        }
-                  }
-                  className={cn(
-                    'obsidian-dashboard-shell-layer pointer-events-auto flex w-full max-w-sm flex-col gap-4 rounded-xl bg-(--obsidian-dashboard-shell-background) p-4 text-(--obsidian-dashboard-shell-foreground) shadow-(--obsidian-dashboard-shell-menu-shadow) outline-none',
-                    isDark && 'dark',
-                  )}
-                >
-                  <div className="flex flex-col gap-1.5">
-                    <AlertDialogPrimitive.Title className="text-sm font-medium leading-snug">
-                      {title}
-                    </AlertDialogPrimitive.Title>
-                    {description ? (
-                      <AlertDialogPrimitive.Description className="text-xs leading-relaxed text-(--obsidian-dashboard-shell-text-muted)">
-                        {description}
-                      </AlertDialogPrimitive.Description>
-                    ) : (
-                      <AlertDialogPrimitive.Description className="sr-only">
-                        {title}
-                      </AlertDialogPrimitive.Description>
-                    )}
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <AlertDialogPrimitive.Cancel asChild>
-                      <DashboardButton variant="secondary" size="sm">
-                        {cancelLabel}
-                      </DashboardButton>
-                    </AlertDialogPrimitive.Cancel>
-                    <AlertDialogPrimitive.Action asChild>
-                      <DashboardButton
-                        variant={tone === 'danger' ? 'danger' : 'primary'}
-                        size="sm"
-                        onClick={onConfirm}
-                      >
-                        {confirmLabel}
-                      </DashboardButton>
-                    </AlertDialogPrimitive.Action>
-                  </div>
-                </motion.div>
-              </AlertDialogPrimitive.Content>
-            </div>
-          </AlertDialogPrimitive.Portal>
-        )}
-      </AnimatePresence>
-    </AlertDialogPrimitive.Root>
-  );
-}
-
-export type DashboardFilterOption = { value: string; label: string };
-
-export type DashboardFilterMenuProps = {
-  /** Shown before the current value and as the menu heading, such as "Sort by". */
-  label?: string;
-  value: string;
-  options: DashboardFilterOption[];
-  onValueChange: (value: string) => void;
-  align?: 'start' | 'end';
-  className?: string;
-};
-
-export function DashboardFilterMenu({
-  label,
-  value,
-  options,
-  onValueChange,
-  align = 'start',
-  className,
-}: DashboardFilterMenuProps) {
-  const currentLabel = options.find((option) => option.value === value)?.label ?? value;
-
-  return (
-    <DashboardMenu>
-      <DashboardMenuTrigger asChild>
-        <DashboardButton
-          variant="secondary"
-          size="sm"
-          aria-label={label ? `${label}: ${currentLabel}` : undefined}
-          className={cn('group gap-0 overflow-hidden px-0', className)}
-        >
-          {label && (
-            <>
-              <span className="px-[9px] font-normal text-(--obsidian-dashboard-shell-text-subtle)">
-                {label}
-              </span>
-              <span aria-hidden className="h-full w-px bg-(--obsidian-dashboard-shell-border)" />
-            </>
-          )}
-          <span className="flex items-center gap-1.5 px-[9px]">
-            {currentLabel}
-            <ChevronDown
-              aria-hidden
-              className="text-(--obsidian-dashboard-shell-text-subtle) transition-transform duration-200 group-data-[state=open]:rotate-180"
-            />
-          </span>
-        </DashboardButton>
-      </DashboardMenuTrigger>
-      <DashboardMenuContent align={align} className="min-w-44">
-        {label && <DashboardMenuLabel>{label}</DashboardMenuLabel>}
-        <DashboardMenuRadioGroup value={value} onValueChange={onValueChange}>
-          {options.map((option) => (
-            <DashboardMenuRadioItem key={option.value} value={option.value}>
-              {option.label}
-            </DashboardMenuRadioItem>
-          ))}
-        </DashboardMenuRadioGroup>
-      </DashboardMenuContent>
-    </DashboardMenu>
-  );
-}
 
 // Duo icons ship their own bundled SVG prop types, so accept any element type rather than a narrow props shape.
 type NavIcon = ElementType;
@@ -700,7 +190,9 @@ export function DashboardShell({
   );
   const toggleSection = useCallback(
     (id: string) =>
-      setCollapsed(collapsed.includes(id) ? collapsed.filter((other) => other !== id) : [...collapsed, id]),
+      setCollapsed(
+        collapsed.includes(id) ? collapsed.filter((other) => other !== id) : [...collapsed, id],
+      ),
     [collapsed, setCollapsed],
   );
   const [activeTab, setActiveTab] = useControllableState(
@@ -1034,89 +526,6 @@ export function DashboardShell({
   );
 }
 
-type HoverHighlight = { show: (element: HTMLElement) => void; hide: () => void };
-
-const HoverHighlightContext = createContext<HoverHighlight | null>(null);
-
-/**
- * One hover highlight for a whole list. It glides from item to item after the pointer,
- * and appears in place when the pointer arrives from outside the list.
- */
-function HoverHighlightList({
-  className,
-  highlightClassName = 'rounded-lg bg-(--obsidian-dashboard-shell-hover)',
-  children,
-}: {
-  className?: string;
-  highlightClassName?: string;
-  children: ReactNode;
-}) {
-  const reduceMotion = !!useReducedMotion();
-  const listRef = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const width = useMotionValue(0);
-  const height = useMotionValue(0);
-  const [isVisible, setIsVisible] = useState(false);
-  const isShown = useRef(false);
-  const hiddenAt = useRef(0);
-
-  const show = useCallback(
-    (element: HTMLElement) => {
-      const list = listRef.current;
-      if (!list) return;
-      // Layout offsets rather than client rects, so a menu that is still scaling in doesn't skew the position.
-      let top = 0;
-      let left = 0;
-      for (
-        let node: HTMLElement | null = element;
-        node && node !== list;
-        node = node.offsetParent as HTMLElement | null
-      ) {
-        top += node.offsetTop;
-        left += node.offsetLeft;
-      }
-      // Leaving and re-entering quickly still glides, so a pointer that grazes a border doesn't make it blink.
-      const glide =
-        !reduceMotion && (isShown.current || performance.now() - hiddenAt.current < 150);
-      const moveTo = (value: typeof x, target: number) =>
-        glide ? animate(value, target, FOLLOW_SPRING) : value.jump(target);
-      moveTo(x, left);
-      moveTo(y, top);
-      moveTo(width, element.offsetWidth);
-      moveTo(height, element.offsetHeight);
-      isShown.current = true;
-      setIsVisible(true);
-    },
-    [height, reduceMotion, width, x, y],
-  );
-
-  const hide = useCallback(() => {
-    if (!isShown.current) return;
-    isShown.current = false;
-    hiddenAt.current = performance.now();
-    setIsVisible(false);
-  }, []);
-
-  const highlight = useMemo(() => ({ show, hide }), [show, hide]);
-
-  return (
-    <HoverHighlightContext.Provider value={highlight}>
-      <div ref={listRef} className={cn('relative', className)} onPointerLeave={hide}>
-        <motion.span
-          aria-hidden
-          className={cn('pointer-events-none absolute left-0 top-0', highlightClassName)}
-          style={{ x, y, width, height }}
-          initial={false}
-          animate={{ opacity: isVisible ? 1 : 0 }}
-          transition={{ duration: isVisible ? 0.12 : 0.15, ease: 'easeOut' }}
-        />
-        {children}
-      </div>
-    </HoverHighlightContext.Provider>
-  );
-}
-
 type SidebarContentProps = {
   brand: DashboardShellProps['brand'];
   navigation: DashboardShellNavSection[];
@@ -1305,7 +714,10 @@ function NavSection({
       >
         <span className="min-w-0 flex-1 truncate">{title}</span>
         {holdsActive && (
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-(--obsidian-dashboard-shell-foreground)" />
+          <span
+            aria-hidden
+            className="size-1.5 shrink-0 rounded-full bg-(--obsidian-dashboard-shell-foreground)"
+          />
         )}
         <ChevronDown
           aria-hidden
