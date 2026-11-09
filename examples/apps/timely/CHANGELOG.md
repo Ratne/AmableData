@@ -3,6 +3,13 @@
 Versions follow `version` in [manifest.json](manifest.json). Each version is a released bundle;
 installations get it, and the manifest changes, through the catalog.
 
+## 1.0.2 (2026-11-09)
+
+- Each minute marks the announced deadlines with one batched write per round instead of one query
+  per deadline.
+- Extending, resetting or deleting a campaign with many deadlines, and erasing an installation,
+  run in chunks of 5000 rows: large campaigns stay within the database limits.
+
 ## 1.0.1 (2026-10-22)
 
 - Deadlines are announced to automations in batches until the backlog is empty (up to 900 events

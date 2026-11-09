@@ -3,6 +3,12 @@
 Versions follow `version` in [manifest.json](manifest.json). Each version is a released bundle;
 installations get it, and the manifest changes, through the catalog.
 
+## 1.0.2 (2026-11-09)
+
+- Partial indexes for the cleanup of abandoned sessions and the resync of unsent results: both
+  scans stay fast as sessions grow.
+- Erasing an installation deletes in chunks of 5000 rows.
+
 ## 1.0.1 (2026-10-22)
 
 - An `email` in the link still links the session to its contact, but no longer skips the opt-in:
