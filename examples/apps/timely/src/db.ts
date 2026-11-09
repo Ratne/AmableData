@@ -71,6 +71,7 @@ export const SCHEMA: readonly string[] = [
   'CREATE INDEX IF NOT EXISTS deadlines_due ON deadlines (expired_fired, deadline_at) WHERE contact_id IS NOT NULL',
   'CREATE INDEX IF NOT EXISTS deadlines_unannounced ON deadlines (started_fired) WHERE contact_id IS NOT NULL',
   'CREATE INDEX IF NOT EXISTS deadlines_contact ON deadlines (install_id, contact_id)',
+  'CREATE INDEX IF NOT EXISTS deadlines_anon_expired ON deadlines (deadline_at) WHERE contact_id IS NULL',
   `CREATE TABLE IF NOT EXISTS action_runs (
     install_id TEXT NOT NULL,
     key TEXT NOT NULL,

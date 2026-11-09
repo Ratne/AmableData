@@ -496,4 +496,33 @@ describe('chunked campaign-wide changes', () => {
     expect(await changeDeadlines(db, campaign, null, { kind: 'reset' }, at)).toBe(rows);
     expect((await db.prepare(`SELECT COUNT(*) AS n FROM deadlines`).first<{ n: number }>())?.n).toBe(0);
   });
+
+  it('drops anonymous deadlines expired more than 90 days ago, keeping contacts and recent ones', async () => {
+    const { ANONYMOUS_RETENTION_MS, dropStaleAnonymous } = await import('../src/deadlines');
+    const { ensureSchema } = await import('../src/db');
+    const db = memoryD1();
+    await ensureSchema(db);
+    const at = Date.now();
+    const old = at - ANONYMOUS_RETENTION_MS - HOUR;
+    const rows: Array<[string, string | null, number]> = [
+      ...Array.from({ length: 5_100 }, (_, i): [string, string | null, number] => [`v${String(i)}`, null, old]),
+      ['recent', null, at - ANONYMOUS_RETENTION_MS + HOUR],
+      ['contact', 'ct_ada', old],
+    ];
+    for (let i = 0; i < rows.length; i += 500) {
+      await db.batch(
+        rows.slice(i, i + 500).map(([subject, contact, deadline]) =>
+          db
+            .prepare(
+              `INSERT INTO deadlines (id, install_id, campaign_id, subject, contact_id, started_at, deadline_at, source, updated_at)
+               VALUES (?, 'inst_1', 'cmp_1', ?, ?, ?, ?, 'page_visit', ?)`,
+            )
+            .bind(`d_${subject}`, subject, contact, deadline - HOUR, deadline, deadline - HOUR),
+        ),
+      );
+    }
+    expect(await dropStaleAnonymous(db, at)).toBe(5_100);
+    const left = await db.prepare(`SELECT subject FROM deadlines ORDER BY subject`).all<{ subject: string }>();
+    expect(left.results.map((r) => r.subject)).toEqual(['contact', 'recent']);
+  });
 });

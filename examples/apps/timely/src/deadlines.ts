@@ -260,6 +260,22 @@ export async function eraseContact(db: SqlDb, installId: string, contactId: stri
   await db.prepare('DELETE FROM deadlines WHERE install_id = ? AND contact_id = ?').bind(installId, contactId).run();
 }
 
+/** Anonymous deadlines are kept this long after they expire; a visitor coming back later starts over. */
+export const ANONYMOUS_RETENTION_MS = 90 * 24 * 3_600_000;
+
+/** Cron: drops anonymous visitors' deadlines expired more than ANONYMOUS_RETENTION_MS ago. */
+export function dropStaleAnonymous(db: SqlDb, now: number, maxRounds = 10): Promise<number> {
+  return inChunks(
+    () =>
+      db
+        .prepare(
+          `DELETE FROM deadlines WHERE rowid IN (SELECT rowid FROM deadlines WHERE contact_id IS NULL AND deadline_at < ? LIMIT ${String(CHUNK_ROWS)})`,
+        )
+        .bind(now - ANONYMOUS_RETENTION_MS),
+    maxRounds,
+  );
+}
+
 export interface PendingEvent {
   readonly id: string;
   readonly installId: string;

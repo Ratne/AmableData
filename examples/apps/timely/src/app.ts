@@ -28,6 +28,7 @@ import {
   changeDeadlines,
   contactDeadlines,
   countDeadlines,
+  dropStaleAnonymous,
   eraseContact,
   findDeadline,
   getOrStart,
@@ -568,6 +569,7 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
       if (started.length < limit && expired.length < limit) break;
     }
     await dropDeletedCampaignDeadlines(env.DB);
+    await dropStaleAnonymous(env.DB, at);
     await env.DB.prepare('DELETE FROM action_runs WHERE rowid IN (SELECT rowid FROM action_runs WHERE created_at < ? LIMIT 5000)')
       .bind(at - ACTION_TTL_MS)
       .run();

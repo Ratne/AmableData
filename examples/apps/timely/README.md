@@ -98,6 +98,8 @@ The release script builds `dist/worker.mjs` (screens inlined), attaches it to th
 Timely stores, per installation, its campaigns and, per contact or anonymous visitor, the start
 and the end of their deadline and what started it. It reads contacts only to check that a contact
 exists before starting a deadline and to show names in the Contacts tab. Anonymous visitors are a
-random id kept in their browser's local storage; the timer requests carry no cookies. A privacy
+random id kept in their browser's local storage; the timer requests carry no cookies. Their
+deadlines are deleted 90 days after they expire (a visitor coming back later starts a new
+countdown); contacts' deadlines are kept until the contact is erased. A privacy
 erasure request deletes the contact's deadlines; a data request returns them. Uninstalling the app
 deletes all campaigns and deadlines of the installation.

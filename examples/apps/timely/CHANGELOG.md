@@ -3,6 +3,12 @@
 Versions follow `version` in [manifest.json](manifest.json). Each version is a released bundle;
 installations get it, and the manifest changes, through the catalog.
 
+## 1.0.3 (2026-11-09)
+
+- Anonymous visitors' deadlines are deleted 90 days after they expire, so the database stops
+  growing with one-off visits; a visitor coming back later starts a new countdown. Contacts'
+  deadlines are unchanged.
+
 ## 1.0.2 (2026-11-09)
 
 - Each minute marks the announced deadlines with one batched write per round instead of one query
