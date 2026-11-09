@@ -16,8 +16,8 @@ import {
   updateSavedSearchSchema,
 } from '@amable/api-types';
 import type { Context } from 'hono';
-import { validateImportBatch } from '../../apps/validate-hook';
-import { defer, getAuth, getTenant, type AppEnv } from '../../middleware';
+import { hasBatchValidators, queueImportValidation } from '../../apps/validate-hook';
+import { getAuth, getTenant, type AppEnv } from '../../middleware';
 import { CrmError } from '../errors';
 import { CsvParser, detectDelimiter } from '../import/csv';
 import type { SearchEntityKind } from '../search/index-store';
@@ -231,6 +231,7 @@ async function streamCsvImport(c: Context<AppEnv>, importId: string) {
   let nextRowNumber = 1;
   let rows = 0;
   let bytes = 0;
+  let validators: boolean | null = null;
 
   const flush = async (): Promise<void> => {
     if (batch.length === 0 || header === null) return;
@@ -240,7 +241,8 @@ async function streamCsvImport(c: Context<AppEnv>, importId: string) {
     batch = [];
     const result = await callCrm(c, 'imports.rows', { importId, header, rows: current, firstRowNumber });
     if (result.created_contacts.length > 0 && getAuth(c).kind !== 'app') {
-      await defer(c, validateImportBatch(c.env, getTenant(c).tenant.id, result.created_contacts));
+      validators ??= await hasBatchValidators(c.env, getTenant(c).tenant.id);
+      if (validators) await queueImportValidation(c.env, getTenant(c).tenant.id, result.created_contacts);
     }
   };
   const accept = async (parsed: string[][]): Promise<void> => {

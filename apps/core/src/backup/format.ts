@@ -30,6 +30,11 @@ export const BACKUP_LEASE_MS = 10 * 60 * 1000;
 export const BACKUP_STAGING_PREFIX = 'backups/_staging/';
 /** Pages (D1 queries / DO dump calls) per slice: subrequest headroom within one tick. */
 export const BACKUP_SLICE_MAX_PAGES = 400;
+/**
+ * Pages of every slice of one scheduled tick together: D1 counts at most 1,000
+ * queries per Worker invocation and the cron tick runs other jobs too.
+ */
+export const BACKUP_TICK_MAX_PAGES = 500;
 /** A backup suspended longer than this is abandoned and restarted from scratch. */
 export const BACKUP_ABANDON_MS = 24 * 60 * 60 * 1000;
 

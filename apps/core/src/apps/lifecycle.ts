@@ -2,6 +2,7 @@ import { newScopes, type AppManifest } from '@amable/core/apps';
 import { monotonicFactory } from 'ulid';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
+import { DELETE_CHUNK, deleteInChunks } from '../platform/chunked-delete';
 import { appSecretAd } from '../webhooks/service';
 import { AppError } from './errors';
 import {
@@ -264,19 +265,27 @@ export async function uninstallApp(
   return reload(env, install.id);
 }
 
-async function finalize(env: Env, install: AppInstall, nowMs: number): Promise<void> {
+const CACHE_ROUNDS_PER_FINALIZE = 5;
+
+/** false = cached verdicts left to drop: the install stays `uninstalling` and the next tick continues. */
+async function finalize(env: Env, install: AppInstall, nowMs: number): Promise<boolean> {
   await tenantOp(env, install.tenantId, 'apps.cleanup', { appId: install.appId, keepData: install.keepData === true });
   await revokeTokens(env.DB, install.id, nowMs);
   await disableEndpoint(env.DB, install.id, 'app_uninstalled', nowMs);
+  // Large imports leave many cached verdicts (30-day TTL): dropped in chunks, a bounded number per tick.
+  const dropped = await deleteInChunks(env.DB, 'app_hook_cache', 'install_id = ?', [install.id], {
+    maxRounds: CACHE_ROUNDS_PER_FINALIZE,
+  });
+  if (dropped >= CACHE_ROUNDS_PER_FINALIZE * DELETE_CHUNK) return false;
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM app_oauth_codes WHERE install_id = ?`).bind(install.id),
-    env.DB.prepare(`DELETE FROM app_hook_cache WHERE install_id = ?`).bind(install.id),
     env.DB.prepare(
       `UPDATE app_installs SET status = 'uninstalled', uninstalled_at = ?, updated_at = ?, cleanup_until = NULL,
          webhook_secret = NULL, webhook_secret_prev = NULL, webhook_secret_prev_until = NULL,
          pending_manifest = NULL, pending_scopes = NULL WHERE id = ?`,
     ).bind(nowMs, nowMs, install.id),
   ]);
+  return true;
 }
 
 /** Cron: closes the uninstalls whose cleanup window is over (a few per tick). */
@@ -291,8 +300,7 @@ export async function finalizeUninstalls(env: Env, nowMs: number, limit = 20): P
     const install = await installById(env.DB, row.id);
     if (install === null) continue;
     try {
-      await finalize(env, install, nowMs);
-      done += 1;
+      if (await finalize(env, install, nowMs)) done += 1;
     } catch (error) {
       console.error(`[apps] finalize ${row.id} failed:`, error instanceof Error ? error.message : error);
     }

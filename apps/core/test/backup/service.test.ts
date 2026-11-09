@@ -291,6 +291,42 @@ describe('scheduled backups', () => {
     expect(state.inProgress).toBeNull();
   });
 
+  it('stops a tick at its page budget (D1 queries per invocation) and completes on later ticks', async () => {
+    seedDos(acme.id, 150);
+    const deps = testDeps(r2, dos, h.env.DB, clock, 16 * 1024, 1);
+    let pages = 0;
+    const counting: BackupDeps = {
+      ...deps,
+      stub: (tenantId, name) => {
+        const stub = deps.stub(tenantId, name);
+        return {
+          ...stub,
+          backupDump: (cursor) => {
+            pages += 1;
+            return stub.backupDump(cursor);
+          },
+        };
+      },
+    };
+    const first = await runScheduledBackups(counting, { maxBackups: 5, maxPages: 3 });
+    expect(first.status).toBe('ran');
+    expect(pages).toBeLessThanOrEqual(3);
+    let ticks = 1;
+    const done = new Set(first.done);
+    while (!done.has(acme.id)) {
+      ticks += 1;
+      expect(ticks).toBeLessThan(500);
+      clock.now += 5 * 60_000;
+      for (const scope of (await runScheduledBackups(counting, { maxBackups: 5, maxPages: 3 }))
+        .done)
+        done.add(scope);
+    }
+    expect(ticks).toBeGreaterThan(1);
+    const backup = (await listBackups(counting, tenantBackupPrefix(acme.id)))[0];
+    const all = await lines(backup?.key ?? '');
+    expect(all.filter((l) => l['table'] === 'crm_contacts')).toHaveLength(150);
+  });
+
   it('keeps the stored slices after a failure and resumes after the retry window', async () => {
     seedDos(acme.id, 150);
     const base = testDeps(r2, dos, h.env.DB, clock, 16 * 1024, 1);

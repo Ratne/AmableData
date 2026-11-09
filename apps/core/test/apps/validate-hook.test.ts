@@ -2,7 +2,14 @@ import { formDefinitionSchema } from '@amable/forms';
 import { afterEach, describe, expect, it } from 'vitest';
 import { overrideAuthServices } from '../../src/auth/services';
 import { installById } from '../../src/apps/store';
-import { BREAKER_THRESHOLD, validateContactValues, validateImportBatch } from '../../src/apps/validate-hook';
+import {
+  BREAKER_THRESHOLD,
+  hasBatchValidators,
+  IMPORT_VALIDATE_KIND,
+  validateContactValues,
+  validateImportBatch,
+} from '../../src/apps/validate-hook';
+import { consumeWebhooks } from '../../src/webhooks/runtime';
 import { blockingValidationErrors } from '../../src/forms/app-validation';
 import { appConnector, appConnectorCatalog, appConnectorIssues } from '../../src/forms/connectors/app';
 import type { ConnectorContext } from '../../src/forms/connectors/types';
@@ -149,6 +156,38 @@ describe('contact.validate hook', () => {
     expect(h.calls.filter((c) => c.url.endsWith('/hooks/validate-batch')).length).toBe(before + 1);
     expect((await contactOf(installed, ids[0]!)).tags.map((t) => t.name)).toContain('Email non valida');
     expect((await contactOf(installed, ids[1]!)).custom_fields['app_emailable_email_status']).toBe('valid');
+  });
+
+  it('runs a queued import batch in the webhooks-out consumer', async () => {
+    const h = await createAppsHarness();
+    expect(await hasBatchValidators(h.env, 't_acme')).toBe(false);
+    h.routes.set('https://apps.example.com/hooks/validate-batch', (call) => {
+      const body = JSON.parse(call.body) as { items: Array<{ ref: string; values: { email: string } }> };
+      return Response.json({ results: body.items.map((item) => ({ ref: item.ref, ...verdict(item.values.email) })) });
+    });
+    const installed = await installApp(h, {
+      extensions: { contact_validate: { fields: ['email'], endpoint: '/hooks/validate', batch_endpoint: '/hooks/validate-batch' } },
+    });
+    expect(await hasBatchValidators(h.env, 't_acme')).toBe(true);
+    const created = await installed.owner.post('/api/v2/t/acme/contacts', { given_name: 'X', emails: [{ email: 'bad1@example.com' }] });
+    const id = String(created.body.id);
+    const acked: string[] = [];
+    const batch = {
+      queue: 'webhooks-out',
+      messages: [
+        {
+          id: 'm1',
+          timestamp: new Date(),
+          attempts: 1,
+          body: { kind: IMPORT_VALIDATE_KIND, version: 1, tenantId: 't_acme', contacts: [{ id, email: 'bad1@example.com', phone: null }] },
+          ack: () => acked.push('m1'),
+          retry: () => undefined,
+        },
+      ],
+    } as unknown as MessageBatch<unknown>;
+    await consumeWebhooks(batch, h.env);
+    expect(acked).toEqual(['m1']);
+    expect((await contactOf(installed, id)).tags.map((t) => t.name)).toContain('Email non valida');
   });
 });
 

@@ -313,3 +313,37 @@ export async function validateImportBatch(
   }
   return applied;
 }
+
+export const IMPORT_VALIDATE_KIND = 'contacts.validate_batch';
+
+export interface ImportValidateMessage {
+  readonly kind: typeof IMPORT_VALIDATE_KIND;
+  readonly version: 1;
+  readonly tenantId: string;
+  readonly contacts: readonly BatchContact[];
+}
+
+export function isImportValidateMessage(body: unknown): body is ImportValidateMessage {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    (body as { kind?: unknown }).kind === IMPORT_VALIDATE_KIND &&
+    typeof (body as { tenantId?: unknown }).tenantId === 'string' &&
+    Array.isArray((body as { contacts?: unknown }).contacts)
+  );
+}
+
+/** True when an app validates contacts in batches for the tenant (import validation has work to do). */
+export async function hasBatchValidators(env: Env, tenantId: string): Promise<boolean> {
+  return (await validateHooks(env, tenantId)).some((i) => hookOf(i)?.batch_endpoint !== undefined);
+}
+
+/**
+ * Queues the validation of one imported batch. Running every batch of a
+ * 100k-row CSV inside the upload request would exceed the D1 queries and
+ * subrequests of one invocation; each queue message is its own invocation.
+ */
+export async function queueImportValidation(env: Env, tenantId: string, contacts: readonly BatchContact[]): Promise<void> {
+  const message: ImportValidateMessage = { kind: IMPORT_VALIDATE_KIND, version: 1, tenantId, contacts };
+  await env.WEBHOOKS_OUT.send(message);
+}

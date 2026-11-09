@@ -221,6 +221,30 @@ describe('fan-out and delivery', () => {
     expect(await service.prune()).toBe(1);
   });
 
+  it('removes an endpoint with a long log in chunks: hidden at once, finished by prune', async () => {
+    const service = new WebhookService(await deps());
+    const { endpoint } = await service.create('t_acme', { url: 'https://a.example.com/h', event_types: ['*'], createdBy: null });
+    const rows = 20_050;
+    for (let i = 0; i < rows; i += 500) {
+      await h.env.DB.batch(
+        Array.from({ length: Math.min(500, rows - i) }, (_, k) =>
+          h.env.DB.prepare(
+            `INSERT INTO webhook_deliveries (id, tenant_id, endpoint_id, event_id, event_type, payload, status, created_at)
+             VALUES (?, 't_acme', ?, ?, 'contact.created', '{}', 'succeeded', ?)`,
+          ).bind(`d_${String(i + k)}`, endpoint.id, `e_${String(i + k)}`, h.clock.now),
+        ),
+      );
+    }
+    await service.remove('t_acme', endpoint.id);
+    expect(await service.list('t_acme')).toEqual([]);
+    const left = async () =>
+      (await h.env.DB.prepare(`SELECT COUNT(*) AS n FROM webhook_deliveries WHERE endpoint_id = ?`).bind(endpoint.id).first<{ n: number }>())?.n;
+    expect(await left()).toBe(50);
+    await service.prune();
+    expect(await left()).toBe(0);
+    expect(await h.env.DB.prepare(`SELECT id FROM webhook_endpoints WHERE id = ?`).bind(endpoint.id).first()).toBeNull();
+  });
+
   it('re-enqueues pending deliveries whose queue message was lost', async () => {
     const d = await deps();
     let queueDown = false;

@@ -1,4 +1,5 @@
 import type { Env } from '../env';
+import { deleteInChunks } from './chunked-delete';
 
 /** Grace after expiry before an auth row is dropped (keeps recent history inspectable). */
 const EXPIRED_GRACE_MS = 7 * 24 * 3600 * 1000;
@@ -6,8 +7,7 @@ const EXPIRED_GRACE_MS = 7 * 24 * 3600 * 1000;
 const USAGE_RETENTION_MS = 90 * 24 * 3600 * 1000;
 /** Audit trail kept one year. */
 const AUDIT_RETENTION_MS = 365 * 24 * 3600 * 1000;
-/** Per table and run; chunked so one run never holds D1 for long or trips query limits. */
-const DELETE_CHUNK = 5000;
+/** Chunks of 5,000 rows per table and run (up to 100,000): one run never holds D1 for long. */
 
 const TARGETS = [
   { table: 'sessions', where: 'expires_at < ?' },
@@ -31,12 +31,7 @@ function boundOf(table: string, nowMs: number): number {
 export async function runRetention(env: Env, nowMs: number): Promise<number> {
   let deleted = 0;
   for (const { table, where } of TARGETS) {
-    const result = await env.DB.prepare(
-      `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE ${where} LIMIT ${String(DELETE_CHUNK)})`,
-    )
-      .bind(boundOf(table, nowMs))
-      .run();
-    deleted += result.meta.changes ?? 0;
+    deleted += await deleteInChunks(env.DB, table, where, [boundOf(table, nowMs)]);
   }
   return deleted;
 }

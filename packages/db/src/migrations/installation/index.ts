@@ -13,6 +13,7 @@ import { m0011AppDeployments } from './0011_app_deployments';
 import { m0012AppEventsCreatedIndex } from './0012_app_events_created_index';
 import { m0013PlatformUsageHourIndex } from './0013_platform_usage_hour_index';
 import { m0014AuditLogCreatedIndex } from './0014_audit_log_created_index';
+import { m0015D1LimitsIndexes } from './0015_d1_limits_indexes';
 
 /**
  * Ordered list of installation D1 migrations.
@@ -33,4 +34,5 @@ export const installationMigrations: readonly Migration[] = [
   m0012AppEventsCreatedIndex,
   m0013PlatformUsageHourIndex,
   m0014AuditLogCreatedIndex,
+  m0015D1LimitsIndexes,
 ];

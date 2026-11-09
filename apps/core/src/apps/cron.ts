@@ -1,4 +1,5 @@
 import type { Env } from '../env';
+import { deleteInChunks } from '../platform/chunked-delete';
 import { refreshPrivateInstalls, runCatalogSync } from './catalog-sync';
 import { releaseUnusedDeployments } from './deployer';
 import { finalizeUninstalls } from './lifecycle';
@@ -24,9 +25,9 @@ export async function runAppsCron(env: Env, nowMs: number): Promise<void> {
             nowMs - 7 * 86_400_000,
             nowMs - 7 * 86_400_000,
           ),
-          env.DB.prepare(`DELETE FROM app_hook_cache WHERE expires_at < ?`).bind(nowMs),
         ]),
     ],
+    ['hook cache expiry', () => deleteInChunks(env.DB, 'app_hook_cache', 'expires_at < ?', [nowMs])],
   ];
   for (const [name, step] of steps) {
     try {

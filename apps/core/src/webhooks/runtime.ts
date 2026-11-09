@@ -1,6 +1,7 @@
 import { monotonicFactory } from 'ulid';
 import { pauseInstall } from '../apps/lifecycle';
 import { installById } from '../apps/store';
+import { isImportValidateMessage, validateImportBatch } from '../apps/validate-hook';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
 import { WebhookService, type WebhookDeps, type WebhookMessage } from './service';
@@ -56,11 +57,21 @@ function isMessage(body: unknown): body is WebhookMessage {
   return kind === 'webhooks.fanout' || kind === 'webhooks.deliver';
 }
 
-/** Consumer of `webhooks-out`: fan-out of tenant events and single delivery attempts. */
+/** Consumer of `webhooks-out`: fan-out of tenant events, single delivery attempts, import validation batches. */
 export async function consumeWebhooks(batch: MessageBatch<unknown>, env: Env): Promise<void> {
   const service = webhookService(env);
   for (const message of batch.messages) {
     const body = message.body;
+    if (isImportValidateMessage(body)) {
+      try {
+        await validateImportBatch(env, body.tenantId, body.contacts);
+        message.ack();
+      } catch (error) {
+        console.error('[webhooks] import validation failed', error);
+        message.retry({ delaySeconds: 60 });
+      }
+      continue;
+    }
     if (!isMessage(body)) {
       message.ack();
       continue;

@@ -9,6 +9,7 @@ import {
   BACKUP_RETENTION_MANUAL,
   BACKUP_RETENTION_SCHEDULED,
   BACKUP_SLICE_MAX_PAGES,
+  BACKUP_TICK_MAX_PAGES,
   BACKUP_STAGING_PREFIX,
   BACKUP_STATE_KEY,
   BACKUP_TICK_BUDGET_MS,
@@ -135,6 +136,9 @@ const TENANT_D1_EXCLUDE = [
   'recovery_codes',
   'known_devices',
   'rate_limits',
+  // Delivery logs, kept 30 days and never restored; no tenant index to page them by.
+  'webhook_deliveries',
+  'app_events',
 ];
 const D1_PAGE = 500;
 const ROWID = '__backup_rowid';
@@ -417,18 +421,23 @@ async function runStaged(
   job: StagedBackup,
   deadline: number | null,
   onSlice?: () => Promise<void>,
+  tick?: { pages: number; maxPages: number },
 ): Promise<BackupObjectInfo | 'suspended'> {
   const slicePages = deps.slicePages ?? BACKUP_SLICE_MAX_PAGES;
+  const outOfBudget = (): boolean =>
+    (deadline !== null && deps.now() >= deadline) ||
+    (tick !== undefined && tick.pages >= tick.maxPages);
   while (job.cursor !== null) {
-    if (deadline !== null && deps.now() >= deadline) return 'suspended';
+    if (outOfBudget()) return 'suspended';
     let pages = 0;
     await writeSlice(deps, job, () => {
       pages += 1;
-      return pages >= slicePages || (deadline !== null && deps.now() >= deadline);
+      if (tick !== undefined) tick.pages += 1;
+      return pages >= slicePages || outOfBudget();
     });
     await onSlice?.();
   }
-  if (deadline !== null && deps.now() >= deadline) return 'suspended';
+  if (outOfBudget()) return 'suspended';
   return finalizeStaged(deps, job);
 }
 
@@ -529,9 +538,11 @@ export interface ScheduledBackupSummary {
  */
 export async function runScheduledBackups(
   deps: BackupDeps,
-  options: { maxBackups?: number; budgetMs?: number } = {},
+  options: { maxBackups?: number; budgetMs?: number; maxPages?: number } = {},
 ): Promise<ScheduledBackupSummary> {
   const started = deps.now();
+  // Shared by every slice of the tick: the cron invocation also runs the other jobs.
+  const tick = { pages: 0, maxPages: options.maxPages ?? BACKUP_TICK_MAX_PAGES };
   const maxBackups = options.maxBackups ?? BACKUP_MAX_PER_TICK;
   const budget = options.budgetMs ?? BACKUP_TICK_BUDGET_MS;
   const deadline = started + budget;
@@ -592,8 +603,12 @@ export async function runScheduledBackups(
   const runJob = async (job: StagedBackup): Promise<boolean> => {
     state.inProgress = job;
     try {
-      const out = await runStaged(deps, job, deadline, () =>
-        writeState(deps, state).then(() => undefined),
+      const out = await runStaged(
+        deps,
+        job,
+        deadline,
+        () => writeState(deps, state).then(() => undefined),
+        tick,
       );
       if (out === 'suspended') return false;
       state.inProgress = null;
@@ -624,7 +639,7 @@ export async function runScheduledBackups(
     }
     if (state.inProgress === null) {
       for (const item of queue.slice(0, Math.max(0, maxBackups - done.length))) {
-        if (deps.now() - started > budget) break;
+        if (deps.now() - started > budget || tick.pages >= tick.maxPages) break;
         const completed = await runJob(await newStagedBackup(deps, item.tenant, 'scheduled'));
         await writeState(deps, state);
         if (!completed) break; // suspended or failed: the slot is taken, stop starting new ones

@@ -18,6 +18,7 @@ import {
 import { AUTOMATION_EVENT_TYPES, EVENT_TYPES } from '@amable/core';
 import { recordAppMetric } from '../apps/metrics';
 import { toIso } from '../crm/util';
+import { DELETE_CHUNK, deleteInChunks } from '../platform/chunked-delete';
 
 /** Retired names still accepted on input and stored subscriptions, mapped to the event actually sent. */
 const WEBHOOK_TYPE_ALIASES: Readonly<Record<string, string>> = { 'booking.created': 'appointment.booked' };
@@ -242,13 +243,17 @@ interface AppEndpointInfo {
   readonly status: string;
 }
 
+/** Endpoints removed with a long delivery log, waiting for `prune` to drop it. */
+const NOT_DELETED = `AND disabled_reason IS NOT 'deleted'`;
+const REMOVE_INLINE_ROUNDS = 4;
+
 export class WebhookService {
   constructor(private readonly deps: WebhookDeps) {}
 
   /** Endpoints managed by the tenant (app endpoints are managed by the apps module). */
   private async endpointRow(tenantId: string, id: string): Promise<EndpointRow> {
     const row = await this.deps.db
-      .prepare(`SELECT * FROM webhook_endpoints WHERE id = ? AND tenant_id = ? AND app_install_id IS NULL`)
+      .prepare(`SELECT * FROM webhook_endpoints WHERE id = ? AND tenant_id = ? AND app_install_id IS NULL ${NOT_DELETED}`)
       .bind(id, tenantId)
       .first<EndpointRow>();
     if (row === null) throw new WebhookError(404, 'not_found', 'webhook endpoint not found');
@@ -258,7 +263,7 @@ export class WebhookService {
   async list(tenantId: string): Promise<WebhookEndpoint[]> {
     const rows = await this.deps.db
       .prepare(
-        `SELECT * FROM webhook_endpoints WHERE tenant_id = ? AND app_install_id IS NULL ORDER BY created_at DESC`,
+        `SELECT * FROM webhook_endpoints WHERE tenant_id = ? AND app_install_id IS NULL ${NOT_DELETED} ORDER BY created_at DESC`,
       )
       .bind(tenantId)
       .all<EndpointRow>();
@@ -278,7 +283,7 @@ export class WebhookService {
     if (urlError !== null) throw new WebhookError(422, 'invalid_url', urlError);
     validateTypes(input.event_types);
     const count = await this.deps.db
-      .prepare(`SELECT COUNT(*) AS n FROM webhook_endpoints WHERE tenant_id = ? AND app_install_id IS NULL`)
+      .prepare(`SELECT COUNT(*) AS n FROM webhook_endpoints WHERE tenant_id = ? AND app_install_id IS NULL ${NOT_DELETED}`)
       .bind(tenantId)
       .first<{ n: number }>();
     if ((count?.n ?? 0) >= MAX_ENDPOINTS_PER_TENANT) {
@@ -346,16 +351,29 @@ export class WebhookService {
     return this.get(tenantId, id);
   }
 
+  /**
+   * Deletes an endpoint and its delivery log. A long log (30 days of a busy
+   * endpoint) is not dropped in one statement: the endpoint is hidden and
+   * disabled at once, and `prune` deletes the rest in chunks.
+   */
   async remove(tenantId: string, id: string): Promise<void> {
     await this.endpointRow(tenantId, id);
-    await this.deps.db.batch([
-      this.deps.db
-        .prepare(`DELETE FROM webhook_deliveries WHERE endpoint_id = ? AND tenant_id = ?`)
-        .bind(id, tenantId),
-      this.deps.db
+    const deleted = await deleteInChunks(this.deps.db, 'webhook_deliveries', 'endpoint_id = ?', [id], {
+      maxRounds: REMOVE_INLINE_ROUNDS,
+    });
+    if (deleted < REMOVE_INLINE_ROUNDS * DELETE_CHUNK) {
+      await this.deps.db
         .prepare(`DELETE FROM webhook_endpoints WHERE id = ? AND tenant_id = ?`)
-        .bind(id, tenantId),
-    ]);
+        .bind(id, tenantId)
+        .run();
+      return;
+    }
+    await this.deps.db
+      .prepare(
+        `UPDATE webhook_endpoints SET status = 'disabled', disabled_reason = 'deleted', updated_at = ? WHERE id = ? AND tenant_id = ?`,
+      )
+      .bind(this.deps.now(), id, tenantId)
+      .run();
   }
 
   async rotateSecret(tenantId: string, id: string): Promise<{ secret: string }> {
@@ -949,11 +967,18 @@ export class WebhookService {
   async prune(): Promise<number> {
     await this.requeueStuckPending();
     const cutoff = this.deps.now() - DELIVERY_RETENTION_MS;
-    const result = await this.deps.db
-      .prepare(`DELETE FROM webhook_deliveries WHERE created_at < ?`)
-      .bind(cutoff)
-      .run();
-    await this.deps.db.prepare(`DELETE FROM app_events WHERE created_at < ?`).bind(cutoff).run();
-    return result.meta.changes ?? 0;
+    const db = this.deps.db;
+    let deleted = await deleteInChunks(db, 'webhook_deliveries', 'created_at < ?', [cutoff]);
+    await deleteInChunks(db, 'app_events', 'created_at < ?', [cutoff]);
+    // Endpoints removed with a long log: the rest of the log, then the endpoint.
+    const removed = await db
+      .prepare(`SELECT id FROM webhook_endpoints WHERE status = 'disabled' AND disabled_reason = 'deleted' LIMIT 5`)
+      .all<{ id: string }>();
+    for (const { id } of removed.results) {
+      const n = await deleteInChunks(db, 'webhook_deliveries', 'endpoint_id = ?', [id], { maxRounds: 10 });
+      deleted += n;
+      if (n < 10 * DELETE_CHUNK) await db.prepare(`DELETE FROM webhook_endpoints WHERE id = ?`).bind(id).run();
+    }
+    return deleted;
   }
 }
