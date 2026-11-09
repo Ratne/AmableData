@@ -1,5 +1,5 @@
 import type { Campaign } from './campaigns';
-import { randomId, type SqlDb } from './db';
+import { CHUNK_ROWS, inChunks, randomId, type SqlDb } from './db';
 import { subjectKey, type Subject } from './token';
 
 /**
@@ -210,32 +210,39 @@ export async function changeDeadlines(
   const scope = ids === null ? '' : ` AND id IN (SELECT value FROM json_each(?))`;
   const binds = [campaign.installId, campaign.id, ...(ids === null ? [] : [JSON.stringify(ids)])];
   if (ids !== null && ids.length === 0) return 0;
-  let statement;
+  const where = `install_id = ? AND campaign_id = ?${scope}`;
+  let set: string;
+  let setBinds: unknown[];
   switch (change.kind) {
-    case 'reset':
-      statement = db.prepare(`DELETE FROM deadlines WHERE install_id = ? AND campaign_id = ?${scope}`).bind(...binds);
-      break;
+    case 'reset': {
+      if (ids !== null) return (await db.prepare(`DELETE FROM deadlines WHERE ${where}`).bind(...binds).run()).meta.changes;
+      // A whole evergreen campaign can hold a million rows: deleted in chunks.
+      return inChunks(() =>
+        db.prepare(`DELETE FROM deadlines WHERE rowid IN (SELECT rowid FROM deadlines WHERE ${where} LIMIT ${String(CHUNK_ROWS)})`).bind(...binds),
+      );
+    }
     case 'restart':
-      statement = db
-        .prepare(
-          `UPDATE deadlines SET started_at = ?, deadline_at = ?, started_fired = 0, expired_fired = 0, updated_at = ? WHERE install_id = ? AND campaign_id = ?${scope}`,
-        )
-        .bind(now, deadlineFor(campaign, now), now, ...binds);
+      set = 'started_at = ?, deadline_at = ?, started_fired = 0, expired_fired = 0, updated_at = ?';
+      setBinds = [now, deadlineFor(campaign, now), now];
       break;
     case 'extend':
-      statement = db
-        .prepare(
-          `UPDATE deadlines SET deadline_at = MAX(deadline_at, ?) + ?, expired_fired = 0, updated_at = ? WHERE install_id = ? AND campaign_id = ?${scope}`,
-        )
-        .bind(now, change.minutes * 60_000, now, ...binds);
+      set = 'deadline_at = MAX(deadline_at, ?) + ?, expired_fired = 0, updated_at = ?';
+      setBinds = [now, change.minutes * 60_000, now];
       break;
     case 'set':
-      statement = db
-        .prepare(`UPDATE deadlines SET deadline_at = ?, expired_fired = 0, updated_at = ? WHERE install_id = ? AND campaign_id = ?${scope}`)
-        .bind(change.deadlineAt, now, ...binds);
+      set = 'deadline_at = ?, expired_fired = 0, updated_at = ?';
+      setBinds = [change.deadlineAt, now];
       break;
   }
-  return (await statement.run()).meta.changes;
+  if (ids !== null) return (await db.prepare(`UPDATE deadlines SET ${set} WHERE ${where}`).bind(...setBinds, ...binds).run()).meta.changes;
+  // Whole campaign: chunks of the rows this change has not written yet (it stamps `updated_at` with `now`).
+  return inChunks(() =>
+    db
+      .prepare(
+        `UPDATE deadlines SET ${set} WHERE rowid IN (SELECT rowid FROM deadlines WHERE ${where} AND updated_at <> ? LIMIT ${String(CHUNK_ROWS)})`,
+      )
+      .bind(...setBinds, ...binds, now),
+  );
 }
 
 export async function contactDeadlines(db: SqlDb, installId: string, contactId: string): Promise<Array<Deadline & { campaignName: string }>> {
@@ -294,11 +301,17 @@ export async function unannounced(db: SqlDb, now: number, limit: number): Promis
   return { started: started.results.map(pending), expired: expired.results.map(pending) };
 }
 
-/** Marks an announcement done, unless the deadline changed meanwhile (then it is announced again). */
-export async function markAnnounced(db: SqlDb, kind: 'started' | 'expired', event: PendingEvent): Promise<void> {
-  const column = kind === 'started' ? 'started_fired' : 'expired_fired';
-  await db
-    .prepare(`UPDATE deadlines SET ${column} = 1 WHERE id = ? AND started_at = ? AND deadline_at = ?`)
-    .bind(event.id, event.startedAt, event.deadlineAt)
-    .run();
+/** Marks announcements done (one batch), unless a deadline changed meanwhile (then it is announced again). */
+export async function markAnnounced(
+  db: SqlDb,
+  events: ReadonlyArray<{ kind: 'started' | 'expired'; event: PendingEvent }>,
+): Promise<void> {
+  if (events.length === 0) return;
+  await db.batch(
+    events.map(({ kind, event }) =>
+      db
+        .prepare(`UPDATE deadlines SET ${kind === 'started' ? 'started_fired' : 'expired_fired'} = 1 WHERE id = ? AND started_at = ? AND deadline_at = ?`)
+        .bind(event.id, event.startedAt, event.deadlineAt),
+    ),
+  );
 }

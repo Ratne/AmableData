@@ -13,6 +13,7 @@ import { assets } from './assets';
 import {
   campaignByPublicId,
   deleteCampaign,
+  dropDeletedCampaignDeadlines,
   eraseInstall,
   getCampaign,
   listCampaigns,
@@ -519,6 +520,7 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
     const contexts = new Map<string, Promise<AppContext | null>>();
     const sent = { started: 0, expired: 0 };
     let deferred = 0;
+    let done: { kind: 'started' | 'expired'; event: PendingEvent }[] = [];
     const fire = async (kind: 'started' | 'expired', event: PendingEvent) => {
       let ctx = contexts.get(event.installId);
       if (ctx === undefined) {
@@ -544,7 +546,7 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
           }
         }
       }
-      await markAnnounced(env.DB, kind, event);
+      done.push({ kind, event });
     };
     // Batch after batch until the backlog is empty (a fixed campaign expires for everyone at once),
     // within the subrequests and the time of one cron run.
@@ -557,11 +559,15 @@ export function createWorker(deps: { fetch?: Fetch; now?: () => number } = {}) {
       const before = deferred;
       await mapLimited(started, 5, (event) => fire('started', event));
       await mapLimited(expired, 5, (event) => fire('expired', event));
+      // One D1 query for the whole round (the cron invocation has 1,000).
+      await markAnnounced(env.DB, done);
+      done = [];
       budget -= started.length + expired.length;
       // The CRM is refusing for now: the next run tries again.
       if (deferred > before) break;
       if (started.length < limit && expired.length < limit) break;
     }
+    await dropDeletedCampaignDeadlines(env.DB);
     await env.DB.prepare('DELETE FROM action_runs WHERE rowid IN (SELECT rowid FROM action_runs WHERE created_at < ? LIMIT 5000)')
       .bind(at - ACTION_TTL_MS)
       .run();

@@ -1,4 +1,4 @@
-import { randomId, type SqlDb } from './db';
+import { CHUNK_ROWS, inChunks, randomId, type SqlDb } from './db';
 import { formIds, type Given, type QuizDefinition } from './quiz';
 
 export type QuizStatus = 'draft' | 'published';
@@ -416,9 +416,15 @@ export async function eraseContact(db: SqlDb, installId: string, contactId: stri
 }
 
 export async function eraseInstall(db: SqlDb, installId: string): Promise<void> {
+  // Years of sessions: chunked, so no single statement nears the D1 30 s cap.
+  for (const table of ['session_answers', 'sessions']) {
+    await inChunks(() =>
+      db
+        .prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE install_id = ? LIMIT ${String(CHUNK_ROWS)})`)
+        .bind(installId),
+    );
+  }
   await db.batch([
-    db.prepare('DELETE FROM session_answers WHERE install_id = ?').bind(installId),
-    db.prepare('DELETE FROM sessions WHERE install_id = ?').bind(installId),
     db.prepare('DELETE FROM pending_links WHERE install_id = ?').bind(installId),
     db.prepare('DELETE FROM quizzes WHERE install_id = ?').bind(installId),
   ]);
@@ -426,14 +432,17 @@ export async function eraseInstall(db: SqlDb, installId: string): Promise<void> 
 
 /** Unfinished anonymous sessions, old previews and stale pending links: nobody will ever claim them. */
 export async function cleanup(db: SqlDb, at: number): Promise<void> {
-  const stale = 'contact_id IS NULL AND (finished_at IS NULL AND updated_at < ? OR preview = 1 AND updated_at < ?)';
-  const bounds = [at - ANONYMOUS_TTL_MS, at - PENDING_LINK_TTL_MS];
   // Chunked: one run clears up to 2000 stale sessions, the rest go to the next
   // cron tick (an unbounded DELETE over years of sessions could time out).
+  // Two branches, each served by its partial index.
   const ids = (
     await db
-      .prepare(`SELECT id FROM sessions WHERE ${stale} LIMIT 2000`)
-      .bind(...bounds)
+      .prepare(
+        `SELECT id FROM (SELECT id FROM sessions WHERE contact_id IS NULL AND finished_at IS NULL AND updated_at < ? LIMIT 1000)
+         UNION
+         SELECT id FROM (SELECT id FROM sessions WHERE contact_id IS NULL AND preview = 1 AND updated_at < ? LIMIT 1000)`,
+      )
+      .bind(at - ANONYMOUS_TTL_MS, at - PENDING_LINK_TTL_MS)
       .all<{ id: string }>()
   ).results.map((row) => row.id);
   await db.batch([

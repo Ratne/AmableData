@@ -15,6 +15,24 @@ export interface SqlDb {
   batch(statements: SqlStatement[]): Promise<unknown[]>;
 }
 
+/** Rows per statement of a chunked write: each one stays far below the D1 30 s query cap. */
+export const CHUNK_ROWS = 5000;
+
+/**
+ * Runs `statement` (a DELETE / UPDATE limited to CHUNK_ROWS rows that no longer
+ * match once written) until it touches fewer rows, at most `maxRounds` times.
+ * Returns the rows touched.
+ */
+export async function inChunks(statement: () => SqlStatement, maxRounds = 200): Promise<number> {
+  let total = 0;
+  for (let round = 0; round < maxRounds; round += 1) {
+    const changes = (await statement().run()).meta.changes;
+    total += changes;
+    if (changes < CHUNK_ROWS) break;
+  }
+  return total;
+}
+
 export const SCHEMA: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS campaigns (
     id TEXT PRIMARY KEY,

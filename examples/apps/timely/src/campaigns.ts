@@ -1,4 +1,4 @@
-import { randomId, type SqlDb } from './db';
+import { CHUNK_ROWS, inChunks, randomId, type SqlDb } from './db';
 import { normalizeStyle, type TimerStyle } from './style';
 
 /**
@@ -217,19 +217,33 @@ export async function saveCampaign(
   return meta.changes === 0 ? null : getCampaign(db, installId, id);
 }
 
-/** Soft-deletes the campaign (its public URLs stop answering) and drops its deadlines. */
+/** Soft-deletes the campaign (its public URLs stop answering) and drops its deadlines in chunks. */
 export async function deleteCampaign(db: SqlDb, installId: string, id: string, now: number): Promise<boolean> {
-  const [updated] = (await db.batch([
-    db.prepare('UPDATE campaigns SET deleted_at = ? WHERE install_id = ? AND id = ? AND deleted_at IS NULL').bind(now, installId, id),
-    db.prepare('DELETE FROM deadlines WHERE install_id = ? AND campaign_id = ?').bind(installId, id),
-  ])) as Array<{ meta: { changes: number } }>;
-  return (updated?.meta.changes ?? 0) > 0;
+  const updated = await db
+    .prepare('UPDATE campaigns SET deleted_at = ? WHERE install_id = ? AND id = ? AND deleted_at IS NULL')
+    .bind(now, installId, id)
+    .run();
+  if (updated.meta.changes === 0) return false;
+  await dropDeadlines(db, 'install_id = ? AND campaign_id = ?', [installId, id]);
+  return true;
+}
+
+function dropDeadlines(db: SqlDb, where: string, binds: unknown[], maxRounds?: number): Promise<number> {
+  return inChunks(
+    () => db.prepare(`DELETE FROM deadlines WHERE rowid IN (SELECT rowid FROM deadlines WHERE ${where} LIMIT ${String(CHUNK_ROWS)})`).bind(...binds),
+    maxRounds,
+  );
+}
+
+/** Cron: deadlines left behind by a deleted campaign whose chunked delete was interrupted. */
+export async function dropDeletedCampaignDeadlines(db: SqlDb): Promise<number> {
+  return dropDeadlines(db, 'campaign_id IN (SELECT id FROM campaigns WHERE deleted_at IS NOT NULL)', [], 10);
 }
 
 /** Everything of an install, after `app.uninstalled`. */
 export async function eraseInstall(db: SqlDb, installId: string): Promise<void> {
+  await dropDeadlines(db, 'install_id = ?', [installId]);
   await db.batch([
-    db.prepare('DELETE FROM deadlines WHERE install_id = ?').bind(installId),
     db.prepare('DELETE FROM campaigns WHERE install_id = ?').bind(installId),
     db.prepare('DELETE FROM action_runs WHERE install_id = ?').bind(installId),
   ]);

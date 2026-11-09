@@ -16,6 +16,24 @@ export interface SqlDb {
   batch(statements: SqlStatement[]): Promise<unknown[]>;
 }
 
+/** Rows per statement of a chunked write: each one stays far below the D1 30 s query cap. */
+export const CHUNK_ROWS = 5000;
+
+/**
+ * Runs `statement` (a DELETE / UPDATE limited to CHUNK_ROWS rows that no longer
+ * match once written) until it touches fewer rows, at most `maxRounds` times.
+ * Returns the rows touched.
+ */
+export async function inChunks(statement: () => SqlStatement, maxRounds = 200): Promise<number> {
+  let total = 0;
+  for (let round = 0; round < maxRounds; round += 1) {
+    const changes = (await statement().run()).meta.changes;
+    total += changes;
+    if (changes < CHUNK_ROWS) break;
+  }
+  return total;
+}
+
 export const SCHEMA: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS quizzes (
     id TEXT PRIMARY KEY,
@@ -48,6 +66,10 @@ export const SCHEMA: readonly string[] = [
   'CREATE INDEX IF NOT EXISTS sessions_quiz ON sessions (install_id, quiz_id, started_at)',
   'CREATE INDEX IF NOT EXISTS sessions_submission ON sessions (install_id, submission_id) WHERE submission_id IS NOT NULL',
   'CREATE INDEX IF NOT EXISTS sessions_contact ON sessions (install_id, contact_id) WHERE contact_id IS NOT NULL',
+  // Partial indexes of the cleanup and resync scans (their queries repeat these WHERE terms exactly).
+  'CREATE INDEX IF NOT EXISTS sessions_anon_open ON sessions (updated_at) WHERE contact_id IS NULL AND finished_at IS NULL',
+  'CREATE INDEX IF NOT EXISTS sessions_anon_preview ON sessions (updated_at) WHERE contact_id IS NULL AND preview = 1',
+  'CREATE INDEX IF NOT EXISTS sessions_unsynced ON sessions (updated_at) WHERE finished_at IS NOT NULL AND contact_id IS NOT NULL AND synced_at IS NULL AND preview = 0',
   `CREATE TABLE IF NOT EXISTS session_answers (
     session_id TEXT NOT NULL,
     install_id TEXT NOT NULL,

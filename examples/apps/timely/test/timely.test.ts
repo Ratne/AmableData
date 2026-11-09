@@ -466,3 +466,34 @@ describe('timely: privacy and lifecycle', () => {
     expect(passed(results)).toBe(true);
   });
 });
+
+describe('chunked campaign-wide changes', () => {
+  it('extends every deadline of a large campaign exactly once and resets it in chunks', async () => {
+    const { changeDeadlines } = await import('../src/deadlines');
+    const { ensureSchema } = await import('../src/db');
+    const db = memoryD1();
+    await ensureSchema(db);
+    const at = Date.now();
+    const campaign = { id: 'cmp_1', installId: 'inst_1', mode: 'evergreen', durationMinutes: 60 } as unknown as Parameters<typeof changeDeadlines>[1];
+    const rows = 5_200;
+    for (let i = 0; i < rows; i += 500) {
+      await db.batch(
+        Array.from({ length: Math.min(500, rows - i) }, (_, k) =>
+          db
+            .prepare(
+              `INSERT INTO deadlines (id, install_id, campaign_id, subject, started_at, deadline_at, source, updated_at)
+               VALUES (?, 'inst_1', 'cmp_1', ?, ?, ?, 'page_visit', ?)`,
+            )
+            .bind(`d${String(i + k)}`, `v${String(i + k)}`, at - HOUR, at + HOUR, at - HOUR),
+        ),
+      );
+    }
+    expect(await changeDeadlines(db, campaign, null, { kind: 'extend', minutes: 30 }, at)).toBe(rows);
+    const spread = await db
+      .prepare(`SELECT MIN(deadline_at) AS lo, MAX(deadline_at) AS hi FROM deadlines`)
+      .first<{ lo: number; hi: number }>();
+    expect(spread).toEqual({ lo: at + HOUR + 30 * MINUTE, hi: at + HOUR + 30 * MINUTE });
+    expect(await changeDeadlines(db, campaign, null, { kind: 'reset' }, at)).toBe(rows);
+    expect((await db.prepare(`SELECT COUNT(*) AS n FROM deadlines`).first<{ n: number }>())?.n).toBe(0);
+  });
+});
