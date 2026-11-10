@@ -32,7 +32,8 @@ export const crmEn = {
   'crm.error.forbiddenTitle': 'Permission needed',
   'crm.error.notFound': 'This record does not exist or was deleted.',
   'crm.error.validation': 'Some values are not valid.',
-  'crm.error.tooLarge': 'The file is too large: up to 50 MB and 100,000 rows. Split it into smaller files.',
+  'crm.error.tooLarge':
+    'The file is too large: up to 50 MB and 100,000 rows. Split it into smaller files.',
 
   'crm.entity.contacts': 'Contacts',
   'crm.entity.companies': 'Companies',
@@ -122,7 +123,8 @@ export const crmEn = {
   'crm.address.search': 'Search address (street, number, city)…',
   'crm.address.searching': 'Searching…',
   'crm.address.searchEmpty': 'No address found: fill in the fields by hand.',
-  'crm.address.searchUnavailable': 'Address search is unavailable right now: fill in the fields by hand.',
+  'crm.address.searchUnavailable':
+    'Address search is unavailable right now: fill in the fields by hand.',
 
   'crm.validation.required': 'This field is required.',
   'crm.validation.tooLong': 'At most {max} characters.',
@@ -328,6 +330,7 @@ export const crmEn = {
   'crm.activity.subscriptionEnded': 'Subscription ended',
   'crm.activity.subscriptionTrialStarted': 'Trial started',
   'crm.activity.subscriptionTrialConverted': 'Trial converted',
+  'crm.activity.checkoutAbandoned': 'Cart abandoned',
   'crm.activity.companyDeleted': 'Company archived',
 
   'crm.notes.new': 'New note',
@@ -393,7 +396,8 @@ export const crmEn = {
   'crm.deals.restoredElsewhere':
     'Restored into the “{pipeline}” pipeline, because its stage or pipeline was deleted: it is not in the list you are viewing.',
   'crm.deals.showPipeline': 'Show pipeline',
-  'crm.deals.restoredInto': 'Its stage or pipeline was deleted: the deal was restored into the “{pipeline}” pipeline.',
+  'crm.deals.restoredInto':
+    'Its stage or pipeline was deleted: the deal was restored into the “{pipeline}” pipeline.',
   'crm.deals.expectedClose': 'Expected close',
   'crm.deals.created': 'Deal created',
   'crm.deals.moved': 'Moved to {stage}',
@@ -480,7 +484,8 @@ export const crmEn = {
   'crm.contactAutomations.deleted': 'Deleted',
   'crm.contactAutomations.remove': 'Remove from automation',
   'crm.contactAutomations.confirmRemove': 'Remove the contact from "{name}"?',
-  'crm.contactAutomations.confirmRemoveBody': 'Pending steps are cancelled. The contact can be added again later.',
+  'crm.contactAutomations.confirmRemoveBody':
+    'Pending steps are cancelled. The contact can be added again later.',
   'crm.contactAutomations.entered': 'Entered {date}',
   'crm.contactAutomations.ended': 'ended {date}',
   'crm.contactAutomations.source.goal': 'by a goal',
@@ -514,7 +519,8 @@ export const crmEn = {
   'crm.contactSubmissions.masked': 'Sensitive field, hidden for your role',
   'crm.contactSubmissions.source': 'Source',
   'crm.contactSubmissions.openInForm': 'Open in the form submissions',
-  'crm.contactSubmissions.noValuesAccess': 'Your role can see the submissions but not the submitted values.',
+  'crm.contactSubmissions.noValuesAccess':
+    'Your role can see the submissions but not the submitted values.',
   'crm.contactSubmissions.yes': 'Yes',
   'crm.contactSubmissions.no': 'No',
   'crm.contactAutomations.why.completed': 'completed',
@@ -559,7 +565,8 @@ export const crmEn = {
   'crm.import.ignore': 'Do not import',
   'crm.import.duplicates': 'Each field can be used once: {targets}',
   'crm.import.updateExisting': 'Update contacts with the same email',
-  'crm.import.updateExistingHint': 'Fields in the file overwrite the current ones; emails, phones and addresses are added to the existing ones.',
+  'crm.import.updateExistingHint':
+    'Fields in the file overwrite the current ones; emails, phones and addresses are added to the existing ones.',
   'crm.import.applyTags': 'Tag every imported contact',
   'crm.import.listDelimiter': 'Separator for tags and lists',
   'crm.import.start': 'Start import',
@@ -677,12 +684,17 @@ export const crmEn = {
   'locale.language.search': 'Search language or code…',
   'locale.language.empty': 'No language found.',
   'integrations.address.title': 'Address search',
-  'integrations.address.intro': 'Suggests addresses while you type on the contact page. When nothing is found, fill in the fields by hand.',
+  'integrations.address.intro':
+    'Suggests addresses while you type on the contact page. When nothing is found, fill in the fields by hand.',
   'integrations.address.osm': 'OpenStreetMap',
-  'integrations.address.osmHint': 'Built in and free. Good coverage in cities, sometimes incomplete in small towns. For more complete data, install an address app from the Marketplace, such as Mapbox.',
-  'integrations.address.osmOff': 'Turned off on this installation: addresses are entered by hand unless you install an address app from the Marketplace.',
-  'integrations.address.appHint': 'Suggestions come from this app. If it does not answer, OpenStreetMap is used.',
-  'integrations.address.appHintNoFallback': 'Suggestions come from this app. If it does not answer, addresses are entered by hand.',
+  'integrations.address.osmHint':
+    'Built in and free. Good coverage in cities, sometimes incomplete in small towns. For more complete data, install an address app from the Marketplace, such as Mapbox.',
+  'integrations.address.osmOff':
+    'Turned off on this installation: addresses are entered by hand unless you install an address app from the Marketplace.',
+  'integrations.address.appHint':
+    'Suggestions come from this app. If it does not answer, OpenStreetMap is used.',
+  'integrations.address.appHintNoFallback':
+    'Suggestions come from this app. If it does not answer, addresses are entered by hand.',
   'integrations.address.paused': 'Paused: OpenStreetMap is used',
   'integrations.address.findApp': 'Find an address app',
   'integrations.address.manageApp': 'Manage installed apps',

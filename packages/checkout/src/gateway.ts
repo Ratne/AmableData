@@ -1,6 +1,7 @@
 import type {
   AddressSuggestion,
   CompleteResult,
+  LeadPayloadInput,
   OfferActionResult,
   OfferState,
   PublicCheckoutConfig,
@@ -34,6 +35,11 @@ export type CheckoutGatewayOps = {
   'checkout.session': {
     input: { checkoutId: string; payload: SessionPayloadInput };
     output: SessionResult;
+  };
+  /** The buyer typed the email (abandoned cart on): saves the cart, no contact yet. */
+  'checkout.lead': {
+    input: { checkoutId: string; payload: LeadPayloadInput };
+    output: { ok: true };
   };
   /** After Stripe.js confirmed: settles the purchase (the webhook does the same, whichever comes first). */
   'checkout.complete': {
@@ -83,6 +89,7 @@ export const CHECKOUT_GATEWAY_OPS = [
   'checkout.hosted',
   'checkout.quote',
   'checkout.session',
+  'checkout.lead',
   'checkout.complete',
   'checkout.offer',
   'checkout.offerAccept',

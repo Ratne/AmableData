@@ -31,7 +31,10 @@ export function stripeAccountAd(tenantId: string, kind: 'secret' | 'webhook'): s
 }
 
 export function readStripeAccount(ctx: CrmContext): StoredStripeAccount | null {
-  const row = ctx.db.all<{ value: string }>(`SELECT value FROM tenant_meta WHERE key = ?`, META_KEY)[0];
+  const row = ctx.db.all<{ value: string }>(
+    `SELECT value FROM tenant_meta WHERE key = ?`,
+    META_KEY,
+  )[0];
   if (row === undefined) return null;
   const parsed = parseJson<Partial<StoredStripeAccount>>(row.value, {});
   if (
@@ -55,7 +58,10 @@ export function readStripeAccount(ctx: CrmContext): StoredStripeAccount | null {
   };
 }
 
-export function stripeAccount(ctx: CrmContext, _input: Record<string, never> = {}): StoredStripeAccount | null {
+export function stripeAccount(
+  ctx: CrmContext,
+  _input: Record<string, never> = {},
+): StoredStripeAccount | null {
   return readStripeAccount(ctx);
 }
 
@@ -71,7 +77,10 @@ function savedPaymentMethods(ctx: CrmContext): number {
   );
 }
 
-export function stripeSettings(ctx: CrmContext, _input: Record<string, never> = {}): Omit<StripeSettings, 'webhook_url'> {
+export function stripeSettings(
+  ctx: CrmContext,
+  _input: Record<string, never> = {},
+): Omit<StripeSettings, 'webhook_url'> {
   const account = readStripeAccount(ctx);
   if (account === null) {
     return {
@@ -113,7 +122,10 @@ interface StripeIdentity {
 const IDENTITY_KEY = 'commerce_stripe_identity';
 
 function readIdentity(ctx: CrmContext): StripeIdentity | null {
-  const row = ctx.db.all<{ value: string }>(`SELECT value FROM tenant_meta WHERE key = ?`, IDENTITY_KEY)[0];
+  const row = ctx.db.all<{ value: string }>(
+    `SELECT value FROM tenant_meta WHERE key = ?`,
+    IDENTITY_KEY,
+  )[0];
   return row === undefined ? null : parseJson<StripeIdentity | null>(row.value, null);
 }
 
@@ -163,7 +175,8 @@ export function saveStripeAccount(
 ): Omit<StripeSettings, 'webhook_url'> {
   const stored = readStripeAccount(ctx);
   const previous =
-    readIdentity(ctx) ?? (stored === null ? null : { mode: modeOf(stored.publishable_key), account_id: null });
+    readIdentity(ctx) ??
+    (stored === null ? null : { mode: modeOf(stored.publishable_key), account_id: null });
   const accountId = input.accountId ?? null;
   const identity: StripeIdentity = {
     mode: modeOf(input.publishableKey),
@@ -173,7 +186,8 @@ export function saveStripeAccount(
     previous !== null &&
     (previous.mode !== identity.mode ||
       (previous.account_id !== null && accountId !== null && previous.account_id !== accountId));
-  if (changed && input.secret === null) throw invalid('secret_key', 'enter the secret key of the new mode');
+  if (changed && input.secret === null)
+    throw invalid('secret_key', 'enter the secret key of the new mode');
   if (changed) forgetStripeReferences(ctx);
   ctx.db.run(
     `INSERT INTO tenant_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
@@ -181,14 +195,20 @@ export function saveStripeAccount(
     JSON.stringify(identity),
   );
   const current = stored;
-  const secret = input.secret ?? (current === null ? null : { enc: current.secret_enc, hint: current.secret_hint });
+  const secret =
+    input.secret ??
+    (current === null ? null : { enc: current.secret_enc, hint: current.secret_hint });
   if (secret === null) throw invalid('secret_key', 'secret_key is required');
   // The signing secret of another account or mode would reject every event: it is not kept.
   const webhook =
     input.webhook ??
     (changed || current === null || current.webhook_enc === null
       ? null
-      : { enc: current.webhook_enc, hint: current.webhook_hint ?? '', endpointId: current.webhook_endpoint_id });
+      : {
+          enc: current.webhook_enc,
+          hint: current.webhook_hint ?? '',
+          endpointId: current.webhook_endpoint_id,
+        });
   const value: StoredStripeAccount = {
     tenant_id: input.tenantId,
     publishable_key: input.publishableKey,
@@ -225,7 +245,67 @@ export function setManagedPayments(
   return stripeSettings(ctx);
 }
 
-export function clearStripeAccount(ctx: CrmContext, _input: Record<string, never> = {}): { deleted: true } {
+// ------------------------------------------------------ payment method domains
+
+/**
+ * Domains registered in the Stripe account for wallets (Apple Pay, Google
+ * Pay): registration happens in the worker, the outcome is kept here per
+ * publishable key so a new key or mode starts over. A failure is retried
+ * after a day.
+ */
+interface PaymentDomains {
+  publishable_key: string;
+  hosts: Record<string, { ok: boolean; at: number }>;
+}
+
+const DOMAINS_KEY = 'commerce_stripe_domains';
+const DOMAIN_RETRY_MS = 86_400_000;
+const MAX_DOMAINS = 200;
+
+function readPaymentDomains(ctx: CrmContext, publishableKey: string): PaymentDomains {
+  const row = ctx.db.all<{ value: string }>(
+    `SELECT value FROM tenant_meta WHERE key = ?`,
+    DOMAINS_KEY,
+  )[0];
+  const parsed = parseJson<Partial<PaymentDomains>>(row?.value, {});
+  return parsed.publishable_key === publishableKey &&
+    typeof parsed.hosts === 'object' &&
+    parsed.hosts !== null
+    ? { publishable_key: publishableKey, hosts: parsed.hosts }
+    : { publishable_key: publishableKey, hosts: {} };
+}
+
+/** Hosts not to register again now: registered, or failed less than a day ago. */
+export function settledPaymentDomains(ctx: CrmContext, publishableKey: string): string[] {
+  const now = ctx.now();
+  return Object.entries(readPaymentDomains(ctx, publishableKey).hosts)
+    .filter(([, h]) => h.ok || now - h.at < DOMAIN_RETRY_MS)
+    .map(([host]) => host);
+}
+
+export function recordPaymentDomain(
+  ctx: CrmContext,
+  input: { publishableKey: string; host: string; ok: boolean },
+): { ok: true } {
+  const current = readStripeAccount(ctx);
+  if (current === null || current.publishable_key !== input.publishableKey) return { ok: true };
+  const domains = readPaymentDomains(ctx, input.publishableKey);
+  const hosts = { ...domains.hosts, [input.host]: { ok: input.ok, at: ctx.now() } };
+  const kept = Object.entries(hosts)
+    .sort((a, b) => b[1].at - a[1].at)
+    .slice(0, MAX_DOMAINS);
+  ctx.db.run(
+    `INSERT INTO tenant_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    DOMAINS_KEY,
+    JSON.stringify({ publishable_key: input.publishableKey, hosts: Object.fromEntries(kept) }),
+  );
+  return { ok: true };
+}
+
+export function clearStripeAccount(
+  ctx: CrmContext,
+  _input: Record<string, never> = {},
+): { deleted: true } {
   ctx.db.run(`DELETE FROM tenant_meta WHERE key = ?`, META_KEY);
   return { deleted: true };
 }

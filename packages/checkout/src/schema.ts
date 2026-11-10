@@ -1,5 +1,6 @@
 import { formFieldSchema, formStyleSchema, FORM_LOCALES, UPDATE_POLICIES } from '@amable/forms';
 import { z } from 'zod';
+import { STRIPE_METHOD_MODES, STRIPE_PAYMENT_METHOD_TYPES } from './payment-methods';
 
 /**
  * Checkout definition: the JSON document edited in the commerce section,
@@ -175,7 +176,28 @@ export const checkoutSettingsSchema = z.object({
     .default([]),
   hosted_enabled: z.boolean().default(true),
   /** Minutes the post-purchase offers stay chargeable after the payment. */
-  offer_window_minutes: z.number().int().min(5).max(24 * 60).default(60),
+  offer_window_minutes: z
+    .number()
+    .int()
+    .min(5)
+    .max(24 * 60)
+    .default(60),
+  /**
+   * Abandoned cart: the email is saved as soon as the buyer types it; with
+   * no purchase within `delay_minutes` the contact is created (or updated)
+   * and gets `checkout.abandoned` (automation trigger "Cart abandoned").
+   */
+  abandoned_cart: z
+    .object({
+      enabled: z.boolean().default(false),
+      delay_minutes: z
+        .number()
+        .int()
+        .min(15)
+        .max(7 * 24 * 60)
+        .default(60),
+    })
+    .default({ enabled: false, delay_minutes: 60 }),
 });
 export type CheckoutSettings = z.infer<typeof checkoutSettingsSchema>;
 
@@ -201,8 +223,23 @@ export type CheckoutPaymentMethod = (typeof CHECKOUT_PAYMENT_METHODS)[number];
  * coordinates of `account_id` (a workspace bank account); one-time purchases
  * only, since renewals need a saved card.
  */
+/**
+ * Stripe methods of the in-page payment (Payment Element). With Stripe
+ * Managed Payments the card goes through Stripe Checkout, which picks them.
+ */
+export const stripeMethodsSchema = z.object({
+  mode: z.enum(STRIPE_METHOD_MODES).default('automatic'),
+  types: z
+    .array(z.enum(STRIPE_PAYMENT_METHOD_TYPES))
+    .max(STRIPE_PAYMENT_METHOD_TYPES.length)
+    .default(['card']),
+  wallets: z.boolean().default(true),
+});
+export type StripeMethods = z.infer<typeof stripeMethodsSchema>;
+
 export const checkoutPaymentsSchema = z.object({
   card: z.boolean().default(true),
+  stripe_methods: stripeMethodsSchema.default(() => stripeMethodsSchema.parse({})),
   bank_transfer: z
     .object({
       enabled: z.boolean().default(false),
@@ -242,40 +279,87 @@ export const checkoutDefinitionSchema = z
     payments: checkoutPaymentsSchema.default(() => checkoutPaymentsSchema.parse({})),
   })
   .superRefine((d, ctx) => {
-    const unique = (values: string[], path: (i: number) => (string | number)[], message: string): void => {
+    const unique = (
+      values: string[],
+      path: (i: number) => (string | number)[],
+      message: string,
+    ): void => {
       const seen = new Set<string>();
       values.forEach((v, i) => {
         if (seen.has(v)) ctx.addIssue({ code: 'custom', path: path(i), message });
         seen.add(v);
       });
     };
-    unique(d.items.map((i) => i.id), (i) => ['items', i, 'id'], 'duplicate item id');
-    unique(d.bumps.map((b) => b.id), (i) => ['bumps', i, 'id'], 'duplicate bump id');
-    unique(d.offers.map((o) => o.key), (i) => ['offers', i, 'key'], 'duplicate offer key');
-    unique(d.fields.map((f) => f.key), (i) => ['fields', i, 'key'], 'duplicate field key');
+    unique(
+      d.items.map((i) => i.id),
+      (i) => ['items', i, 'id'],
+      'duplicate item id',
+    );
+    unique(
+      d.bumps.map((b) => b.id),
+      (i) => ['bumps', i, 'id'],
+      'duplicate bump id',
+    );
+    unique(
+      d.offers.map((o) => o.key),
+      (i) => ['offers', i, 'key'],
+      'duplicate offer key',
+    );
+    unique(
+      d.fields.map((f) => f.key),
+      (i) => ['fields', i, 'key'],
+      'duplicate field key',
+    );
     const reserved = new Set<string>(RESERVED_FIELD_KEYS);
     d.fields.forEach((f, i) => {
       if (reserved.has(f.key)) {
-        ctx.addIssue({ code: 'custom', path: ['fields', i, 'key'], message: 'reserved for the buyer fields' });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fields', i, 'key'],
+          message: 'reserved for the buyer fields',
+        });
       }
     });
-    unique(d.discounts.map((r) => r.id), (i) => ['discounts', i, 'id'], 'duplicate discount id');
+    unique(
+      d.discounts.map((r) => r.id),
+      (i) => ['discounts', i, 'id'],
+      'duplicate discount id',
+    );
     const products = new Set(d.items.filter((i) => i.kind === 'product').map((i) => i.id));
     d.discounts.forEach((rule, i) => {
       rule.conditions.forEach((c, j) => {
         if (!products.has(c.item_id)) {
-          ctx.addIssue({ code: 'custom', path: ['discounts', i, 'conditions', j, 'item_id'], message: 'pick a product of this checkout' });
+          ctx.addIssue({
+            code: 'custom',
+            path: ['discounts', i, 'conditions', j, 'item_id'],
+            message: 'pick a product of this checkout',
+          });
         }
       });
-      unique(rule.conditions.map((c) => c.item_id), (j) => ['discounts', i, 'conditions', j, 'item_id'], 'duplicate condition item');
+      unique(
+        rule.conditions.map((c) => c.item_id),
+        (j) => ['discounts', i, 'conditions', j, 'item_id'],
+        'duplicate condition item',
+      );
       if (rule.kind === 'percent' && rule.percent_bps === null) {
-        ctx.addIssue({ code: 'custom', path: ['discounts', i, 'percent_bps'], message: 'set the percentage' });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['discounts', i, 'percent_bps'],
+          message: 'set the percentage',
+        });
       }
       if (rule.kind === 'fixed' && rule.amount_minor === null) {
-        ctx.addIssue({ code: 'custom', path: ['discounts', i, 'amount_minor'], message: 'set the amount' });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['discounts', i, 'amount_minor'],
+          message: 'set the amount',
+        });
       }
     });
-    if (d.settings.item_selection !== 'one' && d.items.filter((i) => i.kind === 'plan').length > 1) {
+    if (
+      d.settings.item_selection !== 'one' &&
+      d.items.filter((i) => i.kind === 'plan').length > 1
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['items'],
@@ -283,16 +367,25 @@ export const checkoutDefinitionSchema = z
       });
     }
     if (!d.payments.card && !d.payments.bank_transfer.enabled) {
-      ctx.addIssue({ code: 'custom', path: ['payments', 'card'], message: 'enable at least one payment method' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['payments', 'card'],
+        message: 'enable at least one payment method',
+      });
     }
     if (d.payments.bank_transfer.enabled && d.payments.bank_transfer.account_id === '') {
-      ctx.addIssue({ code: 'custom', path: ['payments', 'bank_transfer', 'account_id'], message: 'pick the bank account' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['payments', 'bank_transfer', 'account_id'],
+        message: 'pick the bank account',
+      });
     }
     if (!d.payments.card && d.items.some((i) => i.kind === 'plan')) {
       ctx.addIssue({
         code: 'custom',
         path: ['payments', 'card'],
-        message: 'subscription plans need the card payment (renewals are charged on the saved card)',
+        message:
+          'subscription plans need the card payment (renewals are charged on the saved card)',
       });
     }
     const keys = new Set(d.offers.map((o) => o.key));
@@ -302,10 +395,18 @@ export const checkoutDefinitionSchema = z
     }
     d.offers.forEach((o, i) => {
       if (!known(o.on_accept) || o.on_accept === o.key) {
-        ctx.addIssue({ code: 'custom', path: ['offers', i, 'on_accept'], message: 'unknown offer' });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['offers', i, 'on_accept'],
+          message: 'unknown offer',
+        });
       }
       if (!known(o.on_decline) || o.on_decline === o.key) {
-        ctx.addIssue({ code: 'custom', path: ['offers', i, 'on_decline'], message: 'unknown offer' });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['offers', i, 'on_decline'],
+          message: 'unknown offer',
+        });
       }
     });
   });

@@ -2,15 +2,22 @@ import type { Checkout } from '@amable/api-types';
 import {
   CHECKOUT_STATUSES,
   CONTACT_FIELD_MODES,
+  REUSABLE_PAYMENT_METHOD_TYPES,
+  STRIPE_PAYMENT_METHOD_TYPES,
   checkoutDefinitionSchema,
   defaultCheckoutDefinition,
   type CheckoutDefinition,
   type CheckoutStatus,
   type ContactFieldMode,
 } from '@amable/checkout';
-import { formDefinitionSchema, type FormDefinition, type FormField as FormFieldDef } from '@amable/forms';
+import {
+  formDefinitionSchema,
+  type FormDefinition,
+  type FormField as FormFieldDef,
+} from '@amable/forms';
 import { DashboardButton, PageBody, PageToolbar, toast, usePageChrome } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
+import { Checkbox } from '@amable/ui/ui/checkbox';
 import { Input } from '@amable/ui/ui/input';
 import { Switch } from '@amable/ui/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@amable/ui/ui/tabs';
@@ -34,7 +41,12 @@ import {
   usePermissions,
 } from '../api/hooks';
 import { CheckoutPreview, previewCheckoutConfig } from '../components/checkout-preview';
-import { BumpsSection, DiscountsSection, ItemsSection, OffersSection } from '../components/checkout-sections';
+import {
+  BumpsSection,
+  DiscountsSection,
+  ItemsSection,
+  OffersSection,
+} from '../components/checkout-sections';
 import { ChoiceSelect, ErrorNotice, FormField, PageState, SectionCard } from '../components/common';
 
 type EditorTab = 'products' | 'fields' | 'bumps' | 'offers' | 'design' | 'settings';
@@ -78,7 +90,8 @@ function CopyButton({ text }: { text: string }) {
         });
       }}
     >
-      {copied ? <Check aria-hidden /> : <Copy aria-hidden />} {copied ? t('common.copied') : t('common.copy')}
+      {copied ? <Check aria-hidden /> : <Copy aria-hidden />}{' '}
+      {copied ? t('common.copied') : t('common.copy')}
     </Button>
   );
 }
@@ -95,14 +108,20 @@ function Editor({ checkout }: { checkout: Checkout }) {
   const reloadRef = useRef<() => Promise<void>>(async () => undefined);
   const lock = useEditLock(canWrite ? editLockPath(slug, 'checkouts', checkout.id) : null, {
     onLost: (holder) =>
-      toast.warning(holder ? t('common.lock.takenOver', { name: holder.user_name }) : t('common.lock.takenOverSomeone')),
+      toast.warning(
+        holder
+          ? t('common.lock.takenOver', { name: holder.user_name })
+          : t('common.lock.takenOverSomeone'),
+      ),
     onStale: () => void reloadRef.current(),
   });
   const writable = canWrite && lock.canEdit;
   const [name, setName] = useState(checkout.name);
   const [status, setStatus] = useState<CheckoutStatus>(checkout.status);
   const [revision, setRevision] = useState(checkout.revision);
-  const [definition, setDefinition] = useState<CheckoutDefinition>(() => parseDefinition(checkout.definition));
+  const [definition, setDefinition] = useState<CheckoutDefinition>(() =>
+    parseDefinition(checkout.definition),
+  );
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [tab, setTab] = useState<EditorTab>('products');
   const [dirty, setDirty] = useState(false);
@@ -133,18 +152,23 @@ function Editor({ checkout }: { checkout: Checkout }) {
     setDirty(true);
   };
   const settings = definition.settings;
-  const setSettings = (patch: Partial<CheckoutDefinition['settings']>) => edit({ ...definition, settings: { ...settings, ...patch } });
+  const setSettings = (patch: Partial<CheckoutDefinition['settings']>) =>
+    edit({ ...definition, settings: { ...settings, ...patch } });
   const style = definition.style;
-  const setStyle = (patch: Partial<CheckoutDefinition['style']>) => edit({ ...definition, style: { ...style, ...patch } });
+  const setStyle = (patch: Partial<CheckoutDefinition['style']>) =>
+    edit({ ...definition, style: { ...style, ...patch } });
   const contact = definition.contact;
-  const setContact = (patch: Partial<CheckoutDefinition['contact']>) => edit({ ...definition, contact: { ...contact, ...patch } });
+  const setContact = (patch: Partial<CheckoutDefinition['contact']>) =>
+    edit({ ...definition, contact: { ...contact, ...patch } });
   const crm = definition.crm;
-  const setCrm = (patch: Partial<CheckoutDefinition['crm']>) => edit({ ...definition, crm: { ...crm, ...patch } });
+  const setCrm = (patch: Partial<CheckoutDefinition['crm']>) =>
+    edit({ ...definition, crm: { ...crm, ...patch } });
 
   const validation = useMemo(() => checkoutDefinitionSchema.safeParse(definition), [definition]);
   const firstIssue = validation.success ? null : validation.error.issues[0];
   const save = useCommerceMutation({
-    mutationFn: () => api.checkouts.update(checkout.id, { name: name.trim(), status, definition, revision }),
+    mutationFn: () =>
+      api.checkouts.update(checkout.id, { name: name.trim(), status, definition, revision }),
     success: t('checkout.editor.saved'),
     onSuccess: (saved) => {
       setRevision(saved.revision);
@@ -153,7 +177,11 @@ function Editor({ checkout }: { checkout: Checkout }) {
   });
 
   const currency =
-    catalog.products.find((p) => definition.items.some((i) => i.ref_id === p.id || p.plans.some((plan) => plan.id === i.ref_id)))?.currency ??
+    catalog.products.find((p) =>
+      definition.items.some(
+        (i) => i.ref_id === p.id || p.plans.some((plan) => plan.id === i.ref_id),
+      ),
+    )?.currency ??
     settingsQuery.data?.default_currency ??
     'EUR';
   const config = useMemo(
@@ -162,8 +190,17 @@ function Editor({ checkout }: { checkout: Checkout }) {
   );
   const selected = definition.fields.find((f) => f.id === selectedField) ?? null;
   const patchField = (id: string, patch: Partial<FormFieldDef>) =>
-    edit({ ...definition, fields: definition.fields.map((f) => (f.id === id ? { ...f, ...patch } : f)) });
-  const sectionProps = { definition, edit, products: catalog.products, currency, disabled: !writable };
+    edit({
+      ...definition,
+      fields: definition.fields.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    });
+  const sectionProps = {
+    definition,
+    edit,
+    products: catalog.products,
+    currency,
+    disabled: !writable,
+  };
 
   const modeChoice = (key: 'name' | 'phone' | 'company' | 'address') => (
     <FormField label={t(`checkout.contact.${key}`)}>
@@ -172,21 +209,48 @@ function Editor({ checkout }: { checkout: Checkout }) {
           id={id}
           value={contact[key]}
           disabled={!writable}
-          onChange={(value) => setContact({ [key]: (CONTACT_FIELD_MODES as readonly string[]).includes(value) ? (value as ContactFieldMode) : 'optional' })}
-          choices={CONTACT_FIELD_MODES.map((value) => ({ value, label: t(`checkout.contact.mode.${value}`) }))}
+          onChange={(value) =>
+            setContact({
+              [key]: (CONTACT_FIELD_MODES as readonly string[]).includes(value)
+                ? (value as ContactFieldMode)
+                : 'optional',
+            })
+          }
+          choices={CONTACT_FIELD_MODES.map((value) => ({
+            value,
+            label: t(`checkout.contact.mode.${value}`),
+          }))}
           className="w-full"
         />
       )}
     </FormField>
   );
 
-  const text = (key: 'heading' | 'button_label' | 'success_message' | 'terms_label', multiline = false) => (
-    <FormField label={t(`checkout.settings.${key}`)} hint={t('checkout.settings.defaultHint')} className={multiline ? 'sm:col-span-2' : undefined}>
+  const text = (
+    key: 'heading' | 'button_label' | 'success_message' | 'terms_label',
+    multiline = false,
+  ) => (
+    <FormField
+      label={t(`checkout.settings.${key}`)}
+      hint={t('checkout.settings.defaultHint')}
+      className={multiline ? 'sm:col-span-2' : undefined}
+    >
       {(id) =>
         multiline ? (
-          <Textarea id={id} rows={2} value={settings[key]} disabled={!writable} onChange={(e) => setSettings({ [key]: e.target.value })} />
+          <Textarea
+            id={id}
+            rows={2}
+            value={settings[key]}
+            disabled={!writable}
+            onChange={(e) => setSettings({ [key]: e.target.value })}
+          />
         ) : (
-          <Input id={id} value={settings[key]} disabled={!writable} onChange={(e) => setSettings({ [key]: e.target.value })} />
+          <Input
+            id={id}
+            value={settings[key]}
+            disabled={!writable}
+            onChange={(e) => setSettings({ [key]: e.target.value })}
+          />
         )
       }
     </FormField>
@@ -213,10 +277,17 @@ function Editor({ checkout }: { checkout: Checkout }) {
               value={status}
               disabled={!writable}
               onChange={(value) => {
-                setStatus((CHECKOUT_STATUSES as readonly string[]).includes(value) ? (value as CheckoutStatus) : 'draft');
+                setStatus(
+                  (CHECKOUT_STATUSES as readonly string[]).includes(value)
+                    ? (value as CheckoutStatus)
+                    : 'draft',
+                );
                 setDirty(true);
               }}
-              choices={CHECKOUT_STATUSES.map((value) => ({ value, label: t(`checkout.status.${value}`) }))}
+              choices={CHECKOUT_STATUSES.map((value) => ({
+                value,
+                label: t(`checkout.status.${value}`),
+              }))}
             />
           </div>
         }
@@ -224,7 +295,9 @@ function Editor({ checkout }: { checkout: Checkout }) {
           canWrite ? (
             <DashboardButton
               variant="primary"
-              disabled={!writable || !dirty || save.isPending || !validation.success || name.trim() === ''}
+              disabled={
+                !writable || !dirty || save.isPending || !validation.success || name.trim() === ''
+              }
               onClick={() => save.mutate(undefined)}
             >
               <Save aria-hidden /> {dirty ? t('common.save') : t('checkout.editor.saved')}
@@ -236,12 +309,17 @@ function Editor({ checkout }: { checkout: Checkout }) {
       <PageBody className="grid gap-4 pt-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
         <div className="grid min-w-0 content-start gap-4">
           {firstIssue ? (
-            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+            <p
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
               {firstIssue.path.join('.')}: {firstIssue.message}
             </p>
           ) : null}
           {status === 'active' && definition.items.length === 0 ? (
-            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">{t('checkout.editor.noItems')}</p>
+            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+              {t('checkout.editor.noItems')}
+            </p>
           ) : null}
           <Tabs value={tab} onValueChange={(value) => setTab(value as EditorTab)}>
             <TabsList className="flex-wrap">
@@ -270,7 +348,14 @@ function Editor({ checkout }: { checkout: Checkout }) {
                         maxLength={2}
                         className="font-mono uppercase"
                         disabled={!writable}
-                        onChange={(e) => setContact({ default_country: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) })}
+                        onChange={(e) =>
+                          setContact({
+                            default_country: e.target.value
+                              .toUpperCase()
+                              .replace(/[^A-Z]/g, '')
+                              .slice(0, 2),
+                          })
+                        }
                       />
                     )}
                   </FormField>
@@ -278,16 +363,22 @@ function Editor({ checkout }: { checkout: Checkout }) {
                     <Switch
                       checked={contact.address_autocomplete}
                       disabled={!writable || contact.address === 'hidden'}
-                      onCheckedChange={(address_autocomplete) => setContact({ address_autocomplete })}
+                      onCheckedChange={(address_autocomplete) =>
+                        setContact({ address_autocomplete })
+                      }
                     />
                     {t('checkout.contact.autocomplete')}
                   </label>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">{t('checkout.contact.emailAlways')}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t('checkout.contact.emailAlways')}
+                </p>
               </SectionCard>
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
                 <SectionCard title={t('checkout.fields.custom')}>
-                  <p className="mb-3 text-sm text-muted-foreground">{t('checkout.fields.prefillHint')}</p>
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    {t('checkout.fields.prefillHint')}
+                  </p>
                   <FieldList
                     definition={{ ...FIELD_HOST, fields: definition.fields }}
                     selectedId={selectedField}
@@ -296,7 +387,11 @@ function Editor({ checkout }: { checkout: Checkout }) {
                     disabled={!writable}
                   />
                 </SectionCard>
-                <SectionCard title={selected ? t(`forms.kind.${selected.kind}`) : t('forms.builder.properties')}>
+                <SectionCard
+                  title={
+                    selected ? t(`forms.kind.${selected.kind}`) : t('forms.builder.properties')
+                  }
+                >
                   {selected ? (
                     <FieldProperties
                       field={selected}
@@ -306,7 +401,9 @@ function Editor({ checkout }: { checkout: Checkout }) {
                       disabled={!writable}
                     />
                   ) : (
-                    <p className="text-sm text-muted-foreground">{t('forms.builder.selectField')}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('forms.builder.selectField')}
+                    </p>
                   )}
                 </SectionCard>
               </div>
@@ -326,8 +423,15 @@ function Editor({ checkout }: { checkout: Checkout }) {
                         id={id}
                         value={style.layout}
                         disabled={!writable}
-                        onChange={(value) => setStyle({ layout: value === 'one_column' ? 'one_column' : 'two_columns' })}
-                        choices={(['two_columns', 'one_column'] as const).map((value) => ({ value, label: t(`checkout.design.layout.${value}`) }))}
+                        onChange={(value) =>
+                          setStyle({
+                            layout: value === 'one_column' ? 'one_column' : 'two_columns',
+                          })
+                        }
+                        choices={(['two_columns', 'one_column'] as const).map((value) => ({
+                          value,
+                          label: t(`checkout.design.layout.${value}`),
+                        }))}
                         className="w-full"
                       />
                     )}
@@ -335,9 +439,24 @@ function Editor({ checkout }: { checkout: Checkout }) {
                   {text('heading')}
                   {text('button_label')}
                   {(
-                    ['primary_color', 'text_color', 'background_color', 'input_background', 'border_color', 'button_text_color', 'summary_background'] as const
+                    [
+                      'primary_color',
+                      'text_color',
+                      'background_color',
+                      'input_background',
+                      'border_color',
+                      'button_text_color',
+                      'summary_background',
+                    ] as const
                   ).map((key) => (
-                    <FormField key={key} label={key === 'summary_background' ? t('checkout.design.summaryBackground') : t(`forms.style.${key}`)}>
+                    <FormField
+                      key={key}
+                      label={
+                        key === 'summary_background'
+                          ? t('checkout.design.summaryBackground')
+                          : t(`forms.style.${key}`)
+                      }
+                    >
                       {(id) => (
                         <div className="flex gap-2">
                           <input
@@ -348,22 +467,52 @@ function Editor({ checkout }: { checkout: Checkout }) {
                             value={/^#[0-9a-f]{6}$/i.test(style[key]) ? style[key] : '#ffffff'}
                             onChange={(e) => setStyle({ [key]: e.target.value })}
                           />
-                          <Input id={id} value={style[key]} disabled={!writable} onChange={(e) => setStyle({ [key]: e.target.value })} />
+                          <Input
+                            id={id}
+                            value={style[key]}
+                            disabled={!writable}
+                            onChange={(e) => setStyle({ [key]: e.target.value })}
+                          />
                         </div>
                       )}
                     </FormField>
                   ))}
                   {(['radius', 'font_size', 'gap', 'max_width'] as const).map((key) => (
                     <FormField key={key} label={t(`forms.style.${key}`)}>
-                      {(id) => <Input id={id} value={style[key]} disabled={!writable} onChange={(e) => setStyle({ [key]: e.target.value })} />}
+                      {(id) => (
+                        <Input
+                          id={id}
+                          value={style[key]}
+                          disabled={!writable}
+                          onChange={(e) => setStyle({ [key]: e.target.value })}
+                        />
+                      )}
                     </FormField>
                   ))}
                   <FormField label={t('forms.style.font_family')} className="sm:col-span-2">
-                    {(id) => <Input id={id} value={style.font_family} disabled={!writable} onChange={(e) => setStyle({ font_family: e.target.value })} />}
-                  </FormField>
-                  <FormField label={t('forms.style.custom_css')} hint={t('forms.style.customCssHint')} className="sm:col-span-3">
                     {(id) => (
-                      <Textarea id={id} rows={6} className="font-mono text-xs" value={style.custom_css} disabled={!writable} onChange={(e) => setStyle({ custom_css: e.target.value })} />
+                      <Input
+                        id={id}
+                        value={style.font_family}
+                        disabled={!writable}
+                        onChange={(e) => setStyle({ font_family: e.target.value })}
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label={t('forms.style.custom_css')}
+                    hint={t('forms.style.customCssHint')}
+                    className="sm:col-span-3"
+                  >
+                    {(id) => (
+                      <Textarea
+                        id={id}
+                        rows={6}
+                        className="font-mono text-xs"
+                        value={style.custom_css}
+                        disabled={!writable}
+                        onChange={(e) => setStyle({ custom_css: e.target.value })}
+                      />
                     )}
                   </FormField>
                 </div>
@@ -374,28 +523,66 @@ function Editor({ checkout }: { checkout: Checkout }) {
               <SectionCard title={t('checkout.settings.purchase')}>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                    <Switch checked={settings.promo_codes} disabled={!writable} onCheckedChange={(promo_codes) => setSettings({ promo_codes })} />
+                    <Switch
+                      checked={settings.promo_codes}
+                      disabled={!writable}
+                      onCheckedChange={(promo_codes) => setSettings({ promo_codes })}
+                    />
                     {t('checkout.settings.promoCodes')}
                   </label>
                   {settings.promo_codes ? (
-                    <FormField label={t('checkout.settings.promoParam')} hint={t('checkout.settings.promoParamHint', { param: settings.promo_param || 'promo' })}>
+                    <FormField
+                      label={t('checkout.settings.promoParam')}
+                      hint={t('checkout.settings.promoParamHint', {
+                        param: settings.promo_param || 'promo',
+                      })}
+                    >
                       {(id) => (
                         <Input
                           id={id}
                           className="font-mono"
                           value={settings.promo_param}
                           disabled={!writable}
-                          onChange={(e) => setSettings({ promo_param: e.target.value.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 64) })}
+                          onChange={(e) =>
+                            setSettings({
+                              promo_param: e.target.value
+                                .replace(/[^A-Za-z0-9_.-]/g, '')
+                                .slice(0, 64),
+                            })
+                          }
                         />
                       )}
                     </FormField>
                   ) : null}
-                  <FormField label={t('checkout.settings.thankYouUrl')} hint={t('checkout.settings.thankYouHint')} className="sm:col-span-2">
-                    {(id) => <Input id={id} type="url" value={settings.thank_you_url} disabled={!writable} onChange={(e) => setSettings({ thank_you_url: e.target.value.trim() })} />}
+                  <FormField
+                    label={t('checkout.settings.thankYouUrl')}
+                    hint={t('checkout.settings.thankYouHint')}
+                    className="sm:col-span-2"
+                  >
+                    {(id) => (
+                      <Input
+                        id={id}
+                        type="url"
+                        value={settings.thank_you_url}
+                        disabled={!writable}
+                        onChange={(e) => setSettings({ thank_you_url: e.target.value.trim() })}
+                      />
+                    )}
                   </FormField>
                   {text('success_message', true)}
-                  <FormField label={t('checkout.settings.termsUrl')} hint={t('checkout.settings.termsHint')}>
-                    {(id) => <Input id={id} type="url" value={settings.terms_url} disabled={!writable} onChange={(e) => setSettings({ terms_url: e.target.value.trim() })} />}
+                  <FormField
+                    label={t('checkout.settings.termsUrl')}
+                    hint={t('checkout.settings.termsHint')}
+                  >
+                    {(id) => (
+                      <Input
+                        id={id}
+                        type="url"
+                        value={settings.terms_url}
+                        disabled={!writable}
+                        onChange={(e) => setSettings({ terms_url: e.target.value.trim() })}
+                      />
+                    )}
                   </FormField>
                   {text('terms_label')}
                   <FormField label={t('forms.settings.locale')}>
@@ -404,13 +591,21 @@ function Editor({ checkout }: { checkout: Checkout }) {
                         id={id}
                         value={settings.locale}
                         disabled={!writable}
-                        onChange={(value) => setSettings({ locale: value === 'en' || value === 'it' ? value : 'auto' })}
-                        choices={(['auto', 'en', 'it'] as const).map((value) => ({ value, label: t(`forms.settings.locale.${value}`) }))}
+                        onChange={(value) =>
+                          setSettings({ locale: value === 'en' || value === 'it' ? value : 'auto' })
+                        }
+                        choices={(['auto', 'en', 'it'] as const).map((value) => ({
+                          value,
+                          label: t(`forms.settings.locale.${value}`),
+                        }))}
                         className="w-full"
                       />
                     )}
                   </FormField>
-                  <FormField label={t('forms.settings.allowedDomains')} hint={t('forms.settings.allowedDomainsHint')}>
+                  <FormField
+                    label={t('forms.settings.allowedDomains')}
+                    hint={t('forms.settings.allowedDomainsHint')}
+                  >
                     {(id) => (
                       <Input
                         id={id}
@@ -428,21 +623,35 @@ function Editor({ checkout }: { checkout: Checkout }) {
                     )}
                   </FormField>
                   <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                    <Switch checked={settings.hosted_enabled} disabled={!writable} onCheckedChange={(hosted_enabled) => setSettings({ hosted_enabled })} />
+                    <Switch
+                      checked={settings.hosted_enabled}
+                      disabled={!writable}
+                      onCheckedChange={(hosted_enabled) => setSettings({ hosted_enabled })}
+                    />
                     {t('checkout.settings.hosted')}
                   </label>
                 </div>
               </SectionCard>
               <SectionCard title={t('forms.builder.tab.crm')}>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <FormField label={t('forms.crm.updatePolicy')} hint={t(`forms.crm.policy.${crm.update_policy}.hint`)}>
+                  <FormField
+                    label={t('forms.crm.updatePolicy')}
+                    hint={t(`forms.crm.policy.${crm.update_policy}.hint`)}
+                  >
                     {(id) => (
                       <ChoiceSelect
                         id={id}
                         value={crm.update_policy}
                         disabled={!writable}
-                        onChange={(value) => setCrm({ update_policy: value === 'overwrite' ? 'overwrite' : 'fill_empty' })}
-                        choices={(['fill_empty', 'overwrite'] as const).map((value) => ({ value, label: t(`forms.crm.policy.${value}`) }))}
+                        onChange={(value) =>
+                          setCrm({
+                            update_policy: value === 'overwrite' ? 'overwrite' : 'fill_empty',
+                          })
+                        }
+                        choices={(['fill_empty', 'overwrite'] as const).map((value) => ({
+                          value,
+                          label: t(`forms.crm.policy.${value}`),
+                        }))}
                         className="w-full"
                       />
                     )}
@@ -454,7 +663,9 @@ function Editor({ checkout }: { checkout: Checkout }) {
                         value={crm.lead_source_id ?? ''}
                         disabled={!writable}
                         emptyLabel={t('forms.crm.none')}
-                        onChange={(value) => setCrm({ lead_source_id: value === '' ? null : value })}
+                        onChange={(value) =>
+                          setCrm({ lead_source_id: value === '' ? null : value })
+                        }
                         choices={refs.leadSources.map((s) => ({ value: s.id, label: s.name }))}
                         className="w-full"
                       />
@@ -473,10 +684,80 @@ function Editor({ checkout }: { checkout: Checkout }) {
                       />
                     )}
                   </FormField>
-                  <FormField label={t('forms.crm.tags')} hint={t('checkout.settings.tagsHint')} className="sm:col-span-3">
-                    {(id) => <TagPicker id={id} value={crm.tag_ids} onChange={(tag_ids) => setCrm({ tag_ids })} disabled={!writable} className="w-full" />}
+                  <FormField
+                    label={t('forms.crm.tags')}
+                    hint={t('checkout.settings.tagsHint')}
+                    className="sm:col-span-3"
+                  >
+                    {(id) => (
+                      <TagPicker
+                        id={id}
+                        value={crm.tag_ids}
+                        onChange={(tag_ids) => setCrm({ tag_ids })}
+                        disabled={!writable}
+                        className="w-full"
+                      />
+                    )}
                   </FormField>
-                  <p className="text-xs text-muted-foreground sm:col-span-3">{t('checkout.settings.attribution')}</p>
+                  <p className="text-xs text-muted-foreground sm:col-span-3">
+                    {t('checkout.settings.attribution')}
+                  </p>
+                </div>
+              </SectionCard>
+              <SectionCard title={t('checkout.abandoned.title')}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                    <Switch
+                      checked={settings.abandoned_cart.enabled}
+                      disabled={!writable}
+                      onCheckedChange={(enabled) =>
+                        setSettings({ abandoned_cart: { ...settings.abandoned_cart, enabled } })
+                      }
+                    />
+                    {t('checkout.abandoned.enabled')}
+                  </label>
+                  {settings.abandoned_cart.enabled && (
+                    <FormField
+                      label={t('checkout.abandoned.delay')}
+                      hint={t('checkout.abandoned.delayHint')}
+                    >
+                      {(id) => (
+                        <ChoiceSelect
+                          id={id}
+                          value={String(settings.abandoned_cart.delay_minutes)}
+                          disabled={!writable}
+                          onChange={(value) =>
+                            setSettings({
+                              abandoned_cart: {
+                                ...settings.abandoned_cart,
+                                delay_minutes: Number(value),
+                              },
+                            })
+                          }
+                          choices={delayChoices(settings.abandoned_cart.delay_minutes).map(
+                            (minutes) => ({
+                              value: String(minutes),
+                              label:
+                                minutes % 1440 === 0
+                                  ? t('checkout.abandoned.days', { n: minutes / 1440 })
+                                  : minutes % 60 === 0
+                                    ? t('checkout.abandoned.hours', { n: minutes / 60 })
+                                    : t('checkout.abandoned.minutes', { n: minutes }),
+                            }),
+                          )}
+                          className="w-full"
+                        />
+                      )}
+                    </FormField>
+                  )}
+                  <p className="text-xs text-muted-foreground sm:col-span-2">
+                    {t('checkout.abandoned.hint')}
+                  </p>
+                  {settings.abandoned_cart.enabled && (
+                    <p className="text-xs text-muted-foreground sm:col-span-2">
+                      {t('checkout.abandoned.privacy')}
+                    </p>
+                  )}
                 </div>
               </SectionCard>
               <EmbedPanel checkoutId={checkout.id} dirty={dirty} />
@@ -498,13 +779,20 @@ function Editor({ checkout }: { checkout: Checkout }) {
 function EmbedPanel({ checkoutId, dirty }: { checkoutId: string; dirty: boolean }) {
   const { t } = useI18n();
   const { slug, api } = useCommerce();
-  const embed = useQuery({ queryKey: commerceKeys.checkoutEmbed(slug, checkoutId), queryFn: () => api.checkouts.embed(checkoutId) });
+  const embed = useQuery({
+    queryKey: commerceKeys.checkoutEmbed(slug, checkoutId),
+    queryFn: () => api.checkouts.embed(checkoutId),
+  });
   if (embed.error) return <ErrorNotice error={embed.error} />;
   const data = embed.data;
   return (
     <SectionCard title={t('checkout.embed.title')}>
       <div className="grid gap-4">
-        {dirty ? <p className="text-sm text-amber-700 dark:text-amber-300">{t('checkout.embed.unsaved')}</p> : null}
+        {dirty ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            {t('checkout.embed.unsaved')}
+          </p>
+        ) : null}
         <div className="grid gap-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{t('checkout.embed.snippet')}</span>
@@ -538,12 +826,23 @@ function EmbedPanel({ checkoutId, dirty }: { checkoutId: string; dirty: boolean 
               </span>
             ) : null}
           </div>
-          <code className="block overflow-x-auto rounded-lg bg-muted p-3 text-xs">{data?.hosted_url ?? '…'}</code>
+          <code className="block overflow-x-auto rounded-lg bg-muted p-3 text-xs">
+            {data?.hosted_url ?? '…'}
+          </code>
         </div>
         <p className="text-xs text-muted-foreground">{t('checkout.embed.landingHint')}</p>
       </div>
     </SectionCard>
   );
+}
+
+const ABANDON_DELAYS = [15, 30, 60, 120, 360, 720, 1440, 2880, 4320, 10080];
+
+/** Preset delays, plus the saved one when set through the API to another value. */
+function delayChoices(current: number): number[] {
+  return ABANDON_DELAYS.includes(current)
+    ? ABANDON_DELAYS
+    : [...ABANDON_DELAYS, current].sort((a, b) => a - b);
 }
 
 function PaymentsSection({
@@ -557,25 +856,115 @@ function PaymentsSection({
 }) {
   const { t } = useI18n();
   const { slug, api } = useCommerce();
-  const accounts = useQuery({ queryKey: commerceKeys.bankAccounts(slug), queryFn: () => api.bankAccounts.list() });
+  const accounts = useQuery({
+    queryKey: commerceKeys.bankAccounts(slug),
+    queryFn: () => api.bankAccounts.list(),
+  });
+  const stripe = useQuery({
+    queryKey: commerceKeys.stripe(slug),
+    queryFn: () => api.stripe.get(),
+    retry: false,
+  });
   const payments = definition.payments;
   const bank = payments.bank_transfer;
-  const setPayments = (patch: Partial<CheckoutDefinition['payments']>) => edit({ ...definition, payments: { ...payments, ...patch } });
-  const setBank = (patch: Partial<CheckoutDefinition['payments']['bank_transfer']>) => setPayments({ bank_transfer: { ...bank, ...patch } });
+  const methods = payments.stripe_methods;
+  const setPayments = (patch: Partial<CheckoutDefinition['payments']>) =>
+    edit({ ...definition, payments: { ...payments, ...patch } });
+  const setBank = (patch: Partial<CheckoutDefinition['payments']['bank_transfer']>) =>
+    setPayments({ bank_transfer: { ...bank, ...patch } });
+  const setMethods = (patch: Partial<CheckoutDefinition['payments']['stripe_methods']>) =>
+    setPayments({ stripe_methods: { ...methods, ...patch } });
   const list = accounts.data?.data ?? [];
   const hasPlan = definition.items.some((i) => i.kind === 'plan');
+  const saves = hasPlan || definition.settings.first_offer !== '';
+  const dropped =
+    saves && methods.mode === 'custom'
+      ? methods.types.filter((m) => !REUSABLE_PAYMENT_METHOD_TYPES.includes(m))
+      : [];
   return (
     <SectionCard title={t('checkout.payments.title')}>
       <div className="grid gap-3">
         <label className="flex items-center gap-2 text-sm">
-          <Switch checked={payments.card} disabled={disabled} onCheckedChange={(card) => setPayments({ card })} />
+          <Switch
+            checked={payments.card}
+            disabled={disabled}
+            onCheckedChange={(card) => setPayments({ card })}
+          />
           {t('checkout.payments.card')}
         </label>
+        {payments.card ? (
+          <div className="grid gap-3 border-l-2 pl-4">
+            {stripe.data?.managed_payments === true ? (
+              <p className="text-xs text-muted-foreground">
+                {t('checkout.payments.managedMethods')}
+              </p>
+            ) : null}
+            <FormField label={t('checkout.payments.methods')}>
+              {(id) => (
+                <ChoiceSelect
+                  id={id}
+                  value={methods.mode}
+                  disabled={disabled}
+                  onChange={(value) =>
+                    setMethods({ mode: value === 'custom' ? 'custom' : 'automatic' })
+                  }
+                  choices={(['automatic', 'custom'] as const).map((value) => ({
+                    value,
+                    label: t(`checkout.payments.methods.${value}`),
+                  }))}
+                  className="w-full"
+                />
+              )}
+            </FormField>
+            <p className="text-xs text-muted-foreground">
+              {t(`checkout.payments.methods.${methods.mode}Hint`)}
+            </p>
+            {methods.mode === 'custom' ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {STRIPE_PAYMENT_METHOD_TYPES.map((type) => (
+                  <label key={type} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={type === 'card' || methods.types.includes(type)}
+                      disabled={disabled || type === 'card'}
+                      onCheckedChange={(on) =>
+                        setMethods({
+                          types:
+                            on === true
+                              ? [...methods.types.filter((m) => m !== type), type]
+                              : methods.types.filter((m) => m !== type),
+                        })
+                      }
+                    />
+                    {t(`checkout.payments.method.${type}`)}
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            {dropped.length > 0 ? (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                {t('checkout.payments.methodsDropped', {
+                  methods: dropped.map((m) => t(`checkout.payments.method.${m}`)).join(', '),
+                })}
+              </p>
+            ) : null}
+            <label className="flex items-center gap-2 text-sm">
+              <Switch
+                checked={methods.wallets}
+                disabled={disabled}
+                onCheckedChange={(wallets) => setMethods({ wallets })}
+              />
+              {t('checkout.payments.wallets')}
+            </label>
+            <p className="text-xs text-muted-foreground">{t('checkout.payments.walletsHint')}</p>
+          </div>
+        ) : null}
         <label className="flex items-center gap-2 text-sm">
           <Switch
             checked={bank.enabled}
             disabled={disabled}
-            onCheckedChange={(enabled) => setBank({ enabled, account_id: bank.account_id || (list[0]?.id ?? '') })}
+            onCheckedChange={(enabled) =>
+              setBank({ enabled, account_id: bank.account_id || (list[0]?.id ?? '') })
+            }
           />
           {t('checkout.payments.bankTransfer')}
         </label>
@@ -583,23 +972,35 @@ function PaymentsSection({
           <>
             {accounts.error ? <ErrorNotice error={accounts.error} /> : null}
             {accounts.data && list.length === 0 ? (
-              <p className="text-sm text-amber-700 dark:text-amber-300">{t('checkout.payments.noAccounts')}</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                {t('checkout.payments.noAccounts')}
+              </p>
             ) : (
-              <FormField label={t('checkout.payments.account')} hint={t('checkout.payments.bankHint')}>
+              <FormField
+                label={t('checkout.payments.account')}
+                hint={t('checkout.payments.bankHint')}
+              >
                 {(id) => (
                   <ChoiceSelect
                     id={id}
                     value={bank.account_id}
                     disabled={disabled}
                     onChange={(account_id) => setBank({ account_id })}
-                    choices={list.map((a) => ({ value: a.id, label: `${a.label} · ${a.iban.slice(-4)}` }))}
+                    choices={list.map((a) => ({
+                      value: a.id,
+                      label: `${a.label} · ${a.iban.slice(-4)}`,
+                    }))}
                     placeholder={t('checkout.payments.pickAccount')}
                     className="w-full"
                   />
                 )}
               </FormField>
             )}
-            {hasPlan ? <p className="text-xs text-muted-foreground">{t('checkout.payments.plansCardOnly')}</p> : null}
+            {hasPlan ? (
+              <p className="text-xs text-muted-foreground">
+                {t('checkout.payments.plansCardOnly')}
+              </p>
+            ) : null}
           </>
         ) : null}
       </div>

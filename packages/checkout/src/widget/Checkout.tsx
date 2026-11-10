@@ -4,6 +4,7 @@ import { WIDGET_STRINGS } from '@amable/forms/strings';
 import { EMAIL_RE, validateSubmission, visibleFieldKeys } from '@amable/forms/validate';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { countryOptions } from '../countries';
+import { paymentMethodTypesFor } from '../payment-methods';
 import type { ContactFieldMode } from '../schema';
 import type {
   AddressSuggestion,
@@ -14,10 +15,23 @@ import type {
   Quote,
   QuoteLine,
 } from '../public';
-import { everyLabel, fill, formatMoney, type CheckoutLocale, type CheckoutStrings } from '../strings';
+import {
+  everyLabel,
+  fill,
+  formatMoney,
+  type CheckoutLocale,
+  type CheckoutStrings,
+} from '../strings';
 import type { CheckoutApi } from './api';
 import { BankDetails } from './BankDetails';
-import { followNext, navigate, sessionTokenFromUrl, storedToken, storeToken, withParam } from './nav';
+import {
+  followNext,
+  navigate,
+  sessionTokenFromUrl,
+  storedToken,
+  storeToken,
+  withParam,
+} from './nav';
 import { appearanceOf, loadStripe, type StripeElements, type StripeJs } from './stripe';
 import { PAYMENT_SLOT } from './styles';
 
@@ -61,7 +75,9 @@ type Method = 'card' | 'bank_transfer';
 function initialSelection(config: PublicCheckoutConfig): Selection {
   const items =
     config.settings.item_selection === 'one'
-      ? [(config.items.find((i) => i.preselected) ?? config.items[0])?.id ?? ''].filter((id) => id !== '')
+      ? [(config.items.find((i) => i.preselected) ?? config.items[0])?.id ?? ''].filter(
+          (id) => id !== '',
+        )
       : config.settings.item_selection === 'any'
         ? config.items.filter((i) => i.preselected).map((i) => i.id)
         : config.items.map((i) => i.id);
@@ -73,22 +89,26 @@ function initialBuyer(config: PublicCheckoutConfig): Buyer {
   const get = (...keys: string[]) => {
     for (const key of keys) {
       const value = params.get(key);
-      if (value !== null && value !== '') return value.slice(0, 200);
+      if (value !== null && value.trim() !== '') return value.slice(0, 200);
     }
     return '';
   };
+  const text = (...keys: string[]) => get(...keys).trim();
+  const country = text('country', 'address_country', 'paese', 'nazione').toUpperCase();
+  // An unencoded "+" in the URL arrives as a space: `?phone=+39333…` reads " 39333…".
+  const phone = get('phone', 'tel', 'telefono', 'cellulare');
   return {
-    email: get('email'),
-    given_name: get('given_name', 'first_name', 'name'),
-    family_name: get('family_name', 'last_name'),
-    phone: get('phone'),
-    company_name: get('company', 'company_name'),
-    address_line1: '',
-    address_line2: '',
-    address_city: '',
-    address_postal_code: '',
-    address_region: '',
-    address_country: config.contact.default_country,
+    email: text('email'),
+    given_name: text('given_name', 'first_name', 'firstname', 'nome', 'name'),
+    family_name: text('family_name', 'last_name', 'lastname', 'surname', 'cognome'),
+    phone: /^ \d/.test(phone) ? `+${phone.slice(1)}` : phone.trim(),
+    company_name: text('company', 'company_name', 'azienda', 'ragione_sociale'),
+    address_line1: text('address', 'address_line1', 'street', 'indirizzo', 'via'),
+    address_line2: text('address_line2', 'address2'),
+    address_city: text('city', 'address_city', 'citta', 'città', 'comune'),
+    address_postal_code: text('postal_code', 'address_postal_code', 'zip', 'cap'),
+    address_region: text('region', 'address_region', 'state', 'provincia'),
+    address_country: /^[A-Z]{2}$/.test(country) ? country : config.contact.default_country,
   };
 }
 
@@ -97,7 +117,14 @@ function localQuote(config: PublicCheckoutConfig, selection: Selection): Quote {
   const lines: QuoteLine[] = [];
   let recurring: Quote['recurring'] = null;
   const line = (name: string, amount: number, quantity: number, kind: QuoteLine['kind']) =>
-    lines.push({ name, quantity, subtotal_minor: amount, discount_minor: 0, total_minor: amount, kind });
+    lines.push({
+      name,
+      quantity,
+      subtotal_minor: amount,
+      discount_minor: 0,
+      total_minor: amount,
+      kind,
+    });
   for (const item of config.items) {
     if (!selection.items.includes(item.id)) continue;
     const quantity = selection.quantities[item.id] ?? item.quantity;
@@ -117,7 +144,8 @@ function localQuote(config: PublicCheckoutConfig, selection: Selection): Quote {
     } else line(item.name, item.unit_price_minor * quantity, quantity, 'item');
   }
   for (const bump of config.bumps) {
-    if (selection.bumps.includes(bump.id)) line(bump.title, bump.unit_price_minor * bump.quantity, bump.quantity, 'bump');
+    if (selection.bumps.includes(bump.id))
+      line(bump.title, bump.unit_price_minor * bump.quantity, bump.quantity, 'bump');
   }
   const total = lines.reduce((sum, l) => sum + l.total_minor, 0);
   return {
@@ -136,7 +164,14 @@ function localQuote(config: PublicCheckoutConfig, selection: Selection): Quote {
 /** This page without the parameters a previous payment return left on it. */
 function cleanReturnUrl(): string {
   const url = new URL(location.href);
-  for (const key of ['amb_cs', 'redirect_status', 'payment_intent', 'payment_intent_client_secret', 'setup_intent', 'setup_intent_client_secret']) {
+  for (const key of [
+    'amb_cs',
+    'redirect_status',
+    'payment_intent',
+    'payment_intent_client_secret',
+    'setup_intent',
+    'setup_intent_client_secret',
+  ]) {
     url.searchParams.delete(key);
   }
   return url.toString();
@@ -146,17 +181,32 @@ function modeLabel(mode: ContactFieldMode, label: string): string {
   return mode === 'required' ? `${label} *` : label;
 }
 
-export function Checkout({ config, api, strings, locale, host, paymentHost, preview }: CheckoutProps) {
+export function Checkout({
+  config,
+  api,
+  strings,
+  locale,
+  host,
+  paymentHost,
+  preview,
+}: CheckoutProps) {
   const fieldStrings = WIDGET_STRINGS[locale];
   const money = (minor: number) => formatMoney(minor, config.currency, locale);
   const promoParam = config.settings.promo_param;
   const [selection, setSelection] = useState<Selection>(() => initialSelection(config));
   const [buyer, setBuyer] = useState<Buyer>(() => initialBuyer(config));
-  const [values, setValues] = useState<Record<string, unknown>>(() => initialValues(config.fields));
+  const [values, setValues] = useState<Record<string, unknown>>(() =>
+    // Custom fields without their own URL parameter are filled from `?<field key>=`.
+    initialValues(
+      config.fields.map((f) => (f.prefill_param === '' ? { ...f, prefill_param: f.key } : f)),
+    ),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [terms, setTerms] = useState(false);
   const [promoInput, setPromoInput] = useState(() =>
-    config.settings.promo_codes && promoParam !== '' ? (new URLSearchParams(location.search).get(promoParam) ?? '').slice(0, 64) : '',
+    config.settings.promo_codes && promoParam !== ''
+      ? (new URLSearchParams(location.search).get(promoParam) ?? '').slice(0, 64)
+      : '',
   );
   const [promoCode, setPromoCode] = useState(promoInput);
   const [quote, setQuote] = useState<Quote>(() => localQuote(config, initialSelection(config)));
@@ -167,10 +217,12 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
   const stripe = useRef<{ js: StripeJs; elements: StripeElements } | null>(null);
   const mountedAt = useRef(Date.now());
   const hp = useRef<HTMLInputElement>(null);
+  const sentLead = useRef('');
 
   const [chosen, setChosen] = useState<Method>(config.payments.card ? 'card' : 'bank_transfer');
   const hasPlan = config.items.some((i) => i.recurring !== null && selection.items.includes(i.id));
-  const intentMode: 'payment' | 'setup' | 'none' = quote.total_minor > 0 ? 'payment' : hasPlan ? 'setup' : 'none';
+  const intentMode: 'payment' | 'setup' | 'none' =
+    quote.total_minor > 0 ? 'payment' : hasPlan ? 'setup' : 'none';
   // Subscriptions renew on the saved card: never by bank transfer.
   const bankOffered = config.payments.bank_transfer && !hasPlan;
   const method: Method = chosen === 'bank_transfer' && !bankOffered ? 'card' : chosen;
@@ -179,6 +231,9 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
   const elementMode = method === 'card' && !redirectCard ? intentMode : 'none';
   const needsStripe = method === 'card' && intentMode !== 'none';
   const saveCard = hasPlan || config.offers_enabled;
+  const methodChoice = config.payments.stripe_methods;
+  const methodTypes = paymentMethodTypesFor(methodChoice, saveCard || elementMode === 'setup');
+  const methodKey = methodTypes === null ? '' : methodTypes.join(',');
   const visible = visibleFieldKeys(config.fields, values);
   const selectionKey = JSON.stringify(selection);
 
@@ -196,7 +251,9 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
     void api.complete(token).then((result) => {
       setBusy(false);
       if (!result.ok || result.value.status === 'failed') {
-        setAlert(result.ok && result.value.message !== null ? result.value.message : strings.paymentFailed);
+        setAlert(
+          result.ok && result.value.message !== null ? result.value.message : strings.paymentFailed,
+        );
         return;
       }
       finish(
@@ -216,10 +273,42 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       return undefined;
     }
     const timer = window.setTimeout(() => {
-      void api.quote(config.id, selection, promoCode).then((result) => setQuote(result.ok ? result.value : local));
+      void api
+        .quote(config.id, selection, promoCode)
+        .then((result) => setQuote(result.ok ? result.value : local));
     }, 200);
     return () => window.clearTimeout(timer);
   }, [selectionKey, promoCode]);
+
+  // Abandoned cart: the email (with name, phone and cart) is saved once typed, before paying.
+  const appliedPromo = quote.promo?.applied === true ? quote.promo.code : '';
+  useEffect(() => {
+    const email = buyer.email.trim();
+    if (preview || config.settings.abandoned_cart?.enabled !== true || !EMAIL_RE.test(email))
+      return undefined;
+    const timer = window.setTimeout(() => {
+      const payload = {
+        selection,
+        promo_code: appliedPromo,
+        buyer: {
+          email,
+          given_name: buyer.given_name,
+          family_name: buyer.family_name,
+          phone: buyer.phone,
+        },
+      };
+      const key = JSON.stringify(payload);
+      if (key === sentLead.current) return;
+      sentLead.current = key;
+      void api.lead(config.id, {
+        ...payload,
+        tracking: collectTracking(),
+        meta: collectMeta(host),
+        hp: hp.current?.value ?? '',
+      });
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [buyer.email, buyer.given_name, buyer.family_name, buyer.phone, selectionKey, appliedPromo]);
 
   // Payment Element: created once Stripe.js is there, updated when the amount or the mode change.
   useEffect(() => {
@@ -228,8 +317,12 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       mode: elementMode,
       currency: config.currency.toLowerCase(),
       ...(elementMode === 'payment'
-        ? { amount: quote.total_minor, setupFutureUsage: saveCard ? ('off_session' as const) : null }
+        ? {
+            amount: quote.total_minor,
+            setupFutureUsage: saveCard ? ('off_session' as const) : null,
+          }
         : {}),
+      ...(methodTypes === null ? {} : { paymentMethodTypes: methodTypes }),
     };
     if (stripe.current !== null) {
       stripe.current.elements.update(options);
@@ -240,7 +333,12 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       .then((js) => {
         if (cancelled || stripe.current !== null) return;
         const elements = js.elements({ ...options, appearance: appearanceOf(config.style) });
-        elements.create('payment', { layout: 'tabs' }).mount(paymentHost);
+        elements
+          .create('payment', {
+            layout: 'tabs',
+            ...(methodChoice.wallets ? {} : { wallets: { applePay: 'never', googlePay: 'never' } }),
+          })
+          .mount(paymentHost);
         stripe.current = { js, elements };
         setStripeReady(true);
       })
@@ -248,7 +346,7 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
     return () => {
       cancelled = true;
     };
-  }, [elementMode, quote.total_minor, saveCard]);
+  }, [elementMode, quote.total_minor, saveCard, methodKey]);
 
   useEffect(() => {
     paymentHost.style.display = elementMode === 'none' ? 'none' : '';
@@ -266,7 +364,8 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       setDone({ message: strings.redirecting, order: null, bank: null });
       return;
     }
-    const paidMessage = message !== '' ? message : config.settings.success_message || strings.success;
+    const paidMessage =
+      message !== '' ? message : config.settings.success_message || strings.success;
     setDone({ message: bank !== null ? strings.bankPending : paidMessage, order, bank });
   };
 
@@ -309,15 +408,28 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
     need(c.company, ['company_name']);
     need(c.address, ['address_line1', 'address_city', 'address_postal_code', 'address_country']);
     const custom = validateSubmission(config, values);
-    if (!custom.ok) for (const [key, code] of Object.entries(custom.errors)) out[key] = fieldError(code);
+    if (!custom.ok)
+      for (const [key, code] of Object.entries(custom.errors)) out[key] = fieldError(code);
     if (config.settings.terms_url !== '' && !terms) out['terms_accepted'] = strings.termsRequired;
     return out;
   };
 
   const showErrors = (found: Record<string, string>) => {
     setErrors(found);
-    setAlert(found['terms_accepted'] !== undefined && Object.keys(found).length === 1 ? strings.termsRequired : strings.fixErrors);
-    window.setTimeout(() => host.shadowRoot?.querySelector<HTMLElement>('[data-af-invalid] input, [data-af-invalid] select, [data-af-invalid] textarea')?.focus(), 30);
+    setAlert(
+      found['terms_accepted'] !== undefined && Object.keys(found).length === 1
+        ? strings.termsRequired
+        : strings.fixErrors,
+    );
+    window.setTimeout(
+      () =>
+        host.shadowRoot
+          ?.querySelector<HTMLElement>(
+            '[data-af-invalid] input, [data-af-invalid] select, [data-af-invalid] textarea',
+          )
+          ?.focus(),
+      30,
+    );
   };
 
   const onSubmit = async (event: Event) => {
@@ -390,7 +502,12 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
           const mapped: Record<string, string> = {};
           for (const d of f.details) {
             const key = d.path.replace(/^values\./, '');
-            mapped[key] = key === 'terms_accepted' ? strings.termsRequired : key === 'promo_code' ? d.message : fieldError(d.message);
+            mapped[key] =
+              key === 'terms_accepted'
+                ? strings.termsRequired
+                : key === 'promo_code'
+                  ? d.message
+                  : fieldError(d.message);
           }
           showErrors(mapped);
         } else if (f.error === 'domain_not_allowed') setAlert(strings.domainNotAllowed);
@@ -408,17 +525,34 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
         navigate(intent.redirect_url);
         return;
       }
-      if ((intent.kind === 'payment' || intent.kind === 'setup') && s !== null && intent.client_secret !== null) {
+      if (
+        (intent.kind === 'payment' || intent.kind === 'setup') &&
+        s !== null &&
+        intent.client_secret !== null
+      ) {
         const confirmParams = {
           return_url: withParam(location.href, 'amb_cs', token),
           payment_method_data: {
-            billing_details: { email: buyer.email, name: `${buyer.given_name} ${buyer.family_name}`.trim() },
+            billing_details: {
+              email: buyer.email,
+              name: `${buyer.given_name} ${buyer.family_name}`.trim(),
+            },
           },
         };
         const confirmed =
           intent.kind === 'payment'
-            ? await s.js.confirmPayment({ elements: s.elements, clientSecret: intent.client_secret, confirmParams, redirect: 'if_required' })
-            : await s.js.confirmSetup({ elements: s.elements, clientSecret: intent.client_secret, confirmParams, redirect: 'if_required' });
+            ? await s.js.confirmPayment({
+                elements: s.elements,
+                clientSecret: intent.client_secret,
+                confirmParams,
+                redirect: 'if_required',
+              })
+            : await s.js.confirmSetup({
+                elements: s.elements,
+                clientSecret: intent.client_secret,
+                confirmParams,
+                redirect: 'if_required',
+              });
         if (confirmed.error !== undefined) {
           setAlert(confirmed.error.message ?? strings.paymentFailed);
           return;
@@ -434,7 +568,13 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
         setAlert(c.message ?? strings.paymentFailed);
         return;
       }
-      finish(token, c.next, c.status === 'processing' ? strings.processing : c.success_message, c.order_number, c.bank_transfer);
+      finish(
+        token,
+        c.next,
+        c.status === 'processing' ? strings.processing : c.success_message,
+        c.order_number,
+        c.bank_transfer,
+      );
     } finally {
       setBusy(false);
     }
@@ -447,9 +587,13 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
       <div class="ac-root">
         <div class="af-success" role="status">
           <div>{done.message}</div>
-          {done.order !== null ? <div class="ac-muted">{fill(strings.orderNumber, { number: done.order })}</div> : null}
+          {done.order !== null ? (
+            <div class="ac-muted">{fill(strings.orderNumber, { number: done.order })}</div>
+          ) : null}
         </div>
-        {done.bank !== null ? <BankDetails details={done.bank} strings={strings} locale={locale} /> : null}
+        {done.bank !== null ? (
+          <BankDetails details={done.bank} strings={strings} locale={locale} />
+        ) : null}
       </div>
     );
   }
@@ -465,7 +609,10 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
           strings={strings}
           checked={selection.bumps.includes(b.id)}
           onToggle={(on) =>
-            setSelection((prev) => ({ ...prev, bumps: on ? [...prev.bumps, b.id] : prev.bumps.filter((id) => id !== b.id) }))
+            setSelection((prev) => ({
+              ...prev,
+              bumps: on ? [...prev.bumps, b.id] : prev.bumps.filter((id) => id !== b.id),
+            }))
           }
         />
       ));
@@ -479,7 +626,10 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
     autoComplete = 'on',
   ) =>
     mode === 'hidden' ? null : (
-      <div class={`af-field${errors[key] !== undefined ? ' af-invalid' : ''}`} data-af-invalid={errors[key] === undefined ? undefined : ''}>
+      <div
+        class={`af-field${errors[key] !== undefined ? ' af-invalid' : ''}`}
+        data-af-invalid={errors[key] === undefined ? undefined : ''}
+      >
         <label class="af-label" for={`ac-${key}`}>
           {modeLabel(mode, label)}
         </label>
@@ -515,16 +665,26 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
           : fill(strings.pay, { amount: money(quote.total_minor) });
   const methods: Array<[Method, string]> = [
     ...(config.payments.card ? ([['card', strings.methodCard]] as Array<[Method, string]>) : []),
-    ...(bankOffered ? ([['bank_transfer', strings.methodBankTransfer]] as Array<[Method, string]>) : []),
+    ...(bankOffered
+      ? ([['bank_transfer', strings.methodBankTransfer]] as Array<[Method, string]>)
+      : []),
   ];
 
   return (
     <div class="ac-root">
       <form class="ac-grid" onSubmit={(e) => void onSubmit(e)} noValidate>
         <div class="ac-main">
-          {config.settings.heading !== '' ? <h2 class="ac-heading">{config.settings.heading}</h2> : null}
+          {config.settings.heading !== '' ? (
+            <h2 class="ac-heading">{config.settings.heading}</h2>
+          ) : null}
           {preview ? <div class="af-notice">{strings.previewNotice}</div> : null}
-          <Items config={config} selection={selection} setSelection={setSelection} money={money} strings={strings} />
+          <Items
+            config={config}
+            selection={selection}
+            setSelection={setSelection}
+            money={money}
+            strings={strings}
+          />
           {bumpsAt('below_items')}
           <section class="ac-section">
             <div class="ac-section-title">{strings.contactTitle}</div>
@@ -550,7 +710,10 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
                   error={errors['address_line1']}
                   onInput={(v) => setBuyerField('address_line1', v)}
                   onPick={(s) => {
-                    const line1 = s.street_number !== null && !s.line1.includes(s.street_number) ? `${s.line1}, ${s.street_number}` : s.line1;
+                    const line1 =
+                      s.street_number !== null && !s.line1.includes(s.street_number)
+                        ? `${s.line1}, ${s.street_number}`
+                        : s.line1;
                     setBuyer((prev) => ({
                       ...prev,
                       address_line1: line1,
@@ -564,7 +727,13 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
                 />
                 {input('address_line2', strings.addressLine2, 'optional', 'text', 'address-line2')}
                 <div class="ac-row">
-                  {input('address_postal_code', strings.postalCode, c.address, 'text', 'postal-code')}
+                  {input(
+                    'address_postal_code',
+                    strings.postalCode,
+                    c.address,
+                    'text',
+                    'postal-code',
+                  )}
                   {input('address_city', strings.city, c.address, 'text', 'address-level2')}
                 </div>
                 <div class="ac-row">
@@ -581,7 +750,9 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
                       class="af-select"
                       autoComplete="country"
                       value={buyer.address_country}
-                      onChange={(e) => setBuyerField('address_country', (e.target as HTMLSelectElement).value)}
+                      onChange={(e) =>
+                        setBuyerField('address_country', (e.target as HTMLSelectElement).value)
+                      }
                     >
                       {c.address === 'required' ? null : <option value="">—</option>}
                       {countries.map((o) => (
@@ -590,7 +761,9 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
                         </option>
                       ))}
                     </select>
-                    {errors['address_country'] !== undefined ? <div class="af-error">{errors['address_country']}</div> : null}
+                    {errors['address_country'] !== undefined ? (
+                      <div class="af-error">{errors['address_country']}</div>
+                    ) : null}
                   </div>
                 </div>
               </>
@@ -622,16 +795,27 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
               <div class="ac-methods" role="radiogroup">
                 {methods.map(([key, label]) => (
                   <label key={key} class={`ac-item${method === key ? ' ac-item-on' : ''}`}>
-                    <input type="radio" name="ac-method" checked={method === key} onChange={() => setChosen(key)} />
+                    <input
+                      type="radio"
+                      name="ac-method"
+                      checked={method === key}
+                      onChange={() => setChosen(key)}
+                    />
                     <span class="ac-item-name">{label}</span>
                   </label>
                 ))}
               </div>
             ) : null}
-            {needsStripe && config.stripe_publishable_key === null && !preview ? <div class="af-alert">{strings.stripeMissing}</div> : null}
+            {needsStripe && config.stripe_publishable_key === null && !preview ? (
+              <div class="af-alert">{strings.stripeMissing}</div>
+            ) : null}
             {preview ? <div class="af-notice">{strings.previewNotice}</div> : null}
-            {method === 'bank_transfer' ? <div class="ac-muted">{strings.bankTransferNote}</div> : null}
-            {method === 'card' && redirectCard ? <div class="ac-muted">{strings.redirectNote}</div> : null}
+            {method === 'bank_transfer' ? (
+              <div class="ac-muted">{strings.bankTransferNote}</div>
+            ) : null}
+            {method === 'card' && redirectCard ? (
+              <div class="ac-muted">{strings.redirectNote}</div>
+            ) : null}
             <div class="ac-payment" style={elementMode === 'none' ? 'display:none' : undefined}>
               <slot name={PAYMENT_SLOT} />
             </div>
@@ -640,7 +824,11 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
           {config.settings.terms_url !== '' ? (
             <div class={`af-field${errors['terms_accepted'] !== undefined ? ' af-invalid' : ''}`}>
               <label class="af-choice">
-                <input type="checkbox" checked={terms} onChange={(e) => setTerms((e.target as HTMLInputElement).checked)} />
+                <input
+                  type="checkbox"
+                  checked={terms}
+                  onChange={(e) => setTerms((e.target as HTMLInputElement).checked)}
+                />
                 <span>
                   <a href={config.settings.terms_url} target="_blank" rel="noopener noreferrer">
                     {config.settings.terms_label || strings.terms}
@@ -649,14 +837,25 @@ export function Checkout({ config, api, strings, locale, host, paymentHost, prev
               </label>
             </div>
           ) : null}
-          <input ref={hp} class="af-hp" tabIndex={-1} autoComplete="off" name="company_website" aria-hidden="true" />
+          <input
+            ref={hp}
+            class="af-hp"
+            tabIndex={-1}
+            autoComplete="off"
+            name="company_website"
+            aria-hidden="true"
+          />
           {alert !== '' ? (
             <div class="af-alert" role="alert">
               {alert}
             </div>
           ) : null}
           <div class="af-actions">
-            <button type="submit" class="af-button" disabled={busy || (elementMode !== 'none' && !stripeReady && !preview)}>
+            <button
+              type="submit"
+              class="af-button"
+              disabled={busy || (elementMode !== 'none' && !stripeReady && !preview)}
+            >
               {busy ? strings.paying : buttonLabel}
             </button>
           </div>
@@ -698,7 +897,9 @@ function Items({
   };
   return (
     <section class="ac-section">
-      {pickOne && config.items.length > 1 ? <div class="ac-section-title">{strings.chooseOne}</div> : null}
+      {pickOne && config.items.length > 1 ? (
+        <div class="ac-section-title">{strings.chooseOne}</div>
+      ) : null}
       {pickAny ? <div class="ac-section-title">{strings.chooseAny}</div> : null}
       <div class="ac-items" role={pickOne ? 'radiogroup' : undefined}>
         {config.items.map((item) => {
@@ -721,16 +922,22 @@ function Items({
                     setSelection((prev) => ({
                       ...prev,
                       items: checked
-                        ? config.items.map((i) => i.id).filter((id) => id === item.id || prev.items.includes(id))
+                        ? config.items
+                            .map((i) => i.id)
+                            .filter((id) => id === item.id || prev.items.includes(id))
                         : prev.items.filter((id) => id !== item.id),
                     }));
                   }}
                 />
               ) : null}
-              {item.image_url !== '' ? <img class="ac-thumb" src={item.image_url} alt="" loading="lazy" /> : null}
+              {item.image_url !== '' ? (
+                <img class="ac-thumb" src={item.image_url} alt="" loading="lazy" />
+              ) : null}
               <div class="ac-item-body">
                 <span class="ac-item-name">{item.name}</span>
-                {item.description !== '' ? <span class="ac-item-desc">{item.description}</span> : null}
+                {item.description !== '' ? (
+                  <span class="ac-item-desc">{item.description}</span>
+                ) : null}
                 {item.recurring !== null && item.recurring.trial_days > 0 ? (
                   <span class="ac-ok">{fill(strings.trial, { n: item.recurring.trial_days })}</span>
                 ) : null}
@@ -750,8 +957,14 @@ function Items({
                   value={selection.quantities[item.id] ?? item.quantity}
                   onClick={(e) => e.stopPropagation()}
                   onInput={(e) => {
-                    const n = Math.max(1, Math.min(999, Math.round(Number((e.target as HTMLInputElement).value) || 1)));
-                    setSelection((prev) => ({ ...prev, quantities: { ...prev.quantities, [item.id]: n } }));
+                    const n = Math.max(
+                      1,
+                      Math.min(999, Math.round(Number((e.target as HTMLInputElement).value) || 1)),
+                    );
+                    setSelection((prev) => ({
+                      ...prev,
+                      quantities: { ...prev.quantities, [item.id]: n },
+                    }));
                   }}
                 />
               ) : null}
@@ -787,19 +1000,29 @@ function BumpBox({
   onToggle: (on: boolean) => void;
 }) {
   const box = (
-    <input type="checkbox" checked={checked} onChange={(e) => onToggle((e.target as HTMLInputElement).checked)} />
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onToggle((e.target as HTMLInputElement).checked)}
+    />
   );
   const price = (
     <span class="ac-price">
-      {bump.regular_price_minor !== null ? <span class="ac-strike">{money(bump.regular_price_minor * bump.quantity)}</span> : null}
+      {bump.regular_price_minor !== null ? (
+        <span class="ac-strike">{money(bump.regular_price_minor * bump.quantity)}</span>
+      ) : null}
       {money(bump.unit_price_minor * bump.quantity)}
     </span>
   );
   const body = (
     <div class="ac-bump-body">
-      {bump.image_url !== '' ? <img class="ac-thumb" src={bump.image_url} alt="" loading="lazy" /> : null}
+      {bump.image_url !== '' ? (
+        <img class="ac-thumb" src={bump.image_url} alt="" loading="lazy" />
+      ) : null}
       <div class="ac-item-body">
-        {bump.skin === 'ribbon' ? null : <span class="ac-bump-title">{bump.title || strings.bumpAdd}</span>}
+        {bump.skin === 'ribbon' ? null : (
+          <span class="ac-bump-title">{bump.title || strings.bumpAdd}</span>
+        )}
         {bump.description !== '' ? <span class="ac-item-desc">{bump.description}</span> : null}
       </div>
       {price}
@@ -873,7 +1096,10 @@ function AddressLine({
 
   const list = useMemo(() => (open ? suggestions : []), [open, suggestions]);
   return (
-    <div class={`af-field ac-suggest${error !== undefined ? ' af-invalid' : ''}`} data-af-invalid={error === undefined ? undefined : ''}>
+    <div
+      class={`af-field ac-suggest${error !== undefined ? ' af-invalid' : ''}`}
+      data-af-invalid={error === undefined ? undefined : ''}
+    >
       <label class="af-label" for="ac-address_line1">
         {label}
       </label>
@@ -935,7 +1161,8 @@ function Summary({
 }) {
   const r = quote.recurring;
   const automatic = quote.discounts;
-  const promoDiscount = quote.discount_minor - automatic.reduce((sum, d) => sum + d.amount_minor, 0);
+  const promoDiscount =
+    quote.discount_minor - automatic.reduce((sum, d) => sum + d.amount_minor, 0);
   return (
     <aside class="ac-summary">
       <div class="ac-section-title">{strings.summaryTitle}</div>
@@ -945,7 +1172,11 @@ function Summary({
             {line.kind === 'setup_fee' ? `${strings.setupFee} · ${line.name}` : line.name}
             {line.quantity > 1 ? ` × ${String(line.quantity)}` : ''}
           </span>
-          <span>{line.kind === 'trial' ? fill(strings.trial, { n: r?.trial_days ?? 0 }) : money(line.subtotal_minor)}</span>
+          <span>
+            {line.kind === 'trial'
+              ? fill(strings.trial, { n: r?.trial_days ?? 0 })
+              : money(line.subtotal_minor)}
+          </span>
         </div>
       ))}
       {automatic.map((d, i) => (
@@ -977,9 +1208,16 @@ function Summary({
             every: everyLabel(strings, r.interval, r.interval_count),
           })}
           {r.discounted_amount_minor !== null && r.discounted_periods !== null ? (
-            <div>{fill(strings.discountedRenewals, { amount: money(r.discounted_amount_minor), n: r.discounted_periods })}</div>
+            <div>
+              {fill(strings.discountedRenewals, {
+                amount: money(r.discounted_amount_minor),
+                n: r.discounted_periods,
+              })}
+            </div>
           ) : null}
-          {r.discounted_amount_minor !== null && r.discounted_periods === null ? <div>{strings.discountedForever}</div> : null}
+          {r.discounted_amount_minor !== null && r.discounted_periods === null ? (
+            <div>{strings.discountedForever}</div>
+          ) : null}
         </div>
       ) : null}
       {promoEnabled ? (

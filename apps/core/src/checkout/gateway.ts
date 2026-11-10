@@ -3,6 +3,7 @@ import {
   OFFER_RETURN_PARAM,
   SESSION_PARAM,
   selectionSchema,
+  leadPayloadSchema,
   sessionPayloadSchema,
   type CheckoutGatewayOps,
   type OfferActionResult,
@@ -14,10 +15,12 @@ import { GatewayError, type GatewayContext, type GatewayHandlers } from '../publ
 import type { StoredStripeAccount } from '../commerce/stripe/account';
 import {
   StripeApiError,
+  sameMethods,
   type StripeCheckoutSession,
   type StripePaymentIntent,
   type StripeSetupIntent,
 } from '../commerce/stripe/client';
+import { registerPaymentDomains, walletHost } from '../commerce/stripe/payment-domains';
 import { commerceRuntime, openStripe, type OpenStripe } from '../commerce/stripe/runtime';
 import {
   asCharge,
@@ -35,7 +38,11 @@ type Output<K extends keyof CheckoutGatewayOps> = CheckoutGatewayOps[K]['output'
 const id = z.string().min(1).max(64);
 const token = z.string().min(16).max(128);
 const refSchema = z.strictObject({ checkoutId: id });
-const quoteSchema = z.strictObject({ checkoutId: id, selection: selectionSchema, promoCode: z.string().max(64).default('') });
+const quoteSchema = z.strictObject({
+  checkoutId: id,
+  selection: selectionSchema,
+  promoCode: z.string().max(64).default(''),
+});
 const sessionSchema = z.strictObject({ checkoutId: id, payload: z.unknown() });
 const tokenSchema = z.strictObject({ token });
 const offerSchema = z.strictObject({ token, offerKey: z.string().min(1).max(40) });
@@ -43,12 +50,19 @@ const offerAcceptSchema = offerSchema.extend({ returnUrl: z.string().max(2000).d
 const addressSchema = z.strictObject({
   checkoutId: id,
   q: z.string().trim().min(3).max(200),
-  country: z.string().regex(/^([A-Za-z]{2})?$/).default(''),
+  country: z
+    .string()
+    .regex(/^([A-Za-z]{2})?$/)
+    .default(''),
   lang: z.string().max(16).default(''),
 });
-const webhookSchema = z.strictObject({ payload: z.string().max(512 * 1024), signature: z.string().max(2048).nullable() });
+const webhookSchema = z.strictObject({
+  payload: z.string().max(512 * 1024),
+  signature: z.string().max(2048).nullable(),
+});
 
 const SESSION_RATE = { name: 'checkout:session:ip', limit: 20, windowMs: 10 * 60_000 } as const;
+const LEAD_RATE = { name: 'checkout:lead:ip', limit: 60, windowMs: 10 * 60_000 } as const;
 const QUOTE_RATE = { name: 'checkout:quote:ip', limit: 120, windowMs: 10 * 60_000 } as const;
 const ADDRESS_RATE = { name: 'checkout:address:ip', limit: 60, windowMs: 5 * 60_000 } as const;
 const OFFER_RATE = { name: 'checkout:offer:ip', limit: 30, windowMs: 10 * 60_000 } as const;
@@ -66,16 +80,21 @@ function parse<T>(schema: z.ZodType<T>, input: unknown): T {
   return result.data;
 }
 
-async function limit(ctx: GatewayContext, rate: { name: string; limit: number; windowMs: number }): Promise<void> {
+async function limit(
+  ctx: GatewayContext,
+  rate: { name: string; limit: number; windowMs: number },
+): Promise<void> {
   if (ctx.client.ip === null) return;
   const runtime = await commerceRuntime(ctx.env);
   const result = await runtime.limiter.consume(rate, `${ctx.tenant.id}:${ctx.client.ip}`);
-  if (!result.allowed) throw new GatewayError(429, 'rate_limited', 'too many requests, retry later');
+  if (!result.allowed)
+    throw new GatewayError(429, 'rate_limited', 'too many requests, retry later');
 }
 
 async function stripeOf(ctx: GatewayContext): Promise<OpenStripe> {
   const account = await ctx.crm('stripe.account', {});
-  if (account === null) throw new GatewayError(409, 'stripe_not_configured', 'payments are not configured');
+  if (account === null)
+    throw new GatewayError(409, 'stripe_not_configured', 'payments are not configured');
   return openStripe(await commerceRuntime(ctx.env), account);
 }
 
@@ -96,7 +115,12 @@ function hostOf(url: string): string | null {
   }
 }
 
-function domainAllowed(allowed: readonly string[], pageUrl: string, referer: string | null, hostedPath: string): boolean {
+function domainAllowed(
+  allowed: readonly string[],
+  pageUrl: string,
+  referer: string | null,
+  hostedPath: string,
+): boolean {
   if (allowed.length === 0) return true;
   const source = pageUrl !== '' ? pageUrl : (referer ?? '');
   try {
@@ -108,14 +132,49 @@ function domainAllowed(allowed: readonly string[], pageUrl: string, referer: str
   return host !== null && allowed.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
-async function publicConfig(ctx: GatewayContext, checkoutId: string): Promise<{ config: PublicCheckoutConfig; allowedDomains: string[] }> {
-  const { config, allowedDomains } = await ctx.crm('checkout.public', { checkoutId });
-  return { config: { ...config, tenant: ctx.tenant.slug }, allowedDomains };
+async function publicConfig(
+  ctx: GatewayContext,
+  checkoutId: string,
+): Promise<{ config: PublicCheckoutConfig; allowedDomains: string[]; paymentDomains: string[] }> {
+  const { config, allowedDomains, paymentDomains } = await ctx.crm('checkout.public', {
+    checkoutId,
+  });
+  return { config: { ...config, tenant: ctx.tenant.slug }, allowedDomains, paymentDomains };
+}
+
+/** First load of an in-page card checkout on a domain: register it for wallets in the background. */
+function registerWalletDomain(
+  ctx: GatewayContext,
+  cfg: PublicCheckoutConfig,
+  settled: readonly string[],
+): void {
+  if (
+    cfg.stripe_publishable_key === null ||
+    !cfg.payments.card ||
+    cfg.payments.card_flow !== 'element'
+  )
+    return;
+  const host = walletHost(ctx.client.referer);
+  if (host === null || settled.includes(host)) return;
+  const publishableKey = cfg.stripe_publishable_key;
+  ctx.executionCtx.waitUntil(
+    stripeOf(ctx)
+      .then((stripe) =>
+        registerPaymentDomains(stripe, [host], (h, ok) =>
+          ctx.crm('stripe.paymentDomainResult', { publishableKey, host: h, ok }),
+        ),
+      )
+      .catch((error: unknown) =>
+        console.error('[checkout] wallet domain registration failed', error),
+      ),
+  );
 }
 
 async function config(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.config'>> {
   const { checkoutId } = parse(refSchema, input);
-  return (await publicConfig(ctx, checkoutId)).config;
+  const { config: cfg, paymentDomains } = await publicConfig(ctx, checkoutId);
+  registerWalletDomain(ctx, cfg, paymentDomains);
+  return cfg;
 }
 
 async function hosted(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.hosted'>> {
@@ -159,7 +218,11 @@ function withParams(base: string, params: Record<string, string>): string {
   return url.toString();
 }
 
-function intentMetadata(sessionId: string, checkoutId: string, orderId: string | null): Record<string, string> {
+function intentMetadata(
+  sessionId: string,
+  checkoutId: string,
+  orderId: string | null,
+): Record<string, string> {
   return {
     amable_kind: 'checkout',
     amable_session: sessionId,
@@ -213,7 +276,9 @@ async function paymentIntentFor(
 ): Promise<StripePaymentIntent> {
   if (prepared.intentId !== null && prepared.previousIntentKind === 'payment') {
     const current = await stripe.client.retrievePaymentIntent(prepared.intentId);
-    if (current.status === 'requires_payment_method' || current.status === 'requires_confirmation') {
+    const confirmable =
+      current.status === 'requires_payment_method' || current.status === 'requires_confirmation';
+    if (confirmable && sameMethods(current, prepared.methodTypes)) {
       return current.amount === prepared.amountMinor
         ? current
         : await stripe.client.updatePaymentIntent(current.id, {
@@ -234,6 +299,7 @@ async function paymentIntentFor(
       receiptEmail: prepared.email,
       description: prepared.description,
       metadata,
+      methodTypes: prepared.methodTypes,
     },
     `checkout:${prepared.sessionId}:${String(prepared.amountMinor)}:${randomToken(6)}`,
   );
@@ -248,10 +314,12 @@ async function setupIntentFor(
 ): Promise<StripeSetupIntent> {
   if (prepared.intentId !== null && prepared.previousIntentKind === 'setup') {
     const current = await stripe.client.retrieveSetupIntent(prepared.intentId);
-    if (current.status === 'requires_payment_method' || current.status === 'requires_confirmation') return current;
+    const confirmable =
+      current.status === 'requires_payment_method' || current.status === 'requires_confirmation';
+    if (confirmable && sameMethods(current, prepared.methodTypes)) return current;
   }
   return stripe.client.createSetupIntent(
-    { customer: customerId, metadata },
+    { customer: customerId, metadata, methodTypes: prepared.methodTypes },
     `checkout-setup:${prepared.sessionId}:${randomToken(6)}`,
   );
 }
@@ -261,21 +329,72 @@ async function setupIntentFor(
  * order, the worker creates the Stripe customer and intent. A re-submit with
  * the same session token keeps the same intent (amount updated).
  */
+/** Always answers ok: whether the cart was kept (feature off, honeypot, bad email) is not the page's business. */
+async function lead(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.lead'>> {
+  const { checkoutId, payload: raw } = parse(sessionSchema, input);
+  const payload = parse(leadPayloadSchema, raw);
+  if (payload.hp !== '') return { ok: true };
+  await limit(ctx, LEAD_RATE);
+  const { config: cfg, allowedDomains } = await publicConfig(ctx, checkoutId);
+  if (!cfg.settings.abandoned_cart.enabled) return { ok: true };
+  if (
+    !domainAllowed(
+      allowedDomains,
+      payload.meta.page_url,
+      ctx.client.referer,
+      `/c/${ctx.tenant.slug}/${cfg.id}`,
+    )
+  ) {
+    throw new GatewayError(
+      403,
+      'domain_not_allowed',
+      'this checkout cannot be used on this website',
+    );
+  }
+  await ctx.crm('checkout.captureLead', {
+    checkoutId,
+    payload: {
+      ...payload,
+      meta: {
+        ...payload.meta,
+        visitor_id:
+          payload.meta.visitor_id !== '' ? payload.meta.visitor_id : (ctx.client.visitorId ?? ''),
+      },
+    },
+    tenant: { id: ctx.tenant.id, slug: ctx.tenant.slug, name: ctx.tenant.name },
+  });
+  return { ok: true };
+}
+
 async function session(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.session'>> {
   const { checkoutId, payload: raw } = parse(sessionSchema, input);
   const payload = parse(sessionPayloadSchema, raw);
   if (payload.hp !== '') throw new GatewayError(422, 'validation_failed', 'invalid input');
   await limit(ctx, SESSION_RATE);
   const { config: cfg, allowedDomains } = await publicConfig(ctx, checkoutId);
-  if (!domainAllowed(allowedDomains, payload.meta.page_url, ctx.client.referer, `/c/${ctx.tenant.slug}/${cfg.id}`)) {
-    throw new GatewayError(403, 'domain_not_allowed', 'this checkout cannot be used on this website');
+  if (
+    !domainAllowed(
+      allowedDomains,
+      payload.meta.page_url,
+      ctx.client.referer,
+      `/c/${ctx.tenant.slug}/${cfg.id}`,
+    )
+  ) {
+    throw new GatewayError(
+      403,
+      'domain_not_allowed',
+      'this checkout cannot be used on this website',
+    );
   }
   // A bank transfer purchase never reaches Stripe: the checkout may have no Stripe account.
   const account = await ctx.crm('stripe.account', {});
   if (account === null && payload.payment_method === 'card' && cfg.payments.card) {
     throw new GatewayError(409, 'stripe_not_configured', 'payments are not configured');
   }
-  const back = payload.payment_method === 'card' && account?.managed === true ? returnUrlOf(payload.return_url, payload.meta.page_url) : null;
+  const back =
+    payload.payment_method === 'card' && account?.managed === true
+      ? returnUrlOf(payload.return_url, payload.meta.page_url)
+      : null;
   const reuse = payload.session_token === '' ? null : await sha256Hex(payload.session_token);
   const freshToken = randomToken(32);
   const prepared = await ctx.crm('checkout.prepare', {
@@ -284,7 +403,8 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
       ...payload,
       meta: {
         ...payload.meta,
-        visitor_id: payload.meta.visitor_id !== '' ? payload.meta.visitor_id : (ctx.client.visitorId ?? ''),
+        visitor_id:
+          payload.meta.visitor_id !== '' ? payload.meta.visitor_id : (ctx.client.visitorId ?? ''),
       },
     },
     tokenHash: await sha256Hex(freshToken),
@@ -292,7 +412,10 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
   });
   const activeToken = prepared.reused ? payload.session_token : freshToken;
   if (prepared.intentKind === 'bank_transfer') {
-    await ctx.crm('checkout.settleBankTransfer', { sessionId: prepared.sessionId, tenantId: ctx.tenant.id });
+    await ctx.crm('checkout.settleBankTransfer', {
+      sessionId: prepared.sessionId,
+      tenantId: ctx.tenant.id,
+    });
     return {
       session_token: activeToken,
       intent: { kind: 'bank_transfer', client_secret: null, redirect_url: null },
@@ -309,12 +432,19 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
       intentId: null,
     });
     await ctx.crm('checkout.settleFree', { sessionId: prepared.sessionId });
-    return { session_token: activeToken, intent: { kind: 'none', client_secret: null, redirect_url: null }, quote: prepared.quote };
+    return {
+      session_token: activeToken,
+      intent: { kind: 'none', client_secret: null, redirect_url: null },
+      quote: prepared.quote,
+    };
   }
   const stripe = await openStripe(await commerceRuntime(ctx.env), account);
   try {
     if (prepared.intentKind === 'redirect') {
-      if (back === null) throw new GatewayError(422, 'validation_failed', 'invalid input', [{ path: 'return_url', message: 'required' }]);
+      if (back === null)
+        throw new GatewayError(422, 'validation_failed', 'invalid input', [
+          { path: 'return_url', message: 'required' },
+        ]);
       const url = await openHostedCheckout(ctx, stripe, prepared, checkoutId, back, activeToken);
       return {
         session_token: activeToken,
@@ -325,7 +455,11 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
     let customerId = prepared.customerId;
     if (customerId === null) {
       const customer = await stripe.client.createCustomer(
-        { email: prepared.email, name: prepared.name === '' ? null : prepared.name, metadata: { amable_contact: prepared.contactId } },
+        {
+          email: prepared.email,
+          name: prepared.name === '' ? null : prepared.name,
+          metadata: { amable_contact: prepared.contactId },
+        },
         `customer:${ctx.tenant.id}:${prepared.contactId}`,
       );
       customerId = customer.id;
@@ -348,7 +482,8 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
       intentKind: prepared.intentKind === 'none' ? null : prepared.intentKind,
       intentId,
     });
-    if (prepared.intentKind === 'none') await ctx.crm('checkout.settleFree', { sessionId: prepared.sessionId });
+    if (prepared.intentKind === 'none')
+      await ctx.crm('checkout.settleFree', { sessionId: prepared.sessionId });
     return {
       session_token: activeToken,
       intent: { kind: prepared.intentKind, client_secret: clientSecret, redirect_url: null },
@@ -386,7 +521,8 @@ function setupFacts(intent: StripeSetupIntent): IntentFacts {
 
 /** A Stripe Checkout Session as intent facts (`failed`: its async payment failed). */
 function checkoutFacts(session: StripeCheckoutSession, failed = false): IntentFacts {
-  const paid = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+  const paid =
+    session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
   return {
     intentId: session.id,
     kind: 'checkout',
@@ -400,7 +536,11 @@ function checkoutFacts(session: StripeCheckoutSession, failed = false): IntentFa
     amountReceived: paid ? (session.amount_total ?? 0) : 0,
     customerId: null,
     paymentMethodId: null,
-    failureMessage: failed ? 'the payment did not go through' : session.status === 'expired' ? 'the payment page expired' : null,
+    failureMessage: failed
+      ? 'the payment did not go through'
+      : session.status === 'expired'
+        ? 'the payment page expired'
+        : null,
     paymentIntentId: session.payment_intent,
   };
 }
@@ -410,7 +550,12 @@ async function complete(ctx: GatewayContext, input: unknown): Promise<Output<'ch
   const { token: raw } = parse(tokenSchema, input);
   const tokenHash = await sha256Hex(raw);
   const state = await ctx.crm('checkout.completion', { tokenHash });
-  if (state.status !== 'paid' && state.status !== 'pending' && state.intentId !== null && state.intentKind !== null) {
+  if (
+    state.status !== 'paid' &&
+    state.status !== 'pending' &&
+    state.intentId !== null &&
+    state.intentKind !== null
+  ) {
     const stripe = await stripeOf(ctx);
     try {
       const facts =
@@ -425,7 +570,11 @@ async function complete(ctx: GatewayContext, input: unknown): Promise<Output<'ch
       throw stripeFailure(error);
     }
   }
-  const { intentId: _id, intentKind: _kind, ...result } = await ctx.crm('checkout.completion', { tokenHash });
+  const {
+    intentId: _id,
+    intentKind: _kind,
+    ...result
+  } = await ctx.crm('checkout.completion', { tokenHash });
   return result;
 }
 
@@ -438,7 +587,12 @@ async function offerOutcome(
   ctx: GatewayContext,
   sessionId: string,
   status: OfferActionResult['status'],
-  extra: { clientSecret?: string | null; publishableKey?: string | null; message?: string | null; redirectUrl?: string | null } = {},
+  extra: {
+    clientSecret?: string | null;
+    publishableKey?: string | null;
+    message?: string | null;
+    redirectUrl?: string | null;
+  } = {},
 ): Promise<OfferActionResult> {
   const done = status === 'paid' || status === 'declined';
   return {
@@ -477,7 +631,8 @@ async function settleHostedOffer(
     amountReceived: facts.amountReceived,
     message: facts.failureMessage,
   });
-  if (result.state === 'failed') return offerOutcome(ctx, sessionId, 'failed', { message: facts.failureMessage });
+  if (result.state === 'failed')
+    return offerOutcome(ctx, sessionId, 'failed', { message: facts.failureMessage });
   return offerOutcome(ctx, sessionId, 'paid');
 }
 
@@ -511,7 +666,9 @@ async function settleIntent(
     });
   }
   if (result.state === 'stale') return offerOutcome(ctx, charge.sessionId, 'paid');
-  return offerOutcome(ctx, charge.sessionId, 'failed', { message: intent.last_payment_error?.message ?? null });
+  return offerOutcome(ctx, charge.sessionId, 'failed', {
+    message: intent.last_payment_error?.message ?? null,
+  });
 }
 
 /**
@@ -519,13 +676,18 @@ async function settleIntent(
  * present, so 3-D Secure can be asked back). The idempotency key per
  * session, offer and attempt makes double clicks and retries harmless.
  */
-async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.offerAccept'>> {
+async function offerAccept(
+  ctx: GatewayContext,
+  input: unknown,
+): Promise<Output<'checkout.offerAccept'>> {
   const { token: raw, offerKey, returnUrl } = parse(offerAcceptSchema, input);
   await limit(ctx, OFFER_RATE);
   const tokenHash = await sha256Hex(raw);
   const charge = await ctx.crm('checkout.offerPrepare', { tokenHash, offerKey });
   if (charge.action === 'none') {
-    return offerOutcome(ctx, charge.sessionId, 'failed', { message: 'this offer is no longer available' });
+    return offerOutcome(ctx, charge.sessionId, 'failed', {
+      message: 'this offer is no longer available',
+    });
   }
   if (charge.action === 'accepted') return offerOutcome(ctx, charge.sessionId, 'paid');
   if (charge.action === 'free') {
@@ -544,14 +706,29 @@ async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<
   try {
     if (charge.action === 'check' && charge.pendingIntentId !== null) {
       if (charge.pendingIntentId.startsWith('cs_')) {
-        return await settleHostedOffer(ctx, stripe, charge.sessionId, offerKey, charge.pendingIntentId);
+        return await settleHostedOffer(
+          ctx,
+          stripe,
+          charge.sessionId,
+          offerKey,
+          charge.pendingIntentId,
+        );
       }
       const intent = await stripe.client.retrievePaymentIntent(charge.pendingIntentId);
-      return await settleIntent(ctx, stripe, { sessionId: charge.sessionId, orderId: null }, offerKey, intent);
+      return await settleIntent(
+        ctx,
+        stripe,
+        { sessionId: charge.sessionId, orderId: null },
+        offerKey,
+        intent,
+      );
     }
     if (charge.action === 'redirect') {
       const back = returnUrlOf(returnUrl);
-      if (back === null) throw new GatewayError(422, 'validation_failed', 'invalid input', [{ path: 'returnUrl', message: 'required' }]);
+      if (back === null)
+        throw new GatewayError(422, 'validation_failed', 'invalid input', [
+          { path: 'returnUrl', message: 'required' },
+        ]);
       const metadata = {
         amable_kind: 'offer',
         amable_session: charge.sessionId,
@@ -565,7 +742,8 @@ async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<
           email: charge.receiptEmail,
           successUrl: withParams(back, { [SESSION_PARAM]: raw, [OFFER_RETURN_PARAM]: offerKey }),
           cancelUrl: withParams(back, { [SESSION_PARAM]: raw }),
-          expiresAt: Math.floor((await commerceRuntime(ctx.env)).now() / 1000) + CHECKOUT_SESSION_TTL_S,
+          expiresAt:
+            Math.floor((await commerceRuntime(ctx.env)).now() / 1000) + CHECKOUT_SESSION_TTL_S,
           metadata,
         },
         `offer-hosted:${charge.sessionId}:${offerKey}:${String(charge.attempt)}`,
@@ -622,7 +800,13 @@ async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<
         throw error;
       }
     }
-    return await settleIntent(ctx, stripe, { sessionId: charge.sessionId, orderId: charge.orderId }, offerKey, intent);
+    return await settleIntent(
+      ctx,
+      stripe,
+      { sessionId: charge.sessionId, orderId: charge.orderId },
+      offerKey,
+      intent,
+    );
   } catch (error) {
     if (error instanceof GatewayError) throw error;
     throw stripeFailure(error);
@@ -630,26 +814,47 @@ async function offerAccept(ctx: GatewayContext, input: unknown): Promise<Output<
 }
 
 /** After `handleNextAction` (3-D Secure) in the browser. */
-async function offerConfirm(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.offerConfirm'>> {
+async function offerConfirm(
+  ctx: GatewayContext,
+  input: unknown,
+): Promise<Output<'checkout.offerConfirm'>> {
   const { token: raw, offerKey } = parse(offerSchema, input);
-  const charge = await ctx.crm('checkout.offerPrepare', { tokenHash: await sha256Hex(raw), offerKey });
+  const charge = await ctx.crm('checkout.offerPrepare', {
+    tokenHash: await sha256Hex(raw),
+    offerKey,
+  });
   if (charge.action !== 'check' || charge.pendingIntentId === null) {
     return offerOutcome(ctx, charge.sessionId, charge.action === 'none' ? 'paid' : 'failed');
   }
   const stripe = await stripeOf(ctx);
   try {
     if (charge.pendingIntentId.startsWith('cs_')) {
-      return await settleHostedOffer(ctx, stripe, charge.sessionId, offerKey, charge.pendingIntentId);
+      return await settleHostedOffer(
+        ctx,
+        stripe,
+        charge.sessionId,
+        offerKey,
+        charge.pendingIntentId,
+      );
     }
     const intent = await stripe.client.retrievePaymentIntent(charge.pendingIntentId);
-    return await settleIntent(ctx, stripe, { sessionId: charge.sessionId, orderId: null }, offerKey, intent);
+    return await settleIntent(
+      ctx,
+      stripe,
+      { sessionId: charge.sessionId, orderId: null },
+      offerKey,
+      intent,
+    );
   } catch (error) {
     if (error instanceof GatewayError) throw error;
     throw stripeFailure(error);
   }
 }
 
-async function offerDecline(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.offerDecline'>> {
+async function offerDecline(
+  ctx: GatewayContext,
+  input: unknown,
+): Promise<Output<'checkout.offerDecline'>> {
   const { token: raw, offerKey } = parse(offerSchema, input);
   const tokenHash = await sha256Hex(raw);
   await ctx.crm('checkout.offerDecline', { tokenHash, offerKey });
@@ -665,7 +870,10 @@ async function offerDecline(ctx: GatewayContext, input: unknown): Promise<Output
 }
 
 /** Beacon of the offer page being closed (bank transfer purchases): the summary email goes out now. */
-async function flushSummary(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.flushSummary'>> {
+async function flushSummary(
+  ctx: GatewayContext,
+  input: unknown,
+): Promise<Output<'checkout.flushSummary'>> {
   const { token: raw } = parse(tokenSchema, input);
   return ctx.crm('checkout.flushSummary', { tokenHash: await sha256Hex(raw) });
 }
@@ -674,7 +882,8 @@ async function address(ctx: GatewayContext, input: unknown): Promise<Output<'che
   const { checkoutId, q, country, lang } = parse(addressSchema, input);
   await limit(ctx, ADDRESS_RATE);
   const { config: cfg } = await publicConfig(ctx, checkoutId);
-  if (cfg.contact.address === 'hidden' || !cfg.contact.address_autocomplete) return { data: [], attribution: null };
+  if (cfg.contact.address === 'hidden' || !cfg.contact.address_autocomplete)
+    return { data: [], attribution: null };
   return suggestAddresses(ctx.env, ctx.tenant.id, {
     q,
     ...(country === '' ? {} : { country: country.toUpperCase() }),
@@ -687,7 +896,10 @@ async function address(ctx: GatewayContext, input: unknown): Promise<Output<'che
  * then dispatched to the TenantDb (idempotent: Stripe retries, the browser
  * may have settled first).
  */
-async function stripeWebhook(ctx: GatewayContext, input: unknown): Promise<Output<'checkout.stripeWebhook'>> {
+async function stripeWebhook(
+  ctx: GatewayContext,
+  input: unknown,
+): Promise<Output<'checkout.stripeWebhook'>> {
   const { payload, signature } = parse(webhookSchema, input);
   const account: StoredStripeAccount | null = await ctx.crm('stripe.account', {});
   if (account === null || account.webhook_enc === null) {
@@ -695,17 +907,28 @@ async function stripeWebhook(ctx: GatewayContext, input: unknown): Promise<Outpu
   }
   const runtime = await commerceRuntime(ctx.env);
   const stripe = await openStripe(runtime, account);
-  if (stripe.webhookSecret === null || !(await verifyStripeSignature(payload, signature, stripe.webhookSecret, runtime.now()))) {
+  if (
+    stripe.webhookSecret === null ||
+    !(await verifyStripeSignature(payload, signature, stripe.webhookSecret, runtime.now()))
+  ) {
     throw new GatewayError(400, 'invalid_signature', 'invalid Stripe signature');
   }
   const event = parseStripeEvent(payload);
   if (event === null) throw new GatewayError(400, 'bad_request', 'invalid event');
   if (event.type.startsWith('payment_intent.')) {
     const intent = asPaymentIntent(event);
-    await ctx.crm('stripe.event', { type: 'intent', intent: paymentFacts(intent), metadata: intent.metadata ?? {} });
+    await ctx.crm('stripe.event', {
+      type: 'intent',
+      intent: paymentFacts(intent),
+      metadata: intent.metadata ?? {},
+    });
   } else if (event.type.startsWith('setup_intent.')) {
     const intent = asSetupIntent(event);
-    await ctx.crm('stripe.event', { type: 'intent', intent: setupFacts(intent), metadata: intent.metadata ?? {} });
+    await ctx.crm('stripe.event', {
+      type: 'intent',
+      intent: setupFacts(intent),
+      metadata: intent.metadata ?? {},
+    });
   } else if (event.type.startsWith('checkout.session.')) {
     const hosted = asCheckoutSession(event);
     await ctx.crm('stripe.event', {
@@ -731,6 +954,7 @@ export const checkoutGatewayHandlers: GatewayHandlers = {
   'checkout.hosted': hosted,
   'checkout.quote': quote,
   'checkout.session': session,
+  'checkout.lead': lead,
   'checkout.complete': complete,
   'checkout.offer': offer,
   'checkout.offerAccept': offerAccept,

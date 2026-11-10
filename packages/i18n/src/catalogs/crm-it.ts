@@ -34,7 +34,8 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
     'Il tuo ruolo non consente questa azione. Chiedi a un admin del workspace.',
   'crm.error.forbiddenTitle': 'Permesso necessario',
   'crm.error.notFound': 'Questo record non esiste o è stato eliminato.',
-  'crm.error.tooLarge': 'Il file è troppo grande: al massimo 50 MB e 100.000 righe. Dividilo in file più piccoli.',
+  'crm.error.tooLarge':
+    'Il file è troppo grande: al massimo 50 MB e 100.000 righe. Dividilo in file più piccoli.',
   'crm.error.validation': 'Alcuni valori non sono validi.',
 
   'crm.entity.contacts': 'Contatti',
@@ -331,6 +332,7 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.activity.subscriptionEnded': 'Abbonamento terminato',
   'crm.activity.subscriptionTrialStarted': 'Prova avviata',
   'crm.activity.subscriptionTrialConverted': 'Prova convertita',
+  'crm.activity.checkoutAbandoned': 'Carrello abbandonato',
   'crm.activity.companyDeleted': 'Azienda archiviata',
 
   'crm.notes.new': 'Nuova nota',
@@ -396,7 +398,8 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.deals.restoredElsewhere':
     'Ripristinato nella pipeline «{pipeline}», perché la sua fase o pipeline è stata eliminata: non compare nella lista che stai guardando.',
   'crm.deals.showPipeline': 'Mostra pipeline',
-  'crm.deals.restoredInto': 'La sua fase o pipeline è stata eliminata: il deal è stato ripristinato nella pipeline «{pipeline}».',
+  'crm.deals.restoredInto':
+    'La sua fase o pipeline è stata eliminata: il deal è stato ripristinato nella pipeline «{pipeline}».',
   'crm.deals.expectedClose': 'Chiusura prevista',
   'crm.deals.created': 'Opportunità creata',
   'crm.deals.moved': 'Spostata in {stage}',
@@ -478,12 +481,14 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.contactEmails.status.failed': 'Non riuscita',
   'crm.contactAutomations.current': 'In corso',
   'crm.contactAutomations.history': 'Storico',
-  'crm.contactAutomations.noneActive': 'Il contatto non è in nessuna automazione in questo momento.',
+  'crm.contactAutomations.noneActive':
+    'Il contatto non è in nessuna automazione in questo momento.',
   'crm.contactAutomations.noHistory': 'Nessuna automazione passata.',
   'crm.contactAutomations.deleted': 'Eliminata',
   'crm.contactAutomations.remove': "Togli dall'automazione",
   'crm.contactAutomations.confirmRemove': 'Togliere il contatto da "{name}"?',
-  'crm.contactAutomations.confirmRemoveBody': 'I passi in attesa vengono annullati. Il contatto potrà essere aggiunto di nuovo.',
+  'crm.contactAutomations.confirmRemoveBody':
+    'I passi in attesa vengono annullati. Il contatto potrà essere aggiunto di nuovo.',
   'crm.contactAutomations.entered': 'Entrato il {date}',
   'crm.contactAutomations.ended': 'uscito il {date}',
   'crm.contactAutomations.source.goal': 'da un goal',
@@ -562,7 +567,8 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.import.ignore': 'Non importare',
   'crm.import.duplicates': 'Ogni campo si può usare una volta sola: {targets}',
   'crm.import.updateExisting': 'Aggiorna i contatti con la stessa email',
-  'crm.import.updateExistingHint': 'I campi del file sostituiscono quelli attuali; email, telefoni e indirizzi vengono aggiunti a quelli esistenti.',
+  'crm.import.updateExistingHint':
+    'I campi del file sostituiscono quelli attuali; email, telefoni e indirizzi vengono aggiunti a quelli esistenti.',
   'crm.import.applyTags': 'Applica tag a tutti i contatti importati',
   'crm.import.listDelimiter': 'Separatore per tag e liste',
   'crm.import.start': 'Avvia import',
@@ -680,12 +686,17 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'locale.language.search': 'Cerca lingua o codice…',
   'locale.language.empty': 'Nessuna lingua trovata.',
   'integrations.address.title': 'Ricerca indirizzi',
-  'integrations.address.intro': 'Suggerisce gli indirizzi mentre scrivi nella scheda contatto. Se non trova nulla, i campi si compilano a mano.',
+  'integrations.address.intro':
+    'Suggerisce gli indirizzi mentre scrivi nella scheda contatto. Se non trova nulla, i campi si compilano a mano.',
   'integrations.address.osm': 'OpenStreetMap',
-  'integrations.address.osmHint': 'Integrato e gratuito. Buona copertura nelle città, a volte incompleta nei piccoli comuni. Per dati più completi installa dal Marketplace un’app per gli indirizzi, come Mapbox.',
-  'integrations.address.osmOff': 'Disattivato su questa installazione: gli indirizzi si inseriscono a mano, a meno di installare dal Marketplace un’app per gli indirizzi.',
-  'integrations.address.appHint': 'I suggerimenti arrivano da questa app. Se non risponde si usa OpenStreetMap.',
-  'integrations.address.appHintNoFallback': 'I suggerimenti arrivano da questa app. Se non risponde, gli indirizzi si inseriscono a mano.',
+  'integrations.address.osmHint':
+    'Integrato e gratuito. Buona copertura nelle città, a volte incompleta nei piccoli comuni. Per dati più completi installa dal Marketplace un’app per gli indirizzi, come Mapbox.',
+  'integrations.address.osmOff':
+    'Disattivato su questa installazione: gli indirizzi si inseriscono a mano, a meno di installare dal Marketplace un’app per gli indirizzi.',
+  'integrations.address.appHint':
+    'I suggerimenti arrivano da questa app. Se non risponde si usa OpenStreetMap.',
+  'integrations.address.appHintNoFallback':
+    'I suggerimenti arrivano da questa app. Se non risponde, gli indirizzi si inseriscono a mano.',
   'integrations.address.paused': 'In pausa: si usa OpenStreetMap',
   'integrations.address.findApp': 'Cerca un’app per gli indirizzi',
   'integrations.address.manageApp': 'Gestisci le app installate',

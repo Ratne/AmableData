@@ -1,6 +1,7 @@
 import {
   CHECKOUT_STRINGS,
   RESERVED_FIELD_KEYS,
+  paymentMethodTypesFor,
   resolveCheckoutLocale,
   selectionSchema,
   sessionPayloadSchema,
@@ -14,6 +15,7 @@ import {
   type Selection,
   type SelectionInput,
   type SessionPayloadInput,
+  type StripePaymentMethodType,
 } from '@amable/checkout';
 import {
   formDefinitionSchema,
@@ -28,18 +30,38 @@ import type { CrmContext } from '../crm/context';
 import { CrmError, invalidMany } from '../crm/errors';
 import { parseJson } from '../crm/util';
 import { getSettings } from '../commerce/settings';
-import { createOrderRow, deleteOrder, finalizeDraftRow, replaceDraftLines, restoreDraft } from '../commerce/orders';
+import {
+  createOrderRow,
+  deleteOrder,
+  finalizeDraftRow,
+  replaceDraftLines,
+  restoreDraft,
+} from '../commerce/orders';
 import { recordPayment } from '../commerce/payments';
 import { getOrderRow } from '../commerce/rows';
 import { startCheckoutSubscription } from '../commerce/subscriptions';
 import { bankAccountById } from '../commerce/bank-accounts';
 import type { CheckoutLine } from '../commerce/stripe/client';
-import { readStripeAccount } from '../commerce/stripe/account';
+import { readStripeAccount, settledPaymentDomains } from '../commerce/stripe/account';
 import { applyToContact } from '../forms/mapping';
 import { bankSnapshot, bankTransferDetails, scheduleSummary } from './bank-transfer';
+import { convertLead, linkLeadSession } from './leads';
 import { tagBuyer } from './paid-hooks';
-import { activeCheckoutRow, getCheckoutRow, storedCheckoutDefinition, type CheckoutRow } from './checkouts';
-import { assertSameCurrency, buildCart, priceCart, recurringOf, resolveCatalog, type Cart, type PricedCart } from './pricing';
+import {
+  activeCheckoutRow,
+  getCheckoutRow,
+  storedCheckoutDefinition,
+  type CheckoutRow,
+} from './checkouts';
+import {
+  assertSameCurrency,
+  buildCart,
+  priceCart,
+  recurringOf,
+  resolveCatalog,
+  type Cart,
+  type PricedCart,
+} from './pricing';
 
 /** Unpaid sessions can be resumed for this long. */
 export const OPEN_SESSION_TTL_MS = 2 * 3_600_000;
@@ -146,7 +168,10 @@ export function sessionById(ctx: CrmContext, id: string): SessionRow {
 }
 
 export function localeOf(d: CheckoutDefinition, browserLocale: string | null): CheckoutLocale {
-  return resolveCheckoutLocale(d.settings.locale, browserLocale === null || browserLocale === '' ? [] : [browserLocale]);
+  return resolveCheckoutLocale(
+    d.settings.locale,
+    browserLocale === null || browserLocale === '' ? [] : [browserLocale],
+  );
 }
 
 // --------------------------------------------------------------- buyer fields
@@ -163,23 +188,94 @@ const ADDRESS_TARGETS = {
 /** Built-in buyer fields as form fields: one validator and one contact mapping for everything. */
 export function buyerFields(contact: CheckoutContact, locale: CheckoutLocale): FormField[] {
   const s = CHECKOUT_STRINGS[locale];
-  const out: FormFieldInput[] = [{ id: 'b_email', kind: 'email', key: 'email', label: s.email, required: true, map_to: 'email' }];
+  const out: FormFieldInput[] = [
+    { id: 'b_email', kind: 'email', key: 'email', label: s.email, required: true, map_to: 'email' },
+  ];
   const add = (mode: CheckoutContact['name'], field: FormFieldInput): void => {
     if (mode !== 'hidden') out.push({ ...field, required: mode === 'required' });
   };
-  add(contact.name, { id: 'b_given', kind: 'text', key: 'given_name', label: s.firstName, map_to: 'given_name', max_length: 100 });
-  add(contact.name, { id: 'b_family', kind: 'text', key: 'family_name', label: s.lastName, map_to: 'family_name', max_length: 100 });
-  add(contact.phone, { id: 'b_phone', kind: 'phone', key: 'phone', label: s.phone, map_to: 'phone' });
-  add(contact.company, { id: 'b_company', kind: 'text', key: 'company_name', label: s.company, map_to: 'company_name', max_length: 200 });
+  add(contact.name, {
+    id: 'b_given',
+    kind: 'text',
+    key: 'given_name',
+    label: s.firstName,
+    map_to: 'given_name',
+    max_length: 100,
+  });
+  add(contact.name, {
+    id: 'b_family',
+    kind: 'text',
+    key: 'family_name',
+    label: s.lastName,
+    map_to: 'family_name',
+    max_length: 100,
+  });
+  add(contact.phone, {
+    id: 'b_phone',
+    kind: 'phone',
+    key: 'phone',
+    label: s.phone,
+    map_to: 'phone',
+  });
+  add(contact.company, {
+    id: 'b_company',
+    kind: 'text',
+    key: 'company_name',
+    label: s.company,
+    map_to: 'company_name',
+    max_length: 200,
+  });
   if (contact.address !== 'hidden') {
     const required = contact.address === 'required';
     out.push(
-      { id: 'b_line1', kind: 'text', key: 'address_line1', label: s.addressLine1, required, map_to: ADDRESS_TARGETS.address_line1 },
-      { id: 'b_line2', kind: 'text', key: 'address_line2', label: s.addressLine2, map_to: ADDRESS_TARGETS.address_line2 },
-      { id: 'b_city', kind: 'text', key: 'address_city', label: s.city, required, map_to: ADDRESS_TARGETS.address_city },
-      { id: 'b_zip', kind: 'text', key: 'address_postal_code', label: s.postalCode, required, map_to: ADDRESS_TARGETS.address_postal_code, max_length: 20 },
-      { id: 'b_region', kind: 'text', key: 'address_region', label: s.region, map_to: ADDRESS_TARGETS.address_region },
-      { id: 'b_country', kind: 'text', key: 'address_country', label: s.country, required, map_to: ADDRESS_TARGETS.address_country, max_length: 2 },
+      {
+        id: 'b_line1',
+        kind: 'text',
+        key: 'address_line1',
+        label: s.addressLine1,
+        required,
+        map_to: ADDRESS_TARGETS.address_line1,
+      },
+      {
+        id: 'b_line2',
+        kind: 'text',
+        key: 'address_line2',
+        label: s.addressLine2,
+        map_to: ADDRESS_TARGETS.address_line2,
+      },
+      {
+        id: 'b_city',
+        kind: 'text',
+        key: 'address_city',
+        label: s.city,
+        required,
+        map_to: ADDRESS_TARGETS.address_city,
+      },
+      {
+        id: 'b_zip',
+        kind: 'text',
+        key: 'address_postal_code',
+        label: s.postalCode,
+        required,
+        map_to: ADDRESS_TARGETS.address_postal_code,
+        max_length: 20,
+      },
+      {
+        id: 'b_region',
+        kind: 'text',
+        key: 'address_region',
+        label: s.region,
+        map_to: ADDRESS_TARGETS.address_region,
+      },
+      {
+        id: 'b_country',
+        kind: 'text',
+        key: 'address_country',
+        label: s.country,
+        required,
+        map_to: ADDRESS_TARGETS.address_country,
+        max_length: 2,
+      },
     );
   }
   return out.map((f) => formFieldSchema.parse(f));
@@ -187,7 +283,9 @@ export function buyerFields(contact: CheckoutContact, locale: CheckoutLocale): F
 
 /** Custom fields may not write the attributes the buyer fields already write. */
 function customFields(d: CheckoutDefinition, builtins: FormField[]): FormField[] {
-  const taken = new Set(builtins.map((f) => f.map_to).filter((t): t is NonNullable<typeof t> => t !== null));
+  const taken = new Set(
+    builtins.map((f) => f.map_to).filter((t): t is NonNullable<typeof t> => t !== null),
+  );
   const reserved = new Set<string>(RESERVED_FIELD_KEYS);
   return d.fields
     .filter((f) => !reserved.has(f.key))
@@ -199,11 +297,20 @@ function customFields(d: CheckoutDefinition, builtins: FormField[]): FormField[]
 export function checkoutPublic(
   ctx: CrmContext,
   input: { checkoutId: string },
-): { config: Omit<PublicCheckoutConfig, 'tenant'>; allowedDomains: string[] } {
+): {
+  config: Omit<PublicCheckoutConfig, 'tenant'>;
+  allowedDomains: string[];
+  paymentDomains: string[];
+} {
   const row = activeCheckoutRow(ctx, input.checkoutId);
   const d = storedCheckoutDefinition(row);
   const catalog = resolveCatalog(ctx, d, getSettings(ctx).default_currency);
-  const { allowed_domains, first_offer: _first, offer_window_minutes: _window, ...settings } = d.settings;
+  const {
+    allowed_domains,
+    first_offer: _first,
+    offer_window_minutes: _window,
+    ...settings
+  } = d.settings;
   const stripe = readStripeAccount(ctx);
   return {
     config: {
@@ -247,9 +354,11 @@ export function checkoutPublic(
         card: d.payments.card,
         bank_transfer: bankTransferAvailable(ctx, d),
         card_flow: stripe?.managed === true ? 'redirect' : 'element',
+        stripe_methods: d.payments.stripe_methods,
       },
     },
     allowedDomains: allowed_domains,
+    paymentDomains: stripe === null ? [] : settledPaymentDomains(ctx, stripe.publishable_key),
   };
 }
 
@@ -258,7 +367,12 @@ function bankTransferAvailable(ctx: CrmContext, d: CheckoutDefinition): boolean 
   return bank.enabled && bankAccountById(ctx, bank.account_id) !== null;
 }
 
-function cartOf(ctx: CrmContext, row: CheckoutRow, selection: Selection, locale: CheckoutLocale) {
+export function cartOf(
+  ctx: CrmContext,
+  row: CheckoutRow,
+  selection: Selection,
+  locale: CheckoutLocale,
+) {
   const d = storedCheckoutDefinition(row);
   const catalog = resolveCatalog(ctx, d, getSettings(ctx).default_currency);
   // A product may have changed currency after the checkout was saved.
@@ -268,7 +382,12 @@ function cartOf(ctx: CrmContext, row: CheckoutRow, selection: Selection, locale:
 
 export function checkoutQuote(
   ctx: CrmContext,
-  input: { checkoutId: string; selection: SelectionInput; promoCode: string; locale: string | null },
+  input: {
+    checkoutId: string;
+    selection: SelectionInput;
+    promoCode: string;
+    locale: string | null;
+  },
 ): Quote {
   const row = activeCheckoutRow(ctx, input.checkoutId);
   const selection = selectionSchema.parse(input.selection);
@@ -307,6 +426,8 @@ export interface PrepareResult {
   intentKind: 'payment' | 'setup' | 'none' | 'redirect' | 'bank_transfer';
   /** The payment method is kept for renewals or one-click offers. */
   save: boolean;
+  /** `payment_method_types` of the intent; null: the methods of the Stripe dashboard. */
+  methodTypes: StripePaymentMethodType[] | null;
   customerId: string | null;
   intentId: string | null;
   previousIntentKind: SessionRow['intent_kind'];
@@ -321,10 +442,19 @@ export interface PrepareResult {
  * its final amount (discounts included) with the product tax code. When the
  * lines do not add up to the order total, one line for the whole order.
  */
-export function checkoutLinesOf(ctx: CrmContext, orderId: string, description: string): CheckoutLine[] {
+export function checkoutLinesOf(
+  ctx: CrmContext,
+  orderId: string,
+  description: string,
+): CheckoutLine[] {
   const order = getOrderRow(ctx, orderId);
   const fallbackCode = readStripeAccount(ctx)?.default_tax_code ?? '';
-  const items = ctx.db.all<{ name: string; quantity: number; total_minor: number; tax_code: string | null }>(
+  const items = ctx.db.all<{
+    name: string;
+    quantity: number;
+    total_minor: number;
+    tax_code: string | null;
+  }>(
     `SELECT i.name, i.quantity, i.total_minor, p.stripe_tax_code AS tax_code
      FROM crm_order_items i LEFT JOIN crm_products p ON p.id = i.product_id
      WHERE i.order_id = ? ORDER BY i.position`,
@@ -337,9 +467,12 @@ export function checkoutLinesOf(ctx: CrmContext, orderId: string, description: s
       amount: i.total_minor,
       taxCode: i.tax_code !== null && i.tax_code !== '' ? i.tax_code : fallbackCode,
     }));
-  if (order.shipping_minor > 0) lines.push({ name: 'Shipping', amount: order.shipping_minor, taxCode: '' });
+  if (order.shipping_minor > 0)
+    lines.push({ name: 'Shipping', amount: order.shipping_minor, taxCode: '' });
   const sum = lines.reduce((total, l) => total + l.amount, 0);
-  return sum === order.total_minor ? lines : [{ name: description, amount: order.total_minor, taxCode: fallbackCode }];
+  return sum === order.total_minor
+    ? lines
+    : [{ name: description, amount: order.total_minor, taxCode: fallbackCode }];
 }
 
 function tidyValues(values: Record<string, unknown>): Record<string, unknown> {
@@ -348,7 +481,7 @@ function tidyValues(values: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-function trackingFrom(raw: Record<string, string>): Record<string, string> {
+export function trackingFrom(raw: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of TRACKING_PARAMS) {
     const value = raw[key];
@@ -357,7 +490,7 @@ function trackingFrom(raw: Record<string, string>): Record<string, string> {
   return out;
 }
 
-function upsertBuyer(
+export function upsertBuyer(
   ctx: CrmContext,
   d: CheckoutDefinition,
   fields: FormField[],
@@ -404,13 +537,18 @@ export function prepareCheckoutSession(
   const d = storedCheckoutDefinition(row);
   const chosen = payload.payment_method;
   if (chosen === 'bank_transfer' && !bankTransferAvailable(ctx, d)) {
-    throw invalidMany([{ path: 'payment_method', message: 'bank transfer is not available for this checkout' }]);
+    throw invalidMany([
+      { path: 'payment_method', message: 'bank transfer is not available for this checkout' },
+    ]);
   }
   if (chosen === 'card' && !d.payments.card) {
-    throw invalidMany([{ path: 'payment_method', message: 'card payments are not available for this checkout' }]);
+    throw invalidMany([
+      { path: 'payment_method', message: 'card payments are not available for this checkout' },
+    ]);
   }
   const stripe = readStripeAccount(ctx);
-  if (chosen === 'card' && stripe === null) throw new CrmError('conflict', 'payments are not configured');
+  if (chosen === 'card' && stripe === null)
+    throw new CrmError('conflict', 'payments are not configured');
   const managed = chosen === 'card' && stripe?.managed === true;
   const locale = localeOf(d, payload.meta.locale);
   const now = ctx.now();
@@ -418,9 +556,14 @@ export function prepareCheckoutSession(
   let existing: SessionRow | null = null;
   if (input.existingTokenHash !== null) {
     existing =
-      ctx.db.all<SessionRow>(`SELECT * FROM crm_checkout_sessions WHERE token_hash = ?`, input.existingTokenHash)[0] ??
-      null;
-    if (existing !== null && (existing.checkout_id !== row.id || existing.status !== 'open' || existing.expires_at < now)) {
+      ctx.db.all<SessionRow>(
+        `SELECT * FROM crm_checkout_sessions WHERE token_hash = ?`,
+        input.existingTokenHash,
+      )[0] ?? null;
+    if (
+      existing !== null &&
+      (existing.checkout_id !== row.id || existing.status !== 'open' || existing.expires_at < now)
+    ) {
       if (existing.status === 'paid' || existing.status === 'completed') {
         throw new CrmError('conflict', 'this purchase is already paid');
       }
@@ -446,7 +589,12 @@ export function prepareCheckoutSession(
     address_country: b.address.country,
   };
   const checked = validateSubmission({ fields }, raw);
-  const issues = checked.ok ? [] : Object.entries(checked.errors).map(([key, code]) => ({ path: `values.${key}`, message: code }));
+  const issues = checked.ok
+    ? []
+    : Object.entries(checked.errors).map(([key, code]) => ({
+        path: `values.${key}`,
+        message: code,
+      }));
   if (d.settings.terms_url !== '' && !payload.terms_accepted) {
     issues.push({ path: 'terms_accepted', message: 'required' });
   }
@@ -456,7 +604,9 @@ export function prepareCheckoutSession(
   const { catalog, cart } = cartOf(ctx, row, payload.selection, locale);
   const recurring = cart.plan !== null && cart.plan.plan !== null;
   if (recurring && chosen === 'bank_transfer') {
-    throw invalidMany([{ path: 'payment_method', message: 'subscriptions cannot be paid by bank transfer' }]);
+    throw invalidMany([
+      { path: 'payment_method', message: 'subscriptions cannot be paid by bank transfer' },
+    ]);
   }
   if (recurring && managed) {
     throw new CrmError('conflict', 'subscriptions cannot be sold with Stripe Managed Payments');
@@ -475,13 +625,24 @@ export function prepareCheckoutSession(
   });
 
   const sessionId = existing?.id ?? ctx.newId();
-  const orderId = writeDraft(ctx, { row, cart, priced, contactId, sessionId, existing, payload, promoCode, tracking });
+  const orderId = writeDraft(ctx, {
+    row,
+    cart,
+    priced,
+    contactId,
+    sessionId,
+    existing,
+    payload,
+    promoCode,
+    tracking,
+  });
   const order = orderId === null ? null : getOrderRow(ctx, orderId);
   const amount = order?.total_minor ?? 0;
   const plan = sessionPlan(payload.selection, promoCode, cart, priced);
   // A free purchase has nothing to transfer: it settles as a card one.
   const method = amount > 0 ? chosen : 'card';
-  const save = method === 'card' && !managed && (plan.subscription !== null || d.settings.first_offer !== '');
+  const save =
+    method === 'card' && !managed && (plan.subscription !== null || d.settings.first_offer !== '');
   const intentKind: PrepareResult['intentKind'] =
     amount > 0
       ? method === 'bank_transfer'
@@ -494,8 +655,10 @@ export function prepareCheckoutSession(
         : 'none';
 
   const customerId =
-    ctx.db.all<{ customer_id: string }>(`SELECT customer_id FROM crm_stripe_customers WHERE contact_id = ?`, contactId)[0]
-      ?.customer_id ?? null;
+    ctx.db.all<{ customer_id: string }>(
+      `SELECT customer_id FROM crm_stripe_customers WHERE contact_id = ?`,
+      contactId,
+    )[0]?.customer_id ?? null;
   const columns = {
     contact_id: contactId,
     order_id: orderId,
@@ -555,6 +718,7 @@ export function prepareCheckoutSession(
       sessionId,
     );
   }
+  linkLeadSession(ctx, row.id, b.email, sessionId);
   const name = [b.given_name, b.family_name].filter((v) => v !== '').join(' ');
   const description = order === null ? row.name : `${row.name} — ${order.number}`;
   return {
@@ -569,16 +733,25 @@ export function prepareCheckoutSession(
     currency: catalog.currency,
     intentKind,
     save,
+    methodTypes: paymentMethodTypesFor(d.payments.stripe_methods, save || intentKind === 'setup'),
     customerId: customerId ?? existing?.stripe_customer_id ?? null,
     intentId: existing?.intent_id ?? null,
     previousIntentKind: existing?.intent_kind ?? null,
     description,
-    lines: intentKind === 'redirect' && orderId !== null ? checkoutLinesOf(ctx, orderId, description) : [],
+    lines:
+      intentKind === 'redirect' && orderId !== null
+        ? checkoutLinesOf(ctx, orderId, description)
+        : [],
     quote: priced.quote,
   };
 }
 
-function sessionPlan(selection: Selection, promoCode: string, cart: Cart, priced: PricedCart): SessionPlan {
+function sessionPlan(
+  selection: Selection,
+  promoCode: string,
+  cart: Cart,
+  priced: PricedCart,
+): SessionPlan {
   const plan = cart.plan;
   const discount = priced.subscriptionDiscount;
   return {
@@ -624,13 +797,18 @@ function writeDraft(
   const promo = input.priced.promo === null ? null : input.promoCode;
   const previous = input.existing?.order_id ?? null;
   if (input.cart.lines.length === 0) {
-    if (previous !== null && getOrderRow(ctx, previous).status === 'draft') deleteOrder(ctx, { id: previous });
+    if (previous !== null && getOrderRow(ctx, previous).status === 'draft')
+      deleteOrder(ctx, { id: previous });
     return null;
   }
   if (previous !== null) {
     const draft = getOrderRow(ctx, previous);
     if (draft.status === 'draft') {
-      return replaceDraftLines(ctx, draft, { lines: input.priced.lines, promoCode: promo, contactId: input.contactId }).id;
+      return replaceDraftLines(ctx, draft, {
+        lines: input.priced.lines,
+        promoCode: promo,
+        contactId: input.contactId,
+      }).id;
     }
   }
   return createOrderRow(
@@ -641,7 +819,9 @@ function writeDraft(
       items: [],
       status: 'draft',
       ...(promo === null ? {} : { promo_code: promo }),
-      ...(input.payload.meta.visitor_id === '' ? {} : { analytics_visitor_id: input.payload.meta.visitor_id }),
+      ...(input.payload.meta.visitor_id === ''
+        ? {}
+        : { analytics_visitor_id: input.payload.meta.visitor_id }),
     },
     {
       source: 'checkout',
@@ -706,7 +886,9 @@ export interface IntentFacts {
  * Purchases without a saved card (bank transfer, Stripe Checkout): offers
  * are accepted without one click, and subscription offers are skipped.
  */
-export function withoutSavedCard(session: Pick<SessionRow, 'payment_method' | 'intent_kind'>): boolean {
+export function withoutSavedCard(
+  session: Pick<SessionRow, 'payment_method' | 'intent_kind'>,
+): boolean {
   return session.payment_method === 'bank_transfer' || session.intent_kind === 'checkout';
 }
 
@@ -733,12 +915,19 @@ export function nextOfferKey(
   return null;
 }
 
-export function nextStepOf(d: CheckoutDefinition, row: Pick<SessionRow, 'current_offer'>): NextStep {
+export function nextStepOf(
+  d: CheckoutDefinition,
+  row: Pick<SessionRow, 'current_offer'>,
+): NextStep {
   if (row.current_offer !== null) {
     const offer = d.offers.find((o) => o.key === row.current_offer);
-    if (offer !== undefined) return { kind: 'offer', url: offer.page_url === '' ? null : offer.page_url };
+    if (offer !== undefined)
+      return { kind: 'offer', url: offer.page_url === '' ? null : offer.page_url };
   }
-  return { kind: 'thank_you', url: d.settings.thank_you_url === '' ? null : d.settings.thank_you_url };
+  return {
+    kind: 'thank_you',
+    url: d.settings.thank_you_url === '' ? null : d.settings.thank_you_url,
+  };
 }
 
 /**
@@ -756,12 +945,20 @@ function settleRow(ctx: CrmContext, session: SessionRow, facts: IntentFacts): vo
   if (session.order_id !== null) {
     const draft = getOrderRow(ctx, session.order_id);
     if (draft.status === 'draft') {
-      ctx.db.run(`UPDATE crm_orders SET payment_method = ? WHERE id = ?`, session.payment_method, draft.id);
+      ctx.db.run(
+        `UPDATE crm_orders SET payment_method = ? WHERE id = ?`,
+        session.payment_method,
+        draft.id,
+      );
     }
     const order = finalizeDraftRow(ctx, getOrderRow(ctx, draft.id));
     const balance = order.total_minor - order.paid_minor;
     const amount =
-      facts.kind === 'checkout' ? balance : facts.kind === 'payment' ? Math.min(facts.amountReceived, balance) : 0;
+      facts.kind === 'checkout'
+        ? balance
+        : facts.kind === 'payment'
+          ? Math.min(facts.amountReceived, balance)
+          : 0;
     if (!bank && balance > 0 && amount > 0) {
       recordPayment(ctx, {
         orderId: order.id,
@@ -775,6 +972,7 @@ function settleRow(ctx: CrmContext, session: SessionRow, facts: IntentFacts): vo
     }
   }
   if (session.contact_id !== null && !bank) tagBuyer(ctx, session.contact_id, d.crm.tag_ids);
+  convertLead(ctx, session.id);
   const paymentMethod = facts.paymentMethodId ?? session.stripe_payment_method_id;
   const customer = facts.customerId ?? session.stripe_customer_id;
   if (plan.subscription !== null && session.contact_id !== null) {
@@ -791,7 +989,11 @@ function settleRow(ctx: CrmContext, session: SessionRow, facts: IntentFacts): vo
           : {
               promoId: s.discount.promoId,
               code: s.discount.code,
-              rule: { kind: s.discount.kind, percentBps: s.discount.percentBps, amountMinor: s.discount.amountMinor },
+              rule: {
+                kind: s.discount.kind,
+                percentBps: s.discount.percentBps,
+                amountMinor: s.discount.amountMinor,
+              },
               periodsLeft: s.discount.periodsLeft,
             },
       stripeCustomerId: customer,
@@ -821,7 +1023,10 @@ function settleRow(ctx: CrmContext, session: SessionRow, facts: IntentFacts): vo
  * Records the outcome of the checkout intent; idempotent (the browser and
  * the webhook both report it, in any order).
  */
-export function settleCheckoutIntent(ctx: CrmContext, input: IntentFacts): { sessionId: string | null } {
+export function settleCheckoutIntent(
+  ctx: CrmContext,
+  input: IntentFacts,
+): { sessionId: string | null } {
   const session = ctx.db.all<SessionRow>(
     `SELECT * FROM crm_checkout_sessions WHERE intent_id = ?`,
     input.intentId,
@@ -833,12 +1038,17 @@ export function settleCheckoutIntent(ctx: CrmContext, input: IntentFacts): { ses
     settleRow(ctx, session, input);
     return { sessionId: session.id };
   }
-  if (session.status !== 'open' && session.status !== 'processing') return { sessionId: session.id };
+  if (session.status !== 'open' && session.status !== 'processing')
+    return { sessionId: session.id };
   const now = ctx.now();
   if (input.status === 'succeeded') {
     settleRow(ctx, session, input);
   } else if (input.status === 'processing') {
-    ctx.db.run(`UPDATE crm_checkout_sessions SET status = 'processing', updated_at = ? WHERE id = ?`, now, session.id);
+    ctx.db.run(
+      `UPDATE crm_checkout_sessions SET status = 'processing', updated_at = ? WHERE id = ?`,
+      now,
+      session.id,
+    );
   } else if (input.failureMessage !== null) {
     ctx.db.run(
       `UPDATE crm_checkout_sessions SET status = 'open', last_error = ?, updated_at = ? WHERE id = ?`,
@@ -855,7 +1065,10 @@ export function settleCheckoutIntent(ctx: CrmContext, input: IntentFacts): { ses
  * expiry are marked `expired` and their draft orders deleted; expired ones
  * are deleted once the retention for late payments is over.
  */
-export function expireCheckoutSessions(ctx: CrmContext, input: { limit?: number } = {}): { expired: number; deleted: number } {
+export function expireCheckoutSessions(
+  ctx: CrmContext,
+  input: { limit?: number } = {},
+): { expired: number; deleted: number } {
   const now = ctx.now();
   const limit = input.limit ?? 200;
   const stale = ctx.db.all<{ id: string; order_id: string | null }>(
@@ -865,10 +1078,17 @@ export function expireCheckoutSessions(ctx: CrmContext, input: { limit?: number 
   );
   for (const s of stale) {
     if (s.order_id !== null) {
-      const draft = ctx.db.all(`SELECT 1 FROM crm_orders WHERE id = ? AND status = 'draft' AND deleted_at IS NULL`, s.order_id);
+      const draft = ctx.db.all(
+        `SELECT 1 FROM crm_orders WHERE id = ? AND status = 'draft' AND deleted_at IS NULL`,
+        s.order_id,
+      );
       if (draft.length > 0) deleteOrder(ctx, { id: s.order_id });
     }
-    ctx.db.run(`UPDATE crm_checkout_sessions SET status = 'expired', updated_at = ? WHERE id = ?`, now, s.id);
+    ctx.db.run(
+      `UPDATE crm_checkout_sessions SET status = 'expired', updated_at = ? WHERE id = ?`,
+      now,
+      s.id,
+    );
   }
   const old = ctx.db.all<{ id: string }>(
     `SELECT id FROM crm_checkout_sessions WHERE status = 'expired' AND expires_at <= ? LIMIT ?`,
@@ -917,23 +1137,31 @@ export function settleFreeSession(ctx: CrmContext, input: { sessionId: string })
  * coordinates of the checkout bank account, then the offer chain (if any)
  * starts. The summary email goes out at the end of the chain.
  */
-export function settleBankTransfer(ctx: CrmContext, input: { sessionId: string; tenantId: string }): { ok: true } {
+export function settleBankTransfer(
+  ctx: CrmContext,
+  input: { sessionId: string; tenantId: string },
+): { ok: true } {
   const session = sessionById(ctx, input.sessionId);
   if (session.status !== 'open' || session.payment_method !== 'bank_transfer') return { ok: true };
   const d = storedCheckoutDefinition(getCheckoutRow(ctx, session.checkout_id));
   const account = bankAccountById(ctx, d.payments.bank_transfer.account_id);
-  if (account === null) throw new CrmError('conflict', 'bank transfer is not available for this checkout');
+  if (account === null)
+    throw new CrmError('conflict', 'bank transfer is not available for this checkout');
   const details = JSON.stringify(bankSnapshot(account, input.tenantId));
   ctx.db.run(`UPDATE crm_checkout_sessions SET bank_details = ? WHERE id = ?`, details, session.id);
-  settleRow(ctx, { ...session, bank_details: details }, {
-    intentId: '',
-    kind: 'setup',
-    status: 'succeeded',
-    amountReceived: 0,
-    customerId: null,
-    paymentMethodId: null,
-    failureMessage: null,
-  });
+  settleRow(
+    ctx,
+    { ...session, bank_details: details },
+    {
+      intentId: '',
+      kind: 'setup',
+      status: 'succeeded',
+      amountReceived: 0,
+      customerId: null,
+      paymentMethodId: null,
+      failureMessage: null,
+    },
+  );
   const settled = sessionById(ctx, session.id);
   scheduleSummary(ctx, session.id, settled.current_offer === null ? 'now' : 'idle', false);
   return { ok: true };
@@ -946,7 +1174,10 @@ export function checkoutCompletion(
   const session = sessionByToken(ctx, input.tokenHash);
   const d = storedCheckoutDefinition(getCheckoutRow(ctx, session.checkout_id));
   const locale = (session.locale === 'it' ? 'it' : 'en') as CheckoutLocale;
-  const success = d.settings.success_message !== '' ? d.settings.success_message : CHECKOUT_STRINGS[locale].success;
+  const success =
+    d.settings.success_message !== ''
+      ? d.settings.success_message
+      : CHECKOUT_STRINGS[locale].success;
   const orderNumber = session.order_id === null ? null : getOrderRow(ctx, session.order_id).number;
   const base = {
     intentId: session.intent_id,
@@ -955,7 +1186,10 @@ export function checkoutCompletion(
     success_message: success,
     bank_transfer: null,
   };
-  if ((session.status === 'paid' || session.status === 'completed') && session.payment_method === 'bank_transfer') {
+  if (
+    (session.status === 'paid' || session.status === 'completed') &&
+    session.payment_method === 'bank_transfer'
+  ) {
     return {
       ...base,
       status: 'pending',
@@ -968,7 +1202,15 @@ export function checkoutCompletion(
     return { ...base, status: 'paid', message: null, next: nextStepOf(d, session) };
   }
   if (session.status === 'processing') {
-    return { ...base, status: 'processing', message: null, next: { kind: 'thank_you', url: d.settings.thank_you_url === '' ? null : d.settings.thank_you_url } };
+    return {
+      ...base,
+      status: 'processing',
+      message: null,
+      next: {
+        kind: 'thank_you',
+        url: d.settings.thank_you_url === '' ? null : d.settings.thank_you_url,
+      },
+    };
   }
   return { ...base, status: 'failed', message: session.last_error, next: null };
 }

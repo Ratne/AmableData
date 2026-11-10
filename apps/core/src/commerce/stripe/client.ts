@@ -50,6 +50,8 @@ export interface StripePaymentIntent {
   metadata: Record<string, string>;
   last_payment_error: { code?: string; decline_code?: string; message?: string } | null;
   latest_charge: string | null;
+  payment_method_types?: string[];
+  automatic_payment_methods?: { enabled: boolean } | null;
 }
 
 export interface StripeSetupIntent {
@@ -67,6 +69,8 @@ export interface StripeSetupIntent {
   payment_method: string | null;
   metadata: Record<string, string>;
   last_setup_error: { code?: string; message?: string } | null;
+  payment_method_types?: string[];
+  automatic_payment_methods?: { enabled: boolean } | null;
 }
 
 export interface StripeCustomer {
@@ -170,6 +174,28 @@ function parseError(status: number, body: unknown): StripeApiError {
   });
 }
 
+/** Explicit method types, or the methods enabled in the Stripe dashboard (null). */
+function methodsParam(types: readonly string[] | null): Record<string, Param> {
+  return types === null
+    ? { automatic_payment_methods: { enabled: true } }
+    : { payment_method_types: [...types] };
+}
+
+/** The intent offers exactly these methods (null: the automatic ones), so the Payment Element can confirm it. */
+export function sameMethods(
+  intent: Pick<StripePaymentIntent, 'payment_method_types' | 'automatic_payment_methods'>,
+  types: readonly string[] | null,
+): boolean {
+  const automatic =
+    intent.automatic_payment_methods === undefined ||
+    intent.automatic_payment_methods?.enabled === true;
+  if (types === null) return automatic;
+  if (intent.automatic_payment_methods?.enabled === true) return false;
+  const current = [...(intent.payment_method_types ?? [])].sort();
+  const wanted = [...types].sort();
+  return current.length === wanted.length && wanted.every((t, i) => t === current[i]);
+}
+
 /** Stripe emails its receipt to this address once the payment succeeds (live mode only). */
 function receipt(email: string | null): { receipt_email?: string } {
   return email === null || email === '' ? {} : { receipt_email: email };
@@ -217,11 +243,19 @@ export class StripeClient {
 
   /** Our endpoints are found by URL: the signing secret is only returned when an endpoint is created. */
   async webhookEndpoints(): Promise<StripeWebhookEndpoint[]> {
-    const page = await this.request<{ data: StripeWebhookEndpoint[] }>('GET', '/v1/webhook_endpoints', { limit: 100 });
+    const page = await this.request<{ data: StripeWebhookEndpoint[] }>(
+      'GET',
+      '/v1/webhook_endpoints',
+      { limit: 100 },
+    );
     return page.data;
   }
 
-  createWebhookEndpoint(params: { url: string; events: readonly string[]; description: string }): Promise<StripeWebhookEndpoint> {
+  createWebhookEndpoint(params: {
+    url: string;
+    events: readonly string[];
+    description: string;
+  }): Promise<StripeWebhookEndpoint> {
     return this.request('POST', '/v1/webhook_endpoints', {
       url: params.url,
       enabled_events: [...params.events],
@@ -231,11 +265,33 @@ export class StripeClient {
   }
 
   updateWebhookEndpoint(id: string, events: readonly string[]): Promise<StripeWebhookEndpoint> {
-    return this.request('POST', `/v1/webhook_endpoints/${encodeURIComponent(id)}`, { enabled_events: [...events] });
+    return this.request('POST', `/v1/webhook_endpoints/${encodeURIComponent(id)}`, {
+      enabled_events: [...events],
+    });
   }
 
   deleteWebhookEndpoint(id: string): Promise<{ id: string; deleted: boolean }> {
     return this.request('DELETE', `/v1/webhook_endpoints/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Registers a domain for Apple Pay, Google Pay and Link in the Payment
+   * Element; a domain the account already holds counts as registered.
+   */
+  async registerPaymentMethodDomain(domain: string): Promise<void> {
+    try {
+      await this.request('POST', '/v1/payment_method_domains', {
+        domain_name: domain,
+        enabled: true,
+      });
+    } catch (error) {
+      if (
+        error instanceof StripeApiError &&
+        (error.error.code === 'resource_already_exists' || /already/i.test(error.message))
+      )
+        return;
+      throw error;
+    }
   }
 
   /** Id of the account the key belongs to; null when the key may not read it (restricted keys). */
@@ -270,6 +326,8 @@ export class StripeClient {
       receiptEmail: string | null;
       description: string;
       metadata: Record<string, string>;
+      /** Null: the methods enabled in the Stripe dashboard. */
+      methodTypes: readonly string[] | null;
     },
     idempotencyKey: string,
   ): Promise<StripePaymentIntent> {
@@ -282,7 +340,7 @@ export class StripeClient {
         customer: params.customer,
         description: params.description,
         metadata: params.metadata,
-        automatic_payment_methods: { enabled: true },
+        ...methodsParam(params.methodTypes),
         ...(params.save ? { setup_future_usage: 'off_session' } : {}),
         ...receipt(params.receiptEmail),
       },
@@ -292,7 +350,13 @@ export class StripeClient {
 
   updatePaymentIntent(
     id: string,
-    params: { amount: number; save: boolean; receiptEmail: string | null; description: string; metadata: Record<string, string> },
+    params: {
+      amount: number;
+      save: boolean;
+      receiptEmail: string | null;
+      description: string;
+      metadata: Record<string, string>;
+    },
   ): Promise<StripePaymentIntent> {
     return this.request('POST', `/v1/payment_intents/${encodeURIComponent(id)}`, {
       amount: params.amount,
@@ -352,7 +416,11 @@ export class StripeClient {
 
   /** Saves a method without charging (trial subscriptions, 100% discounts). */
   createSetupIntent(
-    params: { customer: string; metadata: Record<string, string> },
+    params: {
+      customer: string;
+      metadata: Record<string, string>;
+      methodTypes: readonly string[] | null;
+    },
     idempotencyKey: string,
   ): Promise<StripeSetupIntent> {
     return this.request(
@@ -362,7 +430,7 @@ export class StripeClient {
         customer: params.customer,
         usage: 'off_session',
         metadata: params.metadata,
-        automatic_payment_methods: { enabled: true },
+        ...methodsParam(params.methodTypes),
       },
       idempotencyKey,
     );
@@ -423,7 +491,10 @@ export class StripeClient {
           price_data: {
             currency: params.currency.toLowerCase(),
             unit_amount: line.amount,
-            product_data: { name: line.name, ...(line.taxCode === '' ? {} : { tax_code: line.taxCode }) },
+            product_data: {
+              name: line.name,
+              ...(line.taxCode === '' ? {} : { tax_code: line.taxCode }),
+            },
           },
         })),
       },
@@ -433,7 +504,13 @@ export class StripeClient {
   }
 
   retrieveCheckoutSession(id: string): Promise<StripeCheckoutSession> {
-    return this.request('GET', `/v1/checkout/sessions/${encodeURIComponent(id)}`, {}, undefined, STRIPE_MANAGED_API_VERSION);
+    return this.request(
+      'GET',
+      `/v1/checkout/sessions/${encodeURIComponent(id)}`,
+      {},
+      undefined,
+      STRIPE_MANAGED_API_VERSION,
+    );
   }
 
   expireCheckoutSession(id: string): Promise<StripeCheckoutSession> {

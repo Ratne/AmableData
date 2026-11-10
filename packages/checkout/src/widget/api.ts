@@ -1,6 +1,7 @@
 import type {
   AddressSuggestion,
   CompleteResult,
+  LeadPayloadInput,
   OfferActionResult,
   OfferState,
   PublicCheckoutConfig,
@@ -26,7 +27,10 @@ async function call<T>(url: string, body?: unknown): Promise<ApiResult<T>> {
     const response = await fetch(url, {
       method: body === undefined ? 'GET' : 'POST',
       credentials: 'omit',
-      headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      headers: {
+        accept: 'application/json',
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const parsed = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -37,7 +41,9 @@ async function call<T>(url: string, body?: unknown): Promise<ApiResult<T>> {
         status: response.status,
         error: typeof parsed['error'] === 'string' ? parsed['error'] : 'error',
         message: typeof parsed['message'] === 'string' ? parsed['message'] : '',
-        details: Array.isArray(parsed['details']) ? (parsed['details'] as ApiFailure['details']) : [],
+        details: Array.isArray(parsed['details'])
+          ? (parsed['details'] as ApiFailure['details'])
+          : [],
       },
     };
   } catch {
@@ -71,7 +77,17 @@ export class CheckoutApi {
     return call(this.checkoutUrl(id, 'session'), payload);
   }
 
-  address(id: string, q: string, country: string, lang: string): Promise<ApiResult<{ data: AddressSuggestion[]; attribution?: string | null }>> {
+  /** Abandoned cart: the buyer typed the email. Fire and forget. */
+  lead(id: string, payload: LeadPayloadInput): Promise<ApiResult<{ ok: true }>> {
+    return call(this.checkoutUrl(id, 'lead'), payload);
+  }
+
+  address(
+    id: string,
+    q: string,
+    country: string,
+    lang: string,
+  ): Promise<ApiResult<{ data: AddressSuggestion[]; attribution?: string | null }>> {
     return call(this.checkoutUrl(id, 'address'), { q, country, lang });
   }
 
@@ -90,7 +106,11 @@ export class CheckoutApi {
     offerKey: string,
     returnUrl = '',
   ): Promise<ApiResult<OfferActionResult>> {
-    return call(this.url(`session/${action}`), { token, offer_key: offerKey, return_url: returnUrl });
+    return call(this.url(`session/${action}`), {
+      token,
+      offer_key: offerKey,
+      return_url: returnUrl,
+    });
   }
 
   /** The offer page is being closed: the bank transfer summary email goes out now. */

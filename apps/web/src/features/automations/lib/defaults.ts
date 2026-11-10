@@ -13,6 +13,7 @@ export const GOAL_TYPES: readonly GoalTriggerType[] = [
   'form_submitted',
   'product_purchased',
   'order_paid',
+  'checkout_abandoned',
   'email_opened',
   'email_clicked',
   'lead_score',
@@ -38,6 +39,8 @@ export function defaultTrigger(type: GoalTriggerType): GoalTrigger {
     case 'product_purchased':
       return { type };
     case 'order_paid':
+      return { type };
+    case 'checkout_abandoned':
       return { type };
     case 'email_opened':
       return { type };

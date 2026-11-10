@@ -15,6 +15,8 @@ export interface StripeElementsOptions {
   currency: string;
   setupFutureUsage?: 'off_session' | null;
   paymentMethodCreation?: 'manual';
+  /** Omitted: the methods enabled in the Stripe dashboard. */
+  paymentMethodTypes?: string[];
   appearance?: { theme?: 'stripe' | 'flat'; variables?: Record<string, string> };
   locale?: string;
 }
@@ -26,7 +28,14 @@ export interface StripePaymentElement {
 }
 
 export interface StripeElements {
-  create(kind: 'payment', options?: { layout?: 'tabs' | 'accordion'; fields?: unknown }): StripePaymentElement;
+  create(
+    kind: 'payment',
+    options?: {
+      layout?: 'tabs' | 'accordion';
+      fields?: unknown;
+      wallets?: { applePay?: 'auto' | 'never'; googlePay?: 'auto' | 'never' };
+    },
+  ): StripePaymentElement;
   update(options: Partial<StripeElementsOptions>): void;
   submit(): Promise<{ error?: StripeError }>;
 }
@@ -50,7 +59,9 @@ export interface StripeJs {
     confirmParams: ConfirmParams;
     redirect: 'if_required';
   }): Promise<{ error?: StripeError; setupIntent?: { status: string } }>;
-  handleNextAction(options: { clientSecret: string }): Promise<{ error?: StripeError; paymentIntent?: { status: string } }>;
+  handleNextAction(options: {
+    clientSecret: string;
+  }): Promise<{ error?: StripeError; paymentIntent?: { status: string } }>;
 }
 
 declare global {
@@ -69,7 +80,8 @@ function loadScript(): Promise<NonNullable<Window['Stripe']>> {
     const script = document.createElement('script');
     script.src = SRC;
     script.async = true;
-    script.onload = () => (window.Stripe === undefined ? reject(new Error('stripe')) : resolve(window.Stripe));
+    script.onload = () =>
+      window.Stripe === undefined ? reject(new Error('stripe')) : resolve(window.Stripe);
     script.onerror = () => {
       loading = null;
       reject(new Error('stripe'));
@@ -104,6 +116,7 @@ export function appearanceOf(style: {
   if (HEX.test(style.primary_color)) variables['colorPrimary'] = style.primary_color;
   if (HEX.test(style.text_color)) variables['colorText'] = style.text_color;
   if (/^\d+(\.\d+)?px$/.test(style.radius)) variables['borderRadius'] = style.radius;
-  if (style.font_family !== '' && !/[;{}]/.test(style.font_family)) variables['fontFamily'] = style.font_family;
+  if (style.font_family !== '' && !/[;{}]/.test(style.font_family))
+    variables['fontFamily'] = style.font_family;
   return { theme: 'stripe', variables };
 }

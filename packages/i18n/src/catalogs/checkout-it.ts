@@ -11,7 +11,8 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
 
   'checkout.list.new': 'Nuovo checkout',
   'checkout.list.create': 'Crea checkout',
-  'checkout.list.empty': 'Nessun checkout. Creane uno per vendere prodotti e piani dalle tue landing page.',
+  'checkout.list.empty':
+    'Nessun checkout. Creane uno per vendere prodotti e piani dalle tue landing page.',
   'checkout.list.nameHint': "Nome interno, mostrato come origine dell'ordine.",
   'checkout.list.duplicated': 'Checkout duplicato',
   'checkout.list.content': '{items} articoli · {bumps} bump · {offers} offerte',
@@ -43,21 +44,25 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.items.selection.all': 'Compra tutto',
   'checkout.items.selection.one': 'Scegli uno',
   'checkout.items.selection.all.hint': 'Tutti gli articoli vengono acquistati insieme.',
-  'checkout.items.selection.one.hint': "L'acquirente sceglie un articolo (es. piano mensile o annuale).",
+  'checkout.items.selection.one.hint':
+    "L'acquirente sceglie un articolo (es. piano mensile o annuale).",
   'checkout.items.allowQuantity': "Permetti all'acquirente di cambiare le quantità",
   'checkout.items.empty': 'Aggiungi almeno un prodotto o un piano.',
   'checkout.items.kind.product': 'Prodotto',
   'checkout.items.kind.plan': 'Piano',
   'checkout.items.preselected': 'Preselezionato',
   'checkout.items.selection.any': 'Scegli quali',
-  'checkout.items.selection.any.hint': "L'acquirente spunta gli articoli da acquistare (uno o più).",
+  'checkout.items.selection.any.hint':
+    "L'acquirente spunta gli articoli da acquistare (uno o più).",
   'checkout.items.checked': "Spuntato all'apertura della pagina",
 
   'checkout.discounts.title': 'Sconti automatici',
-  'checkout.discounts.intro': 'Sconti applicati da soli quando il carrello contiene i prodotti indicati con almeno la loro quantità (es. A + B: 10% di sconto; 2 × A + 1 × B: 15%). Se più regole sono valide vince lo sconto maggiore.',
+  'checkout.discounts.intro':
+    'Sconti applicati da soli quando il carrello contiene i prodotti indicati con almeno la loro quantità (es. A + B: 10% di sconto; 2 × A + 1 × B: 15%). Se più regole sono valide vince lo sconto maggiore.',
   'checkout.discounts.add': 'Aggiungi sconto',
   'checkout.discounts.defaultLabel': 'Sconto pacchetto',
-  'checkout.discounts.stackPromo': 'I codici promo si sommano agli sconti automatici (disattivato: un codice valido li sostituisce)',
+  'checkout.discounts.stackPromo':
+    'I codici promo si sommano agli sconti automatici (disattivato: un codice valido li sostituisce)',
   'checkout.discounts.label': 'Etichetta',
   'checkout.discounts.labelHint': "Mostrata nel riepilogo dell'ordine.",
   'checkout.discounts.kind': 'Sconto',
@@ -69,7 +74,8 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.discounts.scope.matching': 'I prodotti indicati',
   'checkout.discounts.scope.order': "Tutto l'ordine",
   'checkout.discounts.scope.matching.hint': 'Vengono scontati solo i prodotti delle condizioni.',
-  'checkout.discounts.scope.order.hint': "Viene scontato ogni prodotto dell'ordine, bump compresi (mai i piani in abbonamento).",
+  'checkout.discounts.scope.order.hint':
+    "Viene scontato ogni prodotto dell'ordine, bump compresi (mai i piani in abbonamento).",
   'checkout.discounts.conditions': 'Quando il carrello contiene',
   'checkout.discounts.minQuantity': 'Quantità min.',
   'checkout.discounts.addCondition': 'Aggiungi prodotto',
@@ -142,9 +148,47 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.payments.account': 'Conto bancario',
   'checkout.payments.pickAccount': 'Scegli un conto',
   'checkout.payments.bankHint':
-    'L\'ordine viene creato "In attesa di pagamento" e l\'acquirente riceve queste coordinate nella pagina e via email. Diventa pagato quando registri il pagamento sull\'ordine. Gli upsell accettati dopo l\'acquisto si sommano allo stesso bonifico.',
-  'checkout.payments.noAccounts': 'Nessun conto bancario: aggiungine uno nelle impostazioni E-commerce.',
-  'checkout.payments.plansCardOnly': 'Gli abbonamenti si rinnovano su una carta salvata: con un piano nel carrello viene offerta solo la carta e gli upsell di piani vengono saltati per chi paga con bonifico.',
+    "L'ordine viene creato \"In attesa di pagamento\" e l'acquirente riceve queste coordinate nella pagina e via email. Diventa pagato quando registri il pagamento sull'ordine. Gli upsell accettati dopo l'acquisto si sommano allo stesso bonifico.",
+  'checkout.payments.noAccounts':
+    'Nessun conto bancario: aggiungine uno nelle impostazioni E-commerce.',
+  'checkout.payments.plansCardOnly':
+    'Gli abbonamenti si rinnovano su una carta salvata: con un piano nel carrello viene offerta solo la carta e gli upsell di piani vengono saltati per chi paga con bonifico.',
+  'checkout.payments.methods': 'Metodi di pagamento Stripe',
+  'checkout.payments.methods.automatic': 'Automatici',
+  'checkout.payments.methods.custom': 'Solo quelli selezionati',
+  'checkout.payments.methods.automaticHint':
+    'Tutti i metodi attivi nella dashboard Stripe compatibili con valuta e importo.',
+  'checkout.payments.methods.customHint':
+    "La carta c'è sempre. Gli altri compaiono solo se sono attivi anche nella dashboard Stripe e compatibili con valuta e importo.",
+  'checkout.payments.method.card': 'Carta',
+  'checkout.payments.method.link': 'Link (checkout veloce)',
+  'checkout.payments.method.paypal': 'PayPal',
+  'checkout.payments.method.klarna': 'Klarna',
+  'checkout.payments.method.bancontact': 'Bancontact',
+  'checkout.payments.method.ideal': 'iDEAL',
+  'checkout.payments.method.eps': 'EPS',
+  'checkout.payments.method.sepa_debit': 'Addebito diretto SEPA',
+  'checkout.payments.method.revolut_pay': 'Revolut Pay',
+  'checkout.payments.method.amazon_pay': 'Amazon Pay',
+  'checkout.payments.methodsDropped':
+    'Con un abbonamento o le offerte post-acquisto il metodo viene salvato per gli addebiti successivi: {methods} non si può salvare e non viene offerto.',
+  'checkout.payments.wallets': 'Apple Pay e Google Pay',
+  'checkout.payments.walletsHint':
+    'Compaiono sui dispositivi con una carta nel wallet, sui domini registrati in Stripe (avviene in automatico la prima volta che il checkout si carica su un dominio).',
+  'checkout.payments.managedMethods':
+    'Stripe Managed Payments è attivo: il pagamento con carta passa da Stripe Checkout, che sceglie da sé i metodi.',
+  'checkout.abandoned.title': 'Carrello abbandonato',
+  'checkout.abandoned.enabled': 'Salva l’email appena il cliente la scrive',
+  'checkout.abandoned.delay': 'Abbandonato dopo',
+  'checkout.abandoned.delayHint':
+    'Senza acquisto in questo tempo il contatto viene creato o aggiornato e parte il trigger.',
+  'checkout.abandoned.minutes': '{n} minuti',
+  'checkout.abandoned.hours': '{n} h',
+  'checkout.abandoned.days': '{n} g',
+  'checkout.abandoned.hint':
+    'Avvia un recupero con il trigger di automazione "Carrello abbandonato". Nell’email metti il link alla pagina del checkout aggiungendo ?email={{ contact.email }}: il cliente trova l’email già compilata.',
+  'checkout.abandoned.privacy':
+    'L’email viene raccolta prima dell’acquisto: indicalo nella privacy policy. I carrelli salvati vengono cancellati dopo 30 giorni.',
   'checkout.settings.heading': 'Titolo',
   'checkout.settings.button_label': 'Pulsante di pagamento',
   'checkout.settings.success_message': 'Messaggio di conferma',
@@ -152,14 +196,15 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.settings.defaultHint': "Vuoto usa il testo predefinito nella lingua dell'acquirente.",
   'checkout.settings.promoCodes': 'Accetta codici promo',
   'checkout.settings.promoParam': "Parametro dell'URL",
-  'checkout.settings.promoParamHint': 'Un link con ?{param}=CODICE applica il codice in automatico.',
+  'checkout.settings.promoParamHint':
+    'Un link con ?{param}=CODICE applica il codice in automatico.',
   'checkout.settings.thankYouUrl': 'URL della pagina di ringraziamento',
   'checkout.settings.thankYouHint': 'Vuoto mostra il messaggio di conferma sul posto.',
   'checkout.settings.termsUrl': 'URL dei termini',
   'checkout.settings.termsHint': "Se impostato, l'acquirente deve accettare i termini per pagare.",
   'checkout.settings.hosted': 'Pagina ospitata (un link che funziona senza landing page)',
   'checkout.settings.tagsHint':
-    'Aggiunti solo a pagamento riuscito (una carta rifiutata non ne aggiunge). Il contatto, il suo owner e la lead source vengono salvati appena l\'acquirente invia il modulo.',
+    "Aggiunti solo a pagamento riuscito (una carta rifiutata non ne aggiunge). Il contatto, il suo owner e la lead source vengono salvati appena l'acquirente invia il modulo.",
   'checkout.settings.attribution':
     'Gli ordini conservano i parametri UTM e il referrer della pagina, e il contatto viene collegato al checkout come origine.',
 

@@ -96,6 +96,7 @@ const ACTIVITY_LABELS: Readonly<Record<string, MessageKey>> = {
   'subscription.ended': 'crm.activity.subscriptionEnded',
   'subscription.trial_started': 'crm.activity.subscriptionTrialStarted',
   'subscription.trial_converted': 'crm.activity.subscriptionTrialConverted',
+  'checkout.abandoned': 'crm.activity.checkoutAbandoned',
   'conversation.created': 'crm.activity.conversationCreated',
   'conversation.assigned': 'crm.activity.conversationAssigned',
   'conversation.closed': 'crm.activity.conversationClosed',
@@ -141,6 +142,7 @@ const PREFIX_ICONS: Readonly<Record<string, LucideIcon>> = {
   page: Globe,
   email: Mail,
   order: ShoppingCart,
+  checkout: ShoppingCart,
   payment: CreditCard,
   refund: CreditCard,
   subscription: RefreshCw,
@@ -219,6 +221,8 @@ export function activityDetail(activity: Activity, ctx: ActivityDetailContext): 
   const currency = str(data['currency']);
   if (typeof amount === 'number' && currency !== null) {
     const money = formatMoney(amount, currency, ctx.locale);
+    const checkout = activity.type === 'checkout.abandoned' ? str(data['checkout']) : null;
+    if (checkout !== null) return `${checkout} · ${money}`;
     const orderNumber = str(data['orderNumber']);
     return orderNumber === null ? money : `${orderNumber} · ${money}`;
   }

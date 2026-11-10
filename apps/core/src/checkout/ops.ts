@@ -3,6 +3,7 @@ import * as stripe from '../commerce/stripe/account';
 import * as bank from './bank-transfer';
 import * as charges from './charges';
 import * as checkouts from './checkouts';
+import * as leads from './leads';
 import * as offers from './offers';
 import * as sessions from './sessions';
 
@@ -31,6 +32,8 @@ export const checkoutOps = {
   'checkout.summaryFailed': bank.summaryFailed,
   'checkout.completion': sessions.checkoutCompletion,
   'checkout.expireSessions': sessions.expireCheckoutSessions,
+  'checkout.captureLead': leads.captureCheckoutLead,
+  'checkout.abandonLeads': leads.abandonCheckoutLeads,
   'checkout.offerState': offers.offerState,
   'checkout.offerPrepare': offers.prepareOfferCharge,
   'checkout.offerSettle': offers.settleOfferCharge,
@@ -42,6 +45,7 @@ export const checkoutOps = {
   'stripe.saveAccount': stripe.saveStripeAccount,
   'stripe.clearAccount': stripe.clearStripeAccount,
   'stripe.setManaged': stripe.setManagedPayments,
+  'stripe.paymentDomainResult': stripe.recordPaymentDomain,
   'stripe.event': charges.applyStripeEvent,
   'stripe.refundPlan': charges.stripeRefundPlan,
   'stripe.refundSync': charges.syncStripeRefund,
@@ -51,5 +55,10 @@ export const checkoutOps = {
 
 /** Ops after which an automatic charge may have been scheduled or moved. */
 export function affectsChargeSchedule(op: string): boolean {
-  return op === 'commerce.chargeResult' || op === 'commerce.chargesDue' || op === 'stripe.event' || op.startsWith('checkout.');
+  return (
+    op === 'commerce.chargeResult' ||
+    op === 'commerce.chargesDue' ||
+    op === 'stripe.event' ||
+    op.startsWith('checkout.')
+  );
 }

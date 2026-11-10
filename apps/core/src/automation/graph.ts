@@ -17,6 +17,7 @@ export const TRIGGER_EVENTS: Record<GoalTrigger['type'], readonly string[]> = {
   form_submitted: ['form.submitted'],
   product_purchased: ['order.paid'],
   order_paid: ['order.paid'],
+  checkout_abandoned: ['checkout.abandoned'],
   email_opened: ['email.opened'],
   email_clicked: ['email.link_clicked'],
   lead_score: ['contact.score_changed'],

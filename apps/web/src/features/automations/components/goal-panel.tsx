@@ -168,6 +168,25 @@ function TriggerFields({
           />
         </Field>
       );
+    case 'checkout_abandoned':
+      return (
+        <Field label={t('auto.goal.checkouts')} hint={t('auto.goal.checkoutAbandonedHint')}>
+          <ReferenceMultiPicker
+            path="/checkouts"
+            values={trigger.checkout_ids ?? []}
+            placeholder={t('auto.goal.anyCheckout')}
+            disabled={disabled}
+            onChange={(ids) =>
+              onChange(
+                clean<Of<'checkout_abandoned'>>({
+                  ...trigger,
+                  checkout_ids: ids.length ? ids : undefined,
+                }),
+              )
+            }
+          />
+        </Field>
+      );
     case 'email_opened':
     case 'email_clicked': {
       const email = trigger.email ?? {};
@@ -326,7 +345,9 @@ function TriggerFields({
             values={trigger.template_ids ?? []}
             placeholder={t('auto.goal.anySignatureTemplate')}
             disabled={disabled}
-            onChange={(ids) => onChange({ type: trigger.type, ...(ids.length > 0 ? { template_ids: ids } : {}) })}
+            onChange={(ids) =>
+              onChange({ type: trigger.type, ...(ids.length > 0 ? { template_ids: ids } : {}) })
+            }
           />
         </Field>
       );

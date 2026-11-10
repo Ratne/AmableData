@@ -1,5 +1,9 @@
 import type { Product } from '@amable/api-types';
-import type { CheckoutDefinition, PublicCheckoutConfig, PublicCheckoutItem } from '@amable/checkout';
+import type {
+  CheckoutDefinition,
+  PublicCheckoutConfig,
+  PublicCheckoutItem,
+} from '@amable/checkout';
 import { CHECKOUT_WIDGET_BUNDLE } from '@amable/checkout/bundle';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
@@ -21,7 +25,9 @@ let loading: Promise<WidgetApi> | null = null;
 function loadWidget(): Promise<WidgetApi> {
   if (window.amableCheckout !== undefined) return Promise.resolve(window.amableCheckout);
   loading ??= new Promise<WidgetApi>((resolve, reject) => {
-    const url = URL.createObjectURL(new Blob([CHECKOUT_WIDGET_BUNDLE], { type: 'text/javascript' }));
+    const url = URL.createObjectURL(
+      new Blob([CHECKOUT_WIDGET_BUNDLE], { type: 'text/javascript' }),
+    );
     const script = document.createElement('script');
     script.src = url;
     script.async = true;
@@ -52,7 +58,9 @@ export function previewCheckoutConfig(
   products: readonly Product[],
 ): PublicCheckoutConfig {
   const productById = new Map(products.map((p) => [p.id, p]));
-  const planById = new Map(products.flatMap((p) => p.plans.map((plan) => [plan.id, { plan, product: p }] as const)));
+  const planById = new Map(
+    products.flatMap((p) => p.plans.map((plan) => [plan.id, { plan, product: p }] as const)),
+  );
   const items = definition.items.flatMap((item): PublicCheckoutItem[] => {
     if (item.kind === 'product') {
       const product = productById.get(item.ref_id);
@@ -112,7 +120,12 @@ export function previewCheckoutConfig(
       },
     ];
   });
-  const { allowed_domains: _domains, first_offer: firstOffer, offer_window_minutes: _window, ...settings } = definition.settings;
+  const {
+    allowed_domains: _domains,
+    first_offer: firstOffer,
+    offer_window_minutes: _window,
+    ...settings
+  } = definition.settings;
   void _domains;
   void _window;
   return {
@@ -122,15 +135,20 @@ export function previewCheckoutConfig(
     currency,
     items,
     bumps,
-    fields: definition.fields.map((f) => (f.kind === 'html' ? { ...f, html: sanitizePreviewHtml(f.html) } : f)),
+    fields: definition.fields.map((f) =>
+      f.kind === 'html' ? { ...f, html: sanitizePreviewHtml(f.html) } : f,
+    ),
     contact: definition.contact,
     settings,
     style: definition.style,
     offers_enabled: firstOffer !== '',
     payments: {
       card: definition.payments.card,
-      bank_transfer: definition.payments.bank_transfer.enabled && definition.payments.bank_transfer.account_id !== '',
+      bank_transfer:
+        definition.payments.bank_transfer.enabled &&
+        definition.payments.bank_transfer.account_id !== '',
       card_flow: 'element',
+      stripe_methods: definition.payments.stripe_methods,
     },
     stripe_publishable_key: null,
   };
@@ -149,7 +167,9 @@ export function CheckoutPreview({ config }: { config: PublicCheckoutConfig }) {
       void loadWidget()
         .then((widget) => {
           if (!cancelled && host.current !== null) {
-            widget.mount(host.current, JSON.parse(serialized) as PublicCheckoutConfig, { preview: true });
+            widget.mount(host.current, JSON.parse(serialized) as PublicCheckoutConfig, {
+              preview: true,
+            });
           }
         })
         .catch(() => setFailed(true));
@@ -160,6 +180,7 @@ export function CheckoutPreview({ config }: { config: PublicCheckoutConfig }) {
     };
   }, [serialized]);
 
-  if (failed) return <p className="text-sm text-muted-foreground">{t('checkout.preview.unavailable')}</p>;
+  if (failed)
+    return <p className="text-sm text-muted-foreground">{t('checkout.preview.unavailable')}</p>;
   return <div ref={host} className="min-h-40" />;
 }

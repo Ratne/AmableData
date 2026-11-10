@@ -12,6 +12,7 @@ import { CrmError } from '../../crm/errors';
 import { audit, getTenant, type AppEnv } from '../../middleware';
 import { stripeAccountAd, type StoredStripeAccount } from './account';
 import { STRIPE_WEBHOOK_EVENTS, StripeApiError, StripeClient } from './client';
+import { registerPaymentDomains, walletHost } from './payment-domains';
 import { commerceRuntime, openStripe, secretHint, type CommerceRuntime } from './runtime';
 
 type Ctx = Context<AppEnv>;
@@ -29,7 +30,12 @@ function withUrl(c: Ctx, settings: Omit<StripeSettings, 'webhook_url'>): StripeS
 
 function reachableByStripe(url: string): boolean {
   const { protocol, hostname } = new URL(url);
-  return protocol === 'https:' && hostname !== 'localhost' && !hostname.endsWith('.localhost') && hostname !== '127.0.0.1';
+  return (
+    protocol === 'https:' &&
+    hostname !== 'localhost' &&
+    !hostname.endsWith('.localhost') &&
+    hostname !== '127.0.0.1'
+  );
 }
 
 /**
@@ -37,7 +43,11 @@ function reachableByStripe(url: string): boolean {
  * already pointing at the same URL: the signing secret is only returned on
  * creation, so an existing endpoint cannot be adopted.
  */
-async function createWebhook(client: StripeClient, url: string, slug: string): Promise<{ id: string; secret: string; replaced: string[] }> {
+async function createWebhook(
+  client: StripeClient,
+  url: string,
+  slug: string,
+): Promise<{ id: string; secret: string; replaced: string[] }> {
   const replaced: string[] = [];
   for (const endpoint of await client.webhookEndpoints()) {
     if (endpoint.url !== url) continue;
@@ -49,12 +59,16 @@ async function createWebhook(client: StripeClient, url: string, slug: string): P
     events: STRIPE_WEBHOOK_EVENTS,
     description: `Amable checkout (${slug})`,
   });
-  if (created.secret === undefined) throw new Error('Stripe did not return the webhook signing secret');
+  if (created.secret === undefined)
+    throw new Error('Stripe did not return the webhook signing secret');
   return { id: created.id, secret: created.secret, replaced };
 }
 
 /** Best effort: a key that was revoked or an endpoint removed by hand must not block the change. */
-async function deleteManagedWebhook(runtime: CommerceRuntime, account: StoredStripeAccount): Promise<void> {
+async function deleteManagedWebhook(
+  runtime: CommerceRuntime,
+  account: StoredStripeAccount,
+): Promise<void> {
   if (account.webhook_endpoint_id === null) return;
   try {
     const stripe = await openStripe(runtime, account);
@@ -62,6 +76,22 @@ async function deleteManagedWebhook(runtime: CommerceRuntime, account: StoredStr
   } catch {
     // The endpoint stays in the Stripe dashboard, where it can be removed by hand.
   }
+}
+
+/** Site domains of the workspace and the hosted checkout origin, registered for wallets once the keys are saved. */
+async function registerWalletDomains(c: Ctx, account: StoredStripeAccount): Promise<void> {
+  const sites = await c.env.DB.prepare(
+    `SELECT hostname FROM domains WHERE tenant_id = ? AND kind = 'app' AND status = 'verified'`,
+  )
+    .bind(getTenant(c).tenant.id)
+    .all<{ hostname: string }>();
+  const hosts = [c.env.EDGE_ORIGIN ?? null, ...sites.results.map((r) => r.hostname)]
+    .map(walletHost)
+    .filter((h): h is string => h !== null);
+  const stripe = await openStripe(await commerceRuntime(c.env), account);
+  await registerPaymentDomains(stripe, [...new Set(hosts)], (host, ok) =>
+    callCrm(c, 'stripe.paymentDomainResult', { publishableKey: account.publishable_key, host, ok }),
+  );
 }
 
 /** Stripe account routes, relative to `/api/v2/t/{slug}`. Secrets never leave the worker in clear. */
@@ -83,7 +113,8 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
         method: 'put',
         path: '/commerce/stripe',
         tags,
-        summary: 'Connect Stripe with the workspace API keys (the secret key is checked against Stripe)',
+        summary:
+          'Connect Stripe with the workspace API keys (the secret key is checked against Stripe)',
         request: { body: jsonBody(updateStripeSettingsSchema) },
         responses: { 200: json(stripeSettingsSchema, 'Stripe settings') },
       },
@@ -98,9 +129,11 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
       if (body.secret_key !== undefined) {
         const secretMode = body.secret_key.includes('_live_') ? 'live' : 'test';
         if (secretMode !== publicMode) {
-          throw new CrmError('validation_failed', 'publishable and secret keys belong to different modes (test/live)', [
-            { path: 'secret_key', message: 'test/live mismatch' },
-          ]);
+          throw new CrmError(
+            'validation_failed',
+            'publishable and secret keys belong to different modes (test/live)',
+            [{ path: 'secret_key', message: 'test/live mismatch' }],
+          );
         }
         try {
           const client = new StripeClient(body.secret_key, runtime.fetch);
@@ -122,7 +155,8 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
               endpointId: null,
             };
       let webhookSetupError: string | null = null;
-      const storedKeyFits = current !== null && current.publishable_key.includes('_live_') === (publicMode === 'live');
+      const storedKeyFits =
+        current !== null && current.publishable_key.includes('_live_') === (publicMode === 'live');
       const client =
         body.secret_key !== undefined
           ? new StripeClient(body.secret_key, runtime.fetch)
@@ -141,7 +175,11 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
               hint: secretHint(created.secret),
               endpointId: created.id,
             };
-            if (current !== null && current.webhook_endpoint_id !== null && !created.replaced.includes(current.webhook_endpoint_id)) {
+            if (
+              current !== null &&
+              current.webhook_endpoint_id !== null &&
+              !created.replaced.includes(current.webhook_endpoint_id)
+            ) {
               await deleteManagedWebhook(runtime, current);
             }
           } catch (error) {
@@ -156,9 +194,19 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
         secret:
           body.secret_key === undefined
             ? null
-            : { enc: await box.encrypt(body.secret_key, stripeAccountAd(tenantId, 'secret')), hint: secretHint(body.secret_key) },
+            : {
+                enc: await box.encrypt(body.secret_key, stripeAccountAd(tenantId, 'secret')),
+                hint: secretHint(body.secret_key),
+              },
         webhook,
       });
+      const saved = await callCrm(c, 'stripe.account', {});
+      if (saved !== null) {
+        // Best effort, like the webhook: a domain Stripe refuses must not block the keys.
+        await registerWalletDomains(c, saved).catch((error: unknown) =>
+          console.error('[checkout] wallet domains not registered', error),
+        );
+      }
       await audit(c, 'commerce.stripe_connected', {
         details: {
           mode: publicMode,
@@ -174,7 +222,8 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
       method: 'patch',
       path: '/commerce/stripe/managed-payments',
       tags,
-      summary: 'Turn Stripe Managed Payments on or off (it must also be enabled in the Stripe account)',
+      summary:
+        'Turn Stripe Managed Payments on or off (it must also be enabled in the Stripe account)',
       request: { body: jsonBody(updateManagedPaymentsSchema) },
       responses: { 200: json(stripeSettingsSchema, 'Stripe settings') },
     }),
@@ -190,13 +239,19 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
       if (settings.managed_payments && account !== null && account.webhook_endpoint_id !== null) {
         try {
           const stripe = await openStripe(await commerceRuntime(c.env), account);
-          await stripe.client.updateWebhookEndpoint(account.webhook_endpoint_id, STRIPE_WEBHOOK_EVENTS);
+          await stripe.client.updateWebhookEndpoint(
+            account.webhook_endpoint_id,
+            STRIPE_WEBHOOK_EVENTS,
+          );
         } catch (error) {
           webhookSetupError = error instanceof Error ? error.message : 'webhook update failed';
         }
       }
       await audit(c, 'commerce.stripe_managed_payments', {
-        details: { managed_payments: settings.managed_payments, default_tax_code: settings.default_tax_code },
+        details: {
+          managed_payments: settings.managed_payments,
+          default_tax_code: settings.default_tax_code,
+        },
       });
       return c.json({ ...withUrl(c, settings), webhook_setup_error: webhookSetupError }, 200);
     },
@@ -217,7 +272,10 @@ export function registerStripeRoutes(app: OpenAPIHono<AppEnv>): void {
         await stripe.client.verify();
         return c.json({ ok: true, message: null }, 200);
       } catch (error) {
-        return c.json({ ok: false, message: error instanceof Error ? error.message : 'Stripe check failed' }, 200);
+        return c.json(
+          { ok: false, message: error instanceof Error ? error.message : 'Stripe check failed' },
+          200,
+        );
       }
     },
   );

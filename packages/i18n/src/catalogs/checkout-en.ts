@@ -14,7 +14,8 @@ export const checkoutEn = {
 
   'checkout.list.new': 'New checkout',
   'checkout.list.create': 'Create checkout',
-  'checkout.list.empty': 'No checkouts yet. Create one to sell products and plans from your landing pages.',
+  'checkout.list.empty':
+    'No checkouts yet. Create one to sell products and plans from your landing pages.',
   'checkout.list.nameHint': 'Internal name, shown on the order source.',
   'checkout.list.duplicated': 'Checkout duplicated',
   'checkout.list.content': '{items} items · {bumps} bumps · {offers} offers',
@@ -46,7 +47,8 @@ export const checkoutEn = {
   'checkout.items.selection.all': 'Buy everything',
   'checkout.items.selection.one': 'Choose one',
   'checkout.items.selection.all.hint': 'Every item is bought together.',
-  'checkout.items.selection.one.hint': 'The buyer picks one item (e.g. a monthly or a yearly plan).',
+  'checkout.items.selection.one.hint':
+    'The buyer picks one item (e.g. a monthly or a yearly plan).',
   'checkout.items.allowQuantity': 'Let the buyer change quantities',
   'checkout.items.empty': 'Add at least one product or plan.',
   'checkout.items.kind.product': 'Product',
@@ -57,10 +59,12 @@ export const checkoutEn = {
   'checkout.items.checked': 'Checked when the page opens',
 
   'checkout.discounts.title': 'Automatic discounts',
-  'checkout.discounts.intro': 'Discounts applied by themselves when the cart holds the listed products with at least their quantity (e.g. A + B: 10% off; 2 × A + 1 × B: 15% off). When several rules match, the largest discount wins.',
+  'checkout.discounts.intro':
+    'Discounts applied by themselves when the cart holds the listed products with at least their quantity (e.g. A + B: 10% off; 2 × A + 1 × B: 15% off). When several rules match, the largest discount wins.',
   'checkout.discounts.add': 'Add discount',
   'checkout.discounts.defaultLabel': 'Bundle discount',
-  'checkout.discounts.stackPromo': 'Promo codes add to the automatic discounts (off: a valid promo code replaces them)',
+  'checkout.discounts.stackPromo':
+    'Promo codes add to the automatic discounts (off: a valid promo code replaces them)',
   'checkout.discounts.label': 'Label',
   'checkout.discounts.labelHint': 'Shown in the order summary.',
   'checkout.discounts.kind': 'Discount',
@@ -72,13 +76,15 @@ export const checkoutEn = {
   'checkout.discounts.scope.matching': 'The listed products',
   'checkout.discounts.scope.order': 'The whole order',
   'checkout.discounts.scope.matching.hint': 'Only the products of the conditions are discounted.',
-  'checkout.discounts.scope.order.hint': 'Every product of the order is discounted, bumps included (subscription plans never are).',
+  'checkout.discounts.scope.order.hint':
+    'Every product of the order is discounted, bumps included (subscription plans never are).',
   'checkout.discounts.conditions': 'When the cart holds',
   'checkout.discounts.minQuantity': 'Min. quantity',
   'checkout.discounts.addCondition': 'Add product',
 
   'checkout.bumps.add': 'Add bump',
-  'checkout.bumps.intro': 'Order bumps are extra products the buyer adds with one checkbox, right on the checkout.',
+  'checkout.bumps.intro':
+    'Order bumps are extra products the buyer adds with one checkbox, right on the checkout.',
   'checkout.bumps.defaultTitle': 'Yes, add this to my order',
   'checkout.bumps.title': 'Headline',
   'checkout.bumps.skin': 'Style',
@@ -127,7 +133,8 @@ export const checkoutEn = {
   'checkout.contact.mode.hidden': 'Hidden',
   'checkout.contact.defaultCountry': 'Default country',
   'checkout.contact.autocomplete': 'Address autocomplete',
-  'checkout.contact.emailAlways': 'The email is always required: it identifies the contact in the CRM.',
+  'checkout.contact.emailAlways':
+    'The email is always required: it identifies the contact in the CRM.',
   'checkout.fields.custom': 'Custom fields',
   'checkout.fields.prefillHint':
     'Each field is prefilled from the page URL query parameter with the same name (e.g. ?email=…). UTM parameters are always saved on the order.',
@@ -146,7 +153,44 @@ export const checkoutEn = {
   'checkout.payments.bankHint':
     'The order is placed "Awaiting payment" and the buyer gets these coordinates on the page and by email. Mark it paid by recording the payment on the order. Upsells accepted after the purchase are added to the same transfer.',
   'checkout.payments.noAccounts': 'No bank account yet: add one in E-commerce settings.',
-  'checkout.payments.plansCardOnly': 'Subscriptions renew on a saved card: with a plan in the cart only the card is offered, and plan upsells are skipped for bank transfer buyers.',
+  'checkout.payments.plansCardOnly':
+    'Subscriptions renew on a saved card: with a plan in the cart only the card is offered, and plan upsells are skipped for bank transfer buyers.',
+  'checkout.payments.methods': 'Stripe payment methods',
+  'checkout.payments.methods.automatic': 'Automatic',
+  'checkout.payments.methods.custom': 'Only the selected ones',
+  'checkout.payments.methods.automaticHint':
+    'Every method enabled in the Stripe dashboard that fits the currency and the amount.',
+  'checkout.payments.methods.customHint':
+    'Card is always offered. The others show up only if they are also enabled in the Stripe dashboard and fit the currency and the amount.',
+  'checkout.payments.method.card': 'Card',
+  'checkout.payments.method.link': 'Link (fast checkout)',
+  'checkout.payments.method.paypal': 'PayPal',
+  'checkout.payments.method.klarna': 'Klarna',
+  'checkout.payments.method.bancontact': 'Bancontact',
+  'checkout.payments.method.ideal': 'iDEAL',
+  'checkout.payments.method.eps': 'EPS',
+  'checkout.payments.method.sepa_debit': 'SEPA Direct Debit',
+  'checkout.payments.method.revolut_pay': 'Revolut Pay',
+  'checkout.payments.method.amazon_pay': 'Amazon Pay',
+  'checkout.payments.methodsDropped':
+    'With a subscription or post-purchase offers the payment method is saved for later charges: {methods} cannot be saved and is not offered.',
+  'checkout.payments.wallets': 'Apple Pay and Google Pay',
+  'checkout.payments.walletsHint':
+    'Shown on devices with a card in the wallet, on domains registered in Stripe (done automatically the first time the checkout loads on a domain).',
+  'checkout.payments.managedMethods':
+    'Stripe Managed Payments is on: card payments go through Stripe Checkout, which picks the methods itself.',
+  'checkout.abandoned.title': 'Abandoned cart',
+  'checkout.abandoned.enabled': 'Save the email as soon as the buyer types it',
+  'checkout.abandoned.delay': 'Abandoned after',
+  'checkout.abandoned.delayHint':
+    'Without a purchase in this time the contact is created or updated and the trigger fires.',
+  'checkout.abandoned.minutes': '{n} minutes',
+  'checkout.abandoned.hours': '{n} h',
+  'checkout.abandoned.days': '{n} d',
+  'checkout.abandoned.hint':
+    'Start a follow-up with the automation trigger "Cart abandoned". In the email, link back to the checkout page adding ?email={{ contact.email }}: the email is filled in for the buyer.',
+  'checkout.abandoned.privacy':
+    'The email is collected before the purchase: mention it in your privacy policy. Saved carts are deleted after 30 days.',
   'checkout.settings.heading': 'Heading',
   'checkout.settings.button_label': 'Pay button',
   'checkout.settings.success_message': 'Success message',

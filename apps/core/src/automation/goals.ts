@@ -67,6 +67,8 @@ export function triggerMatches(trigger: GoalTrigger, event: EngineEvent): boolea
       const total = num(p, 'amountMinor') ?? num(p, 'totalMinor') ?? 0;
       return total >= (trigger.min_total_minor ?? 0);
     }
+    case 'checkout_abandoned':
+      return anyOf(trigger.checkout_ids, str(p, 'checkoutId'));
     case 'email_opened':
       return emailSourceMatches(trigger.email, p);
     case 'email_clicked':

@@ -44,6 +44,7 @@ const GOAL_ICONS: Record<GoalTriggerType, LucideIcon> = {
   form_submitted: FileInput,
   product_purchased: ShoppingBag,
   order_paid: BadgeCheck,
+  checkout_abandoned: ShoppingCart,
   email_opened: Eye,
   email_clicked: MousePointerClick,
   lead_score: Gauge,

@@ -4,13 +4,21 @@ import {
   SESSION_PARAM,
   type CheckoutGatewayOps,
   type SelectionInput,
+  type LeadPayloadInput,
   type SessionPayloadInput,
 } from '@amable/checkout';
 import { CHECKOUT_WIDGET_BUNDLE, CHECKOUT_WIDGET_BUNDLE_HASH } from '@amable/checkout/bundle';
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env';
 import { callCore, clientInfo, GatewayCallError, tenantRef } from '../gateway';
-import { CROSS_ORIGIN_BUNDLE, escapeHtml, jsonResponders, OPEN_CORS, readBoundedText, serveBundle } from '../public/http';
+import {
+  CROSS_ORIGIN_BUNDLE,
+  escapeHtml,
+  jsonResponders,
+  OPEN_CORS,
+  readBoundedText,
+  serveBundle,
+} from '../public/http';
 
 /**
  * Checkouts on the edge (customer zone or the edge origin):
@@ -45,9 +53,14 @@ export const CHECKOUT_CSP = [
   "form-action 'self'",
   "base-uri 'none'",
 ].join('; ');
-export const CHECKOUT_PERMISSIONS = 'camera=(), microphone=(), geolocation=(), usb=(), payment=(self "https://js.stripe.com"), browsing-topics=()';
+export const CHECKOUT_PERMISSIONS =
+  'camera=(), microphone=(), geolocation=(), usb=(), payment=(self "https://js.stripe.com"), browsing-topics=()';
 
-const { errorJson, okJson, fromGatewayError } = jsonResponders('checkout', 'checkout service unavailable', OPEN_CORS);
+const { errorJson, okJson, fromGatewayError } = jsonResponders(
+  'checkout',
+  'checkout service unavailable',
+  OPEN_CORS,
+);
 
 function locale(c: Ctx, configured = 'auto'): 'en' | 'it' {
   const header = c.req.header('accept-language') ?? '';
@@ -94,13 +107,19 @@ function htmlHeaders(cache: string): Record<string, string> {
 }
 
 function message(c: Ctx, status: number, text: string): Response {
-  return c.body(page(locale(c), text, `<p class="msg">${escapeHtml(text)}</p>`), status as 200, htmlHeaders('no-store'));
+  return c.body(
+    page(locale(c), text, `<p class="msg">${escapeHtml(text)}</p>`),
+    status as 200,
+    htmlHeaders('no-store'),
+  );
 }
 
 function checkoutRef(c: Ctx): { slug: string; checkoutId: string } | null {
   const slug = c.req.param('slug') ?? '';
   const checkoutId = c.req.param('checkoutId') ?? '';
-  return SLUG_RE.test(slug) && ID_RE.test(checkoutId) && !RESERVED_IDS.has(checkoutId) ? { slug, checkoutId } : null;
+  return SLUG_RE.test(slug) && ID_RE.test(checkoutId) && !RESERVED_IDS.has(checkoutId)
+    ? { slug, checkoutId }
+    : null;
 }
 
 function slugOf(c: Ctx): string | null {
@@ -118,7 +137,8 @@ async function readJson(
     return { ok: false, response: errorJson(415, 'unsupported_media_type', 'send JSON') };
   }
   const raw = await readBoundedText(c, MAX_BODY_BYTES);
-  if (raw === null) return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
+  if (raw === null)
+    return { ok: false, response: errorJson(413, 'payload_too_large', 'request too large') };
   try {
     const value = raw === '' ? {} : (JSON.parse(raw) as unknown);
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -150,15 +170,24 @@ checkoutEdgeRoutes.post('/c/:slug/stripe/webhook', async (c) => {
   const payload = await readBoundedText(c, MAX_WEBHOOK_BYTES);
   if (payload === null) return c.json({ error: 'payload_too_large' }, 413);
   try {
-    await callCore<CheckoutGatewayOps, 'checkout.stripeWebhook'>(c.env, 'checkout.stripeWebhook', tenantRef(c, slug), clientInfo(c), {
-      payload,
-      signature: c.req.header('stripe-signature') ?? null,
-    });
+    await callCore<CheckoutGatewayOps, 'checkout.stripeWebhook'>(
+      c.env,
+      'checkout.stripeWebhook',
+      tenantRef(c, slug),
+      clientInfo(c),
+      {
+        payload,
+        signature: c.req.header('stripe-signature') ?? null,
+      },
+    );
     return c.json({ received: true });
   } catch (error) {
     if (error instanceof GatewayCallError) {
       // 4xx tells Stripe not to insist on a bad signature; 5xx gets retried.
-      return c.json({ error: error.body.code }, error.body.status >= 500 ? 503 : (error.body.status as 400));
+      return c.json(
+        { error: error.body.code },
+        error.body.status >= 500 ? 503 : (error.body.status as 400),
+      );
     }
     console.error('[checkout] webhook failed', error);
     return c.json({ error: 'unavailable' }, 503);
@@ -170,13 +199,17 @@ checkoutEdgeRoutes.post('/c/:slug/stripe/webhook', async (c) => {
 const SESSION_STEPS = ['complete', 'offer', 'accept', 'confirm', 'decline', 'flush'] as const;
 
 for (const step of SESSION_STEPS) {
-  checkoutEdgeRoutes.options(`/c/:slug/session/${step}`, () => new Response(null, { status: 204, headers: OPEN_CORS }));
+  checkoutEdgeRoutes.options(
+    `/c/:slug/session/${step}`,
+    () => new Response(null, { status: 204, headers: OPEN_CORS }),
+  );
 }
 
 checkoutEdgeRoutes.post('/c/:slug/session/:step', async (c) => {
   const slug = slugOf(c);
   const step = c.req.param('step') as (typeof SESSION_STEPS)[number];
-  if (slug === null || !SESSION_STEPS.includes(step)) return errorJson(404, 'not_found', 'not found');
+  if (slug === null || !SESSION_STEPS.includes(step))
+    return errorJson(404, 'not_found', 'not found');
   const body = await readJson(c, step === 'flush');
   if (!body.ok) return body.response;
   const token = text(body.value['token'], 128);
@@ -188,29 +221,81 @@ checkoutEdgeRoutes.post('/c/:slug/session/:step', async (c) => {
   try {
     switch (step) {
       case 'complete':
-        return okJson((await callCore<CheckoutGatewayOps, 'checkout.complete'>(c.env, 'checkout.complete', tenant, client, { token })).value);
+        return okJson(
+          (
+            await callCore<CheckoutGatewayOps, 'checkout.complete'>(
+              c.env,
+              'checkout.complete',
+              tenant,
+              client,
+              { token },
+            )
+          ).value,
+        );
       case 'offer':
-        return okJson((await callCore<CheckoutGatewayOps, 'checkout.offer'>(c.env, 'checkout.offer', tenant, client, { token })).value);
+        return okJson(
+          (
+            await callCore<CheckoutGatewayOps, 'checkout.offer'>(
+              c.env,
+              'checkout.offer',
+              tenant,
+              client,
+              { token },
+            )
+          ).value,
+        );
       case 'accept':
         return okJson(
           (
-            await callCore<CheckoutGatewayOps, 'checkout.offerAccept'>(c.env, 'checkout.offerAccept', tenant, client, {
-              token,
-              offerKey,
-              returnUrl,
-            })
+            await callCore<CheckoutGatewayOps, 'checkout.offerAccept'>(
+              c.env,
+              'checkout.offerAccept',
+              tenant,
+              client,
+              {
+                token,
+                offerKey,
+                returnUrl,
+              },
+            )
           ).value,
         );
       case 'confirm':
         return okJson(
-          (await callCore<CheckoutGatewayOps, 'checkout.offerConfirm'>(c.env, 'checkout.offerConfirm', tenant, client, { token, offerKey })).value,
+          (
+            await callCore<CheckoutGatewayOps, 'checkout.offerConfirm'>(
+              c.env,
+              'checkout.offerConfirm',
+              tenant,
+              client,
+              { token, offerKey },
+            )
+          ).value,
         );
       case 'decline':
         return okJson(
-          (await callCore<CheckoutGatewayOps, 'checkout.offerDecline'>(c.env, 'checkout.offerDecline', tenant, client, { token, offerKey })).value,
+          (
+            await callCore<CheckoutGatewayOps, 'checkout.offerDecline'>(
+              c.env,
+              'checkout.offerDecline',
+              tenant,
+              client,
+              { token, offerKey },
+            )
+          ).value,
         );
       case 'flush':
-        return okJson((await callCore<CheckoutGatewayOps, 'checkout.flushSummary'>(c.env, 'checkout.flushSummary', tenant, client, { token })).value);
+        return okJson(
+          (
+            await callCore<CheckoutGatewayOps, 'checkout.flushSummary'>(
+              c.env,
+              'checkout.flushSummary',
+              tenant,
+              client,
+              { token },
+            )
+          ).value,
+        );
     }
   } catch (error) {
     return fromGatewayError(error);
@@ -229,7 +314,13 @@ checkoutEdgeRoutes.get('/c/:slug/offer', (c) => {
 
 // ---------------------------------------------------------------- checkouts
 
-for (const path of ['/c/:slug/:checkoutId/config', '/c/:slug/:checkoutId/quote', '/c/:slug/:checkoutId/session', '/c/:slug/:checkoutId/address']) {
+for (const path of [
+  '/c/:slug/:checkoutId/config',
+  '/c/:slug/:checkoutId/quote',
+  '/c/:slug/:checkoutId/session',
+  '/c/:slug/:checkoutId/lead',
+  '/c/:slug/:checkoutId/address',
+]) {
   checkoutEdgeRoutes.options(path, () => new Response(null, { status: 204, headers: OPEN_CORS }));
 }
 
@@ -237,9 +328,15 @@ checkoutEdgeRoutes.get('/c/:slug/:checkoutId/config', async (c) => {
   const ref = checkoutRef(c);
   if (ref === null) return errorJson(404, 'not_found', 'checkout not found');
   try {
-    const { value } = await callCore<CheckoutGatewayOps, 'checkout.config'>(c.env, 'checkout.config', tenantRef(c, ref.slug), clientInfo(c), {
-      checkoutId: ref.checkoutId,
-    });
+    const { value } = await callCore<CheckoutGatewayOps, 'checkout.config'>(
+      c.env,
+      'checkout.config',
+      tenantRef(c, ref.slug),
+      clientInfo(c),
+      {
+        checkoutId: ref.checkoutId,
+      },
+    );
     return okJson(value, 'public, max-age=30');
   } catch (error) {
     return fromGatewayError(error);
@@ -252,11 +349,17 @@ checkoutEdgeRoutes.post('/c/:slug/:checkoutId/quote', async (c) => {
   const body = await readJson(c);
   if (!body.ok) return body.response;
   try {
-    const { value } = await callCore<CheckoutGatewayOps, 'checkout.quote'>(c.env, 'checkout.quote', tenantRef(c, ref.slug), clientInfo(c), {
-      checkoutId: ref.checkoutId,
-      selection: (body.value['selection'] ?? {}) as SelectionInput,
-      promoCode: text(body.value['promo_code'], 64),
-    });
+    const { value } = await callCore<CheckoutGatewayOps, 'checkout.quote'>(
+      c.env,
+      'checkout.quote',
+      tenantRef(c, ref.slug),
+      clientInfo(c),
+      {
+        checkoutId: ref.checkoutId,
+        selection: (body.value['selection'] ?? {}) as SelectionInput,
+        promoCode: text(body.value['promo_code'], 64),
+      },
+    );
     return okJson(value);
   } catch (error) {
     return fromGatewayError(error);
@@ -269,10 +372,38 @@ checkoutEdgeRoutes.post('/c/:slug/:checkoutId/session', async (c) => {
   const body = await readJson(c);
   if (!body.ok) return body.response;
   try {
-    const { value } = await callCore<CheckoutGatewayOps, 'checkout.session'>(c.env, 'checkout.session', tenantRef(c, ref.slug), clientInfo(c), {
-      checkoutId: ref.checkoutId,
-      payload: body.value as SessionPayloadInput,
-    });
+    const { value } = await callCore<CheckoutGatewayOps, 'checkout.session'>(
+      c.env,
+      'checkout.session',
+      tenantRef(c, ref.slug),
+      clientInfo(c),
+      {
+        checkoutId: ref.checkoutId,
+        payload: body.value as SessionPayloadInput,
+      },
+    );
+    return okJson(value);
+  } catch (error) {
+    return fromGatewayError(error);
+  }
+});
+
+checkoutEdgeRoutes.post('/c/:slug/:checkoutId/lead', async (c) => {
+  const ref = checkoutRef(c);
+  if (ref === null) return errorJson(404, 'not_found', 'checkout not found');
+  const body = await readJson(c);
+  if (!body.ok) return body.response;
+  try {
+    const { value } = await callCore<CheckoutGatewayOps, 'checkout.lead'>(
+      c.env,
+      'checkout.lead',
+      tenantRef(c, ref.slug),
+      clientInfo(c),
+      {
+        checkoutId: ref.checkoutId,
+        payload: body.value as LeadPayloadInput,
+      },
+    );
     return okJson(value);
   } catch (error) {
     return fromGatewayError(error);
@@ -285,12 +416,18 @@ checkoutEdgeRoutes.post('/c/:slug/:checkoutId/address', async (c) => {
   const body = await readJson(c);
   if (!body.ok) return body.response;
   try {
-    const { value } = await callCore<CheckoutGatewayOps, 'checkout.address'>(c.env, 'checkout.address', tenantRef(c, ref.slug), clientInfo(c), {
-      checkoutId: ref.checkoutId,
-      q: text(body.value['q'], 200),
-      country: text(body.value['country'], 2),
-      lang: text(body.value['lang'], 10),
-    });
+    const { value } = await callCore<CheckoutGatewayOps, 'checkout.address'>(
+      c.env,
+      'checkout.address',
+      tenantRef(c, ref.slug),
+      clientInfo(c),
+      {
+        checkoutId: ref.checkoutId,
+        q: text(body.value['q'], 200),
+        country: text(body.value['country'], 2),
+        lang: text(body.value['lang'], 10),
+      },
+    );
     return okJson(value);
   } catch (error) {
     return fromGatewayError(error);
@@ -302,15 +439,23 @@ checkoutEdgeRoutes.get('/c/:slug/:checkoutId', async (c) => {
   const ref = checkoutRef(c);
   if (ref === null) return message(c, 404, strings.notFound);
   try {
-    const { value } = await callCore<CheckoutGatewayOps, 'checkout.hosted'>(c.env, 'checkout.hosted', tenantRef(c, ref.slug), clientInfo(c), {
-      checkoutId: ref.checkoutId,
-    });
+    const { value } = await callCore<CheckoutGatewayOps, 'checkout.hosted'>(
+      c.env,
+      'checkout.hosted',
+      tenantRef(c, ref.slug),
+      clientInfo(c),
+      {
+        checkoutId: ref.checkoutId,
+      },
+    );
     const lang = locale(c, value.config.settings.locale);
-    const title = value.config.settings.heading !== '' ? value.config.settings.heading : value.config.name;
+    const title =
+      value.config.settings.heading !== '' ? value.config.settings.heading : value.config.name;
     const body = `<div data-amable-checkout="${escapeHtml(value.config.id)}" data-amable-tenant="${escapeHtml(value.config.tenant)}"></div>\n${scriptTag}`;
     return c.body(page(lang, `${title} · ${value.tenantName}`, body), 200, htmlHeaders('no-store'));
   } catch (error) {
-    if (error instanceof GatewayCallError && error.body.status === 404) return message(c, 404, strings.notFound);
+    if (error instanceof GatewayCallError && error.body.status === 404)
+      return message(c, 404, strings.notFound);
     console.error('[checkout] hosted page failed', error);
     return message(c, 502, strings.loadError);
   }

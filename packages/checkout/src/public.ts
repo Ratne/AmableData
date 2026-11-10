@@ -1,6 +1,7 @@
 import { submissionMetaSchema, type FormField } from '@amable/forms';
 import { z } from 'zod';
 import { isCountryCode } from './countries';
+import type { StripeMethodChoice } from './payment-methods';
 import type {
   BumpSkin,
   CheckoutContact,
@@ -55,7 +56,10 @@ export interface PublicCheckoutConfig {
   readonly bumps: readonly PublicBump[];
   readonly fields: readonly FormField[];
   readonly contact: CheckoutContact;
-  readonly settings: Omit<CheckoutSettings, 'allowed_domains' | 'first_offer' | 'offer_window_minutes'>;
+  readonly settings: Omit<
+    CheckoutSettings,
+    'allowed_domains' | 'first_offer' | 'offer_window_minutes'
+  >;
   readonly style: CheckoutStyle;
   /** Post-purchase offers follow: the card is saved for one-click charges. */
   readonly offers_enabled: boolean;
@@ -71,6 +75,8 @@ export interface PublicCheckoutConfig {
     readonly card: boolean;
     readonly bank_transfer: boolean;
     readonly card_flow: 'element' | 'redirect';
+    /** Methods of the in-page payment (`card_flow: element`). */
+    readonly stripe_methods: StripeMethodChoice;
   };
 }
 
@@ -128,7 +134,11 @@ export interface Quote {
     readonly discounted_periods: number | null;
     readonly discounted_amount_minor: number | null;
   } | null;
-  readonly promo: { readonly code: string; readonly applied: boolean; readonly message: string | null } | null;
+  readonly promo: {
+    readonly code: string;
+    readonly applied: boolean;
+    readonly message: string | null;
+  } | null;
   /** Automatic discounts applied (part of `discount_minor`, the rest is the promo code). */
   readonly discounts: ReadonlyArray<{ readonly label: string; readonly amount_minor: number }>;
 }
@@ -169,7 +179,13 @@ export const sessionPayloadSchema = z.object({
   values: z
     .record(
       z.string().max(64),
-      z.union([z.string().max(10_000), z.number(), z.boolean(), z.array(z.string().max(200)).max(200), z.null()]),
+      z.union([
+        z.string().max(10_000),
+        z.number(),
+        z.boolean(),
+        z.array(z.string().max(200)).max(200),
+        z.null(),
+      ]),
     )
     .default({}),
   tracking: z.record(z.string().max(64), z.string().max(500)).default({}),
@@ -185,6 +201,18 @@ export const sessionPayloadSchema = z.object({
 });
 export type SessionPayload = z.infer<typeof sessionPayloadSchema>;
 export type SessionPayloadInput = z.input<typeof sessionPayloadSchema>;
+
+/** Buyer details sent while typing, before paying (abandoned cart, `settings.abandoned_cart`). */
+export const leadPayloadSchema = z.object({
+  selection: selectionSchema.default({ items: [], quantities: {}, bumps: [] }),
+  promo_code: z.string().trim().max(64).default(''),
+  buyer: buyerSchema.pick({ email: true, given_name: true, family_name: true, phone: true }),
+  tracking: z.record(z.string().max(64), z.string().max(500)).default({}),
+  meta: submissionMetaSchema.default(() => submissionMetaSchema.parse({})),
+  hp: z.string().max(500).default(''),
+});
+export type LeadPayload = z.infer<typeof leadPayloadSchema>;
+export type LeadPayloadInput = z.input<typeof leadPayloadSchema>;
 
 export interface SessionResult {
   readonly session_token: string;

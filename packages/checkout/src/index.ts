@@ -9,5 +9,6 @@ export * from './schema';
 export * from './public';
 export * from './strings';
 export * from './countries';
+export * from './payment-methods';
 export type { CheckoutGatewayOps } from './gateway';
 export { CHECKOUT_GATEWAY_OPS, OFFER_RETURN_PARAM, SESSION_PARAM } from './gateway';

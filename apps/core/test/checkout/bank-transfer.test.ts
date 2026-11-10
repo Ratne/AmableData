@@ -25,14 +25,22 @@ interface FakeStripe {
   sessions: Map<string, StripeCheckoutSession>;
 }
 
-function fakeStripe(): { stripe: FakeStripe; fetch: (url: string, init?: RequestInit) => Promise<Response> } {
+function fakeStripe(): {
+  stripe: FakeStripe;
+  fetch: (url: string, init?: RequestInit) => Promise<Response>;
+} {
   const stripe: FakeStripe = { requests: [], sessions: new Map() };
   let seq = 0;
   const fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
     const path = new URL(url).pathname;
     const method = init.method ?? 'GET';
     const body = new URLSearchParams(typeof init.body === 'string' ? init.body : '');
-    stripe.requests.push({ method, path, body, version: new Headers(init.headers).get('stripe-version') });
+    stripe.requests.push({
+      method,
+      path,
+      body,
+      version: new Headers(init.headers).get('stripe-version'),
+    });
     const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
     if (method === 'POST' && path === '/v1/checkout/sessions') {
       seq += 1;
@@ -65,9 +73,14 @@ function fakeStripe(): { stripe: FakeStripe; fetch: (url: string, init?: Request
       if (one[2] !== undefined) stripe.sessions.set(current.id, { ...current, status: 'expired' });
       return json(stripe.sessions.get(current.id));
     }
-    return new Response(JSON.stringify({ error: { type: 'invalid_request_error', message: `unexpected ${method} ${path}` } }), {
-      status: 400,
-    });
+    return new Response(
+      JSON.stringify({
+        error: { type: 'invalid_request_error', message: `unexpected ${method} ${path}` },
+      }),
+      {
+        status: 400,
+      },
+    );
   };
   return { stripe, fetch };
 }
@@ -75,7 +88,12 @@ function fakeStripe(): { stripe: FakeStripe; fetch: (url: string, init?: Request
 function pay(stripe: FakeStripe, id: string): StripeCheckoutSession {
   const current = stripe.sessions.get(id);
   if (current === undefined) throw new Error(`no checkout session ${id}`);
-  const paid: StripeCheckoutSession = { ...current, status: 'complete', payment_status: 'paid', payment_intent: `pi_${id}` };
+  const paid: StripeCheckoutSession = {
+    ...current,
+    status: 'complete',
+    payment_status: 'paid',
+    payment_intent: `pi_${id}`,
+  };
   stripe.sessions.set(id, paid);
   return paid;
 }
@@ -105,11 +123,19 @@ function gateway(w: CommerceWorld, options: { stripe: 'none' | 'managed' }) {
     env: { ENVIRONMENT: 'dev' } as unknown as Env,
     executionCtx: { waitUntil: () => undefined } as unknown as ExecutionContext,
     tenant: { id: 'tenant_test', slug: 'demo', name: 'Demo' },
-    client: { ip: null, userAgent: null, country: null, visitorId: 'v_bank', referer: null, acceptLanguage: 'en' },
+    client: {
+      ip: null,
+      userAgent: null,
+      country: null,
+      visitorId: 'v_bank',
+      referer: null,
+      acceptLanguage: 'en',
+    },
     tenantDb: () => {
       throw new Error('not used');
     },
-    crm: async (op: string, input: unknown) => (w.t.op as (op: string, input: unknown) => unknown)(op, input),
+    crm: async (op: string, input: unknown) =>
+      (w.t.op as (op: string, input: unknown) => unknown)(op, input),
   } as unknown as GatewayContext;
   const call = (op: string, input: unknown): Promise<unknown> => {
     const handler = checkoutGatewayHandlers[op];
@@ -122,7 +148,10 @@ function gateway(w: CommerceWorld, options: { stripe: 'none' | 'managed' }) {
 async function webhook(call: (op: string, input: unknown) => Promise<unknown>, event: unknown) {
   const payload = JSON.stringify(event);
   const t = Math.floor(Date.now() / 1000);
-  return call('checkout.stripeWebhook', { payload, signature: `t=${String(t)},v1=${await signStripePayload(WEBHOOK_SECRET, t, payload)}` });
+  return call('checkout.stripeWebhook', {
+    payload,
+    signature: `t=${String(t)},v1=${await signStripePayload(WEBHOOK_SECRET, t, payload)}`,
+  });
 }
 
 function bankAccount(w: CommerceWorld): string {
@@ -171,56 +200,93 @@ describe('bank transfer checkout', () => {
       },
     });
     const config = (await call('checkout.config', { checkoutId: c.id })) as { payments: unknown };
-    expect(config.payments).toEqual({ card: false, bank_transfer: true, card_flow: 'element' });
+    expect(config.payments).toMatchObject({
+      card: false,
+      bank_transfer: true,
+      card_flow: 'element',
+    });
 
     await expect(
-      call('checkout.session', { checkoutId: c.id, payload: { buyer: BUYER, payment_method: 'card' } }),
+      call('checkout.session', {
+        checkoutId: c.id,
+        payload: { buyer: BUYER, payment_method: 'card' },
+      }),
     ).rejects.toMatchObject({ shape: { code: 'validation_failed' } });
 
     const session = (await call('checkout.session', {
       checkoutId: c.id,
       payload: { buyer: BUYER, payment_method: 'bank_transfer' },
     })) as { session_token: string; intent: unknown };
-    expect(session.intent).toEqual({ kind: 'bank_transfer', client_secret: null, redirect_url: null });
+    expect(session.intent).toEqual({
+      kind: 'bank_transfer',
+      client_secret: null,
+      redirect_url: null,
+    });
     expect(stripe.requests).toHaveLength(0);
 
     // The subscription offer is skipped (no saved card): the mug comes first.
-    const done = (await call('checkout.complete', { token: session.session_token })) as Record<string, unknown>;
+    const done = (await call('checkout.complete', { token: session.session_token })) as Record<
+      string,
+      unknown
+    >;
     expect(done).toMatchObject({ status: 'pending', next: { kind: 'offer' } });
-    expect(done['bank_transfer']).toMatchObject({ holder: 'Demo Srl', iban: 'IT60 X054 2811 1010 0000 0123 456', total_minor: 24_278 });
-    const offer = (await call('checkout.offer', { token: session.session_token })) as { offer: { key: string; payment_method: string } };
+    expect(done['bank_transfer']).toMatchObject({
+      holder: 'Demo Srl',
+      iban: 'IT60 X054 2811 1010 0000 0123 456',
+      total_minor: 24_278,
+    });
+    const offer = (await call('checkout.offer', { token: session.session_token })) as {
+      offer: { key: string; payment_method: string };
+    };
     expect(offer.offer).toMatchObject({ key: 'up', payment_method: 'bank_transfer' });
 
     const main = w.t.op('orders.list', { limit: 10 }).data;
     expect(main).toHaveLength(1);
-    expect(main[0]).toMatchObject({ status: 'unpaid', payment_method: 'bank_transfer', paid_minor: 0 });
+    expect(main[0]).toMatchObject({
+      status: 'unpaid',
+      payment_method: 'bank_transfer',
+      paid_minor: 0,
+    });
     const contactId = main[0]?.contact_id ?? '';
     expect(w.t.op('contacts.get', { id: contactId }).tag_ids).toEqual([]);
     // Waiting for the answer on the offer: nothing is sent yet.
     expect(summaries(w)).toHaveLength(0);
 
-    const accepted = (await call('checkout.offerAccept', { token: session.session_token, offerKey: 'up' })) as Record<string, unknown>;
+    const accepted = (await call('checkout.offerAccept', {
+      token: session.session_token,
+      offerKey: 'up',
+    })) as Record<string, unknown>;
     expect(accepted).toMatchObject({ status: 'paid', next: { kind: 'thank_you' } });
     expect(stripe.requests).toHaveLength(0);
     const orders = w.t.op('orders.list', { limit: 10 }).data;
     expect(orders).toHaveLength(2);
-    expect(orders.every((o) => o.status === 'unpaid' && o.payment_method === 'bank_transfer')).toBe(true);
+    expect(orders.every((o) => o.status === 'unpaid' && o.payment_method === 'bank_transfer')).toBe(
+      true,
+    );
 
     const [email, ...rest] = summaries(w);
     expect(rest).toHaveLength(0);
-    expect(email).toMatchObject({ contactId, source: { type: 'transactional', purpose: 'checkout' } });
+    expect(email).toMatchObject({
+      contactId,
+      source: { type: 'transactional', purpose: 'checkout' },
+    });
     for (const o of orders) expect(bodyText(email)).toContain(o.number);
     expect(bodyText(email)).toContain('IT60 X054 2811 1010 0000 0123 456');
     expect(summaries(w)).toHaveLength(0);
 
-    const final = (await call('checkout.complete', { token: session.session_token })) as { bank_transfer: { orders: unknown[]; total_minor: number } };
+    const final = (await call('checkout.complete', { token: session.session_token })) as {
+      bank_transfer: { orders: unknown[]; total_minor: number };
+    };
     expect(final.bank_transfer.orders).toHaveLength(2);
     expect(final.bank_transfer.total_minor).toBe(orders.reduce((sum, o) => sum + o.total_minor, 0));
 
     // The transfer arrives: recorded by hand, the order is paid and the buyer gets the checkout tags.
     const first = orders.find((o) => o.parent_order_id === null);
     if (first === undefined) throw new Error('main order missing');
-    w.t.op('payments.record', { orderId: first.id, data: { amount_minor: first.total_minor, method: 'bank_transfer' } });
+    w.t.op('payments.record', {
+      orderId: first.id,
+      data: { amount_minor: first.total_minor, method: 'bank_transfer' },
+    });
     expect(w.t.op('orders.get', { id: first.id }).status).toBe('paid');
     expect(w.t.op('contacts.get', { id: contactId }).tag_ids).toEqual([tag.id]);
     expect(w.t.op('checkouts.get', { id: c.id }).stats).toMatchObject({ sessions: 1, paid: 1 });
@@ -242,7 +308,10 @@ describe('bank transfer checkout', () => {
       },
     });
     const open = async () =>
-      (await call('checkout.session', { checkoutId: c.id, payload: { buyer: BUYER, payment_method: 'bank_transfer' } })) as {
+      (await call('checkout.session', {
+        checkoutId: c.id,
+        payload: { buyer: BUYER, payment_method: 'bank_transfer' },
+      })) as {
         session_token: string;
       };
 
@@ -260,9 +329,13 @@ describe('bank transfer checkout', () => {
     for (const o of placed) expect(bodyText(corrected[0])).toContain(o.number);
 
     const closed = await open();
-    expect(await call('checkout.flushSummary', { token: closed.session_token })).toEqual({ sent: true });
+    expect(await call('checkout.flushSummary', { token: closed.session_token })).toEqual({
+      sent: true,
+    });
     expect(summaries(w)).toHaveLength(1);
-    expect(await call('checkout.flushSummary', { token: closed.session_token })).toEqual({ sent: false });
+    expect(await call('checkout.flushSummary', { token: closed.session_token })).toEqual({
+      sent: false,
+    });
   });
 
   it('refuses bank transfer for subscriptions', async () => {
@@ -323,51 +396,91 @@ describe('Stripe Managed Payments checkout', () => {
         settings: { first_offer: 'up' },
       },
     });
-    const config = (await call('checkout.config', { checkoutId: c.id })) as { payments: { card_flow: string } };
+    const config = (await call('checkout.config', { checkoutId: c.id })) as {
+      payments: { card_flow: string };
+    };
     expect(config.payments.card_flow).toBe('redirect');
 
     const session = (await call('checkout.session', {
       checkoutId: c.id,
       payload: { buyer: BUYER, return_url: PAGE },
     })) as { session_token: string; intent: { kind: string; redirect_url: string } };
-    expect(session.intent).toMatchObject({ kind: 'redirect', redirect_url: 'https://checkout.stripe.com/c/pay/cs_1' });
-    const created = stripe.requests.find((r) => r.method === 'POST' && r.path === '/v1/checkout/sessions');
+    expect(session.intent).toMatchObject({
+      kind: 'redirect',
+      redirect_url: 'https://checkout.stripe.com/c/pay/cs_1',
+    });
+    const created = stripe.requests.find(
+      (r) => r.method === 'POST' && r.path === '/v1/checkout/sessions',
+    );
     expect(created?.version).toBe('2025-09-30.clover');
     expect(created?.body.get('managed_payments[enabled]')).toBe('true');
     expect(created?.body.get('mode')).toBe('payment');
-    expect(created?.body.get('line_items[0][price_data][product_data][tax_code]')).toBe('txcd_10000000');
+    expect(created?.body.get('line_items[0][price_data][product_data][tax_code]')).toBe(
+      'txcd_10000000',
+    );
     expect(created?.body.get('customer_email')).toBe('buyer@example.com');
     expect(created?.body.has('automatic_tax[enabled]')).toBe(false);
-    expect(new URL(created?.body.get('success_url') ?? '').searchParams.get('amb_cs')).toBe(session.session_token);
-    expect(stripe.requests.some((r) => r.path === '/v1/customers' || r.path === '/v1/payment_intents')).toBe(false);
+    expect(new URL(created?.body.get('success_url') ?? '').searchParams.get('amb_cs')).toBe(
+      session.session_token,
+    );
+    expect(
+      stripe.requests.some((r) => r.path === '/v1/customers' || r.path === '/v1/payment_intents'),
+    ).toBe(false);
 
     const paid = pay(stripe, 'cs_1');
-    expect(await webhook(call, { id: 'evt_1', type: 'checkout.session.completed', data: { object: paid } })).toEqual({ received: true });
-    const completed = (await call('checkout.complete', { token: session.session_token })) as Record<string, unknown>;
+    expect(
+      await webhook(call, {
+        id: 'evt_1',
+        type: 'checkout.session.completed',
+        data: { object: paid },
+      }),
+    ).toEqual({ received: true });
+    const completed = (await call('checkout.complete', { token: session.session_token })) as Record<
+      string,
+      unknown
+    >;
     expect(completed).toMatchObject({ status: 'paid', next: { kind: 'offer' } });
     const [order] = w.t.op('orders.list', { limit: 10 }).data;
     // The whole order total is recorded, not Stripe's amount with its taxes.
     expect(order).toMatchObject({ status: 'paid', payment_method: 'card' });
     expect(order?.paid_minor).toBe(order?.total_minor);
-    expect(w.t.op('payments.list', { order_id: order?.id ?? '', limit: 10 }).data[0]).toMatchObject({ transaction_id: 'pi_cs_1' });
+    expect(w.t.op('payments.list', { order_id: order?.id ?? '', limit: 10 }).data[0]).toMatchObject(
+      { transaction_id: 'pi_cs_1' },
+    );
 
-    const offer = (await call('checkout.offer', { token: session.session_token })) as { offer: { card_flow: string } };
+    const offer = (await call('checkout.offer', { token: session.session_token })) as {
+      offer: { card_flow: string };
+    };
     expect(offer.offer.card_flow).toBe('redirect');
     const redirect = (await call('checkout.offerAccept', {
       token: session.session_token,
       offerKey: 'up',
       returnUrl: `${PAGE}/offer`,
     })) as Record<string, unknown>;
-    expect(redirect).toMatchObject({ status: 'redirect', redirect_url: 'https://checkout.stripe.com/c/pay/cs_2' });
-    const upsell = stripe.requests.filter((r) => r.method === 'POST' && r.path === '/v1/checkout/sessions')[1];
+    expect(redirect).toMatchObject({
+      status: 'redirect',
+      redirect_url: 'https://checkout.stripe.com/c/pay/cs_2',
+    });
+    const upsell = stripe.requests.filter(
+      (r) => r.method === 'POST' && r.path === '/v1/checkout/sessions',
+    )[1];
     expect(upsell?.body.get('metadata[amable_kind]')).toBe('offer');
     expect(new URL(upsell?.body.get('success_url') ?? '').searchParams.get('amb_offer')).toBe('up');
 
     // Back from Stripe before paying: sent to the same page again.
-    const again = (await call('checkout.offerConfirm', { token: session.session_token, offerKey: 'up' })) as Record<string, unknown>;
-    expect(again).toMatchObject({ status: 'redirect', redirect_url: 'https://checkout.stripe.com/c/pay/cs_2' });
+    const again = (await call('checkout.offerConfirm', {
+      token: session.session_token,
+      offerKey: 'up',
+    })) as Record<string, unknown>;
+    expect(again).toMatchObject({
+      status: 'redirect',
+      redirect_url: 'https://checkout.stripe.com/c/pay/cs_2',
+    });
     pay(stripe, 'cs_2');
-    const confirmed = (await call('checkout.offerConfirm', { token: session.session_token, offerKey: 'up' })) as Record<string, unknown>;
+    const confirmed = (await call('checkout.offerConfirm', {
+      token: session.session_token,
+      offerKey: 'up',
+    })) as Record<string, unknown>;
     expect(confirmed).toMatchObject({ status: 'paid', next: { kind: 'thank_you' } });
     const orders = w.t.op('orders.list', { limit: 10 }).data;
     expect(orders).toHaveLength(2);
@@ -383,7 +496,9 @@ describe('Stripe Managed Payments checkout', () => {
       status: 'active',
       definition: { items: [{ id: 'i1', kind: 'plan', ref_id: w.monthly }] },
     });
-    await expect(call('checkout.session', { checkoutId: c.id, payload: { buyer: BUYER, return_url: PAGE } })).rejects.toMatchObject({
+    await expect(
+      call('checkout.session', { checkoutId: c.id, payload: { buyer: BUYER, return_url: PAGE } }),
+    ).rejects.toMatchObject({
       shape: { code: 'conflict' },
     });
   });

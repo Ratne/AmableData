@@ -83,6 +83,7 @@ export const GOAL_TRIGGER_TYPES = [
   'form_submitted',
   'product_purchased',
   'order_paid',
+  'checkout_abandoned',
   'email_opened',
   'email_clicked',
   'lead_score',
@@ -97,9 +98,13 @@ export const GOAL_TRIGGER_TYPES = [
 ] as const;
 
 /** Marketplace app id (same rule as the manifest `id`). */
-export const appIdSchema = z.string().regex(/^[a-z][a-z0-9-]{2,39}$/, 'lowercase letters, digits and "-"');
+export const appIdSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]{2,39}$/, 'lowercase letters, digits and "-"');
 /** Key of an action or trigger declared in an app manifest. */
-export const appExtensionKeySchema = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/, 'lowercase letters, digits and "_"');
+export const appExtensionKeySchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]{1,39}$/, 'lowercase letters, digits and "_"');
 
 export const apiCallNameSchema = z
   .string()
@@ -117,6 +122,8 @@ export const goalTriggerSchema = z.discriminatedUnion('type', [
     type: z.literal('order_paid'),
     min_total_minor: z.number().int().min(0).optional(),
   }),
+  /** Email typed in a checkout without paying (abandoned cart on); any checkout when omitted. */
+  z.strictObject({ type: z.literal('checkout_abandoned'), checkout_ids: idList.optional() }),
   z.strictObject({ type: z.literal('email_opened'), email: emailRefSchema.optional() }),
   z.strictObject({
     type: z.literal('email_clicked'),

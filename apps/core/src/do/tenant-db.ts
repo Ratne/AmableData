@@ -13,6 +13,7 @@ import {
 import { affectsChargeSchedule } from '../checkout/ops';
 import { runRenewalCharges } from '../checkout/renewals';
 import { nextSessionCleanup } from '../checkout/sessions';
+import { nextLeadDue } from '../checkout/leads';
 import { nextSummaryDue } from '../checkout/bank-transfer';
 import { affectsBillingSchedule } from '../commerce/ops';
 import { seedCommerce, type CommerceSeedSummary } from '../commerce/seed';
@@ -74,7 +75,10 @@ export class TenantDb extends DurableObject<Env> {
    */
   crm(op: string, actor: CrmActor, input: unknown): CrmResult<unknown> {
     const result = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, actor, op, input);
-    if (result.ok && (affectsBillingSchedule(op) || affectsEsignSchedule(op) || affectsChargeSchedule(op))) {
+    if (
+      result.ok &&
+      (affectsBillingSchedule(op) || affectsEsignSchedule(op) || affectsChargeSchedule(op))
+    ) {
       this.armAlarm();
     }
     return result;
@@ -103,12 +107,23 @@ export class TenantDb extends DurableObject<Env> {
           new AlarmStepError(`billing.run ${result.error.code}: ${result.error.message}`),
         );
       }
-      const cleanup = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, 'checkout.expireSessions', {});
+      const cleanup = runCrmOp(
+        { db: this.crmDb, searchMode: this.searchMode },
+        SYSTEM_ACTOR,
+        'checkout.expireSessions',
+        {},
+      );
       if (!cleanup.ok) console.error('[checkout] session cleanup failed:', cleanup.error);
+      await this.abandonCheckoutLeads();
       await this.sendCheckoutSummaries();
       try {
         await runRenewalCharges(this.env, (op, input) => {
-          const out = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, op, input);
+          const out = runCrmOp(
+            { db: this.crmDb, searchMode: this.searchMode },
+            SYSTEM_ACTOR,
+            op,
+            input,
+          );
           if (!out.ok) throw new AlarmStepError(`${op} ${out.error.code}: ${out.error.message}`);
           return out.value as never;
         });
@@ -153,9 +168,34 @@ export class TenantDb extends DurableObject<Env> {
     });
   }
 
+  /** Abandoned carts past their delay: `checkout.abandoned` is in the outbox, the engine is woken to run it. */
+  private async abandonCheckoutLeads(): Promise<void> {
+    const run = runCrmOp(
+      { db: this.crmDb, searchMode: this.searchMode },
+      SYSTEM_ACTOR,
+      'checkout.abandonLeads',
+      {},
+    );
+    if (!run.ok) {
+      console.error('[checkout] abandoned carts failed:', run.error);
+      return;
+    }
+    const { tenantId } = run.value as CrmOpOutput<'checkout.abandonLeads'>;
+    if (tenantId !== null) {
+      await this.env.ENGINE.get(this.env.ENGINE.idFromName(tenantId))
+        .kick(tenantId)
+        .catch(() => undefined);
+    }
+  }
+
   /** Bank transfer summaries due (end of the offer chain, idle buyer, page closed). */
   private async sendCheckoutSummaries(): Promise<void> {
-    const due = runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, 'checkout.dueSummaries', {});
+    const due = runCrmOp(
+      { db: this.crmDb, searchMode: this.searchMode },
+      SYSTEM_ACTOR,
+      'checkout.dueSummaries',
+      {},
+    );
     if (!due.ok) {
       console.error('[checkout] summary emails failed:', due.error);
       return;
@@ -170,7 +210,12 @@ export class TenantDb extends DurableObject<Env> {
       }
     }
     if (failed.length > 0) {
-      runCrmOp({ db: this.crmDb, searchMode: this.searchMode }, SYSTEM_ACTOR, 'checkout.summaryFailed', { sessionIds: failed });
+      runCrmOp(
+        { db: this.crmDb, searchMode: this.searchMode },
+        SYSTEM_ACTOR,
+        'checkout.summaryFailed',
+        { sessionIds: failed },
+      );
     }
   }
 
@@ -182,9 +227,15 @@ export class TenantDb extends DurableObject<Env> {
     const sessions = nextSessionCleanup(this.crmDb);
     const esign = nextEsignDue(this.crmDb);
     const summaries = nextSummaryDue(this.crmDb);
-    const candidates = [billing, charge, sessions, summaries, esign === null ? null : Math.max(esign, now + esignDelay)].filter(
-      (t): t is number => t !== null,
-    );
+    const leads = nextLeadDue(this.crmDb);
+    const candidates = [
+      billing,
+      charge,
+      sessions,
+      summaries,
+      leads,
+      esign === null ? null : Math.max(esign, now + esignDelay),
+    ].filter((t): t is number => t !== null);
     if (candidates.length === 0) void this.ctx.storage.deleteAlarm();
     else void this.ctx.storage.setAlarm(Math.max(Math.min(...candidates), now));
   }

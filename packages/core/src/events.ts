@@ -201,6 +201,17 @@ export interface CommerceEventPayloads {
   'subscription.ended': SubscriptionFacts & { reason: 'cancelled' | 'period_end' };
   'subscription.trial_started': SubscriptionFacts & { trialEndsAt: string };
   'subscription.trial_converted': SubscriptionFacts & { orderId: string };
+  /**
+   * The contact typed the email in a checkout and did not pay within its
+   * abandoned cart delay. `amountMinor` = the cart total at that time.
+   */
+  'checkout.abandoned': CommerceMoney & {
+    checkoutId: string;
+    leadId: string;
+    /** Distinct product ids in the cart. */
+    productIds: string[];
+    pageUrl: string | null;
+  };
 }
 
 export type CommerceEventType = keyof CommerceEventPayloads;
@@ -223,6 +234,7 @@ export const COMMERCE_EVENT_TYPES = [
   'subscription.ended',
   'subscription.trial_started',
   'subscription.trial_converted',
+  'checkout.abandoned',
 ] as const satisfies readonly CommerceEventType[];
 
 type MissingCommerceEvent = Exclude<CommerceEventType, (typeof COMMERCE_EVENT_TYPES)[number]>;
