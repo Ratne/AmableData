@@ -7,3 +7,7 @@ pnpm-lock.yaml
 LICENSE
 # generated tracker bundles (checked by packages/tracker tests)
 packages/tracker/generated/
+# generated Phosphor glyph packs (packages/builder/scripts/gen-phosphor.mjs)
+packages/builder/src/phosphor/*.ts
+!packages/builder/src/phosphor/index.ts
+!packages/builder/src/phosphor/all.ts

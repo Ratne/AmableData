@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import { errorResponseSchema, idSchema, type MediaFile } from '@amable/api-types';
 import { renderBuilderDocumentHtml } from '@amable/builder';
+import '@amable/builder/phosphor-all';
 import type { Context } from 'hono';
 import { json } from '../../crm/api/core';
 import { getTenant, type AppEnv } from '../../middleware';

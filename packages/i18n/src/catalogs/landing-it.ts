@@ -8,9 +8,11 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.status.draft': 'Bozza',
   'landing.status.published': 'Pubblicata',
   'landing.kind.html': 'HTML',
-  'landing.kind.htmlHint': "Pagina scritta in HTML libero: servita così com'è, si modifica come codice sorgente.",
+  'landing.kind.htmlHint':
+    "Pagina scritta in HTML libero: servita così com'è, si modifica come codice sorgente.",
   'landing.html.sourceLabel': 'Sorgente HTML della pagina',
-  'landing.html.hint': "L'intera pagina (doctype, head, body) viene servita come scritta; si aggiunge solo il tracker analytics. Incorpora form, booking e checkout del CRM con i loro snippet per mantenere attive automazioni e integrazioni.",
+  'landing.html.hint':
+    "L'intera pagina (doctype, head, body) viene servita come scritta; si aggiunge solo il tracker analytics. Incorpora form, booking e checkout del CRM con i loro snippet per mantenere attive automazioni e integrazioni.",
   'landing.filter.all': 'Tutte',
   'landing.field.title': 'Titolo',
   'landing.field.path': 'Percorso',
@@ -28,7 +30,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.error.forbidden': 'Non hai i permessi per questa azione.',
   'landing.error.forbiddenTitle': 'Permesso necessario',
   'landing.error.notFound': 'Questa pagina non esiste più.',
-  'landing.error.staleDraft': 'La bozza è stata modificata altrove. Ricarica per avere la versione più recente.',
+  'landing.error.staleDraft':
+    'La bozza è stata modificata altrove. Ricarica per avere la versione più recente.',
   'landing.error.conflict': 'Questo valore è già in uso.',
   'landing.error.locked': 'Qualcun altro sta modificando questa pagina.',
   'landing.error.tooLarge': 'Il file è troppo grande.',
@@ -45,7 +48,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
 
   'landing.settings.general': 'Generale',
   'landing.settings.pathHint': 'Deve essere unico sul dominio. Cambiarlo rompe i vecchi link.',
-  'landing.settings.hostHint': "Un dominio collegato, es. www.esempio.it. Lascia vuoto per pubblicare solo sull'indirizzo predefinito.",
+  'landing.settings.hostHint':
+    "Un dominio collegato, es. www.esempio.it. Lascia vuoto per pubblicare solo sull'indirizzo predefinito.",
   'landing.settings.lang': 'Lingua della pagina',
   'landing.settings.langHint': 'Codice lingua della pagina, es. it o en.',
   'landing.settings.favicon': 'Favicon',
@@ -54,8 +58,10 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.settings.analytics': 'Analitica',
   'landing.settings.analyticsSite': 'Sito di analitica',
   'landing.settings.analyticsAuto': 'Automatico (in base al dominio)',
-  'landing.settings.analyticsHint': 'Il tracker di questo sito viene aggiunto alla pagina pubblicata.',
-  'landing.settings.analyticsUnavailable': 'Impossibile caricare i siti di analitica: vale la scelta automatica.',
+  'landing.settings.analyticsHint':
+    'Il tracker di questo sito viene aggiunto alla pagina pubblicata.',
+  'landing.settings.analyticsUnavailable':
+    'Impossibile caricare i siti di analitica: vale la scelta automatica.',
   'landing.settings.saved': 'Salvato',
   'landing.settings.saveFirst': 'Salva le modifiche prima di pubblicare.',
   'landing.seo.title': 'Titolo SEO',
@@ -71,7 +77,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.publish.section': 'Pubblicazione',
   'landing.publish.title': 'Pubblica pagina',
   'landing.publish.description': 'La bozza attuale va online e diventa una nuova versione.',
-  'landing.publish.descriptionUrl': 'La bozza attuale va online su {url} e diventa una nuova versione.',
+  'landing.publish.descriptionUrl':
+    'La bozza attuale va online su {url} e diventa una nuova versione.',
   'landing.publish.note': 'Nota di versione',
   'landing.publish.noteHint': 'Facoltativa: cosa è cambiato in questa versione.',
   'landing.publish.action': 'Pubblica',
@@ -79,7 +86,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.publish.lastPublished': 'Ultima pubblicazione {date}',
   'landing.publish.unpublish': 'Ritira',
   'landing.publish.unpublishTitle': 'Ritirare questa pagina?',
-  'landing.publish.unpublishBody': 'I visitatori vedranno una pagina "non trovata". Bozza e versioni restano.',
+  'landing.publish.unpublishBody':
+    'I visitatori vedranno una pagina "non trovata". Bozza e versioni restano.',
   'landing.publish.unpublished': 'Pagina ritirata',
 
   'landing.versions.title': 'Versioni',
@@ -88,7 +96,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.versions.live': 'Online',
   'landing.versions.restore': 'Ripristina in bozza',
   'landing.versions.restoreTitle': 'Ripristinare la versione {version} nella bozza?',
-  'landing.versions.restoreBody': 'La bozza attuale viene sostituita da questa versione. La pagina online non cambia finché non pubblichi.',
+  'landing.versions.restoreBody':
+    'La bozza attuale viene sostituita da questa versione. La pagina online non cambia finché non pubblichi.',
   'landing.versions.restored': 'Versione ripristinata nella bozza',
 
   'landing.media.title': 'Libreria media',
@@ -113,7 +122,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.editor.backToList': 'Torna alle landing page',
   'landing.editor.undo': 'Annulla',
   'landing.editor.redo': 'Ripeti',
-  'landing.editor.breakpointHint': 'Le modifiche di stile si salvano su questo breakpoint; i dispositivi più grandi non cambiano.',
+  'landing.editor.breakpointHint':
+    'Le modifiche di stile si salvano su questo breakpoint; i dispositivi più grandi non cambiano.',
   'landing.editor.zoomFit': 'Adatta',
   'landing.editor.fullView': 'Nascondi pannelli',
   'landing.editor.showPanels': 'Mostra pannelli',
@@ -122,7 +132,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.editor.saveFailed': 'Non salvato',
   'landing.editor.unsaved': 'Modifiche non salvate',
   'landing.editor.allSaved': 'Bozza salvata',
-  'landing.editor.staleReloaded': 'La bozza è stata modificata altrove: è stata caricata la versione più recente.',
+  'landing.editor.staleReloaded':
+    'La bozza è stata modificata altrove: è stata caricata la versione più recente.',
   'landing.editor.widgets': 'Widget',
   'landing.editor.structure': 'Struttura',
   'landing.editor.searchWidgets': 'Cerca widget',
@@ -145,11 +156,13 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.editor.pasteInside': 'Incolla dentro ({name})',
   'landing.editor.copyStyle': 'Copia stile',
   'landing.editor.pasteStyle': 'Incolla stile',
-  'landing.editor.copied': '"{name}" copiato negli Appunti — trascinalo dalla tendina, qui o in un’altra pagina',
+  'landing.editor.copied':
+    '"{name}" copiato negli Appunti — trascinalo dalla tendina, qui o in un’altra pagina',
   'landing.editor.copyToClipboard': 'Copia negli appunti (per incollare qui o in un’altra pagina)',
   'landing.editor.copyPage': 'Copia intera pagina',
   'landing.editor.copySelected': 'Copia selezionato: {name}',
-  'landing.editor.copyFailed': 'Copia non riuscita: gli appunti non sono stati salvati. Controlla la connessione e riprova.',
+  'landing.editor.copyFailed':
+    'Copia non riuscita: gli appunti non sono stati salvati. Controlla la connessione e riprova.',
   'landing.editor.pageEmpty': 'La pagina è vuota',
   'landing.editor.pageLabel': 'Intera pagina "{name}" ({count} blocchi)',
   'landing.editor.blockLabel': '{name} ({count} elementi)',
@@ -161,7 +174,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.clipboard.title': 'Appunti',
   'landing.clipboard.hint': 'Appunti: le tue copie delle ultime 24 ore (trascinale sulla pagina)',
   'landing.clipboard.subtitle': 'Trascina una voce sulla pagina, o cliccala per incollarla',
-  'landing.clipboard.empty': 'Nessuna copia. Usa "Copia" su un blocco o "Copia intera pagina": le copie restano qui per 24 ore, anche su altre pagine e altri browser.',
+  'landing.clipboard.empty':
+    'Nessuna copia. Usa "Copia" su un blocco o "Copia intera pagina": le copie restano qui per 24 ore, anche su altre pagine e altri browser.',
   'landing.clipboard.expires': 'Si svuotano da sole dopo 24 ore',
   'landing.clipboard.clear': 'Svuota',
   'landing.clipboard.remove': 'Rimuovi dagli appunti',
@@ -176,25 +190,29 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.editor.stylePastedPartial': 'Stile incollato (solo le proprietà compatibili)',
   'landing.editor.deleteTitle': 'Eliminare "{name}"?',
   'landing.editor.deleteBody': 'Puoi annullare con Ctrl/Cmd+Z.',
-  'landing.editor.deleteBodyChildren': 'Vengono eliminati anche i {count} elementi contenuti. Puoi annullare con Ctrl/Cmd+Z.',
+  'landing.editor.deleteBodyChildren':
+    'Vengono eliminati anche i {count} elementi contenuti. Puoi annullare con Ctrl/Cmd+Z.',
   'landing.editor.deleted': 'Elemento eliminato',
   'landing.editor.undoHint': 'Ctrl/Cmd+Z per annullare',
   'landing.editor.dropNotAllowed': 'non consentito qui',
   'landing.editor.breadcrumb': "Genitori dell'elemento selezionato",
   'landing.editor.page': 'Pagina',
-  'landing.editor.selectHint': 'Seleziona un elemento nel canvas o nella struttura per modificarlo.',
+  'landing.editor.selectHint':
+    'Seleziona un elemento nel canvas o nella struttura per modificarlo.',
   'landing.editor.right.element': 'Elemento',
   'landing.editor.right.design': 'Design globale',
   'landing.editor.tab.content': 'Contenuto',
   'landing.editor.tab.style': 'Stile',
   'landing.editor.tab.advanced': 'Avanzate',
-  'landing.editor.editingDevice': 'Stai modificando la vista {device}. I controlli con il badge valgono solo qui; lasciati vuoti ereditano dal dispositivo più grande.',
+  'landing.editor.editingDevice':
+    'Stai modificando la vista {device}. I controlli con il badge valgono solo qui; lasciati vuoti ereditano dal dispositivo più grande.',
   'landing.editor.state': 'Stato:',
   'landing.editor.state.normal': 'Normale',
   'landing.editor.state.hover': 'Hover',
   'landing.editor.overrideHint': 'Valore impostato su {device}',
   'landing.editor.resetOverride': 'Rimuovi il valore {device}',
-  'landing.editor.responsiveBadgeHint': 'Questo valore vale solo per la vista {device}; lasciato vuoto eredita dal dispositivo più grande.',
+  'landing.editor.responsiveBadgeHint':
+    'Questo valore vale solo per la vista {device}; lasciato vuoto eredita dal dispositivo più grande.',
   'landing.editor.default': 'Predefinito',
   'landing.editor.auto': 'Auto',
   'landing.editor.none': 'Nessuno',
@@ -215,10 +233,24 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.editor.newTab': 'Apri in una nuova scheda',
   'landing.editor.iconName': 'Nome icona',
   'landing.editor.noIcon': 'Nessuna icona (solo testo)',
+  'landing.editor.iconLibrary': 'Libreria icone',
+  'landing.editor.iconBasic': 'Base',
+  'landing.editor.iconSearch': 'Cerca icone (in inglese, es. rocket)…',
+  'landing.editor.iconLoading': 'Caricamento icone…',
+  'landing.editor.iconNoResults': 'Nessuna icona trovata',
+  'landing.editor.iconMore': 'Mostrate {shown} di {total}: affina la ricerca',
+  'landing.editor.iconWeight.regular': 'Normale',
+  'landing.editor.iconWeight.thin': 'Sottile',
+  'landing.editor.iconWeight.light': 'Leggero',
+  'landing.editor.iconWeight.bold': 'Grassetto',
+  'landing.editor.iconWeight.fill': 'Pieno',
+  'landing.editor.iconWeight.duotone': 'Duotone',
   'landing.editor.fontFamily': 'Famiglia (Google Fonts)',
   'landing.editor.fontPlaceholder': 'Cerca un font Google…',
-  'landing.editor.fontMissing': 'Font non trovato su Google Fonts: la pagina userà il font di riserva.',
-  'landing.editor.fontWebsafe': 'Font di sistema (non su Google Fonts): l’aspetto può variare tra dispositivi.',
+  'landing.editor.fontMissing':
+    'Font non trovato su Google Fonts: la pagina userà il font di riserva.',
+  'landing.editor.fontWebsafe':
+    'Font di sistema (non su Google Fonts): l’aspetto può variare tra dispositivi.',
   'landing.editor.themeHeadingFont': 'Font titoli del tema',
   'landing.editor.themeBodyFont': 'Font testo del tema',
   'landing.editor.fontSize': 'Dimensione (px)',
@@ -268,16 +300,19 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.editor.noForms': 'Nessun form: creane prima uno in Form.',
   'landing.editor.missingForm': 'Form mancante ({id})',
   'landing.editor.formIdPlaceholder': 'Id del form',
-  'landing.editor.formsUnavailable': "Impossibile caricare l'elenco dei form: inserisci l'id del form.",
+  'landing.editor.formsUnavailable':
+    "Impossibile caricare l'elenco dei form: inserisci l'id del form.",
   'landing.editor.chooseCheckout': '— Scegli un checkout —',
   'landing.editor.noCheckouts': 'Nessun checkout: creane prima uno in E-commerce → Checkout.',
   'landing.editor.missingCheckout': 'Checkout mancante ({id})',
   'landing.editor.checkoutIdPlaceholder': 'Id del checkout',
-  'landing.editor.checkoutsUnavailable': "Impossibile caricare l'elenco dei checkout: inserisci l'id del checkout.",
+  'landing.editor.checkoutsUnavailable':
+    "Impossibile caricare l'elenco dei checkout: inserisci l'id del checkout.",
   'landing.editor.chooseEventType': '— Scegli un tipo di evento —',
   'landing.editor.noEventTypes': 'Nessun tipo di evento: creane prima uno in Prenotazioni.',
   'landing.editor.eventSlugPlaceholder': 'slug-tipo-evento',
-  'landing.editor.bookingUnavailable': 'Le prenotazioni non sono disponibili: inserisci lo slug del tipo di evento.',
+  'landing.editor.bookingUnavailable':
+    'Le prenotazioni non sono disponibili: inserisci lo slug del tipo di evento.',
 
   'landing.tokens.colors': 'Colori',
   'landing.tokens.primary': 'Primario',
@@ -311,7 +346,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.sections.title': 'Sezioni salvate',
   'landing.sections.description': 'Blocchi riutilizzabili condivisi da tutte le landing page.',
   'landing.sections.filter': 'Filtra sezioni',
-  'landing.sections.empty': 'Nessuna sezione salvata. Seleziona un elemento e salvalo come sezione.',
+  'landing.sections.empty':
+    'Nessuna sezione salvata. Seleziona un elemento e salvalo come sezione.',
   'landing.sections.uncategorized': 'Senza categoria',
   'landing.sections.insert': 'Inserisci',
   'landing.sections.delete': 'Elimina sezione',
@@ -319,7 +355,8 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.sections.deleteBody': 'Le pagine che la usano già non cambiano.',
   'landing.sections.deleted': 'Sezione eliminata',
   'landing.sections.save': 'Salva come sezione',
-  'landing.sections.saveHint': "L'elemento selezionato, con tutto il suo contenuto, diventa riutilizzabile su qualsiasi pagina.",
+  'landing.sections.saveHint':
+    "L'elemento selezionato, con tutto il suo contenuto, diventa riutilizzabile su qualsiasi pagina.",
   'landing.sections.name': 'Nome',
   'landing.sections.category': 'Categoria',
   'landing.sections.categoryHint': 'Facoltativa, es. Hero, Footer, Prezzi.',
@@ -341,12 +378,18 @@ export const landingIt: Readonly<Record<LandingMessageKey, string>> = {
   'landing.transfer.imported': 'Pagina importata come bozza',
   'landing.transfer.invalidArchive': 'Il file non è un export di landing page.',
   'landing.transfer.reportTitle': 'Pagina importata: cosa controllare',
-  'landing.transfer.reportMedia': '{imported} immagini aggiunte alla libreria, {reused} già presenti.',
-  'landing.transfer.relinkForms': '{count} widget form puntano ancora all’installazione di origine: crea i form qui e selezionali nell’editor.',
-  'landing.transfer.relinkBookings': '{count} widget prenotazione vanno collegati a un tipo di evento di questo workspace.',
-  'landing.transfer.relinkCheckouts': '{count} widget checkout vanno collegati a un checkout di questo workspace.',
-  'landing.transfer.mediaMissing': 'Immagini non importate (mancanti o danneggiate nel file): {files}',
-  'landing.transfer.mediaSkipped': 'Immagini escluse dall’export (limite di dimensione o mancanti all’origine): {files}',
+  'landing.transfer.reportMedia':
+    '{imported} immagini aggiunte alla libreria, {reused} già presenti.',
+  'landing.transfer.relinkForms':
+    '{count} widget form puntano ancora all’installazione di origine: crea i form qui e selezionali nell’editor.',
+  'landing.transfer.relinkBookings':
+    '{count} widget prenotazione vanno collegati a un tipo di evento di questo workspace.',
+  'landing.transfer.relinkCheckouts':
+    '{count} widget checkout vanno collegati a un checkout di questo workspace.',
+  'landing.transfer.mediaMissing':
+    'Immagini non importate (mancanti o danneggiate nel file): {files}',
+  'landing.transfer.mediaSkipped':
+    'Immagini escluse dall’export (limite di dimensione o mancanti all’origine): {files}',
   'landing.transfer.pathRenamed': 'Il percorso era già usato: la pagina è su {path}.',
   'landing.transfer.analytics': 'Il sito analytics è stato reimpostato su automatico.',
   'landing.transfer.openEditor': 'Apri editor',

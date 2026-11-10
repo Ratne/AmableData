@@ -5,16 +5,16 @@ import {
   type Breakpoint,
   BREAKPOINT_MAXWIDTH,
   sectionsForType,
-} from "./schema";
+} from './schema';
 
 /** Escape a string for safe insertion into HTML text/attribute context. */
 export function esc(input: unknown): string {
-  return String(input ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  return String(input ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /** The generated wrapper class for a node id. */
@@ -29,21 +29,21 @@ export function wrapperClass(id: string): string {
  */
 export function safeUrl(raw: string): string {
   const url = raw.trim();
-  if (!url) return "";
-  const compact = url.replace(/[\u0000-\u0020]/g, "").toLowerCase();
+  if (!url) return '';
+  const compact = url.replace(/[\u0000-\u0020]/g, '').toLowerCase();
   const scheme = /^([a-z][a-z0-9+.-]*):/.exec(compact);
   if (!scheme) return url;
-  return ["http", "https", "mailto", "tel"].includes(scheme[1] ?? "") ? url : "";
+  return ['http', 'https', 'mailto', 'tel'].includes(scheme[1] ?? '') ? url : '';
 }
 
 /** Map a media-url control value (string | {url}) to a safe URL string. */
 export function mediaUrl(value: unknown): string {
-  if (typeof value === "string") return safeUrl(value);
-  if (value && typeof value === "object" && "url" in value) {
+  if (typeof value === 'string') return safeUrl(value);
+  if (value && typeof value === 'object' && 'url' in value) {
     const u = (value as { url?: unknown }).url;
-    return typeof u === "string" ? safeUrl(u) : "";
+    return typeof u === 'string' ? safeUrl(u) : '';
   }
-  return "";
+  return '';
 }
 
 /**
@@ -52,7 +52,7 @@ export function mediaUrl(value: unknown): string {
  */
 export function mediaResolver(mediaBaseUrl: string | undefined): (value: unknown) => string {
   if (!mediaBaseUrl) return mediaUrl;
-  const base = mediaBaseUrl.endsWith("/") ? mediaBaseUrl : `${mediaBaseUrl}/`;
+  const base = mediaBaseUrl.endsWith('/') ? mediaBaseUrl : `${mediaBaseUrl}/`;
   return (value) => {
     const url = mediaUrl(value);
     const m = /^(?:https?:\/\/[^/]+)?\/m\/[^/]+\/([^?#]+)$/.exec(url);
@@ -62,105 +62,109 @@ export function mediaResolver(mediaBaseUrl: string | undefined): (value: unknown
 
 /** Make generated CSS safe to embed in a <style> element (no "</style>" breakout). */
 export function cssForStyleTag(css: string): string {
-  return css.replace(/</g, "\\3c ");
+  return css.replace(/</g, '\\3c ');
 }
 
 function unitPart(v: unknown, unit: unknown): string {
-  if (v === "" || v === null || v === undefined) return "";
-  const u = typeof unit === "string" ? unit : "px";
+  if (v === '' || v === null || v === undefined) return '';
+  const u = typeof unit === 'string' ? unit : 'px';
   return `${v}${u}`;
 }
 
 /** Build the CSS declarations for a single style control value. */
-function declarationsFor(def: ControlDef, value: unknown, media: (value: unknown) => string): string {
-  if (value === undefined || value === null || value === "") return "";
+function declarationsFor(
+  def: ControlDef,
+  value: unknown,
+  media: (value: unknown) => string,
+): string {
+  if (value === undefined || value === null || value === '') return '';
 
   switch (def.type) {
-    case "typography": {
+    case 'typography': {
       const t = value as Record<string, unknown>;
       const d: string[] = [];
       if (t.fontFamily) d.push(`font-family:${t.fontFamily}`);
       const fs = t.fontSize as { size?: unknown; unit?: unknown } | undefined;
-      if (fs && fs.size !== undefined && fs.size !== "")
-        d.push(`font-size:${unitPart(fs.size, fs.unit ?? "px")}`);
+      if (fs && fs.size !== undefined && fs.size !== '')
+        d.push(`font-size:${unitPart(fs.size, fs.unit ?? 'px')}`);
       if (t.fontWeight) d.push(`font-weight:${t.fontWeight}`);
       if (t.textTransform) d.push(`text-transform:${t.textTransform}`);
       if (t.fontStyle) d.push(`font-style:${t.fontStyle}`);
       if (t.textDecoration) d.push(`text-decoration:${t.textDecoration}`);
       const lh = t.lineHeight as { size?: unknown; unit?: unknown } | undefined;
-      if (lh && lh.size !== undefined && lh.size !== "")
-        d.push(`line-height:${unitPart(lh.size, lh.unit ?? "")}`);
+      if (lh && lh.size !== undefined && lh.size !== '')
+        d.push(`line-height:${unitPart(lh.size, lh.unit ?? '')}`);
       const ls = t.letterSpacing as { size?: unknown; unit?: unknown } | undefined;
-      if (ls && ls.size !== undefined && ls.size !== "")
-        d.push(`letter-spacing:${unitPart(ls.size, ls.unit ?? "px")}`);
-      return d.join(";");
+      if (ls && ls.size !== undefined && ls.size !== '')
+        d.push(`letter-spacing:${unitPart(ls.size, ls.unit ?? 'px')}`);
+      return d.join(';');
     }
-    case "boxShadow": {
+    case 'boxShadow': {
       const s = value as Record<string, unknown>;
-      const x = unitPart(s.x ?? 0, "px");
-      const y = unitPart(s.y ?? 0, "px");
-      const blur = unitPart(s.blur ?? 0, "px");
-      const spread = unitPart(s.spread ?? 0, "px");
-      const col = typeof s.color === "string" ? s.color : "rgba(0,0,0,.2)";
-      const inset = s.inset ? "inset " : "";
+      const x = unitPart(s.x ?? 0, 'px');
+      const y = unitPart(s.y ?? 0, 'px');
+      const blur = unitPart(s.blur ?? 0, 'px');
+      const spread = unitPart(s.spread ?? 0, 'px');
+      const col = typeof s.color === 'string' ? s.color : 'rgba(0,0,0,.2)';
+      const inset = s.inset ? 'inset ' : '';
       // "Text shadow" (cssTemplate=text-shadow): shadow on the GLYPHS, not on
       // the element box. text-shadow has neither spread nor inset.
-      if (def.cssTemplate === "text-shadow") {
-        return `text-shadow:${x || "0"} ${y || "0"} ${blur || "0"} ${col}`;
+      if (def.cssTemplate === 'text-shadow') {
+        return `text-shadow:${x || '0'} ${y || '0'} ${blur || '0'} ${col}`;
       }
-      return `box-shadow:${inset}${x || "0"} ${y || "0"} ${blur || "0"} ${spread || "0"} ${col}`;
+      return `box-shadow:${inset}${x || '0'} ${y || '0'} ${blur || '0'} ${spread || '0'} ${col}`;
     }
-    case "gradient": {
+    case 'gradient': {
       const g = value as Record<string, unknown>;
-      const from = typeof g.from === "string" ? g.from : "";
-      const to = typeof g.to === "string" ? g.to : "";
-      if (!from || !to) return "";
+      const from = typeof g.from === 'string' ? g.from : '';
+      const to = typeof g.to === 'string' ? g.to : '';
+      if (!from || !to) return '';
       const pct = (v: unknown, fallback: number) =>
-        typeof v === "number" && Number.isFinite(v) ? v : fallback;
+        typeof v === 'number' && Number.isFinite(v) ? v : fallback;
       const stops = `${from} ${pct(g.fromStop, 0)}%,${to} ${pct(g.toStop, 100)}%`;
-      if (g.type === "radial") return `background-image:radial-gradient(circle,${stops})`;
+      if (g.type === 'radial') return `background-image:radial-gradient(circle,${stops})`;
       return `background-image:linear-gradient(${pct(g.angle, 180)}deg,${stops})`;
     }
-    case "slider": {
+    case 'slider': {
       const s = value as { size?: unknown; unit?: unknown };
-      if (s.size === undefined || s.size === "") return "";
-      const tpl = def.cssTemplate ?? "";
+      if (s.size === undefined || s.size === '') return '';
+      const tpl = def.cssTemplate ?? '';
       return tpl
         .replace(/\{\{SIZE\}\}/g, String(s.size))
-        .replace(/\{\{UNIT\}\}/g, typeof s.unit === "string" ? s.unit : "px");
+        .replace(/\{\{UNIT\}\}/g, typeof s.unit === 'string' ? s.unit : 'px');
     }
-    case "dimensions": {
+    case 'dimensions': {
       const d = value as Record<string, unknown>;
-      const unit = typeof d.unit === "string" ? d.unit : "px";
+      const unit = typeof d.unit === 'string' ? d.unit : 'px';
       const side = (k: string) =>
-        d[k] === "" || d[k] === undefined || d[k] === null ? "0" : `${d[k]}${unit}`;
-      const tpl = def.cssTemplate ?? "";
+        d[k] === '' || d[k] === undefined || d[k] === null ? '0' : `${d[k]}${unit}`;
+      const tpl = def.cssTemplate ?? '';
       return tpl
-        .replace(/\{\{TOP\}\}/g, side("top"))
-        .replace(/\{\{RIGHT\}\}/g, side("right"))
-        .replace(/\{\{BOTTOM\}\}/g, side("bottom"))
-        .replace(/\{\{LEFT\}\}/g, side("left"));
+        .replace(/\{\{TOP\}\}/g, side('top'))
+        .replace(/\{\{RIGHT\}\}/g, side('right'))
+        .replace(/\{\{BOTTOM\}\}/g, side('bottom'))
+        .replace(/\{\{LEFT\}\}/g, side('left'));
     }
-    case "media": {
+    case 'media': {
       const u = media(value).replace(/["\\\n\r]/g, encodeURIComponent);
-      if (!u) return "";
+      if (!u) return '';
       // Position/repeat are legacy defaults: the dedicated controls, emitted
       // later in the same rule (see ordering in buildNodeCss), win.
       return `background-image:url("${u}");background-position:center;background-repeat:no-repeat`;
     }
     default: {
       // color / select / choose / switcher with a {{VALUE}} template.
-      const tpl = def.cssTemplate ?? "";
-      if (!tpl) return "";
+      const tpl = def.cssTemplate ?? '';
+      if (!tpl) return '';
       // Select/choose have a closed list: values outside it (leftovers of
       // removed options, e.g. _position:"sticky") must not emit CSS the panel
       // does not show.
       if (
-        (def.type === "select" || def.type === "choose") &&
+        (def.type === 'select' || def.type === 'choose') &&
         def.options &&
         !def.options.some((o) => o.value === value)
       )
-        return "";
+        return '';
       return tpl.replace(/\{\{VALUE\}\}/g, String(value));
     }
   }
@@ -171,19 +175,17 @@ export function styleDefsForType(type: string): Map<string, ControlDef> {
   const map = new Map<string, ControlDef>();
   for (const section of sectionsForType(type)) {
     for (const ctrl of section.controls) {
-      if (ctrl.group === "style") map.set(ctrl.key, ctrl);
+      if (ctrl.group === 'style') map.set(ctrl.key, ctrl);
     }
   }
   return map;
 }
 
 function selectorFor(def: ControlDef, wrapSel: string, state: string): string {
-  const base = (def.selector ?? "{{WRAPPER}}").replace(/\{\{WRAPPER\}\}/g, wrapSel);
-  if (state === "hover") {
+  const base = (def.selector ?? '{{WRAPPER}}').replace(/\{\{WRAPPER\}\}/g, wrapSel);
+  if (state === 'hover') {
     // Apply hover to the wrapper token position.
-    return base.includes(wrapSel)
-      ? base.replace(wrapSel, `${wrapSel}:hover`)
-      : `${base}:hover`;
+    return base.includes(wrapSel) ? base.replace(wrapSel, `${wrapSel}:hover`) : `${base}:hover`;
   }
   return base;
 }
@@ -204,11 +206,11 @@ const BREAKPOINT_ORDER: Record<Breakpoint, number> = {
  */
 function cssOrderOf(def: ControlDef | undefined): number {
   if (!def) return 10;
-  return def.cssOrder ?? (def.type === "media" ? 0 : 10);
+  return def.cssOrder ?? (def.type === 'media' ? 0 : 10);
 }
 
 function mediaWrap(bp: Breakpoint, rule: string): string {
-  if (bp === "desktop") return rule;
+  if (bp === 'desktop') return rule;
   const max = BREAKPOINT_MAXWIDTH[bp];
   return `@media(max-width:${max}px){${rule}}`;
 }
@@ -242,7 +244,7 @@ export function buildNodeCss(
   // Variants are therefore emitted widest to narrowest (hover after
   // normal), not in the order the author created them.
   const orderOf = (v: StyleVariant) =>
-    BREAKPOINT_ORDER[v.breakpoint] * 2 + (v.state === "hover" ? 1 : 0);
+    BREAKPOINT_ORDER[v.breakpoint] * 2 + (v.state === 'hover' ? 1 : 0);
   const variants = [...(node.styles as StyleVariant[])].sort((a, b) => orderOf(a) - orderOf(b));
 
   // "Sticky" active on any variant: the z-index must not emit its
@@ -250,7 +252,7 @@ export function buildNodeCss(
   // same rule and cancel it). Sticky is already positioned, so the plain
   // z-index is enough.
   const hasSticky = (node.styles as StyleVariant[]).some(
-    (v) => v.props._sticky === "top" || v.props._sticky === "bottom",
+    (v) => v.props._sticky === 'top' || v.props._sticky === 'bottom',
   );
 
   for (const variant of variants) {
@@ -263,8 +265,8 @@ export function buildNodeCss(
       const def = defs.get(key);
       if (!def) continue;
       let decls = declarationsFor(def, value, media);
-      if (key === "_zIndex" && hasSticky) {
-        decls = decls.replace("position: relative;", "");
+      if (key === '_zIndex' && hasSticky) {
+        decls = decls.replace('position: relative;', '');
       }
       if (!decls) continue;
       const sel = selectorFor(def, wrapSel, variant.state);
@@ -273,46 +275,62 @@ export function buildNodeCss(
       bySelector.set(sel, list);
     }
     for (const [sel, decls] of bySelector) {
-      out.push(mediaWrap(variant.breakpoint, `${sel}{${decls.join(";")}}`));
+      out.push(mediaWrap(variant.breakpoint, `${sel}{${decls.join(';')}}`));
     }
   }
 
   // Advanced: responsive hide flags.
   const s = node.settings;
-  if (s._hideDesktop === "yes")
+  if (s._hideDesktop === 'yes')
     out.push(
-      `@media(min-width:${BREAKPOINT_MAXWIDTH.tablet + 1}px){${hiddenRule(wrapSel, editable, "desktop")}}`,
+      `@media(min-width:${BREAKPOINT_MAXWIDTH.tablet + 1}px){${hiddenRule(wrapSel, editable, 'desktop')}}`,
     );
-  if (s._hideTablet === "yes")
+  if (s._hideTablet === 'yes')
     out.push(
-      `@media(min-width:${BREAKPOINT_MAXWIDTH.mobile + 1}px) and (max-width:${BREAKPOINT_MAXWIDTH.tablet}px){${hiddenRule(wrapSel, editable, "tablet")}}`,
+      `@media(min-width:${BREAKPOINT_MAXWIDTH.mobile + 1}px) and (max-width:${BREAKPOINT_MAXWIDTH.tablet}px){${hiddenRule(wrapSel, editable, 'tablet')}}`,
     );
-  if (s._hideMobile === "yes")
-    out.push(`@media(max-width:${BREAKPOINT_MAXWIDTH.mobile}px){${hiddenRule(wrapSel, editable, "mobile")}}`);
+  if (s._hideMobile === 'yes')
+    out.push(
+      `@media(max-width:${BREAKPOINT_MAXWIDTH.mobile}px){${hiddenRule(wrapSel, editable, 'mobile')}}`,
+    );
 
   // Advanced: free-form CSS, `selector` token scoped to this element.
-  if (typeof s._customCss === "string" && s._customCss.trim()) {
+  if (typeof s._customCss === 'string' && s._customCss.trim()) {
     out.push(s._customCss.replace(/selector/g, wrapSel));
   }
 
   // Responsive default: row containers stack into a column on mobile,
   // unless _direction is explicitly overridden for mobile.
-  if (node.type === "container") {
+  if (node.type === 'container') {
     const dirAt = (bp: Breakpoint): string | undefined => {
       const v = (node.styles as StyleVariant[]).find(
-        (x) => x.breakpoint === bp && x.state === "normal",
+        (x) => x.breakpoint === bp && x.state === 'normal',
       );
       const d = v?.props?._direction;
-      return typeof d === "string" ? d : undefined;
+      return typeof d === 'string' ? d : undefined;
     };
-    const mobile = dirAt("mobile") ?? dirAt("mobilesm");
-    const effective = dirAt("tablet") ?? dirAt("laptop") ?? dirAt("desktop");
-    if (!mobile && effective && effective.startsWith("row")) {
+    // Boxed children centre themselves with auto inline margins: in a row those
+    // margins swallow the free space and override justify-content (wrapped
+    // rows ended up centred whatever the alignment), so they only apply in a
+    // column. `:where` keeps the child's own _margin winning.
+    const boxedChildren = (bp: Breakpoint, dir: string): string =>
+      mediaWrap(
+        bp,
+        `${wrapSel}>:where(.b-container--boxed){margin-inline:${dir.startsWith('row') ? '0' : 'auto'}}`,
+      );
+    for (const bp of Object.keys(BREAKPOINT_ORDER) as Breakpoint[]) {
+      const d = dirAt(bp);
+      if (d) out.push(boxedChildren(bp, d));
+    }
+    const mobile = dirAt('mobile') ?? dirAt('mobilesm');
+    const effective = dirAt('tablet') ?? dirAt('laptop') ?? dirAt('desktop');
+    if (!mobile && effective && effective.startsWith('row')) {
       out.push(
         `@media(max-width:${BREAKPOINT_MAXWIDTH.mobile}px){${wrapSel}{flex-direction:column}}`,
+        boxedChildren('mobile', 'column'),
       );
     }
   }
 
-  return out.join("\n");
+  return out.join('\n');
 }

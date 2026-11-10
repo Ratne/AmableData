@@ -1,4 +1,4 @@
-import { icon as iconSvg, ICON_NAMES, type ControlDef } from '@amable/builder';
+import { type ControlDef } from '@amable/builder';
 import { cn } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Input } from '@amable/ui/ui/input';
@@ -40,6 +40,7 @@ import { MediaInput } from '../components/media-library';
 import { useBuilderLabel } from '../lib/builder-i18n';
 import { ColorField } from './color-field';
 import { FontPicker } from './font-picker';
+import { IconField } from './icon-picker';
 import { RichTextField } from './rich-text';
 import { ShapeDividerControl } from './shape-divider-control';
 import { CheckoutPicker, EventTypePicker, FormPicker } from './widget-pickers';
@@ -59,7 +60,8 @@ interface FieldProps {
   widgetType?: string;
 }
 
-const rec = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
+const rec = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 const num = (v: unknown): string => (v === undefined || v === null ? '' : String(v));
 
 /** Icons of `choose` options in the catalog; unknown names fall back to the text label. */
@@ -107,7 +109,12 @@ function Row({ label, badge, children }: { label: string; badge?: string; childr
   );
 }
 
-const unitSelect = (units: readonly string[], unit: string, disabled: boolean | undefined, onChange: (u: string) => void) =>
+const unitSelect = (
+  units: readonly string[],
+  unit: string,
+  disabled: boolean | undefined,
+  onChange: (u: string) => void,
+) =>
   units.length > 1 ? (
     <select
       className="h-8 rounded-md border bg-background px-1 text-xs"
@@ -128,7 +135,8 @@ function SliderField({ def, value, onChange, disabled }: FieldProps) {
   const units = def.units ?? ['px'];
   const unit = typeof v['unit'] === 'string' ? v['unit'] : (units[0] ?? 'px');
   const size = num(v['size']);
-  const set = (patch: Record<string, unknown>) => onChange({ size: v['size'] ?? '', unit, ...patch });
+  const set = (patch: Record<string, unknown>) =>
+    onChange({ size: v['size'] ?? '', unit, ...patch });
   return (
     <div className="flex items-center gap-2">
       <input
@@ -200,10 +208,17 @@ function UrlField({ value, onChange, disabled, anchors }: FieldProps) {
   const urlStr = typeof value === 'string' ? value : typeof v['url'] === 'string' ? v['url'] : '';
   const target = v['target'] === '_blank';
   const list = anchors ?? [];
-  const selectedAnchor = urlStr.startsWith('#') && list.some((a) => `#${a.id}` === urlStr) ? urlStr : null;
+  const selectedAnchor =
+    urlStr.startsWith('#') && list.some((a) => `#${a.id}` === urlStr) ? urlStr : null;
   return (
     <div className="flex flex-col gap-1.5">
-      <Input value={urlStr} disabled={disabled} className="h-8 text-xs" placeholder={t('landing.editor.urlPlaceholder')} onChange={(e) => onChange({ ...v, url: e.target.value })} />
+      <Input
+        value={urlStr}
+        disabled={disabled}
+        className="h-8 text-xs"
+        placeholder={t('landing.editor.urlPlaceholder')}
+        onChange={(e) => onChange({ ...v, url: e.target.value })}
+      />
       {list.length > 0 ? (
         <Choice
           className="h-8 text-xs"
@@ -222,62 +237,12 @@ function UrlField({ value, onChange, disabled, anchors }: FieldProps) {
           className="size-4 accent-primary"
           checked={target}
           disabled={disabled}
-          onChange={(e) => onChange({ ...v, url: urlStr, target: e.target.checked ? '_blank' : '' })}
+          onChange={(e) =>
+            onChange({ ...v, url: urlStr, target: e.target.checked ? '_blank' : '' })
+          }
         />
         {t('landing.editor.newTab')}
       </label>
-    </div>
-  );
-}
-
-function IconField({ value, onChange, disabled }: FieldProps) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const cur = typeof value === 'string' ? value : '';
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <Input value={cur} disabled={disabled} className="h-8 text-xs" placeholder={t('landing.editor.iconName')} onChange={(e) => onChange(e.target.value)} />
-        <Button type="button" variant="outline" size="sm" className="h-8" disabled={disabled} onClick={() => setOpen((o) => !o)}>
-          {t('landing.editor.choose')}
-        </Button>
-      </div>
-      {open ? (
-        <div className="grid max-h-48 grid-cols-6 gap-1 overflow-auto rounded border p-2">
-          <button
-            type="button"
-            title={t('landing.editor.noIcon')}
-            aria-label={t('landing.editor.noIcon')}
-            className={cn(
-              'flex aspect-square items-center justify-center rounded border p-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted',
-              cur === 'none' && 'border-primary bg-muted',
-            )}
-            onClick={() => {
-              onChange('none');
-              setOpen(false);
-            }}
-          >
-            ∅
-          </button>
-          {ICON_NAMES.map((n) => (
-            <button
-              key={n}
-              type="button"
-              title={n}
-              aria-label={n}
-              className={cn(
-                'flex aspect-square items-center justify-center rounded border p-1.5 hover:bg-muted [&_svg]:size-5',
-                cur === n && 'border-primary bg-muted',
-              )}
-              onClick={() => {
-                onChange(n);
-                setOpen(false);
-              }}
-              dangerouslySetInnerHTML={{ __html: iconSvg(n) }}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -293,7 +258,11 @@ function TypographyField({ value, onChange, disabled }: FieldProps) {
   return (
     <div className="flex flex-col gap-2 rounded-md border p-2">
       <Row label={t('landing.editor.fontFamily')}>
-        <FontPicker value={typeof v['fontFamily'] === 'string' ? v['fontFamily'] : ''} disabled={disabled} onChange={(fontFamily) => set({ fontFamily })} />
+        <FontPicker
+          value={typeof v['fontFamily'] === 'string' ? v['fontFamily'] : ''}
+          disabled={disabled}
+          onChange={(fontFamily) => set({ fontFamily })}
+        />
         <div className="mt-1 flex flex-wrap gap-1">
           {(
             [
@@ -320,13 +289,19 @@ function TypographyField({ value, onChange, disabled }: FieldProps) {
             className="h-8"
             value={num(size['size'])}
             disabled={disabled}
-            onChange={(e) => set({ fontSize: { size: e.target.value === '' ? '' : Number(e.target.value), unit: 'px' } })}
+            onChange={(e) =>
+              set({
+                fontSize: { size: e.target.value === '' ? '' : Number(e.target.value), unit: 'px' },
+              })
+            }
           />
         </Row>
         <Row label={t('landing.editor.fontWeight')}>
           <Choice
             className="h-8"
-            value={typeof v['fontWeight'] === 'string' && v['fontWeight'] !== '' ? v['fontWeight'] : null}
+            value={
+              typeof v['fontWeight'] === 'string' && v['fontWeight'] !== '' ? v['fontWeight'] : null
+            }
             noneLabel={t('landing.editor.auto')}
             options={FONT_WEIGHTS.map((w) => ({ value: w, label: w }))}
             disabled={disabled}
@@ -340,13 +315,24 @@ function TypographyField({ value, onChange, disabled }: FieldProps) {
             className="h-8"
             value={num(lh['size'])}
             disabled={disabled}
-            onChange={(e) => set({ lineHeight: { size: e.target.value === '' ? '' : Number(e.target.value), unit: 'em' } })}
+            onChange={(e) =>
+              set({
+                lineHeight: {
+                  size: e.target.value === '' ? '' : Number(e.target.value),
+                  unit: 'em',
+                },
+              })
+            }
           />
         </Row>
         <Row label={t('landing.editor.textTransform')}>
           <Choice
             className="h-8"
-            value={typeof v['textTransform'] === 'string' && v['textTransform'] !== '' ? v['textTransform'] : null}
+            value={
+              typeof v['textTransform'] === 'string' && v['textTransform'] !== ''
+                ? v['textTransform']
+                : null
+            }
             noneLabel={t('landing.editor.auto')}
             options={(['none', 'uppercase', 'lowercase', 'capitalize'] as const).map((value) => ({
               value,
@@ -372,14 +358,26 @@ function BoxShadowField({ def, value, onChange, disabled }: FieldProps) {
       <div className={isText ? 'grid grid-cols-3 gap-1' : 'grid grid-cols-4 gap-1'}>
         {parts.map((k) => (
           <Row key={k} label={t(`landing.editor.shadow.${k}`)}>
-            <Input type="number" value={num(v[k])} disabled={disabled} className="h-8 px-1" onChange={(e) => set({ [k]: e.target.value === '' ? '' : Number(e.target.value) })} />
+            <Input
+              type="number"
+              value={num(v[k])}
+              disabled={disabled}
+              className="h-8 px-1"
+              onChange={(e) => set({ [k]: e.target.value === '' ? '' : Number(e.target.value) })}
+            />
           </Row>
         ))}
       </div>
       <ColorField value={v['color']} disabled={disabled} onChange={(color) => set({ color })} />
       {!isText ? (
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input type="checkbox" className="size-4 accent-primary" checked={!!v['inset']} disabled={disabled} onChange={(e) => set({ inset: e.target.checked })} />
+          <input
+            type="checkbox"
+            className="size-4 accent-primary"
+            checked={!!v['inset']}
+            disabled={disabled}
+            onChange={(e) => set({ inset: e.target.checked })}
+          />
           {t('landing.editor.shadow.inset')}
         </label>
       ) : null}
@@ -396,11 +394,18 @@ function GradientField({ value, onChange, disabled }: FieldProps) {
   const angle = typeof v['angle'] === 'number' ? v['angle'] : 180;
   const fromStop = typeof v['fromStop'] === 'number' ? v['fromStop'] : 0;
   const toStop = typeof v['toStop'] === 'number' ? v['toStop'] : 100;
-  const set = (patch: Record<string, unknown>) => onChange({ from, to, type, angle, fromStop, toStop, ...patch });
+  const set = (patch: Record<string, unknown>) =>
+    onChange({ from, to, type, angle, fromStop, toStop, ...patch });
 
   if (!from || !to) {
     return (
-      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => set({ from: '#2563eb', to: '#7c3aed' })}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => set({ from: '#2563eb', to: '#7c3aed' })}
+      >
         {t('landing.editor.gradient.add')}
       </Button>
     );
@@ -421,7 +426,11 @@ function GradientField({ value, onChange, disabled }: FieldProps) {
         <div key={colorKey} className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
             <Row label={t(labelKey)}>
-              <ColorField value={colorVal} disabled={disabled} onChange={(c) => set({ [colorKey]: c })} />
+              <ColorField
+                value={colorVal}
+                disabled={disabled}
+                onChange={(c) => set({ [colorKey]: c })}
+              />
             </Row>
           </div>
           <Row label={t('landing.editor.gradient.stop')}>
@@ -432,7 +441,9 @@ function GradientField({ value, onChange, disabled }: FieldProps) {
               value={String(stopVal)}
               disabled={disabled}
               className="h-8 w-16 px-1"
-              onChange={(e) => set({ [stopKey]: e.target.value === '' ? 0 : Number(e.target.value) })}
+              onChange={(e) =>
+                set({ [stopKey]: e.target.value === '' ? 0 : Number(e.target.value) })
+              }
             />
           </Row>
         </div>
@@ -465,7 +476,14 @@ function GradientField({ value, onChange, disabled }: FieldProps) {
           </Row>
         ) : null}
       </div>
-      <Button type="button" variant="ghost" size="sm" className="self-start text-destructive" disabled={disabled} onClick={() => onChange(undefined)}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="self-start text-destructive"
+        disabled={disabled}
+        onClick={() => onChange(undefined)}
+      >
         {t('landing.editor.gradient.remove')}
       </Button>
     </div>
@@ -478,7 +496,8 @@ function RepeaterField(props: FieldProps) {
   const label = useBuilderLabel();
   const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
   const fields = def.fields ?? [];
-  const update = (i: number, patch: Record<string, unknown>) => onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const update = (i: number, patch: Record<string, unknown>) =>
+    onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
     if (j < 0 || j >= rows.length) return;
@@ -505,10 +524,22 @@ function RepeaterField(props: FieldProps) {
                 {typeof titleValue === 'string' && titleValue ? titleValue : `#${String(i + 1)}`}
               </span>
               <div className="flex items-center gap-1">
-                <button type="button" aria-label={t('landing.editor.moveUp')} disabled={disabled} onClick={() => move(i, -1)} className="text-muted-foreground hover:text-foreground">
+                <button
+                  type="button"
+                  aria-label={t('landing.editor.moveUp')}
+                  disabled={disabled}
+                  onClick={() => move(i, -1)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   <ChevronUp className="size-3.5" />
                 </button>
-                <button type="button" aria-label={t('landing.editor.moveDown')} disabled={disabled} onClick={() => move(i, 1)} className="text-muted-foreground hover:text-foreground">
+                <button
+                  type="button"
+                  aria-label={t('landing.editor.moveDown')}
+                  disabled={disabled}
+                  onClick={() => move(i, 1)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   <ChevronDown className="size-3.5" />
                 </button>
                 <button
@@ -534,13 +565,26 @@ function RepeaterField(props: FieldProps) {
             </div>
             <div className="flex flex-col gap-2">
               {fields.map((f) => (
-                <ControlField key={f.key} {...props} def={f} value={row[f.key]} labelBadge={undefined} onChange={(val) => update(i, { [f.key]: val })} />
+                <ControlField
+                  key={f.key}
+                  {...props}
+                  def={f}
+                  value={row[f.key]}
+                  labelBadge={undefined}
+                  onChange={(val) => update(i, { [f.key]: val })}
+                />
               ))}
             </div>
           </div>
         );
       })}
-      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange([...rows, {}])}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => onChange([...rows, {}])}
+      >
         <Plus className="size-3.5" /> {t('landing.editor.addRow', { label: label(def.label) })}
       </Button>
     </div>
@@ -555,9 +599,12 @@ export function ControlField(props: FieldProps) {
   const str = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 
   const body = (() => {
-    if (widgetType === 'form' && def.key === 'formId') return <FormPicker value={str} disabled={disabled} onChange={onChange} />;
-    if (widgetType === 'booking' && def.key === 'eventSlug') return <EventTypePicker value={str} disabled={disabled} onChange={onChange} />;
-    if (widgetType === 'checkout' && def.key === 'checkoutId') return <CheckoutPicker value={str} disabled={disabled} onChange={onChange} />;
+    if (widgetType === 'form' && def.key === 'formId')
+      return <FormPicker value={str} disabled={disabled} onChange={onChange} />;
+    if (widgetType === 'booking' && def.key === 'eventSlug')
+      return <EventTypePicker value={str} disabled={disabled} onChange={onChange} />;
+    if (widgetType === 'checkout' && def.key === 'checkoutId')
+      return <CheckoutPicker value={str} disabled={disabled} onChange={onChange} />;
     switch (def.type) {
       case 'text':
       case 'number':
@@ -572,7 +619,13 @@ export function ControlField(props: FieldProps) {
           />
         );
       case 'richtext':
-        return <RichTextField value={typeof value === 'string' ? value : ''} onChange={onChange} disabled={disabled} />;
+        return (
+          <RichTextField
+            value={typeof value === 'string' ? value : ''}
+            onChange={onChange}
+            disabled={disabled}
+          />
+        );
       case 'textarea':
       case 'code':
         return (
@@ -589,8 +642,12 @@ export function ControlField(props: FieldProps) {
           <Choice
             className="h-8 text-sm"
             value={typeof value === 'string' && value !== '' ? value : null}
-            noneLabel={label(def.options?.find((o) => o.value === '')?.label) || t('landing.editor.default')}
-            options={(def.options ?? []).filter((o) => o.value !== '').map((o) => ({ value: o.value, label: label(o.label) }))}
+            noneLabel={
+              label(def.options?.find((o) => o.value === '')?.label) || t('landing.editor.default')
+            }
+            options={(def.options ?? [])
+              .filter((o) => o.value !== '')
+              .map((o) => ({ value: o.value, label: label(o.label) }))}
             disabled={disabled}
             onChange={(next) => onChange(next ?? '')}
           />
@@ -609,7 +666,10 @@ export function ControlField(props: FieldProps) {
                   aria-pressed={value === o.value}
                   disabled={disabled}
                   onClick={() => onChange(value === o.value ? '' : o.value)}
-                  className={cn('rounded px-2 py-1 text-xs', value === o.value ? 'bg-muted font-medium' : 'text-muted-foreground')}
+                  className={cn(
+                    'rounded px-2 py-1 text-xs',
+                    value === o.value ? 'bg-muted font-medium' : 'text-muted-foreground',
+                  )}
                 >
                   {OptIcon ? <OptIcon className="size-4" /> : label(o.label)}
                 </button>
@@ -624,7 +684,11 @@ export function ControlField(props: FieldProps) {
               type="checkbox"
               className="size-4 accent-primary"
               // Untouched value shows the control default (what the renderer applies).
-              checked={value === undefined || value === null ? def.default === 'yes' : value === 'yes' || value === true}
+              checked={
+                value === undefined || value === null
+                  ? def.default === 'yes'
+                  : value === 'yes' || value === true
+              }
               disabled={disabled}
               onChange={(e) => onChange(e.target.checked ? 'yes' : 'no')}
             />
@@ -638,7 +702,12 @@ export function ControlField(props: FieldProps) {
       case 'dimensions':
         return <DimensionsField {...props} />;
       case 'media': {
-        const url = typeof value === 'string' ? value : typeof rec(value)['url'] === 'string' ? String(rec(value)['url']) : '';
+        const url =
+          typeof value === 'string'
+            ? value
+            : typeof rec(value)['url'] === 'string'
+              ? String(rec(value)['url'])
+              : '';
         return <MediaInput value={url} disabled={disabled} onChange={onChange} />;
       }
       case 'url':
@@ -655,7 +724,12 @@ export function ControlField(props: FieldProps) {
         return <RepeaterField {...props} />;
       case 'popup-select': {
         const list = popups ?? [];
-        if (list.length === 0) return <p className="text-[11px] text-muted-foreground italic">{t('landing.editor.noPopups')}</p>;
+        if (list.length === 0)
+          return (
+            <p className="text-[11px] text-muted-foreground italic">
+              {t('landing.editor.noPopups')}
+            </p>
+          );
         return (
           <Choice
             className="h-8 text-sm"
@@ -669,7 +743,14 @@ export function ControlField(props: FieldProps) {
       }
       case 'shape':
         // value = the node settings; onChange receives a settings patch.
-        return <ShapeDividerControl prefix={def.key} settings={rec(value)} disabled={disabled} onPatch={onChange} />;
+        return (
+          <ShapeDividerControl
+            prefix={def.key}
+            settings={rec(value)}
+            disabled={disabled}
+            onPatch={onChange}
+          />
+        );
       default:
         return null;
     }
@@ -680,7 +761,11 @@ export function ControlField(props: FieldProps) {
   return (
     <Row label={label(def.label)} badge={labelBadge}>
       {body}
-      {def.description ? <span className="text-[11px] leading-snug text-muted-foreground italic">{label(def.description)}</span> : null}
+      {def.description ? (
+        <span className="text-[11px] leading-snug text-muted-foreground italic">
+          {label(def.description)}
+        </span>
+      ) : null}
     </Row>
   );
 }

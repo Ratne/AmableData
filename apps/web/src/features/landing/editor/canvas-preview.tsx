@@ -1,5 +1,10 @@
 import { cn } from '@amable/ui';
-import { renderBuilderDocumentHtml, type BuilderDocument } from '@amable/builder';
+import {
+  loadPhosphor,
+  missingPhosphorWeights,
+  renderBuilderDocumentHtml,
+  type BuilderDocument,
+} from '@amable/builder';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useI18n } from '../../../i18n';
 import type { CanvasZoom } from '../lib/devices';
@@ -74,7 +79,14 @@ export function CanvasPreview({
   const savedScroll = useRef(0);
   const selectedRef = useRef<string | null>(selectedId);
   selectedRef.current = selectedId;
-  const handlers = useRef({ onSelectNode, onContextMenu, onStartMove, onDelete, onResize, onShortcut });
+  const handlers = useRef({
+    onSelectNode,
+    onContextMenu,
+    onStartMove,
+    onDelete,
+    onResize,
+    onShortcut,
+  });
   handlers.current = { onSelectNode, onContextMenu, onStartMove, onDelete, onResize, onShortcut };
 
   useEffect(() => {
@@ -97,26 +109,51 @@ export function CanvasPreview({
   }, []);
 
   const docKey = JSON.stringify(doc);
+  const [iconTick, setIconTick] = useState(0);
+  useEffect(() => {
+    const missing = missingPhosphorWeights(docKey);
+    if (missing.length === 0) return undefined;
+    let live = true;
+    void Promise.all(missing.map(loadPhosphor)).then(() => {
+      if (live) setIconTick((n) => n + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, [docKey]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const parsed = editorCanvasDocument(renderBuilderDocumentHtml(doc, { mode: 'editor', tenantSlug, pageId }));
+      const parsed = editorCanvasDocument(
+        renderBuilderDocumentHtml(doc, { mode: 'editor', tenantSlug, pageId }),
+      );
       const win = iframeRef.current?.contentWindow;
       try {
         savedScroll.current = win?.scrollY ?? savedScroll.current;
       } catch {
         /* frame not ready */
       }
-      const sig = Array.from(parsed.head.querySelectorAll('link[rel="stylesheet"],link[rel="preconnect"]'))
+      const sig = Array.from(
+        parsed.head.querySelectorAll('link[rel="stylesheet"],link[rel="preconnect"]'),
+      )
         .map((l) => l.getAttribute('href') ?? '')
         .join('|');
-      const canPatch = htmlRef.current !== '' && Boolean(win?.document?.body) && sig === fontSig.current;
+      const canPatch =
+        htmlRef.current !== '' && Boolean(win?.document?.body) && sig === fontSig.current;
       fontSig.current = sig;
       if (canPatch && win) {
         // The runtime and the editor overlay already run with delegated listeners.
         parsed.body.querySelectorAll('script').forEach((s) => s.remove());
-        const styles = Array.from(parsed.head.querySelectorAll('style')).map((s) => s.textContent ?? '');
-        win.postMessage({ source: 'b-editor', type: 'replace', body: parsed.body.innerHTML, styles }, '*');
-        win.postMessage({ source: 'b-editor', type: 'select', id: selectedRef.current, scroll: false }, '*');
+        const styles = Array.from(parsed.head.querySelectorAll('style')).map(
+          (s) => s.textContent ?? '',
+        );
+        win.postMessage(
+          { source: 'b-editor', type: 'replace', body: parsed.body.innerHTML, styles },
+          '*',
+        );
+        win.postMessage(
+          { source: 'b-editor', type: 'select', id: selectedRef.current, scroll: false },
+          '*',
+        );
       } else {
         const text = serializeDocument(parsed);
         htmlRef.current = text;
@@ -126,7 +163,7 @@ export function CanvasPreview({
     return () => window.clearTimeout(timer);
     // docKey captures every change of the document.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docKey, tenantSlug, pageId]);
+  }, [docKey, iconTick, tenantSlug, pageId]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -135,12 +172,23 @@ export function CanvasPreview({
       if (d?.source !== 'b-preview') return;
       const h = handlers.current;
       if (d.type === 'shortcut') {
-        if (d.action && (CANVAS_SHORTCUTS as readonly string[]).includes(d.action)) h.onShortcut?.(d.action as CanvasShortcut);
+        if (d.action && (CANVAS_SHORTCUTS as readonly string[]).includes(d.action))
+          h.onShortcut?.(d.action as CanvasShortcut);
         return;
       }
       if (d.type === 'resize') {
-        if (d.leftId && d.rightId && typeof d.leftPct === 'number' && typeof d.rightPct === 'number') {
-          h.onResize({ leftId: d.leftId, rightId: d.rightId, leftPct: d.leftPct, rightPct: d.rightPct });
+        if (
+          d.leftId &&
+          d.rightId &&
+          typeof d.leftPct === 'number' &&
+          typeof d.rightPct === 'number'
+        ) {
+          h.onResize({
+            leftId: d.leftId,
+            rightId: d.rightId,
+            leftPct: d.leftPct,
+            rightPct: d.rightPct,
+          });
         }
         return;
       }
@@ -153,7 +201,11 @@ export function CanvasPreview({
         const el = iframeRef.current;
         const rect = el?.getBoundingClientRect();
         const scale = el && rect && el.offsetWidth > 0 ? rect.width / el.offsetWidth : 1;
-        h.onContextMenu(d.id, (rect?.left ?? 0) + (d.x ?? 0) * scale, (rect?.top ?? 0) + (d.y ?? 0) * scale);
+        h.onContextMenu(
+          d.id,
+          (rect?.left ?? 0) + (d.x ?? 0) * scale,
+          (rect?.top ?? 0) + (d.y ?? 0) * scale,
+        );
       }
     };
     window.addEventListener('message', onMessage);
@@ -164,7 +216,10 @@ export function CanvasPreview({
   useEffect(() => {
     if (lastSelected.current === selectedId) return;
     lastSelected.current = selectedId;
-    iframeRef.current?.contentWindow?.postMessage({ source: 'b-editor', type: 'select', id: selectedId, scroll: true }, '*');
+    iframeRef.current?.contentWindow?.postMessage(
+      { source: 'b-editor', type: 'select', id: selectedId, scroll: true },
+      '*',
+    );
   }, [selectedId, iframeRef]);
 
   const onFrameLoad = () => {
@@ -175,7 +230,10 @@ export function CanvasPreview({
     } catch {
       /* ignore */
     }
-    win.postMessage({ source: 'b-editor', type: 'select', id: selectedRef.current, scroll: false }, '*');
+    win.postMessage(
+      { source: 'b-editor', type: 'select', id: selectedRef.current, scroll: false },
+      '*',
+    );
   };
 
   const pad = 24;
@@ -184,7 +242,11 @@ export function CanvasPreview({
   const frameH = scale > 0 ? Math.max(0, (size.h - pad) / scale) : 0;
 
   return (
-    <div ref={containerRef} className="flex h-full flex-col items-center overflow-auto bg-muted/40 p-3" style={{ scrollbarGutter: 'stable' }}>
+    <div
+      ref={containerRef}
+      className="flex h-full flex-col items-center overflow-auto bg-muted/40 p-3"
+      style={{ scrollbarGutter: 'stable' }}
+    >
       <div
         style={{ width: deviceWidth * scale, height: frameH * scale, flex: 'none' }}
         className={cn(deviceWidth < 1100 && 'overflow-hidden rounded-xl border shadow-xl')}
@@ -193,7 +255,13 @@ export function CanvasPreview({
           ref={iframeRef}
           title={t('landing.editor.canvas')}
           className="bg-white"
-          style={{ width: deviceWidth, height: frameH, transform: `scale(${String(scale)})`, transformOrigin: 'top left', border: 0 }}
+          style={{
+            width: deviceWidth,
+            height: frameH,
+            transform: `scale(${String(scale)})`,
+            transformOrigin: 'top left',
+            border: 0,
+          }}
           srcDoc={html}
           onLoad={onFrameLoad}
           sandbox="allow-scripts allow-same-origin"

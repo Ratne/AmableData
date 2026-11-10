@@ -8,7 +8,8 @@ export const landingEn = {
   'landing.kind.html': 'HTML',
   'landing.kind.htmlHint': 'Page written in raw HTML: served as-is, edited as source code.',
   'landing.html.sourceLabel': 'HTML source of the page',
-  'landing.html.hint': 'The whole page (doctype, head, body) is served as written; only the analytics tracker is added. Embed CRM forms, bookings and checkouts with their snippets to keep automations and integrations working.',
+  'landing.html.hint':
+    'The whole page (doctype, head, body) is served as written; only the analytics tracker is added. Embed CRM forms, bookings and checkouts with their snippets to keep automations and integrations working.',
   'landing.filter.all': 'All',
   'landing.field.title': 'Title',
   'landing.field.path': 'Path',
@@ -43,7 +44,8 @@ export const landingEn = {
 
   'landing.settings.general': 'General',
   'landing.settings.pathHint': 'Must be unique on the domain. Changing it breaks old links.',
-  'landing.settings.hostHint': 'A connected domain, e.g. www.example.com. Leave empty to publish only on the default address.',
+  'landing.settings.hostHint':
+    'A connected domain, e.g. www.example.com. Leave empty to publish only on the default address.',
   'landing.settings.lang': 'Page language',
   'landing.settings.langHint': 'Language code of the page, e.g. en or it.',
   'landing.settings.favicon': 'Favicon',
@@ -53,7 +55,8 @@ export const landingEn = {
   'landing.settings.analyticsSite': 'Analytics site',
   'landing.settings.analyticsAuto': 'Automatic (matched by domain)',
   'landing.settings.analyticsHint': 'The tracker of this site is added to the published page.',
-  'landing.settings.analyticsUnavailable': 'Analytics sites could not be loaded; the automatic choice applies.',
+  'landing.settings.analyticsUnavailable':
+    'Analytics sites could not be loaded; the automatic choice applies.',
   'landing.settings.saved': 'Saved',
   'landing.settings.saveFirst': 'Save your changes before publishing.',
   'landing.seo.title': 'SEO title',
@@ -69,7 +72,8 @@ export const landingEn = {
   'landing.publish.section': 'Publishing',
   'landing.publish.title': 'Publish page',
   'landing.publish.description': 'The current draft goes live and becomes a new version.',
-  'landing.publish.descriptionUrl': 'The current draft goes live at {url} and becomes a new version.',
+  'landing.publish.descriptionUrl':
+    'The current draft goes live at {url} and becomes a new version.',
   'landing.publish.note': 'Version note',
   'landing.publish.noteHint': 'Optional: what changed in this version.',
   'landing.publish.action': 'Publish',
@@ -77,7 +81,8 @@ export const landingEn = {
   'landing.publish.lastPublished': 'Last published {date}',
   'landing.publish.unpublish': 'Unpublish',
   'landing.publish.unpublishTitle': 'Unpublish this page?',
-  'landing.publish.unpublishBody': 'Visitors will get a "not found" page. The draft and the versions are kept.',
+  'landing.publish.unpublishBody':
+    'Visitors will get a "not found" page. The draft and the versions are kept.',
   'landing.publish.unpublished': 'Page unpublished',
 
   'landing.versions.title': 'Versions',
@@ -86,7 +91,8 @@ export const landingEn = {
   'landing.versions.live': 'Live',
   'landing.versions.restore': 'Restore to draft',
   'landing.versions.restoreTitle': 'Restore version {version} to the draft?',
-  'landing.versions.restoreBody': 'The current draft is replaced by this version. The live page does not change until you publish.',
+  'landing.versions.restoreBody':
+    'The current draft is replaced by this version. The live page does not change until you publish.',
   'landing.versions.restored': 'Version restored to the draft',
 
   'landing.media.title': 'Media library',
@@ -111,7 +117,8 @@ export const landingEn = {
   'landing.editor.backToList': 'Back to landing pages',
   'landing.editor.undo': 'Undo',
   'landing.editor.redo': 'Redo',
-  'landing.editor.breakpointHint': 'Style changes are saved on this breakpoint; wider devices are not affected.',
+  'landing.editor.breakpointHint':
+    'Style changes are saved on this breakpoint; wider devices are not affected.',
   'landing.editor.zoomFit': 'Fit',
   'landing.editor.fullView': 'Hide panels',
   'landing.editor.showPanels': 'Show panels',
@@ -120,7 +127,8 @@ export const landingEn = {
   'landing.editor.saveFailed': 'Not saved',
   'landing.editor.unsaved': 'Unsaved changes',
   'landing.editor.allSaved': 'Draft saved',
-  'landing.editor.staleReloaded': 'The draft was changed elsewhere: the latest version has been loaded.',
+  'landing.editor.staleReloaded':
+    'The draft was changed elsewhere: the latest version has been loaded.',
   'landing.editor.widgets': 'Widgets',
   'landing.editor.structure': 'Structure',
   'landing.editor.searchWidgets': 'Search widgets',
@@ -143,11 +151,13 @@ export const landingEn = {
   'landing.editor.pasteInside': 'Paste inside ({name})',
   'landing.editor.copyStyle': 'Copy style',
   'landing.editor.pasteStyle': 'Paste style',
-  'landing.editor.copied': '"{name}" copied to the Clipboard — drag it from the tray, here or on another page',
+  'landing.editor.copied':
+    '"{name}" copied to the Clipboard — drag it from the tray, here or on another page',
   'landing.editor.copyToClipboard': 'Copy to clipboard (paste it here or on another page)',
   'landing.editor.copyPage': 'Copy whole page',
   'landing.editor.copySelected': 'Copy selected: {name}',
-  'landing.editor.copyFailed': 'Copy failed: the clipboard was not saved. Check your connection and try again.',
+  'landing.editor.copyFailed':
+    'Copy failed: the clipboard was not saved. Check your connection and try again.',
   'landing.editor.pageEmpty': 'The page is empty',
   'landing.editor.pageLabel': 'Whole page "{name}" ({count} blocks)',
   'landing.editor.blockLabel': '{name} ({count} elements)',
@@ -159,7 +169,8 @@ export const landingEn = {
   'landing.clipboard.title': 'Clipboard',
   'landing.clipboard.hint': 'Clipboard: your copies of the last 24 hours (drag them onto the page)',
   'landing.clipboard.subtitle': 'Drag an entry onto the page, or click it to paste',
-  'landing.clipboard.empty': 'Nothing copied yet. Use "Copy" on a block or "Copy whole page": copies stay here for 24 hours, on other pages and browsers too.',
+  'landing.clipboard.empty':
+    'Nothing copied yet. Use "Copy" on a block or "Copy whole page": copies stay here for 24 hours, on other pages and browsers too.',
   'landing.clipboard.expires': 'Entries clear themselves after 24 hours',
   'landing.clipboard.clear': 'Clear',
   'landing.clipboard.remove': 'Remove from clipboard',
@@ -174,7 +185,8 @@ export const landingEn = {
   'landing.editor.stylePastedPartial': 'Style pasted (compatible properties only)',
   'landing.editor.deleteTitle': 'Delete "{name}"?',
   'landing.editor.deleteBody': 'You can undo with Ctrl/Cmd+Z.',
-  'landing.editor.deleteBodyChildren': 'The {count} elements inside are deleted too. You can undo with Ctrl/Cmd+Z.',
+  'landing.editor.deleteBodyChildren':
+    'The {count} elements inside are deleted too. You can undo with Ctrl/Cmd+Z.',
   'landing.editor.deleted': 'Element deleted',
   'landing.editor.undoHint': 'Ctrl/Cmd+Z to undo',
   'landing.editor.dropNotAllowed': 'not allowed here',
@@ -186,13 +198,15 @@ export const landingEn = {
   'landing.editor.tab.content': 'Content',
   'landing.editor.tab.style': 'Style',
   'landing.editor.tab.advanced': 'Advanced',
-  'landing.editor.editingDevice': 'You are editing the {device} view. Controls with the badge apply only here; left empty they inherit from the larger device.',
+  'landing.editor.editingDevice':
+    'You are editing the {device} view. Controls with the badge apply only here; left empty they inherit from the larger device.',
   'landing.editor.state': 'State:',
   'landing.editor.state.normal': 'Normal',
   'landing.editor.state.hover': 'Hover',
   'landing.editor.overrideHint': 'Value set on {device}',
   'landing.editor.resetOverride': 'Remove the {device} value',
-  'landing.editor.responsiveBadgeHint': 'This value applies only to the {device} view; left empty it inherits from the larger device.',
+  'landing.editor.responsiveBadgeHint':
+    'This value applies only to the {device} view; left empty it inherits from the larger device.',
   'landing.editor.default': 'Default',
   'landing.editor.auto': 'Auto',
   'landing.editor.none': 'None',
@@ -213,10 +227,24 @@ export const landingEn = {
   'landing.editor.newTab': 'Open in a new tab',
   'landing.editor.iconName': 'Icon name',
   'landing.editor.noIcon': 'No icon (text only)',
+  'landing.editor.iconLibrary': 'Icon library',
+  'landing.editor.iconBasic': 'Basic',
+  'landing.editor.iconSearch': 'Search icons (e.g. rocket)…',
+  'landing.editor.iconLoading': 'Loading icons…',
+  'landing.editor.iconNoResults': 'No icons found',
+  'landing.editor.iconMore': 'Showing {shown} of {total}: refine the search',
+  'landing.editor.iconWeight.regular': 'Regular',
+  'landing.editor.iconWeight.thin': 'Thin',
+  'landing.editor.iconWeight.light': 'Light',
+  'landing.editor.iconWeight.bold': 'Bold',
+  'landing.editor.iconWeight.fill': 'Fill',
+  'landing.editor.iconWeight.duotone': 'Duotone',
   'landing.editor.fontFamily': 'Font family (Google Fonts)',
   'landing.editor.fontPlaceholder': 'Search a Google font…',
-  'landing.editor.fontMissing': 'Font not found on Google Fonts: the page will use the fallback font.',
-  'landing.editor.fontWebsafe': 'System font (not on Google Fonts): rendering may vary across devices.',
+  'landing.editor.fontMissing':
+    'Font not found on Google Fonts: the page will use the fallback font.',
+  'landing.editor.fontWebsafe':
+    'System font (not on Google Fonts): rendering may vary across devices.',
   'landing.editor.themeHeadingFont': 'Theme heading font',
   'landing.editor.themeBodyFont': 'Theme body font',
   'landing.editor.fontSize': 'Size (px)',
@@ -271,7 +299,8 @@ export const landingEn = {
   'landing.editor.noCheckouts': 'No checkouts yet: create one in E-commerce → Checkouts first.',
   'landing.editor.missingCheckout': 'Missing checkout ({id})',
   'landing.editor.checkoutIdPlaceholder': 'Checkout id',
-  'landing.editor.checkoutsUnavailable': 'The checkouts list could not be loaded: enter the checkout id.',
+  'landing.editor.checkoutsUnavailable':
+    'The checkouts list could not be loaded: enter the checkout id.',
   'landing.editor.chooseEventType': '— Choose an event type —',
   'landing.editor.noEventTypes': 'No event types yet: create one in Bookings first.',
   'landing.editor.eventSlugPlaceholder': 'event-type-slug',
@@ -317,7 +346,8 @@ export const landingEn = {
   'landing.sections.deleteBody': 'Pages that already use it are not changed.',
   'landing.sections.deleted': 'Section deleted',
   'landing.sections.save': 'Save as section',
-  'landing.sections.saveHint': 'The selected element and everything inside it become reusable on any page.',
+  'landing.sections.saveHint':
+    'The selected element and everything inside it become reusable on any page.',
   'landing.sections.name': 'Name',
   'landing.sections.category': 'Category',
   'landing.sections.categoryHint': 'Optional, e.g. Hero, Footer, Pricing.',
@@ -340,11 +370,14 @@ export const landingEn = {
   'landing.transfer.invalidArchive': 'This file is not a landing page export.',
   'landing.transfer.reportTitle': 'Page imported: what to check',
   'landing.transfer.reportMedia': '{imported} images added to the library, {reused} already there.',
-  'landing.transfer.relinkForms': '{count} form widgets still point at the original installation: create the forms here and select them in the editor.',
-  'landing.transfer.relinkBookings': '{count} booking widgets need an event type of this workspace.',
+  'landing.transfer.relinkForms':
+    '{count} form widgets still point at the original installation: create the forms here and select them in the editor.',
+  'landing.transfer.relinkBookings':
+    '{count} booking widgets need an event type of this workspace.',
   'landing.transfer.relinkCheckouts': '{count} checkout widgets need a checkout of this workspace.',
   'landing.transfer.mediaMissing': 'Images not imported (missing or damaged in the file): {files}',
-  'landing.transfer.mediaSkipped': 'Images left out of the export (size limit or missing at the source): {files}',
+  'landing.transfer.mediaSkipped':
+    'Images left out of the export (size limit or missing at the source): {files}',
   'landing.transfer.pathRenamed': 'The path was taken: the page is at {path}.',
   'landing.transfer.analytics': 'The analytics site was reset to automatic.',
   'landing.transfer.openEditor': 'Open editor',

@@ -5,6 +5,7 @@ import {
   type PagesGatewayOps,
   type PublishedPage,
 } from '@amable/builder';
+import '@amable/builder/phosphor-all';
 import { Hono, type Context, type Handler } from 'hono';
 import { siteStub, tenantSitesStub } from '../analytics/rpc';
 import { CHECKOUT_PERMISSIONS } from '../checkout/routes';
@@ -45,7 +46,10 @@ function notFoundPage(): Response {
 function unavailable(error: unknown): Response {
   if (error instanceof GatewayCallError && error.body.status === 404) return notFoundPage();
   console.error('[pages] gateway call failed', error);
-  return new Response('Service unavailable', { status: 503, headers: { 'cache-control': 'no-store' } });
+  return new Response('Service unavailable', {
+    status: 503,
+    headers: { 'cache-control': 'no-store' },
+  });
 }
 
 async function sha256Base64(text: string): Promise<string> {
@@ -75,7 +79,9 @@ export async function trackerSiteId(
   try {
     const ids = await tenantSitesStub(env.ANALYTICS, tenantId).indexList();
     // allSettled: one unreachable site DO must not drop the tracker from the page.
-    const records = await Promise.allSettled(ids.map((id) => siteStub(env.ANALYTICS, id).getSite()));
+    const records = await Promise.allSettled(
+      ids.map((id) => siteStub(env.ANALYTICS, id).getSite()),
+    );
     const index = records.findIndex(
       (result) =>
         result.status === 'fulfilled' &&
@@ -119,10 +125,16 @@ async function resolvePage(c: Ctx, options: ServeOptions): Promise<ResolvedPage>
   const now = Date.now();
   const memo = resolveMemo.get(key);
   if (memo !== undefined && memo.expires > now) return memo.value;
-  const value = await callCore<PagesGatewayOps, 'pages.resolve'>(c.env, 'pages.resolve', options.ref, clientInfo(c), {
-    host: options.host,
-    path: options.path,
-  });
+  const value = await callCore<PagesGatewayOps, 'pages.resolve'>(
+    c.env,
+    'pages.resolve',
+    options.ref,
+    clientInfo(c),
+    {
+      host: options.host,
+      path: options.path,
+    },
+  );
   if (resolveMemo.size >= RESOLVE_MAX_ENTRIES) {
     for (const [k, entry] of resolveMemo) if (entry.expires <= now) resolveMemo.delete(k);
     if (resolveMemo.size >= RESOLVE_MAX_ENTRIES) resolveMemo.clear();
@@ -148,7 +160,12 @@ async function servePage(c: Ctx, options: ServeOptions): Promise<Response> {
     if (hit !== undefined) return hit;
   }
   const requestHost = new URL(c.req.url).hostname.toLowerCase();
-  const siteId = await trackerSiteId(c.env, tenant.id, published.settings.analytics_site_id, published.page.host ?? requestHost);
+  const siteId = await trackerSiteId(
+    c.env,
+    tenant.id,
+    published.settings.analytics_site_id,
+    published.page.host ?? requestHost,
+  );
   const { seo, settings } = published;
   const rendered = renderBuilderPage(published.document, {
     mode: 'public',
@@ -176,7 +193,9 @@ async function servePage(c: Ctx, options: ServeOptions): Promise<Response> {
       'content-security-policy': builderPageCsp(rendered, hashes),
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'strict-origin-when-cross-origin',
-      ...(rendered.embeds.includes('checkout') ? { 'permissions-policy': CHECKOUT_PERMISSIONS } : {}),
+      ...(rendered.embeds.includes('checkout')
+        ? { 'permissions-policy': CHECKOUT_PERMISSIONS }
+        : {}),
       ...(seo.noindex ? { 'x-robots-tag': 'noindex' } : {}),
     },
   });
@@ -184,7 +203,9 @@ async function servePage(c: Ctx, options: ServeOptions): Promise<Response> {
     const stored = response.clone();
     const cached = new Response(stored.body, stored);
     cached.headers.set('cache-control', `public, max-age=${HTML_CACHE_SECONDS}`);
-    const put = cache.put(cacheKey, cached).catch((error: unknown) => console.error('[pages] cache put failed', error));
+    const put = cache
+      .put(cacheKey, cached)
+      .catch((error: unknown) => console.error('[pages] cache put failed', error));
     try {
       c.executionCtx.waitUntil(put);
     } catch {
@@ -194,10 +215,19 @@ async function servePage(c: Ctx, options: ServeOptions): Promise<Response> {
   return response;
 }
 
-async function serveSitemap(c: Ctx, ref: GatewayTenantRef, host: string | null, base: string): Promise<Response> {
+async function serveSitemap(
+  c: Ctx,
+  ref: GatewayTenantRef,
+  host: string | null,
+  base: string,
+): Promise<Response> {
   let urls: Array<{ path: string; published_at: number }>;
   try {
-    urls = (await callCore<PagesGatewayOps, 'pages.sitemap'>(c.env, 'pages.sitemap', ref, clientInfo(c), { host })).value.data;
+    urls = (
+      await callCore<PagesGatewayOps, 'pages.sitemap'>(c.env, 'pages.sitemap', ref, clientInfo(c), {
+        host,
+      })
+    ).value.data;
   } catch (error) {
     return unavailable(error);
   }
@@ -209,7 +239,12 @@ async function serveSitemap(c: Ctx, ref: GatewayTenantRef, host: string | null, 
     .join('');
   return new Response(
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`,
-    { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=300' } },
+    {
+      headers: {
+        'content-type': 'application/xml; charset=utf-8',
+        'cache-control': 'public, max-age=300',
+      },
+    },
   );
 }
 

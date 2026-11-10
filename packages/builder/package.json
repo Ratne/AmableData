@@ -5,12 +5,15 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./phosphor-all": "./src/phosphor/all.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p . && tsc -p test"
+    "typecheck": "tsc -p . && tsc -p test",
+    "gen:phosphor": "node scripts/gen-phosphor.mjs"
   },
   "devDependencies": {
+    "@phosphor-icons/core": "2.1.1",
     "typescript": "~7.0.2"
   },
   "dependencies": {

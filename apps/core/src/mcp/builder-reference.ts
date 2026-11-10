@@ -34,13 +34,14 @@ const VALUE_FORMATS: Readonly<Record<ControlType, string>> = {
   dimensions: '{ top, right, bottom, left: number | "", unit: "px" | "%" | "em" | "rem" }',
   media: '{ url: string } (absolute https URL, or the url of a file from upload_media)',
   url: '{ url: string, target?: "_blank", nofollow?: "yes" }',
-  icon: 'icon name string (see icons)',
+  icon: "icon name string (see icons), or any Phosphor glyph as 'ph:<name>' / 'ph-<thin|light|bold|fill|duotone>:<name>' (e.g. 'ph-bold:rocket-launch')",
   repeater: 'array of row objects, each with the keys of fields',
   code: 'string (raw, not sanitized)',
   typography:
     '{ fontFamily?: string, fontSize?: {size,unit}, fontWeight?: "400".."900", lineHeight?: {size,unit}, letterSpacing?: {size,unit}, textTransform?, fontStyle?, textDecoration? }',
   boxShadow: '{ x, y, blur, spread: number (px), color: string, inset?: boolean }',
-  gradient: '{ type: "linear" | "radial", from: color, to: color, fromStop?: 0-100, toStop?: 0-100, angle?: deg }',
+  gradient:
+    '{ type: "linear" | "radial", from: color, to: color, fromStop?: 0-100, toStop?: 0-100, angle?: deg }',
   'popup-select': 'id of a root-level popup node',
   shape: 'shape divider id string',
   hidden: 'internal, leave as is',
@@ -93,8 +94,7 @@ function embedSnippets(target: EmbedTarget): { [key: string]: Json } {
   const edge = target.edgeOrigin;
   const tenant = target.slug;
   return {
-    why:
-      'Use the CRM embeds instead of hand-written <form> tags: a form submission creates or updates the contact, applies the form tags and fires the automations and integrations tied to the form (same for bookings and checkouts). data-amable-page attributes the submission to this landing page in analytics and reports.',
+    why: 'Use the CRM embeds instead of hand-written <form> tags: a form submission creates or updates the contact, applies the form tags and fires the automations and integrations tied to the form (same for bookings and checkouts). data-amable-page attributes the submission to this landing page in analytics and reports.',
     form: {
       find_ids: 'list_forms (id of the form).',
       snippet: `<div data-amable-form="<formId>" data-amable-tenant="${tenant}" data-amable-page="<pageId>"></div>\n<script async src="${edge}/forms.js"></script>`,
@@ -115,7 +115,13 @@ function embedSnippets(target: EmbedTarget): { [key: string]: Json } {
   };
 }
 
-const CATEGORIES: readonly WidgetDef['category'][] = ['layout', 'basic', 'media', 'content', 'form'];
+const CATEGORIES: readonly WidgetDef['category'][] = [
+  'layout',
+  'basic',
+  'media',
+  'content',
+  'form',
+];
 
 /** What a client needs before writing a page document: both document kinds, the widget index and the CRM embeds. */
 export function builderOverview(target: EmbedTarget): { [key: string]: Json } {
@@ -125,7 +131,8 @@ export function builderOverview(target: EmbedTarget): { [key: string]: Json } {
       canvas: {
         when: 'Default. Pages built from widgets, editable afterwards in the visual editor of the web app.',
         shape: '{ editorKind: "canvas", tokens: {…}, body: ElementNode[], customCss?: string }',
-        custom_html: 'For a block the widgets cannot express, use the "html" widget (settings.html, raw HTML/CSS/JS) inside the canvas.',
+        custom_html:
+          'For a block the widgets cannot express, use the "html" widget (settings.html, raw HTML/CSS/JS) inside the canvas.',
       },
       html: {
         when: 'Full control: a page written from scratch as one HTML document. Served exactly as written; only the analytics tracker is added before </body>. Edited in the web app as source code, not on the canvas.',
@@ -157,7 +164,11 @@ export function builderOverview(target: EmbedTarget): { [key: string]: Json } {
         css_variables:
           'Rendered as --b-color-<name> (primary, secondary, accent, text, heading, background, muted, border), --b-font-heading, --b-font-body, --b-radius, --b-container: use var(--b-color-primary) in colors.',
       },
-      limits: { max_nodes: BUILDER_LIMITS.maxNodes, max_depth: BUILDER_LIMITS.maxDepth, custom_css_chars: 100_000 },
+      limits: {
+        max_nodes: BUILDER_LIMITS.maxNodes,
+        max_depth: BUILDER_LIMITS.maxDepth,
+        custom_css_chars: 100_000,
+      },
       structure:
         'body is a list of root containers (sections); each holds widgets or nested containers (columns: a row container with _direction "row" and child containers). Popups are root-level "popup" nodes opened by buttons.',
       widgets: Object.fromEntries(
@@ -165,7 +176,13 @@ export function builderOverview(target: EmbedTarget): { [key: string]: Json } {
           category,
           widgets
             .filter((w) => w.category === category)
-            .map((w) => compact({ type: w.type, title: w.title, container: w.isContainer === true ? true : undefined })),
+            .map((w) =>
+              compact({
+                type: w.type,
+                title: w.title,
+                container: w.isContainer === true ? true : undefined,
+              }),
+            ),
         ]),
       ),
       advanced_controls:
@@ -176,11 +193,30 @@ export function builderOverview(target: EmbedTarget): { [key: string]: Json } {
           {
             id: 'el_hero',
             type: 'container',
-            settings: { _containerType: 'flex', _direction: 'column', contentWidth: 'boxed', htmlTag: 'section' },
-            styles: [{ breakpoint: 'desktop', state: 'normal', props: { _padding: { top: 80, right: 24, bottom: 80, left: 24, unit: 'px' } } }],
+            settings: {
+              _containerType: 'flex',
+              _direction: 'column',
+              contentWidth: 'boxed',
+              htmlTag: 'section',
+            },
+            styles: [
+              {
+                breakpoint: 'desktop',
+                state: 'normal',
+                props: { _padding: { top: 80, right: 24, bottom: 80, left: 24, unit: 'px' } },
+              },
+            ],
             children: [
-              { id: 'el_title', type: 'heading', settings: { title: 'Grow with us', htmlTag: 'h1' } },
-              { id: 'el_cta', type: 'button', settings: { text: 'Get started', link: { url: '#form' } } },
+              {
+                id: 'el_title',
+                type: 'heading',
+                settings: { title: 'Grow with us', htmlTag: 'h1' },
+              },
+              {
+                id: 'el_cta',
+                type: 'button',
+                settings: { text: 'Get started', link: { url: '#form' } },
+              },
             ],
           },
         ],
@@ -207,7 +243,9 @@ export function widgetReference(type: string): { [key: string]: Json } | null {
     defaults: asJson(def.defaults),
     sections: def.sections.map(describeSection),
     advanced: ADVANCED_SECTIONS.map(describeSection),
-    icons: def.sections.some((s) => s.controls.some((c) => c.type === 'icon' || c.fields?.some((f) => f.type === 'icon')))
+    icons: def.sections.some((s) =>
+      s.controls.some((c) => c.type === 'icon' || c.fields?.some((f) => f.type === 'icon')),
+    )
       ? ICON_NAMES
       : undefined,
   });

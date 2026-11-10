@@ -8,6 +8,7 @@ export * from './labels-it';
 export * from './css';
 export * from './inline-html';
 export * from './icons';
+export * from './phosphor';
 export * from './widgets';
 export * from './render';
 export * from './validate';
