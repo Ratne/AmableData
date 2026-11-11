@@ -558,4 +558,87 @@ export const analyticsMigrations: readonly Migration[] = [
       `CREATE INDEX ad_entities_external ON ad_entities (external_id, level)`,
     ],
   },
+  {
+    id: 6,
+    name: 'analytics_compact_dedupe_keys',
+    statements: [
+      // 64-bit hashes of the applied event ids, expired by apply time (store/dedupe.ts).
+      `CREATE TABLE ingested_keys (k TEXT PRIMARY KEY, ts INTEGER NOT NULL) WITHOUT ROWID`,
+      `CREATE INDEX ingested_keys_ts ON ingested_keys (ts)`,
+    ],
+  },
+  {
+    id: 7,
+    name: 'analytics_suppression',
+    statements: [
+      // Tombstones of opted-out / erased visitors: never applied again, dropped by the edge.
+      `CREATE TABLE suppressed_visitors (vid TEXT PRIMARY KEY, created_at INTEGER NOT NULL) WITHOUT ROWID`,
+      // Hashed identities (email / phone SHA-256) whose new visitors are suppressed on sight.
+      `CREATE TABLE suppressed_keys (
+        key_type TEXT NOT NULL,
+        key_value TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (key_type, key_value)
+      ) WITHOUT ROWID`,
+      // R2 rewrite of the purged visitors (archive, ledgers, parked segments, retention archive).
+      `CREATE TABLE purge_jobs (
+        id TEXT PRIMARY KEY,
+        vids TEXT NOT NULL,
+        from_day TEXT NOT NULL,
+        to_day TEXT NOT NULL,
+        not_before INTEGER NOT NULL,
+        phase INTEGER NOT NULL DEFAULT 0,
+        cursor TEXT,
+        scanned INTEGER NOT NULL DEFAULT 0,
+        rewritten INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'running',
+        created_at INTEGER NOT NULL,
+        done_at INTEGER
+      )`,
+    ],
+  },
+  {
+    id: 8,
+    name: 'analytics_suppression_tail',
+    statements: [
+      // Whether visitors found later with the key are purged too (not only blocked).
+      `ALTER TABLE suppressed_keys ADD COLUMN purge INTEGER NOT NULL DEFAULT 1`,
+      // After the first pass the job rescans the recent days until then (late batches, retries).
+      `ALTER TABLE purge_jobs ADD COLUMN tail_until INTEGER`,
+      `ALTER TABLE purge_jobs ADD COLUMN tail INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE purge_jobs ADD COLUMN failed INTEGER NOT NULL DEFAULT 0`,
+    ],
+  },
+  {
+    id: 9,
+    name: 'analytics_session_ad_ids',
+    statements: [
+      // Ad ids of the tracked link (platform macros): leads and sales join the exact ad.
+      `ALTER TABLE sessions ADD COLUMN ad_campaign_id TEXT`,
+      `ALTER TABLE sessions ADD COLUMN ad_set_id TEXT`,
+      `ALTER TABLE sessions ADD COLUMN ad_id TEXT`,
+      `ALTER TABLE sessions ADD COLUMN ad_placement TEXT`,
+      `ALTER TABLE sessions ADD COLUMN ad_keyword TEXT`,
+      `ALTER TABLE sessions ADD COLUMN ad_network TEXT`,
+      `CREATE INDEX sessions_ad ON sessions (ad_id) WHERE ad_id IS NOT NULL`,
+      `CREATE INDEX sessions_ad_campaign ON sessions (ad_campaign_id) WHERE ad_campaign_id IS NOT NULL`,
+    ],
+  },
+  {
+    id: 10,
+    name: 'analytics_neutral_path_ip_ua',
+    statements: [
+      `ALTER TABLE site_config ADD COLUMN script_path TEXT`,
+      // How the event reached the edge: first_party (tracking domain), third_party, proxy.
+      `ALTER TABLE sessions ADD COLUMN collector TEXT`,
+      // Salted (daily) hash of IP + user agent per visitor: optional weak merge of a new visitor.
+      `CREATE TABLE ip_ua_seen (
+        hash TEXT NOT NULL,
+        visitor_id TEXT NOT NULL,
+        last_seen INTEGER NOT NULL,
+        PRIMARY KEY (hash, visitor_id)
+      ) WITHOUT ROWID`,
+      `CREATE INDEX ip_ua_seen_time ON ip_ua_seen (last_seen)`,
+    ],
+  },
 ];

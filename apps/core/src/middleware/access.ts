@@ -18,6 +18,7 @@ import {
   deleteSessionByHash,
   findApiKeyByHash,
   findSessionWithUser,
+  findTenantById,
   findTenantWithRole,
   findUserById,
   setLastTenant,
@@ -242,37 +243,61 @@ export function requireTenant(): MiddlewareHandler<AppEnv> {
     if (auth === undefined) throw new Error('requireTenant() used without requireAuth()');
     const slug = c.req.param('slug');
     if (slug === undefined || !SLUG_RE.test(slug)) return jsonError(c, 404, 'tenant_not_found');
-    const userId = auth.kind === 'app' ? null : auth.kind === 'api_key' ? auth.apiKey.createdBy : auth.user.id;
-    const found = await findTenantWithRole(c.env.DB, slug, userId);
-    if (found === null) return jsonError(c, 404, 'tenant_not_found');
-    const { tenant, role } = found;
-
-    if (auth.kind === 'app') {
-      if (auth.app.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
-      const permissions = new Set(auth.app.scopes.filter((s): s is Permission => PERMISSION_SET.has(s)));
-      c.set('tenant', buildTenantContext(tenant, 'viewer', permissions));
-      return next();
-    }
-
-    if (auth.kind === 'api_key') {
-      if (auth.apiKey.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
-      const creatorRole = role;
-      if (creatorRole === null) return jsonError(c, 401, 'invalid_api_key');
-      const permissions = effectiveKeyPermissions(
-        auth.apiKey.scopes as readonly Permission[],
-        ROLE_PERMISSIONS[creatorRole],
-      );
-      c.set('tenant', buildTenantContext(tenant, creatorRole, permissions));
-      return next();
-    }
-
-    if (role === null) return jsonError(c, 404, 'tenant_not_found');
-    c.set('tenant', buildTenantContext(tenant, role, new Set(ROLE_PERMISSIONS[role])));
-    if (auth.user.lastTenantId !== tenant.id) {
-      await defer(c, setLastTenant(c.env.DB, auth.user.id, tenant.id));
-    }
-    return next();
+    return bindTenant(c, auth, slug, next);
   };
+}
+
+/**
+ * Workspace of the API key itself (no slug in the path: `/api/v1/…`). Only
+ * API keys; same effective permissions as {@link requireTenant}.
+ */
+export function requireKeyTenant(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const auth = c.get('auth');
+    if (auth === undefined) throw new Error('requireKeyTenant() used without requireAuth()');
+    if (auth.kind !== 'api_key') return jsonError(c, 401, 'api_key_required');
+    const tenant = await findTenantById(c.env.DB, auth.apiKey.tenantId);
+    if (tenant === null) return jsonError(c, 401, 'invalid_api_key');
+    return bindTenant(c, auth, tenant.slug, next);
+  };
+}
+
+async function bindTenant(
+  c: Context<AppEnv>,
+  auth: AuthContext,
+  slug: string,
+  next: () => Promise<void>,
+) {
+  const userId = auth.kind === 'app' ? null : auth.kind === 'api_key' ? auth.apiKey.createdBy : auth.user.id;
+  const found = await findTenantWithRole(c.env.DB, slug, userId);
+  if (found === null) return jsonError(c, 404, 'tenant_not_found');
+  const { tenant, role } = found;
+
+  if (auth.kind === 'app') {
+    if (auth.app.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
+    const permissions = new Set(auth.app.scopes.filter((s): s is Permission => PERMISSION_SET.has(s)));
+    c.set('tenant', buildTenantContext(tenant, 'viewer', permissions));
+    return next();
+  }
+
+  if (auth.kind === 'api_key') {
+    if (auth.apiKey.tenantId !== tenant.id) return jsonError(c, 404, 'tenant_not_found');
+    const creatorRole = role;
+    if (creatorRole === null) return jsonError(c, 401, 'invalid_api_key');
+    const permissions = effectiveKeyPermissions(
+      auth.apiKey.scopes as readonly Permission[],
+      ROLE_PERMISSIONS[creatorRole],
+    );
+    c.set('tenant', buildTenantContext(tenant, creatorRole, permissions));
+    return next();
+  }
+
+  if (role === null) return jsonError(c, 404, 'tenant_not_found');
+  c.set('tenant', buildTenantContext(tenant, role, new Set(ROLE_PERMISSIONS[role])));
+  if (auth.user.lastTenantId !== tenant.id) {
+    await defer(c, setLastTenant(c.env.DB, auth.user.id, tenant.id));
+  }
+  return next();
 }
 
 /** Resolves a session cookie when present and valid; never rejects (public routes). */

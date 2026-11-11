@@ -9,6 +9,8 @@ import {
   analyticsTimeseriesParamsSchema,
   analyticsTimeseriesSchema,
   createSiteSchema,
+  identityMergeSettingsPatchSchema,
+  identityMergeSettingsSchema,
   siteSchema,
   siteSnippetSchema,
   siteWithSecretSchema,
@@ -16,13 +18,22 @@ import {
 } from '@amable/api-types';
 import type { Hono, MiddlewareHandler } from 'hono';
 import { createCrmRouter, crmRoute, json, jsonBody } from '../crm/api/core';
-import { audit, getTenant, requireAuth, requireTenant, type AppEnv } from '../middleware';
+import {
+  audit,
+  getTenant,
+  requireAuth,
+  requireKeyTenant,
+  requireTenant,
+  type AppEnv,
+} from '../middleware';
 import { publicAnalyticsApi, siteKeyApi } from './public';
+import { v1Api } from './v1';
 import { registerAdsRoutes } from './routes-ads';
 import { registerAdsReportRoutes } from './routes-ads-reports';
 import { registerConfigRoutes } from './routes-config';
 import { registerFunnelRoutes } from './routes-funnels';
 import { registerOutboundRoutes } from './routes-outbound';
+import { registerSuppressionRoutes } from './routes-suppressions';
 import { registerSourceRoutes } from './routes-sources';
 import { registerReportRoutes } from './routes-reports';
 import { registerTrackingDomainRoutes, removeSiteTrackingDomains } from './routes-tracking-domains';
@@ -37,9 +48,11 @@ import {
   edgeUnreachableAs503,
   getSite,
   listSites,
+  namespace,
   rangeOf,
   rollSecret,
   siteForQuery,
+  siteRecord,
   siteSnippet,
   unwrap,
   updateSite,
@@ -113,6 +126,41 @@ analyticsApi.openapi(
 );
 
 analyticsApi.openapi(
+  crmRoute('analytics:read', {
+    method: 'get',
+    path: '/sites/{siteId}/identity-settings',
+    tags,
+    summary: 'Automatic visitor merge mechanisms of a site',
+    request: { params: siteIdPath },
+    responses: { 200: json(identityMergeSettingsSchema, 'Merge settings') },
+  }),
+  async (c) => {
+    const { siteId } = c.req.valid('param');
+    await siteRecord(c, siteId);
+    return c.json(await siteStub(namespace(c), siteId).getIdentitySettings(), 200);
+  },
+);
+
+analyticsApi.openapi(
+  crmRoute('analytics:configure', {
+    method: 'patch',
+    path: '/sites/{siteId}/identity-settings',
+    tags,
+    summary: 'Turn merge mechanisms on or off (`ip_ua`: same-day IP + user agent, off by default)',
+    request: { params: siteIdPath, body: jsonBody(identityMergeSettingsPatchSchema) },
+    responses: { 200: json(identityMergeSettingsSchema, 'Merge settings') },
+  }),
+  async (c) => {
+    const { siteId } = c.req.valid('param');
+    await siteRecord(c, siteId);
+    const patch = c.req.valid('json');
+    const settings = unwrap(await siteStub(namespace(c), siteId).updateIdentitySettings(patch));
+    await audit(c, 'analytics.identity_settings_updated', { target: siteId, details: patch });
+    return c.json(settings, 200);
+  },
+);
+
+analyticsApi.openapi(
   crmRoute('analytics:configure', {
     method: 'delete',
     path: '/sites/{siteId}',
@@ -131,14 +179,18 @@ analyticsApi.openapi(
 );
 
 analyticsApi.openapi(
-  crmRoute('analytics:configure', {
-    method: 'post',
-    path: '/sites/{siteId}/secret',
-    tags,
-    summary: 'Roll the server secret of a site',
-    request: { params: siteIdPath },
-    responses: { 200: json(z.object({ secret: z.string() }), 'The new secret (shown once)') },
-  }, { stepUp: true }),
+  crmRoute(
+    'analytics:configure',
+    {
+      method: 'post',
+      path: '/sites/{siteId}/secret',
+      tags,
+      summary: 'Roll the server secret of a site',
+      request: { params: siteIdPath },
+      responses: { 200: json(z.object({ secret: z.string() }), 'The new secret (shown once)') },
+    },
+    { stepUp: true },
+  ),
   async (c) => {
     const { siteId } = c.req.valid('param');
     const secret = await rollSecret(c, siteId);
@@ -228,6 +280,7 @@ registerConfigRoutes(analyticsApi);
 registerFunnelRoutes(analyticsApi);
 registerSourceRoutes(analyticsApi);
 registerOutboundRoutes(analyticsApi);
+registerSuppressionRoutes(analyticsApi);
 registerTrackingDomainRoutes(analyticsApi);
 registerAdsRoutes(analyticsApi);
 registerAdsReportRoutes(analyticsApi);
@@ -258,6 +311,18 @@ export function mountAnalyticsApi(app: Hono<AppEnv>): void {
   );
   app.route('/v2/t/:slug/analytics', analyticsApi);
   app.get('/v2/openapi/analytics.json', (c) => c.json(analyticsOpenApiDocument()));
+  // Workspace server API: the API key names the workspace (no slug, no session).
+  app.use('/v1/*', requireAuth({ apiKey: true }), requireKeyTenant());
+  app.route('/v1', v1Api);
+  app.get('/v2/openapi/v1.json', (c) =>
+    c.json(
+      v1Api.getOpenAPI31Document({
+        openapi: '3.1.0',
+        info: { title: 'amable server API', version: '1.0.0' },
+        servers: [{ url: '/api/v1' }],
+      }),
+    ),
+  );
   // Site-key analytics API (no session, no tenant slug: the key names the site).
   app.route('/v2/analytics', siteKeyApi);
   // Read-only public dashboards of share links.
@@ -317,9 +382,27 @@ function mountAnalyticsDevRoutes(app: Hono<AppEnv>): void {
           { type: 'goal', value: 'newsletter_signup', match: 'exact' },
         ],
       });
-      await site.createSegment({ name: 'Italy · mobile', filters: [{ dimension: 'country', op: 'is', value: 'IT' }, { dimension: 'device', op: 'is', value: 'mobile' }] });
-      await site.createSegment({ name: 'Paid traffic', filters: [{ dimension: 'channel', op: 'contains', value: 'Paid' }] });
-      await site.createAlert({ name: 'New signups', goal: 'signup', enabled: true, email_recipients: ['admin@example.com'], webhook_url: null }, null);
+      await site.createSegment({
+        name: 'Italy · mobile',
+        filters: [
+          { dimension: 'country', op: 'is', value: 'IT' },
+          { dimension: 'device', op: 'is', value: 'mobile' },
+        ],
+      });
+      await site.createSegment({
+        name: 'Paid traffic',
+        filters: [{ dimension: 'channel', op: 'contains', value: 'Paid' }],
+      });
+      await site.createAlert(
+        {
+          name: 'New signups',
+          goal: 'signup',
+          enabled: true,
+          email_recipients: ['admin@example.com'],
+          webhook_url: null,
+        },
+        null,
+      );
       await site.createShare('Investors (read-only)');
       const integrations = integrationsFor(c.env);
       for (const provider of ['meta_ads', 'search_console'] as const) {
@@ -327,7 +410,10 @@ function mountAnalyticsDevRoutes(app: Hono<AppEnv>): void {
           provider,
           status: 'connected',
           account_id: `dev-${provider}`,
-          account_name: provider === 'meta_ads' ? 'Development ad account' : 'sc-domain:example.com (development)',
+          account_name:
+            provider === 'meta_ads'
+              ? 'Development ad account'
+              : 'sc-domain:example.com (development)',
           connected_at: now,
           last_sync_at: null,
           last_error: null,
@@ -345,15 +431,21 @@ function mountAnalyticsDevRoutes(app: Hono<AppEnv>): void {
     const tenant = await tenantOf(c.env, slug);
     if (tenant === null) return c.json({ error: 'tenant_not_found' }, 404);
     try {
-      const report = await generateFunnelDemo(c.env, c.env.ANALYTICS, { id: tenant.id, slug }, {
-        days: Math.min(Math.max(Number(c.req.query('days') ?? '30'), 1), 90),
-        visitors: Math.min(Math.max(Number(c.req.query('visitors') ?? '400'), 1), 5000),
-        seed: c.req.query('seed') ?? 'amable-demo',
-        now: Date.now(),
-      });
+      const report = await generateFunnelDemo(
+        c.env,
+        c.env.ANALYTICS,
+        { id: tenant.id, slug },
+        {
+          days: Math.min(Math.max(Number(c.req.query('days') ?? '30'), 1), 90),
+          visitors: Math.min(Math.max(Number(c.req.query('visitors') ?? '400'), 1), 5000),
+          seed: c.req.query('seed') ?? 'amable-demo',
+          now: Date.now(),
+        },
+      );
       return c.json({ ok: true, ...report });
     } catch (error) {
-      if (error instanceof FunnelDemoError) return c.json({ error: 'no_site', message: error.message }, 409);
+      if (error instanceof FunnelDemoError)
+        return c.json({ error: 'no_site', message: error.message }, 409);
       throw error;
     }
   });
@@ -363,7 +455,10 @@ function mountAnalyticsDevRoutes(app: Hono<AppEnv>): void {
     const tenant = await tenantOf(c.env, c.req.query('tenant') ?? 'demo');
     if (tenant === null) return c.json({ error: 'tenant_not_found' }, 404);
     const count = Math.min(Math.max(Number(c.req.query('count') ?? '6'), 1), 50);
-    return c.json({ ok: true, events: await liveTraffic(c.env.ANALYTICS, tenant.id, Date.now(), count) });
+    return c.json({
+      ok: true,
+      events: await liveTraffic(c.env.ANALYTICS, tenant.id, Date.now(), count),
+    });
   });
 
   app.post('/dev/analytics/sync', async (c) => {

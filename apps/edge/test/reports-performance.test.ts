@@ -91,12 +91,19 @@ describe('ads performance report (fixture: 20 visitors, 2 sources)', () => {
     // first click only when the first touch is ≤ 7 days old (v02), else last click
     ['windowed_hybrid', { m1: [4500, 3], m2: [7000, 1], g1: [12000, 3], null: [600, 1] }],
   ])('credits campaigns with %s', (model, expected) => {
-    const report = run(store, { model, group_by: 'campaign' });
+    const report = run(store, { model, group_by: 'campaign', ...(model === 'windowed_hybrid' ? { window_days: 7 } : {}) });
     expect(credit(report)).toEqual(expected);
     expect(report.totals.revenue_minor).toBe(24_100);
     expect(report.totals.total_revenue_minor).toBe(24_100);
     expect(report.totals.sales).toBe(8);
     expect(report.totals.leads).toBe(1);
+  });
+
+  it('credits only the touches inside the lookback window', () => {
+    const wide = credit(run(store, { model: 'first_click', group_by: 'campaign', window_days: 365 }));
+    const narrow = credit(run(store, { model: 'first_click', group_by: 'campaign', window_days: 1 }));
+    expect(narrow).not.toEqual(wide);
+    expect(narrow['null']?.[0] ?? 0).toBeGreaterThan(wide['null']?.[0] ?? 0);
   });
 
   it('joins spend and derives the money columns (last click)', () => {

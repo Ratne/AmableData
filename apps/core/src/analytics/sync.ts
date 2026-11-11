@@ -20,6 +20,8 @@ import {
   type OutboxEvent,
 } from '@amable/core';
 import { lookbackBound } from './crm-ops';
+import { emailHash, phoneHash } from '../crm/identity-hashes';
+import type { WebTimelineItem } from './registry-ops';
 import { sha256Hex } from '@amable/auth';
 
 /**
@@ -105,7 +107,8 @@ async function activeSites(ns: AnalyticsNamespace, tenantId: string): Promise<Ac
   const out: ActiveSite[] = [];
   for (const id of ids) {
     const record = await siteStub(ns, id).getSite();
-    if (record !== null && !record.deleted && record.tenantId === tenantId) out.push({ id, record });
+    if (record !== null && !record.deleted && record.tenantId === tenantId)
+      out.push({ id, record });
   }
   return out;
 }
@@ -128,7 +131,7 @@ async function locateVisitors(
   return out;
 }
 
-class FactBatch {
+export class FactBatch {
   readonly bySite = new Map<string, CrmFact[]>();
   add(siteId: string, fact: CrmFact): void {
     const list = this.bySite.get(siteId) ?? [];
@@ -149,22 +152,46 @@ interface IdentifiedVisitor {
   ts: number;
 }
 
-/** Sends the emails and phones of the contacts as identity keys of their visitors (merge + retro-link on the edge). */
-async function sendContactIdentities(ports: SyncPorts, identified: readonly IdentifiedVisitor[]): Promise<void> {
+/**
+ * Sends the emails and phones of the contacts, hashed, as identity keys of
+ * their visitors (merge + retro-link on the edge; sites hold no clear contact
+ * data), and indexes those hashes in the registry.
+ */
+async function sendContactIdentities(
+  ports: SyncPorts,
+  identified: readonly IdentifiedVisitor[],
+): Promise<void> {
   if (identified.length === 0) return;
-  const contacts = await ports.crm<Array<{ id: string; emails: string[]; phones: string[] }>>(
+  const clear = await ports.crm<Array<{ id: string; emails: string[]; phones: string[] }>>(
     'analytics.contactIdentities',
     { ids: [...new Set(identified.map((i) => i.contactId))] },
   );
+  const hashes: Array<{ kind: 'email' | 'phone'; hash: string; contactId: string }> = [];
+  const contacts = clear.map((c) => {
+    const emails = c.emails.map(emailHash).filter((h): h is string => h !== null);
+    const phones = c.phones.map(phoneHash).filter((h): h is string => h !== null);
+    for (const hash of emails) hashes.push({ kind: 'email', hash, contactId: c.id });
+    for (const hash of phones) hashes.push({ kind: 'phone', hash, contactId: c.id });
+    return { id: c.id, emails, phones };
+  });
+  if (hashes.length > 0) await ports.crm('analytics.recordIdentityHashes', { items: hashes });
   const byId = new Map(contacts.map((c) => [c.id, c]));
-  const bySite = new Map<string, Array<{ visitor_id: string; email: string | null; phone: string | null; ts: number }>>();
+  const bySite = new Map<
+    string,
+    Array<{ visitor_id: string; email: string | null; phone: string | null; ts: number }>
+  >();
   for (const i of identified) {
     const c = byId.get(i.contactId);
     if (c === undefined) continue;
     const list = bySite.get(i.siteId) ?? [];
     const rows = Math.max(c.emails.length, c.phones.length);
     for (let n = 0; n < rows; n += 1) {
-      list.push({ visitor_id: i.visitorId, email: c.emails[n] ?? null, phone: c.phones[n] ?? null, ts: i.ts });
+      list.push({
+        visitor_id: i.visitorId,
+        email: c.emails[n] ?? null,
+        phone: c.phones[n] ?? null,
+        ts: i.ts,
+      });
     }
     bySite.set(i.siteId, list);
   }
@@ -173,17 +200,26 @@ async function sendContactIdentities(ports: SyncPorts, identified: readonly Iden
   }
 }
 
-async function applyBatch(
+export async function applyBatch(
   ports: SyncPorts,
   tenantId: string,
   batch: FactBatch,
+  /** Sites whose instance has no site any more (deleted): their facts were not applied. */
+  onMissingSite?: (siteId: string) => void,
 ): Promise<number> {
   const links: ContactVisitor[] = [];
   const identified: IdentifiedVisitor[] = [];
   for (const [siteId, facts] of batch.bySite) {
     const result = await siteStub(ports.ns, siteId).applyCrmFacts(facts);
+    if (result === null) onMissingSite?.(siteId);
     for (const l of result?.linked ?? []) {
-      links.push({ siteId, visitorId: l.visitorId, contactId: l.contactId, linkedAt: l.ts, source: l.source });
+      links.push({
+        siteId,
+        visitorId: l.visitorId,
+        contactId: l.contactId,
+        linkedAt: l.ts,
+        source: l.source,
+      });
       identified.push({ siteId, visitorId: l.visitorId, contactId: l.contactId, ts: l.ts });
     }
     for (const f of facts) {
@@ -192,7 +228,27 @@ async function applyBatch(
       }
     }
   }
-  if (links.length > 0) await tenantSitesStub(ports.ns, tenantId).registerLinks(links);
+  if (links.length > 0) {
+    await tenantSitesStub(ports.ns, tenantId).registerLinks(links);
+    const bySite = new Map<string, WebTimelineItem[]>();
+    for (const l of links) {
+      const list = bySite.get(l.siteId) ?? [];
+      list.push({
+        kind: 'linked',
+        contactId: l.contactId,
+        visitorId: l.visitorId,
+        sessionId: null,
+        name: null,
+        hostname: null,
+        path: null,
+        source: l.source,
+        ts: l.linkedAt,
+      });
+      bySite.set(l.siteId, list);
+    }
+    for (const [siteId, items] of bySite)
+      await ports.crm('analytics.recordWebTimeline', { siteId, items });
+  }
   await sendContactIdentities(ports, identified);
   return links.length;
 }
@@ -207,8 +263,13 @@ async function factsFromOutbox(
   const batch = new FactBatch();
   const defaultSite = sites[0]?.id;
   if (defaultSite === undefined) return batch;
-  const payloadOf = (e: OutboxEvent): Record<string, unknown> => e.payload as unknown as Record<string, unknown>;
-  const visitorIds = [...new Set(events.map((e) => str(payloadOf(e)['visitorId'])).filter((v): v is string => v !== null))];
+  const payloadOf = (e: OutboxEvent): Record<string, unknown> =>
+    e.payload as unknown as Record<string, unknown>;
+  const visitorIds = [
+    ...new Set(
+      events.map((e) => str(payloadOf(e)['visitorId'])).filter((v): v is string => v !== null),
+    ),
+  ];
   const located = await locateVisitors(ports.ns, sites, visitorIds);
   const tenant = tenantSitesStub(ports.ns, tenantId);
   const contactSites = new Map<string, ContactVisitor[]>();
@@ -245,14 +306,24 @@ async function factsFromOutbox(
         if (contactId === null || visitorId === null) break;
         const source: CrmLinkSource = e.type === 'form.submitted' ? 'form' : 'booking';
         for (const siteId of located.get(visitorId) ?? []) {
-          batch.add(siteId, { kind: 'link', id: `${e.id}:${siteId}`, contactId, visitorId, source, ts });
+          batch.add(siteId, {
+            kind: 'link',
+            id: `${e.id}:${siteId}`,
+            contactId,
+            visitorId,
+            source,
+            ts,
+          });
         }
         break;
       }
       case 'payment.recorded': {
         const paymentId = str(p['paymentId']);
         if (paymentId === null) break;
-        const target = (await siteFor(visitorId, contactId)) ?? { siteId: defaultSite, visitorId: null };
+        const target = (await siteFor(visitorId, contactId)) ?? {
+          siteId: defaultSite,
+          visitorId: null,
+        };
         batch.add(target.siteId, {
           kind: 'payment',
           id: e.id,
@@ -288,7 +359,13 @@ async function factsFromOutbox(
           : [];
         if (contactId === null || merged.length === 0) break;
         for (const site of sites) {
-          batch.add(site.id, { kind: 'merge', id: `${e.id}:${site.id}`, fromContactIds: merged, toContactId: contactId, ts });
+          batch.add(site.id, {
+            kind: 'merge',
+            id: `${e.id}:${site.id}`,
+            fromContactIds: merged,
+            toContactId: contactId,
+            ts,
+          });
         }
         await tenant.mergeContactLinks(merged, contactId);
         break;
@@ -319,12 +396,20 @@ async function factsFromOutbox(
   return batch;
 }
 
-async function syncOutbox(ports: SyncPorts, tenantId: string, sites: readonly ActiveSite[], report: SyncReport): Promise<void> {
+async function syncOutbox(
+  ports: SyncPorts,
+  tenantId: string,
+  sites: readonly ActiveSite[],
+  report: SyncReport,
+): Promise<void> {
   const tenant = tenantSitesStub(ports.ns, tenantId);
   const cursor = await tenant.syncCursor();
   let after = cursor === null ? '' : lookbackBound(cursor.ts);
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
-    const page = await ports.crm<OutboxPage>('analytics.outboxSince', { after, limit: OUTBOX_PAGE });
+    const page = await ports.crm<OutboxPage>('analytics.outboxSince', {
+      after,
+      limit: OUTBOX_PAGE,
+    });
     if (page.lastId === null || page.lastTs === null) break;
     const fresh = new Set(await tenant.claimEvents(page.events.map((e) => e.id)));
     const events = page.events.filter((e) => fresh.has(e.id));
@@ -334,13 +419,20 @@ async function syncOutbox(ports: SyncPorts, tenantId: string, sites: readonly Ac
       report.facts += batch.size;
       report.linked += await applyBatch(ports, tenantId, batch);
     }
-    if (cursor === null || page.lastTs >= cursor.ts) await tenant.setSyncCursor({ ts: page.lastTs, id: page.lastId });
+    if (cursor === null || page.lastTs >= cursor.ts)
+      await tenant.setSyncCursor({ ts: page.lastTs, id: page.lastId });
     after = page.lastId;
     if (page.scanned < OUTBOX_PAGE) break;
   }
 }
 
-async function goalEventId(siteId: string, kind: string, visitorId: string, ts: number, name: string): Promise<string> {
+async function goalEventId(
+  siteId: string,
+  kind: string,
+  visitorId: string,
+  ts: number,
+  name: string,
+): Promise<string> {
   return `an_${(await sha256Hex(`${siteId}|${kind}|${visitorId}|${ts}|${name}`)).slice(0, 32)}`;
 }
 
@@ -354,7 +446,12 @@ function pageVisitEvent(
 ): AutomationInboundEvent | null {
   if (!ENGINE_TYPES.has(ANALYTICS_AUTOMATION_EVENTS.pageVisited)) return null;
   // Typed by the engine's own union as soon as it adds the event (see @amable/core/analytics).
-  return { id, type: ANALYTICS_AUTOMATION_EVENTS.pageVisited, occurredAt, payload } as unknown as AutomationInboundEvent;
+  return {
+    id,
+    type: ANALYTICS_AUTOMATION_EVENTS.pageVisited,
+    occurredAt,
+    payload,
+  } as unknown as AutomationInboundEvent;
 }
 
 async function drainSite(
@@ -370,42 +467,84 @@ async function drainSite(
   if (work.identities.length > 0) {
     const batch = new FactBatch();
     const emails = work.identities.filter((i) => i.kind === 'email').map((i) => i.value);
+    const hashed = work.identities.flatMap((i): Array<{ kind: 'email' | 'phone'; hash: string }> =>
+      i.kind === 'email_hash'
+        ? [{ kind: 'email' as const, hash: i.value }]
+        : i.kind === 'phone_hash'
+          ? [{ kind: 'phone' as const, hash: i.value }]
+          : [],
+    );
+    const byHash = new Map(
+      (hashed.length === 0
+        ? []
+        : await ports.crm<Array<{ kind: string; hash: string; contactId: string }>>(
+            'analytics.contactsByIdentityHash',
+            { items: hashed },
+          )
+      ).map((m) => [`${m.kind}_hash:${m.hash}`, m.contactId]),
+    );
     const byEmail = new Map(
       (emails.length === 0
         ? []
-        : await ports.crm<Array<{ email: string; contactId: string }>>('analytics.contactsByEmail', { emails })
+        : await ports.crm<Array<{ email: string; contactId: string }>>(
+            'analytics.contactsByEmail',
+            { emails },
+          )
       ).map((m) => [m.email, m.contactId]),
     );
     const tokenContacts = new Map<number, string>();
     for (const item of work.identities.filter((i) => i.kind === 'contact_token')) {
-      const payload = await verifyContactToken(ports.contactTokenSecrets, item.value, { nowMs: ports.now() });
+      const payload = await verifyContactToken(ports.contactTokenSecrets, item.value, {
+        nowMs: ports.now(),
+      });
       if (payload !== null && payload.t === tenantId) tokenContacts.set(item.id, payload.c);
     }
     const tokenIds = [...new Set(tokenContacts.values())];
     const live = new Set(
       (tokenIds.length === 0
         ? []
-        : await ports.crm<Array<{ id: string; deleted: boolean }>>('analytics.contactsBrief', { ids: tokenIds })
+        : await ports.crm<Array<{ id: string; deleted: boolean }>>('analytics.contactsBrief', {
+            ids: tokenIds,
+          })
       )
         .filter((c) => !c.deleted)
         .map((c) => c.id),
     );
     for (const item of work.identities) {
-      const contactId = item.kind === 'email' ? byEmail.get(item.value) : tokenContacts.get(item.id);
-      if (contactId === undefined || (item.kind === 'contact_token' && !live.has(contactId))) continue;
+      const contactId =
+        item.kind === 'email'
+          ? byEmail.get(item.value)
+          : item.kind === 'contact_token'
+            ? tokenContacts.get(item.id)
+            : byHash.get(`${item.kind}:${item.value}`);
+      if (contactId === undefined || (item.kind === 'contact_token' && !live.has(contactId)))
+        continue;
       batch.add(site.id, {
         kind: 'link',
         id: `id:${site.id}:${item.visitorId}:${item.kind}:${item.ts}`,
         contactId,
         visitorId: item.visitorId,
-        source: item.kind === 'email' ? 'identify' : 'email',
+        source: item.kind === 'contact_token' ? 'email' : 'identify',
         ts: item.ts,
       });
     }
     report.linked += await applyBatch(ports, tenantId, batch);
   }
 
-  // 2. automation events of identified visitors
+  // 2. automation events of identified visitors, and their compact journey in the registry
+  if (work.automation.length > 0) {
+    const items: WebTimelineItem[] = work.automation.map((item) => ({
+      kind: item.kind,
+      contactId: item.contactId,
+      visitorId: item.visitorId,
+      sessionId: item.sessionId,
+      name: item.name,
+      hostname: item.hostname,
+      path: item.path,
+      ts: item.ts,
+    }));
+    await ports.crm('analytics.recordWebTimeline', { siteId: site.id, items });
+  }
   const engineEvents: AutomationInboundEvent[] = [];
   for (const item of work.automation) {
     const occurredAt = new Date(item.ts).toISOString();
@@ -451,7 +590,12 @@ async function drainSite(
       continue;
     }
     const now = ports.now();
-    if (!test && target.lastTriggeredAt !== null && now - target.lastTriggeredAt < ALERT_THROTTLE_MS) continue;
+    if (
+      !test &&
+      target.lastTriggeredAt !== null &&
+      now - target.lastTriggeredAt < ALERT_THROTTLE_MS
+    )
+      continue;
     const real = items.filter((i) => !i.test);
     const payload: AlertWebhookPayload = {
       type: 'analytics.goal_alert',
@@ -461,7 +605,9 @@ async function drainSite(
       count: real.length,
       first_at: new Date(Math.min(...items.map((i) => i.ts))).toISOString(),
       last_at: new Date(Math.max(...items.map((i) => i.ts))).toISOString(),
-      visitor_ids: [...new Set(real.map((i) => i.visitorId).filter((v): v is string => v !== null))].slice(0, 50),
+      visitor_ids: [
+        ...new Set(real.map((i) => i.visitorId).filter((v): v is string => v !== null)),
+      ].slice(0, 50),
       test: real.length === 0,
     };
     const results = await ports.deliverAlert({
@@ -498,6 +644,8 @@ export async function syncTenant(ports: SyncPorts, tenantId: string): Promise<Sy
   try {
     const sites = await activeSites(ports.ns, tenantId);
     if (sites.length === 0) return report;
+    // Contacts from before the hash index: one page per run until indexed.
+    await ports.crm('analytics.backfillIdentityHashes', { limit: 500 });
     await syncOutbox(ports, tenantId, sites, report);
     const started = ports.now();
     for (const site of sites) {

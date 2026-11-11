@@ -1,4 +1,4 @@
-import type { CrawlerSnippets } from '@amable/api-types';
+import type { CrawlerSnippets, Site, SiteSnippet } from '@amable/api-types';
 
 /**
  * Server-side snippets reporting crawlers (AI assistants, training and search
@@ -89,4 +89,88 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($ua === '' || preg_match
 }
 `;
   return { endpoint, secret_placeholder: SECRET_PLACEHOLDER, worker, node, php };
+}
+
+/**
+ * Reverse-proxy recipes: the site serves `/<dir>/*` from its own host and
+ * forwards it to the edge, so the tracker is first party without a DNS change.
+ * Only the tracker's own cookie is forwarded; the client IP, host and location
+ * travel in `x-amb-*` headers that the edge trusts only with the site's proxy
+ * key (`proxyKey`, null when the installation has no gateway secret).
+ */
+export function proxyRecipes(
+  site: Pick<Site, 'script_path' | 'cookieless'>,
+  origin: string,
+  proxyKey: string | null,
+): SiteSnippet['proxy'] {
+  const dir = site.script_path.split('/')[0] ?? site.script_path;
+  const edgeHost = new URL(origin).host;
+  const cookie = 'amb_vid';
+  const script = `/${site.script_path}${site.cookieless ? '-l' : ''}.js`;
+  const key = proxyKey ?? 'KEY-UNAVAILABLE-SET-EDGE_GATEWAY_SECRET';
+  const cloudflare = `// Cloudflare Worker on the route  <your-domain>/${dir}/*
+const UPSTREAM = ${JSON.stringify(origin)};
+const PROXY_KEY = ${JSON.stringify(key)};
+
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    const headers = new Headers(request.headers);
+    const vid = (request.headers.get('cookie') || '').match(/(?:^|;\\s*)${cookie}=([^;]+)/);
+    headers.delete('cookie');
+    if (vid) headers.set('cookie', '${cookie}=' + vid[1]);
+    const cf = request.cf || {};
+    headers.set('x-amb-proxy-key', PROXY_KEY);
+    headers.set('x-amb-forwarded-for', request.headers.get('cf-connecting-ip') || '');
+    headers.set('x-amb-forwarded-host', url.hostname);
+    if (cf.country) headers.set('x-amb-geo-country', cf.country);
+    if (cf.region) headers.set('x-amb-geo-region', encodeURIComponent(cf.region));
+    if (cf.city) headers.set('x-amb-geo-city', encodeURIComponent(cf.city));
+    return fetch(UPSTREAM + url.pathname + url.search, {
+      method: request.method,
+      headers,
+      body: request.method === 'POST' ? request.body : undefined,
+    });
+  },
+};
+
+// Page tag: <script defer data-site="…" src="${script}"></script>
+`;
+  const nginx = `# nginx — the location is the one of your server, not of the visitor (no geo headers):
+# put the Worker recipe in front when you need visitor countries and cities.
+# Behind a load balancer or CDN, set real_ip_header / set_real_ip_from first,
+# otherwise $remote_addr is the balancer's address.
+map $cookie_${cookie} $amb_cookie {
+  ""      "";
+  default "${cookie}=$cookie_${cookie}";
+}
+
+# (server block of your site)
+location /${dir}/ {
+  proxy_pass ${origin}/${dir}/;
+  proxy_set_header Host ${edgeHost};
+  proxy_ssl_server_name on;
+  proxy_set_header Cookie $amb_cookie;
+  proxy_set_header X-SA-Proxy-Key "${key}";
+  proxy_set_header X-SA-Forwarded-For $remote_addr;
+  proxy_set_header X-SA-Forwarded-Host $host;
+}
+
+# Page tag: <script defer data-site="…" src="${script}"></script>
+`;
+  const next = `// next.config.js — rewrites cannot add headers: visitor IP and location are those of
+// the hosting server and the sessions count as third party. Prefer the Worker or
+// nginx recipe when they are an option.
+module.exports = {
+  async rewrites() {
+    return [{ source: '/${dir}/:path*', destination: '${origin}/${dir}/:path*' }];
+  },
+};
+`;
+  const vercel = `// vercel.json (same limits as the Next.js rewrite)
+{
+  "rewrites": [{ "source": "/${dir}/:path*", "destination": "${origin}/${dir}/:path*" }]
+}
+`;
+  return { path: `/${dir}/`, cloudflare, nginx, next, vercel };
 }

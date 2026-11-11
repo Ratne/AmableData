@@ -1,9 +1,9 @@
-import type { ServerEvent, TrackerEvent } from '@amable/api-types';
+import { isUnfilledMacro, type ServerEvent, type TrackerEvent } from '@amable/api-types';
 import { classifyChannel } from './channels';
-import { cookielessVisitorId } from './cookieless';
+import { cookielessVisitorId, ipUaHash } from './cookieless';
 import { landingEmailHash } from './store/identity';
 import { parseUserAgent } from './ua';
-import type { EnrichedEvent, ExtraValue, Geo, IdentityData, PaymentData } from './types';
+import type { AdIds, EnrichedEvent, ExtraValue, Geo, IdentityData, PaymentData } from './types';
 
 /** What the edge needs to know about a site (cached per isolate). */
 export interface EdgeSiteConfig {
@@ -13,18 +13,56 @@ export interface EdgeSiteConfig {
   cookieless: boolean;
   allowLocalhost: boolean;
   currency: string;
+  /** Hot window of raw rows in the site DO: older events stop at the age barrier. */
+  retentionDays: number;
   /** SHA-256 hex of the site secret, null when none was issued. */
   secretHash: string | null;
   /** Today's cookieless salt (UTC day). */
   salt: { day: string; value: string };
+  /** Newest tombstones (visitor ids, identity hashes): dropped before the archive. */
+  suppressed: { visitors: readonly string[]; keys: readonly string[] };
 }
 
 export interface RequestContext {
   eid: string;
   now: number;
+  /** When the event happened (client envelope, clamped); defaults to `now`. */
+  ts?: number;
   ip: string;
   userAgent: string;
   geo: Geo;
+  /** How the event reached the edge (browser ingest only). */
+  collector?: Collector;
+}
+
+export type Collector = 'first_party' | 'third_party' | 'proxy';
+
+/** Client clocks ahead of the edge by more than this are ignored. */
+export const MAX_FUTURE_SKEW_MS = 5 * 60_000;
+
+/**
+ * Event time from the client envelope: never in the future (beyond the skew,
+ * the edge clock wins). Old values are kept as they are: the consumer's age
+ * barrier decides whether they may still touch the site DO.
+ */
+export function occurredAt(at: number | string | undefined, now: number): number {
+  const ms = typeof at === 'string' ? Date.parse(at) : at;
+  if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return now;
+  return ms > now + MAX_FUTURE_SKEW_MS ? now : Math.min(ms, now);
+}
+
+/**
+ * Dedupe key of an event: the client id when present (stable across retries
+ * and offline replays), scoped so tracker and server ids never collide; a fresh
+ * id otherwise.
+ */
+export function eventIdOf(
+  source: 'tracker' | 'server',
+  type: string,
+  clientId: string | undefined,
+): string {
+  if (clientId === undefined) return crypto.randomUUID();
+  return source === 'tracker' ? `t:${clientId}` : `s:${type}:${clientId}`;
 }
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
@@ -166,7 +204,11 @@ function baseEvent(
       ? refHost
       : null;
   const params = a.url?.searchParams;
-  const src = (k: string): string | null => a.src?.[k] ?? params?.get(k) ?? null;
+  // Unfilled ad macros (`{{campaign.name}}` of preview clicks) are no value.
+  const src = (k: string): string | null => {
+    const v = a.src?.[k] ?? params?.get(k) ?? null;
+    return v !== null && isUnfilledMacro(v) ? null : v;
+  };
   const clickIds = a.clk !== undefined && Object.keys(a.clk).length > 0 ? a.clk : null;
   const channel = classifyChannel({
     referrerHost: externalRefHost,
@@ -179,7 +221,7 @@ function baseEvent(
   });
   return {
     eid: ctx.eid,
-    ts: ctx.now,
+    ts: ctx.ts ?? ctx.now,
     site: site.siteId,
     type,
     url: a.url?.toString().slice(0, 2048) ?? null,
@@ -198,6 +240,7 @@ function baseEvent(
       content: src('utm_content'),
     },
     clickIds,
+    ad: adIds(src),
     geo: ctx.geo,
     device: ua.device,
     browser: ua.browser,
@@ -239,6 +282,11 @@ export async function enrichTrackerEvent(
     cookieless,
     language: payload.lang?.slice(0, 35) ?? null,
     screenWidth: payload.sw ?? null,
+    collector: ctx.collector ?? null,
+    ipUa:
+      cookieless || payload.type !== 'pageview'
+        ? null
+        : await ipUaHash(site.salt.value, site.siteId, ctx.ip, ctx.userAgent),
   };
   switch (payload.type) {
     case 'goal': {
@@ -331,7 +379,13 @@ export interface DirectLinkView {
  */
 export function directLinkView(payload: TrackerEvent): DirectLinkView | null {
   const dl = payload.dl;
-  if (payload.type !== 'pageview' || dl?.f === undefined || dl.ts === undefined || dl.n === undefined) return null;
+  if (
+    payload.type !== 'pageview' ||
+    dl?.f === undefined ||
+    dl.ts === undefined ||
+    dl.n === undefined
+  )
+    return null;
   if (payload.vid === undefined || payload.cl === 1) return null;
   const url = parseUrl(payload.url);
   if (url === null) return null;
@@ -414,4 +468,21 @@ export async function enrichServerEvent(
       break;
   }
   return event;
+}
+
+/** Ad ids of the landing params; unfilled macros (previews, wrong field) are dropped. */
+export function adIds(src: (k: string) => string | null): AdIds | null {
+  const id = (k: string, max = 64): string | null => {
+    const v = src(k)?.trim();
+    return v === undefined || v === '' || isUnfilledMacro(v) ? null : v.slice(0, max);
+  };
+  const ad: AdIds = {
+    campaignId: id('amb_cid') ?? id('utm_id'),
+    adSetId: id('amb_asid'),
+    adId: id('amb_adid'),
+    placement: id('amb_pl'),
+    keyword: id('amb_kw', 255),
+    network: id('amb_net'),
+  };
+  return Object.values(ad).some((v) => v !== null) ? ad : null;
 }

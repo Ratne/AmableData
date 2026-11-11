@@ -13,6 +13,7 @@ import type { CrmContext } from './context';
 import { placeholders, type SqlValue } from './db/sql';
 import { invalid, notFound } from './errors';
 import { emit } from './events';
+import { indexContactHashes } from './identity-hashes';
 import {
   deleteValuesOf,
   prepareValues,
@@ -166,6 +167,12 @@ function writeEmails(
       position,
     );
   });
+  indexContactHashes(
+    ctx,
+    contactId,
+    'email',
+    emails.map((e) => e.email),
+  );
   return emails[0]?.email.trim().toLowerCase() ?? null;
 }
 
@@ -188,6 +195,12 @@ function writePhones(
       position,
     );
   });
+  indexContactHashes(
+    ctx,
+    contactId,
+    'phone',
+    phones.map((p) => p.number),
+  );
   return phones[0]?.number ?? null;
 }
 
@@ -402,7 +415,14 @@ export function createContact(
 
   const id = ctx.newId();
   const now = ctx.now();
-  const columns: string[] = ['id', 'created_by', 'created_at', 'updated_at', 'social_accounts', 'open_tracking_opt_out'];
+  const columns: string[] = [
+    'id',
+    'created_by',
+    'created_at',
+    'updated_at',
+    'social_accounts',
+    'open_tracking_opt_out',
+  ];
   const values: SqlValue[] = [
     id,
     ctx.actor.id,

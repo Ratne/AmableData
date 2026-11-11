@@ -70,6 +70,14 @@ export function registerLinks(db: SqlDb, links: readonly ContactVisitor[]): void
   });
 }
 
+export function unlinkVisitors(db: SqlDb, siteId: string, visitorIds: readonly string[]): void {
+  db.run(
+    `DELETE FROM contact_visitors WHERE site_id = ? AND visitor_id IN (SELECT value FROM json_each(?))`,
+    siteId,
+    JSON.stringify(visitorIds),
+  );
+}
+
 export function mergeContacts(db: SqlDb, from: readonly string[], to: string): void {
   for (const f of from) db.run(`UPDATE contact_visitors SET contact_id = ? WHERE contact_id = ?`, to, f);
 }

@@ -122,7 +122,7 @@ describe('payload', () => {
     expect(page.sent.at(-1)?.url).toBe('https://app.example.com/#/next');
   });
 
-  it('falls back to fetch keepalive when sendBeacon is unavailable or refuses', () => {
+  it('sends with fetch (acked) while the page is visible, without keepalive', () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const page = openPage();
     const win = page.win as unknown as {
@@ -136,7 +136,7 @@ describe('payload', () => {
     Object.defineProperty(win.navigator, 'sendBeacon', { value: () => false, configurable: true });
     createTracker(page.win, { cookieless: false, hashRouting: false });
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.init).toMatchObject({ method: 'POST', keepalive: true, credentials: 'omit' });
+    expect(calls[0]?.init).toMatchObject({ method: 'POST', keepalive: false, credentials: 'omit' });
     expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ type: 'pageview' });
   });
 });
@@ -289,12 +289,21 @@ describe('links', () => {
   });
 
   it('sends the email-click contact token once and strips it with the handoff params', () => {
-    const ids = { vid: '11111111-2222-4333-8444-555555555555', sid: 'sabcdef0123456789', fs: T0, sn: 2 };
+    const ids = {
+      vid: '11111111-2222-4333-8444-555555555555',
+      sid: 'sabcdef0123456789',
+      fs: T0,
+      sn: 2,
+    };
     const href = new URL(decorateLink('https://www.example.com/pricing?a=1', ids, T0));
     href.searchParams.set('_amb_c', 'eyJ0IjoiZGVtbyJ9.c2ln');
     const page = openPage({ url: href.toString() });
     expect(page.win.location.href).toBe('https://www.example.com/pricing?a=1');
-    expect(page.sent[0]).toMatchObject({ type: 'pageview', vid: ids.vid, ct: 'eyJ0IjoiZGVtbyJ9.c2ln' });
+    expect(page.sent[0]).toMatchObject({
+      type: 'pageview',
+      vid: ids.vid,
+      ct: 'eyJ0IjoiZGVtbyJ9.c2ln',
+    });
     page.win.history.pushState({}, '', '/signup');
     expect(page.sent.at(-1)?.url).toBe('https://www.example.com/signup');
     expect(page.sent.slice(1).every((e) => e.ct === undefined)).toBe(true);
@@ -356,6 +365,35 @@ describe('exclusions', () => {
     );
   });
 
+  it('opt-out stops the page at once and forgets the ids', () => {
+    const page = openPage();
+    const before = page.sent.length;
+    expect(page.win.document.cookie).toContain('amb_vid=');
+    page.handle.command('optout');
+    page.win.history.pushState({}, '', '/after');
+    page.win.dispatchEvent(
+      new (page.win as unknown as typeof globalThis).PopStateEvent('popstate'),
+    );
+    page.handle.command('goal', 'signup');
+    page.win.document.body.click();
+    expect(page.sent.length).toBe(before);
+    expect(page.win.document.cookie).not.toContain('amb_vid=');
+  });
+
+  it('opt-out strips the ids from links the tracker decorated', () => {
+    const page = openPage({
+      url: 'https://www.example.com/lander?f=fun1&n=nd3',
+      body: '<a id="act" href="https://trk.example.com/a/1?x=1">go</a><a id="mine" href="/p?vid=keep">x</a>',
+    });
+    const act = page.win.document.getElementById('act') as HTMLAnchorElement;
+    expect(act.href).toContain('vid=');
+    page.handle.command('optout');
+    expect(act.href).toBe('https://trk.example.com/a/1?x=1');
+    expect((page.win.document.getElementById('mine') as HTMLAnchorElement).href).toContain(
+      'vid=keep',
+    );
+  });
+
   it('opt-out via localStorage and commands', () => {
     const page = openPage();
     page.handle.command('optout');
@@ -374,16 +412,22 @@ describe('exclusions', () => {
 });
 
 describe('bundles', () => {
-  it('generated/bundles.ts is up to date and each variant stays under 6 KB gzip', async () => {
+  it('generated/bundles.ts is up to date and each variant stays under its gzip budget', async () => {
     vi.useRealTimers();
     const bundles = await buildBundles();
     const onDisk = readFileSync(join(import.meta.dirname, '../generated/bundles.ts'), 'utf8');
     expect(onDisk, 'run `pnpm --filter @amable/tracker build`').toBe(renderModule(bundles));
     for (const code of Object.values(bundles)) {
-      expect(gzipSync(code).length).toBeLessThan(6 * 1024);
+      // 6 KB, plus the acked transport with its offline buffer, plus the extended form
+      // capture (twelve kinds in six languages, form_submit, payload, hidden fields) 2 KB,
+      // the layered identity (server cookie, storage mirror, platform cookies, URL aliases) 1 KB,
+      // embeds (shadow DOM, iframes, parent handshake, provider messages) 1 KB.
+      expect(gzipSync(code).length).toBeLessThan(10 * 1024 + 256);
       // v1 was 8588 bytes minified; v2 (forms, link params, action links) may add at most 4 KB,
-      // the site mode lookup of the cookie builds 1 KB more.
-      expect(code.length).toBeLessThanOrEqual(8588 + 4096 + 1024);
+      // the site mode lookup of the cookie builds 1 KB more, the acked transport with its
+      // offline buffer 1 KB more, the immediate opt-out teardown 512 bytes more, the
+      // extended form capture 5 KB more, the layered identity 2 KB more, embeds 3.5 KB more.
+      expect(code.length).toBeLessThanOrEqual(8588 + 4096 + 1024 + 1024 + 512 + 5120 + 2048 + 3584);
     }
   });
 });

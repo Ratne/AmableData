@@ -233,7 +233,7 @@ describe('funnel graphs v2 API', () => {
       expect(res.body['direct_url']).toBeNull();
       expect(res.body['action_urls']).toEqual([]);
       expect(String(res.body['snippet'])).toContain(`data-site="${siteId}"`);
-      expect(String(res.body['snippet'])).toContain('src="https://t.acme.test/s.js"');
+      expect(String(res.body['snippet'])).toMatch(/src="https:\/\/t\.acme\.test\/[a-z0-9]{8}\/[a-z]+\.js"/);
 
       expect(res.body['base_url']).toBe(`https://t.acme.test/s/${siteId}`);
 
@@ -268,7 +268,7 @@ describe('funnel graphs v2 API', () => {
         action_urls: [{ action: 1, url: 'https://go.acme.test/a/1', default_url: `https://go.acme.test/go/${funnelId}/lb/a/1` }],
       });
       expect(String(res.body['entrance_url'])).not.toMatch(/gclid|gbraid|wbraid/);
-      expect(String(res.body['snippet'])).toContain('src="https://go.acme.test/s.js"');
+      expect(String(res.body['snippet'])).toMatch(/src="https:\/\/go\.acme\.test\/[a-z0-9]{8}\/[a-z]+\.js"/);
       const page = await viewer.get(`${BASE}/funnels-v2/${funnelId}/links?${sq()}&source=${googleId}&node=la&page=la2`);
       expect(page.body['entrance_url']).toBe(`${edge()}/go/${funnelId}-${googleId}/la/la2?${fields}`);
       expect(page.body['direct_url']).toBe(`https://lander.test/a2?f=${funnelId}&ts=${googleId}&n=la&p=la2&${fields}`);

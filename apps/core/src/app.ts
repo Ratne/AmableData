@@ -32,6 +32,7 @@ import { mountEmailApi } from './email/mount';
 import { mountReportsApi } from './reports/routes';
 import { mountDevelopersApi } from './developers/mount';
 import { mountMcpServer, selfFetcher } from './mcp/server';
+import { mountOpsApi } from './ops/routes';
 import { ensureInstallationMigrated } from './migrate';
 import { mountPlatformApi } from './platform/mount';
 
@@ -96,6 +97,8 @@ mountAnalyticsApi(app);
 mountPublishingApi(app);
 // Report engine REST v2 under /api/v2/t/:slug (reports, customReports, dashboards) + /api/v2/openapi/reports.json.
 mountReportsApi(app);
+// Operations page: parked registry messages, tracking replay backlog, syncs, recovery actions.
+mountOpsApi(app);
 // Outgoing webhooks, sending/tracking/site domains, merged OpenAPI (/api/v2/openapi/all.json).
 mountDevelopersApi(app);
 // Platform link (managed offering): signed control plane calls, support, ideas, assisted access.

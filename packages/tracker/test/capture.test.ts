@@ -85,7 +85,7 @@ describe('normalization', () => {
       h: null,
       i: null,
       j: null,
-      k: null,
+      k: 'given_name',
       l: null,
       m: 'phone',
       n: null,
@@ -113,15 +113,15 @@ describe('form capture', () => {
     expect(identifies(page)).toHaveLength(0);
     type(page, 'email', ' Mario@Example.com ');
     expect(identifies(page)).toHaveLength(1);
-    expect(identifies(page)[0]?.data).toEqual({ email: 'mario@example.com' });
+    expect(identifies(page)[0]?.data).toEqual({ email: 'mario@example.com', given_name: 'Mario' });
     type(page, 'phone', '0039 333-123 4567', 'change');
     expect(identifies(page).at(-1)?.data).toEqual({
       email: 'mario@example.com',
+      given_name: 'Mario',
       phone: '+393331234567',
     });
     const body = JSON.stringify(page.sent);
     expect(body).not.toContain('hunter2');
-    expect(body).not.toContain('Mario"');
     expect(body).not.toContain('hidden@example.com');
   });
 
@@ -166,16 +166,182 @@ describe('form capture', () => {
   });
 });
 
+describe('extended form capture', () => {
+  const submit = (page: Page, id: string): void => {
+    const form = page.win.document.getElementById(id) as HTMLFormElement;
+    form.addEventListener('submit', (e) => e.preventDefault());
+    form.dispatchEvent(new page.dom.window.Event('submit', { cancelable: true }));
+  };
+  const goals = (page: Page) => page.sent.filter((e) => e.type === 'goal');
+
+  it('classifies the twelve kinds by autocomplete, name, placeholder and label', () => {
+    const page = openPage({
+      body: `
+        <input id="a" name="coupon_code">
+        <input id="b" autocomplete="given-name">
+        <input id="c" name="cognome">
+        <input id="d" name="nome_e_cognome">
+        <textarea id="e" name="indirizzo"></textarea>
+        <input id="f" autocomplete="address-line1">
+        <input id="g" placeholder="Città">
+        <select id="h" name="provincia"><option value="MI">MI</option></select>
+        <select id="i" autocomplete="country"><option value="IT">Italia</option></select>
+        <input id="j" name="cap">
+        <label for="k">Codice promo</label><input id="k" name="x1">
+        <textarea id="l" name="first_name"></textarea>
+        <select id="m" name="email"><option>x</option></select>
+        <input id="n" name="zip" type="number">`,
+    });
+    const kinds = Object.fromEntries(
+      'abcdefghijklmn'.split('').map((id) => [id, fieldKind(input(page, id)) ?? null]),
+    );
+    expect(kinds).toEqual({
+      a: 'coupon',
+      b: 'given_name',
+      c: 'family_name',
+      d: 'full_name',
+      e: 'address',
+      f: 'street',
+      g: 'city',
+      h: 'region',
+      i: 'country',
+      j: 'postal_code',
+      k: 'coupon',
+      l: null,
+      m: null,
+      n: null,
+    });
+  });
+
+  it('pairs email and phone only within the same form', () => {
+    const page = openPage({
+      body: `
+        <form id="news"><input id="e1" type="email"></form>
+        <form id="call"><input id="p1" type="tel"><input id="c1" name="city"></form>`,
+    });
+    type(page, 'e1', 'one@example.com');
+    type(page, 'c1', 'Milano');
+    expect(identifies(page).map((e) => e.data)).toEqual([{ email: 'one@example.com' }]);
+    type(page, 'p1', '+39 333 1112222');
+    expect(identifies(page).map((e) => e.data)).toEqual([
+      { email: 'one@example.com' },
+      { city: 'Milano', phone: '+393331112222' },
+    ]);
+  });
+
+  it('sends form_submit with the form and the captured kinds, values only in the identify', () => {
+    const page = openPage({
+      body: `<form id="lead" action="/x"><input name="email" value="l@example.com">
+        <input name="nome" value="Ada"><input name="budget" value="5000"></form>`,
+    });
+    submit(page, 'lead');
+    expect(goals(page).map((e) => [e.name, e.data])).toEqual([
+      ['form_submit', { form: 'lead', fields: 'email,given_name' }],
+    ]);
+    expect(identifies(page)[0]?.data).toEqual({ email: 'l@example.com', given_name: 'Ada' });
+  });
+
+  it('opt-in payload adds the other answers, never contacts, secrets or hidden values', () => {
+    const page = openPage({
+      attrs: { 'data-form-payload': '' },
+      body: `<form id="quiz" name="quiz"><input name="email" value="q@example.com">
+        <select name="Budget"><option value="5k" selected>5k</option></select>
+        <input type="radio" name="size" value="s"><input type="radio" name="size" value="m" checked>
+        <input name="note" value="call +39 333 1234567"><input name="ref" value="me@x.it">
+        <input type="hidden" name="h" value="secret"><input name="pin_code" value="12"></form>`,
+    });
+    submit(page, 'quiz');
+    expect(goals(page)[0]?.data).toEqual({
+      form: 'quiz',
+      fields: 'email',
+      f_budget: '5k',
+      f_size: 'm',
+    });
+  });
+
+  it('typing capture identifies after a pause, without a blur', () => {
+    const page = openPage({
+      attrs: { 'data-capture-typing': '' },
+      body: '<form><input id="e" type="email"></form>',
+    });
+    const el = input(page, 'e');
+    el.value = 'typed@example.com';
+    el.dispatchEvent(new page.dom.window.Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(2900);
+    expect(identifies(page)).toHaveLength(0);
+    vi.advanceTimersByTime(200);
+    expect(identifies(page).map((e) => e.data)).toEqual([{ email: 'typed@example.com' }]);
+  });
+
+  it('fills data-amb-fill hidden fields with the visitor id, click ids and UTM', () => {
+    const page = openPage({
+      body: `<form id="f"><input type="hidden" id="v" data-amb-fill="vid">
+        <input type="hidden" id="g" data-amb-fill="gclid"><input type="hidden" id="u" data-amb-fill="utm_source">
+        <input type="hidden" id="c" data-amb-fill="click_id"><input type="hidden" id="k" data-amb-fill="keep" value="x"></form>`,
+    });
+    expect(input(page, 'v').value).toBe(cookieMap(page.win)['amb_vid']);
+    expect(input(page, 'g').value).toBe('abc');
+    expect(input(page, 'c').value).toBe('abc');
+    expect(input(page, 'u').value).toBe('news');
+    expect(input(page, 'k').value).toBe('x');
+  });
+});
+
+describe('layered identity and URL contacts', () => {
+  const VID = '44444444-4444-4444-8444-444444444444';
+
+  it('restores the visitor id from the storage mirror when the cookie is gone', () => {
+    const first = openPage({});
+    const vid = first.sent[0]?.vid;
+    expect(first.win.localStorage.getItem('amb_id')).toContain(String(vid));
+    const page = openPage({
+      before: (win) =>
+        win.localStorage.setItem('amb_id', JSON.stringify({ vid: VID, fs: T0 - 1000 })),
+    });
+    expect(page.sent[0]?.vid).toBe(VID);
+    expect(page.sent[0]?.fs).toBe(T0 - 1000);
+    page.handle.command('optout');
+    expect(page.win.localStorage.getItem('amb_id')).toBeNull();
+  });
+
+  it('sends the ad platform cookies with the click ids', () => {
+    const page = openPage({ cookies: ['_fbp=fb.1.1700000000000.123', '_ttp=tt-abc'] });
+    expect(page.sent[0]?.clk).toEqual({
+      gclid: 'abc',
+      fbp: 'fb.1.1700000000000.123',
+      ttp: 'tt-abc',
+    });
+  });
+
+  it('email and phone URL aliases identify and never travel in page URLs', () => {
+    const page = openPage({
+      url: 'https://www.example.com/booked?invitee_email=Ada%40Example.com&invitee_phone=%2B39%20333%201234567&x=1',
+    });
+    const [pv] = page.sent;
+    expect(pv?.url).toBe('https://www.example.com/booked?x=1');
+    expect(pv?.la).toEqual({ he: 'ada@example.com' });
+    expect(identifies(page).map((e) => e.data)).toEqual([
+      { email: 'ada@example.com', phone: '+393331234567' },
+    ]);
+  });
+});
+
 describe('he / sl / el', () => {
   it('parses plain or hashed emails and source labels', () => {
-    expect(readLinkAttribution(new URLSearchParams('he=Mario%40Example.com&el=email&sl=fb_group'))).toEqual({
+    expect(
+      readLinkAttribution(new URLSearchParams('he=Mario%40Example.com&el=email&sl=fb_group')),
+    ).toEqual({
       he: 'mario@example.com',
       el: 'email',
       sl: 'fb_group',
     });
-    expect(readLinkAttribution(new URLSearchParams(`he=${HASH}`))).toEqual({ he: HASH.toLowerCase() });
+    expect(readLinkAttribution(new URLSearchParams(`he=${HASH}`))).toEqual({
+      he: HASH.toLowerCase(),
+    });
     // Unencoded alias: `+` decodes to a space.
-    expect(readLinkAttribution(new URLSearchParams('he=a+tag@example.com'))?.he).toBe('a+tag@example.com');
+    expect(readLinkAttribution(new URLSearchParams('he=a+tag@example.com'))?.he).toBe(
+      'a+tag@example.com',
+    );
     expect(readLinkAttribution(new URLSearchParams('he=garbage&el=<b>'))).toEqual({ el: 'b' });
     expect(readLinkAttribution(new URLSearchParams('utm_source=x'))).toBeUndefined();
   });
@@ -184,7 +350,9 @@ describe('he / sl / el', () => {
     const page = openPage({
       url: 'https://www.example.com/offer?gclid=G1&utm_source=nl&he=Mario%40Example.com&el=launch&sl=partner',
     });
-    expect(page.win.location.href).toBe('https://www.example.com/offer?gclid=G1&utm_source=nl&el=launch&sl=partner');
+    expect(page.win.location.href).toBe(
+      'https://www.example.com/offer?gclid=G1&utm_source=nl&el=launch&sl=partner',
+    );
     const pv = page.sent[0];
     expect(pv).toMatchObject({
       type: 'pageview',
@@ -210,20 +378,28 @@ describe('he / sl / el', () => {
 describe('direct-link context', () => {
   it('reads f/ts/n/p only when a funnel id or funnel vid is present', () => {
     expect(readDirectLink(new URLSearchParams('p=123&n=4'), {})).toEqual({});
-    expect(readDirectLink(new URLSearchParams('f=fun1&ts=src2&n=nd3&p=pg4'), { f: 'old', n: 'x' })).toEqual({
+    expect(
+      readDirectLink(new URLSearchParams('f=fun1&ts=src2&n=nd3&p=pg4'), { f: 'old', n: 'x' }),
+    ).toEqual({
       f: 'fun1',
       ts: 'src2',
       n: 'nd3',
       p: 'pg4',
     });
     expect(
-      readDirectLink(new URLSearchParams('vid=v1234567890&n=nd9'), { f: 'fun1', ts: 'src2', n: 'nd3' }),
+      readDirectLink(new URLSearchParams('vid=v1234567890&n=nd9'), {
+        f: 'fun1',
+        ts: 'src2',
+        n: 'nd3',
+      }),
     ).toEqual({ f: 'fun1', ts: 'src2', n: 'nd9', vid: 'v1234567890' });
     expect(readDirectLink(new URLSearchParams('f=bad%20id'), { f: 'keep' })).toEqual({ f: 'keep' });
   });
 
   it('is sent with every event and kept across page loads of the session', () => {
-    const page = openPage({ url: 'https://www.example.com/lander?f=fun1&ts=src2&n=nd3&p=pg4&campaign=x' });
+    const page = openPage({
+      url: 'https://www.example.com/lander?f=fun1&ts=src2&n=nd3&p=pg4&campaign=x',
+    });
     const dl = { f: 'fun1', ts: 'src2', n: 'nd3', p: 'pg4' };
     expect(page.sent[0]).toMatchObject({ type: 'pageview', dl });
     page.handle.command('goal', 'clicked');
@@ -360,8 +536,13 @@ describe('emitted params snapshot', () => {
     });
     type(page, 'tel', '+39 333 000 1111');
     page.handle.command('conversion', { value: 10, currency: 'EUR', tx: 'tx1' });
-    const strip = ({ vid: _v, sid: _s, ...rest }: Record<string, unknown>) => rest;
-    expect(page.sent.map((e) => strip(e as unknown as Record<string, unknown>))).toMatchInlineSnapshot(`
+    const strip = ({ vid: _v, sid: _s, id: _i, at: _a, ...rest }: Record<string, unknown>) => rest;
+    const ids = page.sent.map((e) => (e as unknown as Record<string, unknown>)['id']);
+    expect(new Set(ids).size).toBe(page.sent.length);
+    for (const e of page.sent)
+      expect((e as unknown as Record<string, unknown>)['at']).toBe(Date.now());
+    expect(page.sent.map((e) => strip(e as unknown as Record<string, unknown>)))
+      .toMatchInlineSnapshot(`
       [
         {
           "clk": {
@@ -422,7 +603,6 @@ describe('emitted params snapshot', () => {
             "fbclid": "FB",
           },
           "data": {
-            "email": "lead@example.com",
             "phone": "+393330001111",
           },
           "dl": {

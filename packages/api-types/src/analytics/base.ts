@@ -47,6 +47,13 @@ export const SOURCE_PARAM_NAMES = [
   'ref',
   'source',
   'via',
+  'utm_id',
+  'amb_cid',
+  'amb_asid',
+  'amb_adid',
+  'amb_pl',
+  'amb_kw',
+  'amb_net',
 ] as const;
 
 const trackerIdSchema = z.string().regex(/^[A-Za-z0-9-]{8,64}$/);
@@ -62,6 +69,10 @@ function boundedRecord<T extends z.ZodType>(value: T, maxKeys: number) {
 /** Body of `POST /e` sent by the browser tracker (protocol v1). Unknown keys are dropped. */
 export const trackerEventSchema = z.object({
   type: z.enum(ANALYTICS_EVENT_TYPES),
+  /** Client event id, stable across retries (dedupe key). */
+  id: trackerIdSchema.optional(),
+  /** Client time of the event (ms); clamped at the edge, never trusted in the future. */
+  at: z.number().int().positive().optional(),
   site: z.string().min(1).max(64),
   url: z.string().min(1).max(2048),
   ref: z.string().max(2048).optional(),
@@ -76,8 +87,9 @@ export const trackerEventSchema = z.object({
   fs: z.number().int().nonnegative().optional(),
   sn: z.number().int().min(1).max(1_000_000).optional(),
   cl: z.literal(1).optional(),
-  clk: boundedRecord(z.string().max(255), 8).optional(),
-  src: boundedRecord(z.string().max(255), 8).optional(),
+  // Click ids plus the ad platform cookies (fbp, fbc, ttp).
+  clk: boundedRecord(z.string().max(255), 12).optional(),
+  src: boundedRecord(z.string().max(255), 16).optional(),
   name: z.string().max(64).optional(),
   data: boundedRecord(extraValueSchema, 20).optional(),
   /** Signed contact token (`_amb_c` of an email click), sent once with the landing pageview. */
@@ -121,11 +133,24 @@ const currencySchema = z
   .transform((s) => s.toUpperCase());
 
 /**
+ * Envelope of every server event: `event_id` makes retries idempotent (scoped
+ * by event type), `occurred_at` (ms or ISO 8601) back-dates the event.
+ */
+const serverEnvelope = {
+  event_id: z
+    .string()
+    .regex(/^[\w.:-]{1,128}$/)
+    .optional(),
+  occurred_at: z.union([z.number().int().positive(), z.iso.datetime({ offset: true })]).optional(),
+};
+
+/**
  * Body of `POST /e/server` (server SDKs: goals, payments, identify, server-side
  * pageviews and crawler hits). Authenticated with the site secret.
  */
 export const serverEventSchema = z.discriminatedUnion('type', [
   z.object({
+    ...serverEnvelope,
     type: z.literal('goal'),
     visitor_id: trackerIdSchema,
     name: goalNameSchema,
@@ -133,6 +158,7 @@ export const serverEventSchema = z.discriminatedUnion('type', [
     params: goalParamsSchema.optional(),
   }),
   z.object({
+    ...serverEnvelope,
     type: z.literal('payment'),
     visitor_id: trackerIdSchema.optional(),
     amount: z.number().finite().nonnegative(),
@@ -145,6 +171,7 @@ export const serverEventSchema = z.discriminatedUnion('type', [
     is_free_trial: z.boolean().optional(),
   }),
   z.object({
+    ...serverEnvelope,
     type: z.literal('identify'),
     visitor_id: trackerIdSchema,
     user_id: z.string().min(1).max(255),
@@ -153,6 +180,7 @@ export const serverEventSchema = z.discriminatedUnion('type', [
     traits: goalParamsSchema.optional(),
   }),
   z.object({
+    ...serverEnvelope,
     type: z.literal('pageview'),
     url: z.string().min(1).max(2048),
     user_agent: z.string().max(1024),
@@ -161,6 +189,7 @@ export const serverEventSchema = z.discriminatedUnion('type', [
     visitor_id: trackerIdSchema.optional(),
   }),
   z.object({
+    ...serverEnvelope,
     type: z.literal('crawler'),
     url: z.string().min(1).max(2048),
     user_agent: z.string().max(1024),
@@ -192,11 +221,15 @@ const timezoneSchema = z
     }
   }, 'unknown IANA time zone');
 
-/** Days of raw data kept in the AnalyticsDO (older rows are archived to R2); 0 = forever. */
-const retentionSchema = z
-  .number()
-  .int()
-  .refine((d) => d === 0 || (d >= 30 && d <= 3650), '0 or 30..3650');
+/** Default hot window of raw rows in the AnalyticsDO; the cold copy lives on R2 from ingest on. */
+export const DEFAULT_RETENTION_DAYS = 90;
+/**
+ * Days of raw data kept in the AnalyticsDO. Bounded: a site DO has a hard 10 GB
+ * ceiling, so raw rows can never be kept forever there (R2 holds the full history).
+ */
+export const RETENTION_MIN_DAYS = 30;
+export const RETENTION_MAX_DAYS = 395;
+const retentionSchema = z.number().int().min(RETENTION_MIN_DAYS).max(RETENTION_MAX_DAYS);
 
 export const siteSchema = z.object({
   id: z.string(),
@@ -210,6 +243,8 @@ export const siteSchema = z.object({
   retention_days: z.number().int(),
   /** Default attribution model of the dashboard. */
   attribution_model: z.enum(ATTRIBUTION_MODELS),
+  /** Neutral tracker path `<dir>/<name>` (script `/<dir>/<name>.js`, events `/<dir>/<name>`). */
+  script_path: z.string(),
   has_secret: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -223,7 +258,7 @@ export const createSiteSchema = z.strictObject({
   allow_localhost: z.boolean().default(false),
   timezone: timezoneSchema.default('UTC'),
   currency: currencySchema.default('EUR'),
-  retention_days: retentionSchema.default(395),
+  retention_days: retentionSchema.default(DEFAULT_RETENTION_DAYS),
   attribution_model: z.enum(ATTRIBUTION_MODELS).default('last_non_direct'),
 });
 export type CreateSiteInput = z.infer<typeof createSiteSchema>;
@@ -237,6 +272,10 @@ export const updateSiteSchema = z.strictObject({
   currency: currencySchema.optional(),
   retention_days: retentionSchema.optional(),
   attribution_model: z.enum(ATTRIBUTION_MODELS).optional(),
+  script_path: z
+    .string()
+    .regex(/^[a-z0-9]{6,16}\/[a-z0-9]{2,16}$/)
+    .optional(),
 });
 export type UpdateSiteInput = z.infer<typeof updateSiteSchema>;
 
@@ -247,6 +286,14 @@ export const siteSnippetSchema = z.object({
   scripts: z.object({ default: z.string(), cookieless: z.string(), hash: z.string() }),
   /** Endpoint for server SDKs (Bearer site secret). */
   server_endpoint: z.string(),
+  /** Reverse-proxy recipes serving the tracker from the site's own host (`/<dir>/*` → edge). */
+  proxy: z.object({
+    path: z.string(),
+    cloudflare: z.string(),
+    nginx: z.string(),
+    next: z.string(),
+    vercel: z.string(),
+  }),
 });
 export type SiteSnippet = z.infer<typeof siteSnippetSchema>;
 
@@ -270,6 +317,10 @@ export const ANALYTICS_SESSION_DIMENSIONS = [
   'utm_medium',
   'utm_term',
   'utm_content',
+  'ad_campaign',
+  'ad_set',
+  'ad',
+  'ad_placement',
   'country',
   'region',
   'city',

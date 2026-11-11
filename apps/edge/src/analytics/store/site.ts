@@ -1,5 +1,7 @@
+import { suppressedForConfig } from './suppression';
 import {
   ATTRIBUTION_MODELS,
+  defaultScriptPath,
   type AttributionModel,
   type Site,
   type UpdateSiteInput,
@@ -20,6 +22,7 @@ interface SiteRow {
   currency: string;
   retention_days: number;
   attribution_model: string;
+  script_path: string | null;
   secret_hash: string | null;
   last_event_at: number | null;
   last_event_url: string | null;
@@ -64,6 +67,7 @@ function toRecord(row: SiteRow): SiteRecord {
       currency: row.currency,
       retention_days: row.retention_days,
       attribution_model: toModel(row.attribution_model),
+      script_path: row.script_path ?? defaultScriptPath(row.site_id),
       has_secret: row.secret_hash !== null,
       created_at: new Date(row.created_at).toISOString(),
       updated_at: new Date(row.updated_at).toISOString(),
@@ -123,7 +127,7 @@ export function updateSite(db: SqlDb, patch: UpdateSiteInput, now: number): Site
   const s = current.site;
   db.run(
     `UPDATE site_config SET name = ?, hostnames = ?, cookieless = ?, allow_localhost = ?, timezone = ?,
-       currency = ?, retention_days = ?, attribution_model = ?, updated_at = ? WHERE id = 1`,
+       currency = ?, retention_days = ?, attribution_model = ?, script_path = ?, updated_at = ? WHERE id = 1`,
     patch.name ?? s.name,
     JSON.stringify(patch.hostnames ?? s.hostnames),
     (patch.cookieless ?? s.cookieless) ? 1 : 0,
@@ -132,6 +136,7 @@ export function updateSite(db: SqlDb, patch: UpdateSiteInput, now: number): Site
     patch.currency ?? s.currency,
     patch.retention_days ?? s.retention_days,
     patch.attribution_model ?? s.attribution_model,
+    patch.script_path ?? s.script_path,
     now,
   );
   if (patch.timezone !== undefined && patch.timezone !== s.timezone) {
@@ -181,8 +186,10 @@ export function edgeConfig(db: SqlDb, now: number): EdgeSiteConfig | null {
     cookieless: record.site.cookieless,
     allowLocalhost: record.site.allow_localhost,
     currency: record.site.currency,
+    retentionDays: record.site.retention_days,
     secretHash: record.secretHash,
     salt: todaySalt(db, now),
+    suppressed: suppressedForConfig(db),
   };
 }
 

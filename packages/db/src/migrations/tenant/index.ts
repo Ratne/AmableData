@@ -24,6 +24,9 @@ import { t0022OpenTracking } from './0022_open_tracking';
 import { t0023CanvasClipboard } from './0023_canvas_clipboard';
 import { t0024Shortlinks } from './0024_shortlinks';
 import { t0025CheckoutLeads } from './0025_checkout_leads';
+import { t0026WebRegistry } from './0026_web_registry';
+import { t0027WebSales } from './0027_web_sales';
+import { t0028WebSuppressions } from './0028_web_suppressions';
 
 /**
  * Ordered list of tenant-DO SQLite migrations.
@@ -55,4 +58,7 @@ export const tenantMigrations: readonly Migration[] = [
   t0023CanvasClipboard,
   t0024Shortlinks,
   t0025CheckoutLeads,
+  t0026WebRegistry,
+  t0027WebSales,
+  t0028WebSuppressions,
 ];

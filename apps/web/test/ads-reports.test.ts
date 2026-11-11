@@ -119,7 +119,7 @@ describe('performance search → options', () => {
     const o = resolvePerformance({});
     expect(o).toMatchObject({
       model: 'last_click',
-      windowDays: 7,
+      windowDays: 30,
       basis: 'click_date',
       groupBy: 'platform',
       view: 'table',

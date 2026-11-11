@@ -1,17 +1,30 @@
-import { conversionEventSchema, type FunnelTouch, type TouchKind } from '@amable/api-types';
+import {
+  conversionEventSchema,
+  type FunnelTouch,
+  MAX_ATTRIBUTION_WINDOW_DAYS,
+  type TouchKind,
+} from '@amable/api-types';
 import { z } from 'zod';
 import { first, type SqlDb, type SqlValue } from '../db/sql';
 import { DAY_MS } from '../time';
 import { newObjectId } from './config';
+import { archiveRows, type ArchiveSink } from './retention';
 
 /**
  * Funnel click-log (`touches`, immutable: re-recording a touch id is a no-op)
  * and the conversions received for its hits (`conversion_log`). A touch is
- * `identified` once its visitor has an email/phone key or a CRM contact:
- * anonymous touches expire after 90 days, identified ones are kept.
+ * `identified` once its visitor has an email/phone key or a CRM contact.
+ *
+ * Retention: anonymous touches live as long as the widest attribution window
+ * (365 days), identified ones 13 months; anonymous visitors without activity
+ * for 13 months are forgotten with their graph rows.
  */
 
-const ANONYMOUS_TOUCH_TTL_MS = 90 * DAY_MS;
+export const ANONYMOUS_TOUCH_TTL_MS = MAX_ATTRIBUTION_WINDOW_DAYS * DAY_MS;
+export const IDENTIFIED_TOUCH_TTL_MS = 395 * DAY_MS;
+export const DORMANT_VISITOR_TTL_MS = 395 * DAY_MS;
+/** Rows deleted per table and pass: the daily alarm keeps the transaction bounded. */
+const PURGE_CHUNK = 50_000;
 
 interface TouchRow {
   id: string;
@@ -156,21 +169,109 @@ export function markTouchesIdentified(db: SqlDb, visitorIds: readonly string[]):
   );
 }
 
+export interface TouchRetentionResult {
+  anonymous_touches: number;
+  identified_touches: number;
+  dormant_visitors: number;
+  /** A chunk was full: more rows are due (the alarm runs again soon). */
+  touches_more: boolean;
+}
+
 /**
- * Deletes anonymous touches older than 90 days. Visitors identified since the
- * touch was recorded (CRM link, email set by ingest) are flagged first.
+ * Applies the touch and visitor retention, archiving every purged row first
+ * (bounded per pass). Visitors identified since a touch was recorded (CRM
+ * link, email set by ingest) are flagged first, so they get the longer horizon.
  */
-export function purgeAnonymousTouches(db: SqlDb, now: number): number {
-  const cutoff = now - ANONYMOUS_TOUCH_TTL_MS;
+export async function purgeTouches(
+  db: SqlDb,
+  sink: ArchiveSink | null,
+  siteId: string,
+  now: number,
+): Promise<TouchRetentionResult> {
+  const anonymousCutoff = now - ANONYMOUS_TOUCH_TTL_MS;
   db.run(
     `UPDATE touches SET identified = 1
      WHERE identified = 0 AND ts < ? AND visitor_id IN ${IDENTIFIED_VISITOR_SQL}`,
-    cutoff,
+    anonymousCutoff,
   );
-  return db.all<{ id: string }>(
-    `DELETE FROM touches WHERE identified = 0 AND ts < ? RETURNING id`,
+  const purge = async (where: string, cutoff: number): Promise<number> => {
+    const rows = db.all<TouchRow & { identified: number }>(
+      `SELECT * FROM touches WHERE ${where} AND ts < ? ORDER BY ts LIMIT ?`,
+      cutoff,
+      PURGE_CHUNK,
+    );
+    const firstRow = rows[0];
+    if (firstRow === undefined) return 0;
+    await archiveRows(sink, siteId, 'touches', rows, firstRow.ts, `${firstRow.id}-${rows.length}`);
+    // Re-checked: a visitor may have been identified while the archive was written.
+    db.run(
+      `DELETE FROM touches WHERE id IN (SELECT value FROM json_each(?)) AND ${where} AND ts < ?`,
+      JSON.stringify(rows.map((r) => r.id)),
+      cutoff,
+    );
+    return rows.length;
+  };
+  const anonymous = await purge('identified = 0', anonymousCutoff);
+  const identified = await purge('1 = 1', now - IDENTIFIED_TOUCH_TTL_MS);
+  const dormant = await pruneDormantVisitors(db, sink, siteId, now);
+  return {
+    anonymous_touches: anonymous,
+    identified_touches: identified,
+    dormant_visitors: dormant,
+    touches_more: Math.max(anonymous, identified, dormant) >= PURGE_CHUNK,
+  };
+}
+
+/**
+ * Anonymous visitors idle for 13 months: no email/phone key, user id or
+ * contact, and not part of any merge (a merge ties them to a person, and an
+ * inactive merge row is a manual unmerge that must survive).
+ */
+const DORMANT_SQL = `last_seen < ? AND contact_id IS NULL AND email IS NULL AND user_id IS NULL
+  AND id NOT IN (SELECT visitor_id FROM identity_keys WHERE key_type IN ('email', 'phone'))
+  AND id NOT IN (SELECT child_visitor_id FROM visitor_merges)
+  AND id NOT IN (SELECT origin_visitor_id FROM visitor_merges)`;
+
+/** Archives, then forgets dormant anonymous visitors with every row that hangs on them. */
+async function pruneDormantVisitors(
+  db: SqlDb,
+  sink: ArchiveSink | null,
+  siteId: string,
+  now: number,
+): Promise<number> {
+  const cutoff = now - DORMANT_VISITOR_TTL_MS;
+  const rows = db.all<{ id: string; last_seen: number }>(
+    `SELECT * FROM visitors WHERE ${DORMANT_SQL} ORDER BY last_seen LIMIT ?`,
     cutoff,
-  ).length;
+    PURGE_CHUNK,
+  );
+  const firstRow = rows[0];
+  if (firstRow === undefined) return 0;
+  const IN = `(SELECT value FROM json_each(?))`;
+  const candidates = JSON.stringify(rows.map((r) => r.id));
+  const label = `${firstRow.id}-${rows.length}`;
+  const dependents = ['identity_keys', 'visitor_tags', 'funnel_sessions', 'touches'] as const;
+  await archiveRows(sink, siteId, 'visitors', rows, firstRow.last_seen, label);
+  for (const table of dependents) {
+    const dependent = db.all<object>(
+      `SELECT * FROM ${table} WHERE visitor_id IN ${IN}`,
+      candidates,
+    );
+    await archiveRows(sink, siteId, table, dependent, firstRow.last_seen, label);
+  }
+  // Events may have landed while the archive was written: re-check before deleting.
+  const ids = JSON.stringify(
+    db
+      .all<{ id: string }>(
+        `SELECT id FROM visitors WHERE id IN ${IN} AND ${DORMANT_SQL}`,
+        candidates,
+        cutoff,
+      )
+      .map((r) => r.id),
+  );
+  for (const table of dependents) db.run(`DELETE FROM ${table} WHERE visitor_id IN ${IN}`, ids);
+  db.run(`DELETE FROM visitors WHERE id IN ${IN}`, ids);
+  return rows.length;
 }
 
 // ------------------------------------------------------------- conversion log

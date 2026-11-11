@@ -1,5 +1,10 @@
-import { ANALYTICS_EVENT_TYPES, trackerEventSchema } from '@amable/api-types';
-import type { EventPayload, EventType } from '../src/protocol';
+import {
+  AD_PARAM_NAMES,
+  ANALYTICS_EVENT_TYPES,
+  SOURCE_PARAM_NAMES,
+  trackerEventSchema,
+} from '@amable/api-types';
+import { SOURCE_PARAMS, type EventPayload, type EventType } from '../src/protocol';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
@@ -27,5 +32,10 @@ describe('tracker protocol', () => {
       la: { sl: 'news' },
     };
     expect(trackerEventSchema.parse(payload)).toEqual(payload);
+  });
+
+  it('captures the same source params the ingest accepts, ad ids included', () => {
+    expect([...SOURCE_PARAMS]).toEqual([...SOURCE_PARAM_NAMES]);
+    for (const name of AD_PARAM_NAMES) expect(SOURCE_PARAMS).toContain(name);
   });
 });

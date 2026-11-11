@@ -98,6 +98,10 @@ export const analyticsEn = {
   'analytics.dim.utm_medium': 'UTM medium',
   'analytics.dim.utm_term': 'UTM term',
   'analytics.dim.utm_content': 'UTM content',
+  'analytics.dim.ad_campaign': 'Ad campaign',
+  'analytics.dim.ad_set': 'Ad set',
+  'analytics.dim.ad': 'Ad',
+  'analytics.dim.ad_placement': 'Placement',
   'analytics.dim.country': 'Country',
   'analytics.dim.region': 'Region',
   'analytics.dim.city': 'City',
@@ -380,7 +384,8 @@ export const analyticsEn = {
   'analytics.sites.timezone': 'Time zone',
   'analytics.sites.currency': 'Currency',
   'analytics.sites.retention': 'Retention (days)',
-  'analytics.sites.retentionHint': '0 keeps raw data forever, otherwise 30–3650.',
+  'analytics.sites.retentionHint':
+    'Days of raw data kept hot (30–395); older data stays in the archive and the rollups.',
   'analytics.sites.cookieless': 'Cookieless',
   'analytics.sites.cookielessHint':
     'No identifier is stored in the browser; visitors are counted with a daily rotating hash.',
@@ -431,6 +436,52 @@ export const analyticsEn = {
   'analytics.tracking.serverEndpoint': 'Server endpoint',
   'analytics.tracking.serverHint':
     'Send goals, payments and identify calls from your backend with the site secret as Bearer token.',
+  'analytics.links.title': 'Tracked links',
+  'analytics.links.ads': 'Ads',
+  'analytics.links.email': 'Email',
+  'analytics.links.destination': 'Destination URL',
+  'analytics.links.platform': 'Platform',
+  'analytics.links.provider': 'Email provider',
+  'analytics.links.campaign': 'Campaign label',
+  'analytics.links.suffixHint':
+    'Paste these parameters in: {field}. The platform fills the macros at every click.',
+  'analytics.links.fullUrl': 'Or use the complete URL:',
+  'analytics.links.adsHint':
+    'Campaign, ad set and ad ids land on the session: leads and sales are joined to the exact ad, also when the ad platform does not attribute them.',
+  'analytics.links.emailHint':
+    '{tag} is the provider merge tag of the recipient email: the click identifies the contact (the address is hashed at the edge and removed from the URL).',
+  'analytics.path.title': 'Script path',
+  'analytics.path.rotate': 'New path',
+  'analytics.path.rotated':
+    'New script path: update the tag on the site (the old path keeps working).',
+  'analytics.path.hint':
+    'The tag loads the tracker from {path}, a random path of this site that no filter list knows. Serve it from a tracking domain or through your own host with a proxy below.',
+  'analytics.path.proxy': 'Reverse proxy',
+  'analytics.path.proxyHint':
+    'Forward {path} of your site to the edge: the tracker becomes first party without a DNS change.',
+  'analytics.matching.title': 'Visitor matching',
+  'analytics.matching.ipUa': 'Match by IP and browser (same day)',
+  'analytics.matching.ipUaHint':
+    'Links a new visitor to the only person seen the same day with the same IP and user agent (typically cookies wiped). Shared networks (offices, mobile carriers) are skipped. It is a guess: two people on the same home network with the same phone can be merged, and one’s browsing lands on the other’s contact. Opt-outs and erasures do not extend to visitors merged this way. Turning it off does not undo past matches. Off by default.',
+  'analytics.coverage.title': 'Tracking coverage (30 days)',
+  'analytics.coverage.empty': 'No sessions in the last 30 days.',
+  'analytics.coverage.hint':
+    'Returning: sessions of a visitor already known (the cookie survived). Identified: visitors with email or phone. Ads: sessions with a click id or ad ids.',
+  'analytics.coverage.domainCta':
+    '{share} of the sessions go through a shared host: cookies are short-lived on Safari and blockers filter it. Set up a tracking domain or a proxy.',
+  'analytics.coverage.domainAction': 'Set up a domain',
+  'analytics.path.rotateTitle': 'Generate a new path?',
+  'analytics.path.rotateBody':
+    'The site tag has to be updated. With a proxy, update its route to the new directory too. The old path keeps working.',
+  'analytics.coverage.collector': 'Collection',
+  'analytics.coverage.sessions': 'Sessions',
+  'analytics.coverage.returning': 'Returning',
+  'analytics.coverage.identified': 'Identified',
+  'analytics.coverage.ads': 'Ads',
+  'analytics.coverage.mode.first_party': 'Tracking domain',
+  'analytics.coverage.mode.third_party': 'Shared host',
+  'analytics.coverage.mode.proxy': 'Proxy',
+  'analytics.coverage.mode.unknown': 'Unknown',
   'analytics.tracking.crawlers': 'AI crawler tracking (server side)',
   'analytics.tracking.crawlersHint':
     'Crawlers do not run JavaScript: add this to your server to count them. Replace {placeholder} with the site secret.',
@@ -488,7 +539,8 @@ export const analyticsEn = {
   'analytics.alerts.rotateConfirmTitle': 'Issue a new webhook secret?',
   'analytics.alerts.rotateConfirmBody':
     'The current secret stops working at once: update the receiver with the new one. Unsaved changes in this form are discarded.',
-  'analytics.alerts.rotateHint': 'The secret is shown only once. Lost it? Issue a new one: the old one stops working at once.',
+  'analytics.alerts.rotateHint':
+    'The secret is shown only once. Lost it? Issue a new one: the old one stops working at once.',
 
   'analytics.share.title': 'Share {site}',
   'analytics.share.hint':
@@ -578,7 +630,8 @@ export const analyticsEn = {
   'analytics.performance.basis.sale_date': 'Sale date',
   'analytics.performance.basisHint.click_date':
     'Revenue is credited to the day of the click, including sales that came later.',
-  'analytics.performance.basisHint.sale_date': 'Revenue is counted on the day of the sale (cash collected).',
+  'analytics.performance.basisHint.sale_date':
+    'Revenue is counted on the day of the sale (cash collected).',
   'analytics.performance.group': 'Group by',
   'analytics.performance.group.platform': 'Platform',
   'analytics.performance.group.source': 'Traffic source',
@@ -696,7 +749,8 @@ export const analyticsEn = {
   'analytics.adsWidgets.roas': 'ROAS',
   'analytics.adsWidgets.revenue': 'Attributed revenue',
   'analytics.adsWidgets.quality': 'Tracking quality',
-  'analytics.adsWidgets.qualityHint': '{conversions} conversions · {identity} identified · {click} with click ID',
+  'analytics.adsWidgets.qualityHint':
+    '{conversions} conversions · {identity} identified · {click} with click ID',
   'analytics.adsWidgets.modelHint': 'Last click',
   'analytics.adsWidgets.open': 'Performance report',
   'analytics.sources.title': 'Traffic sources',
@@ -745,9 +799,12 @@ export const analyticsEn = {
   'analytics.domains.status.active': 'Active',
   'analytics.domains.status.error': 'Error',
   'analytics.domains.error.taken': 'This hostname is already connected.',
-  'analytics.domains.error.invalid': 'Enter a valid hostname you own (platform hostnames are not allowed).',
-  'analytics.domains.error.unavailable': 'Custom tracking domains are not configured on this installation.',
-  'analytics.domains.error.provider': 'The certificate service did not answer. Try again in a moment.',
+  'analytics.domains.error.invalid':
+    'Enter a valid hostname you own (platform hostnames are not allowed).',
+  'analytics.domains.error.unavailable':
+    'Custom tracking domains are not configured on this installation.',
+  'analytics.domains.error.provider':
+    'The certificate service did not answer. Try again in a moment.',
   'analytics.settings.tab.domains': 'Domains',
 
   'analytics.funnelBuilder.title': 'Funnel builder',
@@ -934,7 +991,8 @@ export const analyticsEn = {
 
   'analytics.funnelBuilder.saving': 'Saving…',
   'analytics.funnelBuilder.savedVersion': 'Saved · version {version}',
-  'analytics.funnelBuilder.saveInvalid': 'The server rejected the funnel: fix the highlighted nodes.',
+  'analytics.funnelBuilder.saveInvalid':
+    'The server rejected the funnel: fix the highlighted nodes.',
   'analytics.funnelBuilder.conflict.toast': 'Someone else saved this funnel in the meantime.',
   'analytics.funnelBuilder.conflict.body':
     'A newer version ({version}) was saved elsewhere. Reload it (your changes are lost) or keep your changes and save them over it.',
@@ -1074,7 +1132,8 @@ export const analyticsEn = {
     'The source token is the platform macro written into generated links; when empty the parameter is not appended but is still captured from incoming URLs.',
   'analytics.sources.error.required': 'Required.',
   'analytics.sources.error.urlParam.invalid': 'Use 1-64 letters, digits, _ . -',
-  'analytics.sources.error.urlParam.reserved': 'Reserved by the tracking links (vid, n, c, ts, f, p, hit, rev, tx, rn).',
+  'analytics.sources.error.urlParam.reserved':
+    'Reserved by the tracking links (vid, n, c, ts, f, p, hit, rev, tx, rn).',
   'analytics.sources.error.urlParam.duplicate': 'Already used by another field.',
   'analytics.sources.conversion.mode': 'Send conversions back',
   'analytics.sources.conversion.mode.integration': 'Ad platform API',
@@ -1166,8 +1225,10 @@ export const analyticsEn = {
   'analytics.ads.connections.disconnected': 'Ad account disconnected',
   'analytics.ads.connections.error.unavailable':
     'Ad platform integrations are not configured on this installation.',
-  'analytics.ads.connections.error.authExpired': 'The authorization expired: reconnect the account.',
-  'analytics.ads.connections.error.provider': 'The ad platform did not answer. Try again in a moment.',
+  'analytics.ads.connections.error.authExpired':
+    'The authorization expired: reconnect the account.',
+  'analytics.ads.connections.error.provider':
+    'The ad platform did not answer. Try again in a moment.',
   'analytics.ads.outbound.title': 'Conversions sent',
   'analytics.ads.outbound.hint':
     'Server-side conversions queued for the ad platforms. Failed jobs can be sent again.',
@@ -1184,7 +1245,8 @@ export const analyticsEn = {
   'analytics.ads.outbound.value': 'Value',
   'analytics.ads.outbound.attempts': 'Attempts',
   'analytics.ads.outbound.empty': 'No conversions in the queue.',
-  'analytics.ads.outbound.truncated': 'Showing the newest {count}: narrow the filters to see the others.',
+  'analytics.ads.outbound.truncated':
+    'Showing the newest {count}: narrow the filters to see the others.',
   'analytics.ads.outbound.resend': 'Resend',
   'analytics.ads.outbound.resendSelected': 'Resend selected ({count})',
   'analytics.ads.outbound.resendFailed': 'Resend all failed',

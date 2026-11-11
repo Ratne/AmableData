@@ -57,7 +57,7 @@ export const EDGE_ERROR_REPORT_OP = 'platform.reportError';
 export const EDGE_INSTALLATION_TENANT: GatewayTenantRef = { slug: '_installation' };
 
 export interface EdgeErrorReport {
-  readonly source: 'edge' | 'queue' | 'durable_object';
+  readonly source: 'edge' | 'queue' | 'durable_object' | 'cron';
   readonly module: string | null;
   /** Route pattern (`/f/:slug`), never the concrete URL. */
   readonly route: string | null;

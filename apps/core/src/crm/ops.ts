@@ -21,6 +21,9 @@ import { contactTabCounts, listContactTags } from './contact-tabs';
 import * as customFields from './custom-fields/repo';
 import * as deals from './deals';
 import { analyticsCrmOps } from '../analytics/crm-ops';
+import { registryCrmOps } from '../analytics/registry-ops';
+import { salesCrmOps } from '../analytics/sales-ops';
+import { suppressionCrmOps } from '../analytics/suppression-ops';
 import * as events from './events';
 import * as idempotency from './idempotency';
 import * as imports from './import/service';
@@ -244,6 +247,9 @@ const crmOps = {
   ...esignOps,
   // short links on dedicated domains (apps/core/src/shortlinks)
   ...shortlinksOps,
+  ...registryCrmOps,
+  ...salesCrmOps,
+  ...suppressionCrmOps,
 } satisfies Record<string, (ctx: CrmContext, input: never) => unknown>;
 
 type CrmOps = typeof crmOps;

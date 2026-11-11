@@ -14,6 +14,7 @@ import { developersIt } from './developers-it';
 import { appsIt } from './apps-it';
 import { conversationsIt } from './conversations-it';
 import { backupsIt } from './backups-it';
+import { opsIt } from './ops-it';
 import { foldersIt } from './folders-it';
 import { billingIt } from './billing-it';
 import { membersIt } from './members-it';
@@ -39,6 +40,7 @@ export const it: Readonly<Record<MessageKey, string>> = {
   ...appsIt,
   ...conversationsIt,
   ...backupsIt,
+  ...opsIt,
   ...foldersIt,
   ...billingIt,
   ...membersIt,

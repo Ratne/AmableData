@@ -14,6 +14,7 @@ import { developersEn } from './developers-en';
 import { appsEn } from './apps-en';
 import { conversationsEn } from './conversations-en';
 import { backupsEn } from './backups-en';
+import { opsEn } from './ops-en';
 import { foldersEn } from './folders-en';
 import { billingEn } from './billing-en';
 import { membersEn } from './members-en';
@@ -38,6 +39,7 @@ export const en = {
   ...appsEn,
   ...conversationsEn,
   ...backupsEn,
+  ...opsEn,
   ...foldersEn,
   ...billingEn,
   ...membersEn,

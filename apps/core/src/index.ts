@@ -1,7 +1,9 @@
 import { httpsRedirect } from '@amable/app-edge/https';
 import { runScheduledAdsSync } from './analytics/ads-sync';
 import { runScheduledTrackingDomains } from './analytics/routes-tracking-domains';
+import { consumeRegistry } from './analytics/registry';
 import { runScheduledAnalytics } from './analytics/runtime';
+import type { RegistryMessage } from '@amable/app-edge/analytics';
 import { app } from './app';
 import { runAppsCron } from './apps/cron';
 import { archiveDeps, runScheduledArchive } from './archive/scheduler';
@@ -14,6 +16,7 @@ import { consumeEsignSeal } from './esign/queue';
 import { ESIGN_SEAL_QUEUE } from './esign/runner';
 import { consumeFormSubmissions, FORM_SUBMISSIONS_QUEUE } from './forms/queue';
 import { serveSpa } from './middleware/spa';
+import { parkRegistryDeadLetters } from './ops/registry-dlq';
 import { platformScheduled } from './platform/mount';
 import { withErrorReporting } from './platform/telemetry';
 import { runUpdateCheck } from './platform/updates';
@@ -63,6 +66,9 @@ const handler = {
       if (queue === FORM_SUBMISSIONS_QUEUE) return consumeFormSubmissions(batch, env);
       if (queue === WEBHOOKS_QUEUE) return consumeWebhooks(batch, env);
       if (queue === ESIGN_SEAL_QUEUE) return consumeEsignSeal(batch, env);
+      // Parked in R2, replayed from the operations page of the workspace.
+      if (queue === 'registry-dlq') return parkRegistryDeadLetters(batch as MessageBatch<RegistryMessage>, env);
+      if (queue === 'registry') return consumeRegistry(batch as MessageBatch<RegistryMessage>, env);
       console.log(`[queue:${batch.queue}] received ${batch.messages.length} message(s) — stub`);
       batch.ackAll();
     }, (promise) => ctx.waitUntil(promise));
@@ -77,7 +83,7 @@ const handler = {
       withErrorReporting(env, 'cron', `${controller.cron} ${name}`, fn, (promise) => ctx.waitUntil(promise)).catch(
         () => null,
       );
-    // Web analytics: CRM → analytics sync of every tenant, daily ad / search integrations.
+    // Web analytics: registry → analytics sync of every tenant, daily ad / search integrations.
     await job('analytics', () => runScheduledAnalytics(env));
     // Ad platforms: hourly spend of the current day, daily reconciliation, token refresh.
     await job('ads', () => runScheduledAdsSync(env));

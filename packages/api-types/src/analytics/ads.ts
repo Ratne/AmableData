@@ -68,7 +68,10 @@ export const adSpendDaySchema = z.object({
   /** Local day of the ad account, `YYYY-MM-DD`. */
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   spend_minor: z.number().int().nonnegative(),
-  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
   clicks: z.number().int().nonnegative().nullable().optional(),
   impressions: z.number().int().nonnegative().nullable().optional(),
   /** What the platform claims (reported vs actual). */
@@ -94,7 +97,11 @@ export const outboundPayloadSchema = z.object({
   event_name: z.string().min(1).max(200),
   event_time: z.number().int(),
   value_minor: z.number().int().nullable().optional(),
-  currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullable()
+    .optional(),
   order_id: z.string().max(255).nullable().optional(),
   click_ids: z.record(z.string(), z.string().max(512)).default({}),
   email: z.string().max(320).nullable().optional(),
@@ -142,8 +149,18 @@ export const identityKeySchema = z.object({
 });
 export type IdentityKey = z.infer<typeof identityKeySchema>;
 
-export const MERGE_MECHANISMS = ['email', 'phone', 'session', 'manual'] as const;
+export const MERGE_MECHANISMS = ['email', 'phone', 'session', 'ip_ua', 'manual'] as const;
 export type MergeMechanism = (typeof MERGE_MECHANISMS)[number];
+
+/** Automatic merge mechanisms of a site; `ip_ua` (same-day IP + user agent) is off by default. */
+export const identityMergeSettingsSchema = z.object({
+  email: z.boolean(),
+  phone: z.boolean(),
+  session: z.boolean(),
+  ip_ua: z.boolean(),
+});
+export type IdentityMergeSettingsBody = z.infer<typeof identityMergeSettingsSchema>;
+export const identityMergeSettingsPatchSchema = identityMergeSettingsSchema.partial().strict();
 
 export const visitorMergeSchema = z.object({
   child_visitor_id: z.string(),

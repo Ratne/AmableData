@@ -78,6 +78,10 @@ export const PERMISSIONS = [
   'analytics:read',
   'analytics:configure',
   'analytics:journey_read',
+  /** Server-side leads, sales and events (`/v1`, workspace API keys). */
+  'tracking:ingest',
+  /** Erase a person's tracked data through `/v1/suppressions` (irreversible). */
+  'tracking:erase',
   // Reports
   'reports:read',
   'reports:sales_read',
@@ -196,6 +200,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'analytics:read',
     'analytics:configure',
     'analytics:journey_read',
+    'tracking:ingest',
     'reports:read',
     'reports:sales_read',
     'opportunities:read',

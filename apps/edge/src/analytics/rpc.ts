@@ -87,13 +87,38 @@ export type {
   AdEntityRecord,
   AdSpendQuery,
 } from './store/ad-entities';
-export type { TouchQuery, ConversionInput, ConversionRecord, ConversionQuery } from './store/touches';
+export type {
+  TouchQuery,
+  ConversionInput,
+  ConversionRecord,
+  ConversionQuery,
+} from './store/touches';
 export type { OutboundEnqueueInput, OutboundOutcome, OutboundQuery } from './store/outbound';
 export type { IdentityKeyRef } from './store/identity';
+export { normalizeEmailKey, normalizePhoneKey, sha256Hex as sha256HexSync } from './store/identity';
+export {
+  splitPii,
+  suppressedAtEdge,
+  PROFILE_FIELDS,
+  type RegistryMessage,
+  type ProfileField,
+} from './registry';
+export type { SuppressInput, SuppressResult, SuppressedKeyType } from './store/suppression';
+export { deliverDirect, type DirectIngestEnv } from './pipeline';
+export type { IdentityKind } from './store/crm';
 export type { UpdateFunnelGraphOutcome } from './store/funnel-graphs';
 export { crmTransactionId } from './store/crm';
-export { enrichServerEvent, type EdgeSiteConfig, type RequestContext } from './enrich';
+export {
+  enrichServerEvent,
+  eventIdOf,
+  occurredAt,
+  toMinor,
+  type EdgeSiteConfig,
+  type RequestContext,
+} from './enrich';
 export type { EnrichedEvent, BotHit } from './types';
 export type { Channel } from './channels';
 export { CRAWLER_LIST_VERSION } from './crawlers';
 export { CRAWLER_RANGES_VERSION } from './crawler-ip';
+
+export { proxyKeyFor, PROXY_KEY_HEADER } from './proxy-key';

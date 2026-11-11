@@ -1,5 +1,12 @@
 import { normalizePhone } from '@amable/ads-providers';
-import type { IdentityKey, IdentityKeyType, MergeMechanism, TouchKind, VisitorMerge } from '@amable/api-types';
+import type {
+  IdentityKey,
+  IdentityKeyType,
+  MergeMechanism,
+  TouchKind,
+  VisitorMerge,
+} from '@amable/api-types';
+import { identityMergeSettingsPatchSchema } from '@amable/api-types';
 import { z } from 'zod';
 import { first, type SqlDb } from '../db/sql';
 import type { EnrichedEvent } from '../types';
@@ -20,7 +27,11 @@ export interface IdentityKeyRef {
 export function upsertIdentityKeys(db: SqlDb, keys: readonly IdentityKey[]): number {
   let added = 0;
   const identified = new Set<string>();
-  for (const k of keys) {
+  for (const raw of keys) {
+    // Imported keys get the same hashing as the ingest: no clear email/phone is stored.
+    const value = storedKeyValue(raw.key_type, raw.key_value);
+    if (value === null) continue;
+    const k = { ...raw, key_value: value };
     const existed =
       db.all<{ n: number }>(
         `SELECT 1 AS n FROM identity_keys WHERE key_type = ? AND key_value = ? AND visitor_id = ?`,
@@ -44,6 +55,17 @@ export function upsertIdentityKeys(db: SqlDb, keys: readonly IdentityKey[]): num
 }
 
 /** Visitors holding the key, earliest first. */
+/** Stored form of a key: SHA-256 of the normalized email/phone, other types as is. */
+export function storedKeyValue(keyType: IdentityKeyType, value: string): string | null {
+  if (keyType === 'email') return landingEmailHash(value);
+  if (keyType === 'phone') return phoneKeyHash(value);
+  return value;
+}
+
+/**
+ * Visitors holding a key (a clear email/phone is looked up by its hash).
+ * Suppressed visitors are left out: nobody merges into a tombstone.
+ */
 export function findVisitorsByKey(
   db: SqlDb,
   keyType: IdentityKeyType,
@@ -51,9 +73,10 @@ export function findVisitorsByKey(
 ): IdentityKey[] {
   return db.all<IdentityKey>(
     `SELECT key_type, key_value, visitor_id, first_seen FROM identity_keys
-     WHERE key_type = ? AND key_value = ? ORDER BY first_seen, visitor_id`,
+     WHERE key_type = ? AND key_value = ? AND visitor_id NOT IN (SELECT vid FROM suppressed_visitors)
+     ORDER BY first_seen, visitor_id`,
     keyType,
-    keyValue,
+    storedKeyValue(keyType, keyValue) ?? keyValue,
   );
 }
 
@@ -202,7 +225,8 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 export function normalizeEmailKey(raw: string): string | null {
   const email = raw.trim().toLowerCase();
   const at = email.lastIndexOf('@');
-  if (at <= 0 || at === email.length - 1 || email.indexOf('@') !== at || /\s/.test(email)) return null;
+  if (at <= 0 || at === email.length - 1 || email.indexOf('@') !== at || /\s/.test(email))
+    return null;
   if (!email.slice(at + 1).includes('.') || email.length > 320) return null;
   return email;
 }
@@ -239,7 +263,9 @@ export function sha256Hex(text: string): string {
   const bits = bytes.length * 8;
   view.setUint32(padded.length - 8, Math.floor(bits / 0x1_0000_0000));
   view.setUint32(padded.length - 4, bits >>> 0);
-  const h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+  const h = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  ];
   const w = new Uint32Array(64);
   for (let off = 0; off < padded.length; off += 64) {
     for (let i = 0; i < 16; i += 1) w[i] = view.getUint32(off + i * 4);
@@ -250,9 +276,24 @@ export function sha256Hex(text: string): string {
       const s1 = rotr(b, 17) ^ rotr(b, 19) ^ (b >>> 10);
       w[i] = (w[i - 16] ?? 0) + s0 + (w[i - 7] ?? 0) + s1;
     }
-    let [a, b, c, d, e, f, g, hh] = h as [number, number, number, number, number, number, number, number];
+    let [a, b, c, d, e, f, g, hh] = h as [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+    ];
     for (let i = 0; i < 64; i += 1) {
-      const t1 = (hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + (SHA256_K[i] ?? 0) + (w[i] ?? 0)) >>> 0;
+      const t1 =
+        (hh +
+          (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) +
+          ((e & f) ^ (~e & g)) +
+          (SHA256_K[i] ?? 0) +
+          (w[i] ?? 0)) >>>
+        0;
       const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
       hh = g;
       g = f;
@@ -290,30 +331,27 @@ export interface IdentitySignals {
   sessionId?: string | null | undefined;
 }
 
+/** SHA-256 hex of a normalized phone (E.164), or the value itself when already hashed. */
+export function phoneKeyHash(raw: string): string | null {
+  const v = raw.trim().toLowerCase();
+  if (SHA256_HEX.test(v)) return v;
+  const phone = normalizePhoneKey(v);
+  return phone === null ? null : sha256Hex(phone);
+}
+
 /**
- * Email/phone keys of the signals: a plain email is stored both as is and as
- * its SHA-256, so a hashed `he=` matches a visitor known by the clear address.
+ * Email/phone keys of the signals, always as SHA-256 of the normalized value
+ * (events reach the site already hashed; a clear value is hashed here), so a
+ * hashed `he=` matches a visitor identified by a form.
  */
 export function identityKeyRefs(s: IdentitySignals): IdentityKeyRef[] {
   const out = new Map<string, IdentityKeyRef>();
-  const add = (key_type: IdentityKeyType, key_value: string): void => {
-    out.set(`${key_type}:${key_value}`, { key_type, key_value });
+  const add = (key_type: IdentityKeyType, key_value: string | null): void => {
+    if (key_value !== null) out.set(`${key_type}:${key_value}`, { key_type, key_value });
   };
-  const addEmail = (raw: string): void => {
-    const email = normalizeEmailKey(raw);
-    if (email === null) return;
-    add('email', email);
-    add('email', sha256Hex(email));
-  };
-  if (s.email) addEmail(s.email);
-  if (s.landingEmail) {
-    const hash = landingEmailHash(s.landingEmail);
-    if (hash !== null) add('email', hash);
-  }
-  if (s.phone) {
-    const phone = normalizePhoneKey(s.phone);
-    if (phone !== null) add('phone', phone);
-  }
+  if (s.email) add('email', landingEmailHash(s.email));
+  if (s.landingEmail) add('email', landingEmailHash(s.landingEmail));
+  if (s.phone) add('phone', phoneKeyHash(s.phone));
   return [...out.values()];
 }
 
@@ -351,22 +389,29 @@ export function signalsFromEvent(e: EnrichedEvent): IdentitySignals | null {
 
 // ------------------------------------------------------------ merge settings
 
-const IDENTITY_MERGE_MECHANISMS = ['email', 'phone', 'session'] as const;
+const IDENTITY_MERGE_MECHANISMS = ['email', 'phone', 'session', 'ip_ua'] as const;
 type AutoMergeMechanism = (typeof IDENTITY_MERGE_MECHANISMS)[number];
 export type IdentityMergeSettings = Record<AutoMergeMechanism, boolean>;
 
-const DEFAULT_MERGE_SETTINGS: IdentityMergeSettings = { email: true, phone: true, session: true };
+/** `ip_ua` is a probabilistic match: off until the workspace opts in. */
+const DEFAULT_MERGE_SETTINGS: IdentityMergeSettings = {
+  email: true,
+  phone: true,
+  session: true,
+  ip_ua: false,
+};
 
-export const identityMergeSettingsPatchSchema = z
-  .object({ email: z.boolean(), phone: z.boolean(), session: z.boolean() })
-  .partial()
-  .strict();
+export { identityMergeSettingsPatchSchema };
 
 const MERGE_SETTINGS_KEY = 'identity_merge';
 
 /** Automatic merge mechanisms enabled for the site (stored in the instance key/value table). */
 export function getMergeSettings(db: SqlDb): IdentityMergeSettings {
-  const row = first<{ value: string }>(db, `SELECT value FROM sync_state WHERE key = ?`, MERGE_SETTINGS_KEY);
+  const row = first<{ value: string }>(
+    db,
+    `SELECT value FROM sync_state WHERE key = ?`,
+    MERGE_SETTINGS_KEY,
+  );
   if (row === undefined) return { ...DEFAULT_MERGE_SETTINGS };
   // Read once per ingested event: parse each stored value only once.
   if (lastMergeSettings?.raw !== row.value) {
@@ -391,6 +436,8 @@ export function setMergeSettings(
     MERGE_SETTINGS_KEY,
     JSON.stringify(next),
   );
+  // Turning the IP + user agent merge off drops the hashes it kept.
+  if (!next.ip_ua) db.run(`DELETE FROM ip_ua_seen`);
   return next;
 }
 
@@ -429,7 +476,11 @@ function activeParent(db: SqlDb, visitorId: string): string | null {
 function groupOrigin(db: SqlDb, visitorId: string): string {
   let current = visitorId;
   const seen = new Set([current]);
-  for (let parent = activeParent(db, current); parent !== null && !seen.has(parent); parent = activeParent(db, current)) {
+  for (
+    let parent = activeParent(db, current);
+    parent !== null && !seen.has(parent);
+    parent = activeParent(db, current)
+  ) {
     seen.add(parent);
     current = parent;
   }
@@ -564,7 +615,13 @@ function linkGroups(
   const [origin, child] = fa < fb || (fa === fb && ra < rb) ? [ra, rb] : [rb, ra];
   upsertVisitorMerge(db, child, origin, mechanism, now);
   retroLink(db, origin);
-  return { child_visitor_id: child, origin_visitor_id: origin, mechanism, active: true, created_at: now };
+  return {
+    child_visitor_id: child,
+    origin_visitor_id: origin,
+    mechanism,
+    active: true,
+    created_at: now,
+  };
 }
 
 export interface IdentityRecordResult {
@@ -587,7 +644,8 @@ export function recordIdentity(
   const refs = identityKeyRefs(signals);
   if (refs.length === 0) return { added: 0, merges: [] };
   const sessionId = signals.sessionId ?? null;
-  const all: IdentityKeyRef[] = sessionId === null ? refs : [...refs, { key_type: 'session', key_value: sessionId }];
+  const all: IdentityKeyRef[] =
+    sessionId === null ? refs : [...refs, { key_type: 'session', key_value: sessionId }];
   const added = upsertIdentityKeys(
     db,
     all.map((k) => ({ ...k, visitor_id: visitorId, first_seen: ts })),
@@ -601,14 +659,62 @@ export function recordIdentity(
   };
   for (const k of all) {
     if (k.key_type === 'ip') continue;
-    for (const other of findVisitorsByKey(db, k.key_type, k.key_value)) link(other.visitor_id, k.key_type);
+    for (const other of findVisitorsByKey(db, k.key_type, k.key_value))
+      link(other.visitor_id, k.key_type);
   }
   if (sessionId !== null) {
-    const owner = first<{ visitor_id: string }>(db, `SELECT visitor_id FROM sessions WHERE id = ?`, sessionId);
+    const owner = first<{ visitor_id: string }>(
+      db,
+      `SELECT visitor_id FROM sessions WHERE id = ?`,
+      sessionId,
+    );
     if (owner !== undefined) link(owner.visitor_id, 'session');
   }
   retroLink(db, visitorId);
   return { added, merges };
+}
+
+const IP_UA_WINDOW_MS = 24 * 60 * 60_000;
+/** More visitors than this already seen with the same IP + user agent: shared network (office, carrier NAT), no merge. */
+export const IP_UA_SHARED_THRESHOLD = 1;
+
+/**
+ * With the `ip_ua` merge on: remembers the visitor's IP + user agent hash and,
+ * when the visitor is new, links it to the only other person seen with that
+ * hash the same UTC day (the salt rotates at midnight) — typically cookies
+ * wiped. A different user agent (in-app browser → browser) never matches.
+ */
+export function recordIpUa(
+  db: SqlDb,
+  visitorId: string,
+  hash: string,
+  isNew: boolean,
+  now: number,
+): VisitorMerge | null {
+  // Off (the default): nothing is kept.
+  if (!getMergeSettings(db).ip_ua) return null;
+  db.run(`DELETE FROM ip_ua_seen WHERE last_seen < ?`, now - 2 * IP_UA_WINDOW_MS);
+  let merge: VisitorMerge | null = null;
+  if (isNew) {
+    const others = db.all<{ visitor_id: string }>(
+      `SELECT visitor_id FROM ip_ua_seen WHERE hash = ? AND visitor_id != ? AND last_seen >= ? LIMIT 20`,
+      hash,
+      visitorId,
+      now - IP_UA_WINDOW_MS,
+    );
+    // Visitors already merged together are one person: count people, not ids.
+    const people = new Set(others.map((o) => groupOrigin(db, o.visitor_id)));
+    const only = people.size <= IP_UA_SHARED_THRESHOLD ? [...people][0] : undefined;
+    if (only !== undefined) merge = linkGroups(db, visitorId, only, 'ip_ua', now);
+  }
+  db.run(
+    `INSERT INTO ip_ua_seen (hash, visitor_id, last_seen) VALUES (?, ?, ?)
+     ON CONFLICT (hash, visitor_id) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen)`,
+    hash,
+    visitorId,
+    now,
+  );
+  return merge;
 }
 
 export const funnelVisitorLinkSchema = z.object({
@@ -634,7 +740,12 @@ export function linkFunnelVisitor(
   if (visitorId === funnelVisitorId || !getMergeSettings(db).session) return null;
   upsertIdentityKeys(
     db,
-    [funnelVisitorId, visitorId].map((v) => ({ key_type: 'session' as const, key_value: funnelVisitorId, visitor_id: v, first_seen: ts })),
+    [funnelVisitorId, visitorId].map((v) => ({
+      key_type: 'session' as const,
+      key_value: funnelVisitorId,
+      visitor_id: v,
+      first_seen: ts,
+    })),
   );
   return linkGroups(db, funnelVisitorId, visitorId, 'session', now);
 }
@@ -675,14 +786,14 @@ export function visitorForKeys(db: SqlDb, refs: readonly IdentityKeyRef[]): stri
   let best: IdentityKey | undefined;
   for (const k of refs) {
     const holder = findVisitorsByKey(db, k.key_type, k.key_value)[0];
-    if (holder !== undefined && (best === undefined || holder.first_seen < best.first_seen)) best = holder;
+    if (holder !== undefined && (best === undefined || holder.first_seen < best.first_seen))
+      best = holder;
   }
   return best === undefined ? null : groupOrigin(db, best.visitor_id);
 }
 
 export type ManualMergeResult =
-  | { ok: true; merge: VisitorMerge }
-  | { ok: false; reason: 'not_found' | 'same_group' };
+  { ok: true; merge: VisitorMerge } | { ok: false; reason: 'not_found' | 'same_group' };
 
 /** Merges the child's group into the origin's group (explicit choice: no seniority rule). */
 export function mergeVisitorsManually(
@@ -691,13 +802,23 @@ export function mergeVisitorsManually(
   childVisitorId: string,
   now: number,
 ): ManualMergeResult {
-  if (!visitorKnown(db, originVisitorId) || !visitorKnown(db, childVisitorId)) return { ok: false, reason: 'not_found' };
+  if (!visitorKnown(db, originVisitorId) || !visitorKnown(db, childVisitorId))
+    return { ok: false, reason: 'not_found' };
   const origin = groupOrigin(db, originVisitorId);
   const child = groupOrigin(db, childVisitorId);
   if (origin === child) return { ok: false, reason: 'same_group' };
   upsertVisitorMerge(db, child, origin, 'manual', now);
   retroLink(db, origin);
-  return { ok: true, merge: { child_visitor_id: child, origin_visitor_id: origin, mechanism: 'manual', active: true, created_at: now } };
+  return {
+    ok: true,
+    merge: {
+      child_visitor_id: child,
+      origin_visitor_id: origin,
+      mechanism: 'manual',
+      active: true,
+      created_at: now,
+    },
+  };
 }
 
 /**
@@ -727,8 +848,8 @@ export function reprocessIdentities(
   now: number,
 ): { keys: number; merges: number; visitors: number } {
   const settings = getMergeSettings(db);
-  const types = IDENTITY_MERGE_MECHANISMS.filter((m) => settings[m]);
-  const keys = db.all<{ key_type: AutoMergeMechanism; key_value: string }>(
+  const types = IDENTITY_MERGE_MECHANISMS.filter((m) => settings[m] && m !== 'ip_ua');
+  const keys = db.all<{ key_type: Exclude<AutoMergeMechanism, 'ip_ua'>; key_value: string }>(
     `SELECT DISTINCT key_type, key_value FROM identity_keys
      WHERE first_seen >= ? AND first_seen < ? AND key_type IN (SELECT value FROM json_each(?))
      ORDER BY key_type, key_value`,
@@ -741,7 +862,8 @@ export function reprocessIdentities(
     const holders = findVisitorsByKey(db, k.key_type, k.key_value).map((h) => h.visitor_id);
     const [head, ...rest] = holders;
     if (head === undefined) continue;
-    for (const other of rest) if (linkGroups(db, head, other, k.key_type, now) !== null) merges += 1;
+    for (const other of rest)
+      if (linkGroups(db, head, other, k.key_type, now) !== null) merges += 1;
   }
   const visitors = db
     .all<{ visitor_id: string }>(
@@ -865,7 +987,10 @@ export function journeyIdentityExtras(
       ids,
       limit,
     )
-    .map((r) => ({ ...r, fields: r.fields === null ? null : (JSON.parse(r.fields) as Record<string, string>) }));
+    .map((r) => ({
+      ...r,
+      fields: r.fields === null ? null : (JSON.parse(r.fields) as Record<string, string>),
+    }));
   const tags = db
     .all<{ tag: string }>(
       `SELECT DISTINCT tag FROM visitor_tags WHERE visitor_id IN (SELECT value FROM json_each(?)) ORDER BY tag`,

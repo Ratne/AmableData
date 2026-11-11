@@ -9,6 +9,7 @@ export type { AppEnv, AuthContext, TenantContext } from './context';
 export {
   requireAuth,
   requireTenant,
+  requireKeyTenant,
   requireAnyPermission,
   requirePermission,
   requireStepUp,

@@ -226,6 +226,7 @@ export class FakeR2 {
       ...this.view(object),
       body: new Blob([bytes]).stream(),
       json: () => Promise.resolve(JSON.parse(new TextDecoder().decode(bytes)) as unknown),
+      text: () => Promise.resolve(new TextDecoder().decode(bytes)),
     });
   }
 

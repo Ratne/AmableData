@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { inCidr, parseIp, verifyCrawlerIp } from '../src/analytics/crawler-ip';
 import { creditTouches, splitMinor } from '../src/analytics/store/attribution';
 import { computeFunnel, type StoredFunnelStep } from '../src/analytics/store/funnels';
-import { featuresOf, scoreFacts, trainLogistic, type TrainingSample } from '../src/analytics/store/prediction';
+import {
+  featuresOf,
+  scoreFacts,
+  trainLogistic,
+  type TrainingSample,
+} from '../src/analytics/store/prediction';
 import { RealtimeHub, type RealtimeSocket } from '../src/analytics/store/realtime';
 import type { AnalyticsRealtime, RealtimeEvent } from '@amable/api-types';
 import { createStore, ev, siteInit, T0 } from './helpers';
+import { sha256Hex } from '../src/analytics/store/identity';
 
 const MIN = 60_000;
 const DAY = 86_400_000;
@@ -23,7 +29,9 @@ describe('attribution models', () => {
     const channels = ['Organic search', 'Email', 'Direct', 'Direct'];
     expect(creditTouches(channels, 'first_touch')).toEqual([{ index: 0, weight: 1 }]);
     expect(creditTouches(channels, 'last_non_direct')).toEqual([{ index: 1, weight: 1 }]);
-    expect(creditTouches(['Direct', 'Direct'], 'last_non_direct')).toEqual([{ index: 1, weight: 1 }]);
+    expect(creditTouches(['Direct', 'Direct'], 'last_non_direct')).toEqual([
+      { index: 1, weight: 1 },
+    ]);
     const linear = creditTouches(channels, 'linear');
     expect(linear).toHaveLength(4);
     expect(linear.reduce((a, w) => a + w.weight, 0)).toBeCloseTo(1, 10);
@@ -117,28 +125,60 @@ describe('attribution models', () => {
       });
     store.ingest(
       [
-        ev({ vid: 'a', sid: 'a1', ts: T0, channel: 'Organic search', source: 'Google', path: '/blog' }),
-        ev({ vid: 'a', sid: 'a2', ts: T0 + DAY, channel: 'Email', source: 'Newsletter', path: '/offer' }),
+        ev({
+          vid: 'a',
+          sid: 'a1',
+          ts: T0,
+          channel: 'Organic search',
+          source: 'Google',
+          path: '/blog',
+        }),
+        ev({
+          vid: 'a',
+          sid: 'a2',
+          ts: T0 + DAY,
+          channel: 'Email',
+          source: 'Newsletter',
+          path: '/offer',
+        }),
         ev({ vid: 'a', sid: 'a3', ts: T0 + 2 * DAY, channel: 'Direct', path: '/pricing' }),
         pay('a', 'a3', T0 + 2 * DAY + MIN, 'tx-a', 1001),
-        ev({ vid: 'b', sid: 'b1', ts: T0 + DAY, channel: 'Paid social', source: 'Facebook', path: '/offer' }),
+        ev({
+          vid: 'b',
+          sid: 'b1',
+          ts: T0 + DAY,
+          channel: 'Paid social',
+          source: 'Facebook',
+          path: '/offer',
+        }),
         pay('b', 'b1', T0 + DAY + MIN, 'tx-b', 500),
       ],
       [],
     );
     const report = store.attribution(range, 'channel');
     if (!report.ok) throw new Error(report.error.message);
-    expect(report.value.models).toEqual(['first_touch', 'last_touch', 'last_non_direct', 'linear', 'position_based']);
+    expect(report.value.models).toEqual([
+      'first_touch',
+      'last_touch',
+      'last_non_direct',
+      'linear',
+      'position_based',
+    ]);
     expect(report.value.total_revenue_minor).toBe(1501);
     expect(report.value.total_conversions).toBe(2);
     const credit = (value: string, model: string) =>
-      report.value.rows.find((r) => r.value === value)?.credits.find((c) => c.model === model)?.revenue_minor ?? 0;
+      report.value.rows.find((r) => r.value === value)?.credits.find((c) => c.model === model)
+        ?.revenue_minor ?? 0;
     expect(credit('Organic search', 'first_touch')).toBe(1001);
     expect(credit('Direct', 'last_touch')).toBe(1001);
     expect(credit('Email', 'last_non_direct')).toBe(1001);
     expect(credit('Paid social', 'position_based')).toBe(500);
     // Position based over three touches: 40 / 20 / 40, exact in minor units.
-    expect(credit('Organic search', 'position_based') + credit('Email', 'position_based') + credit('Direct', 'position_based')).toBe(1001);
+    expect(
+      credit('Organic search', 'position_based') +
+        credit('Email', 'position_based') +
+        credit('Direct', 'position_based'),
+    ).toBe(1001);
     expect(credit('Email', 'position_based')).toBe(200);
     // Each model hands out the whole revenue.
     for (const model of report.value.models) {
@@ -152,7 +192,8 @@ describe('attribution models', () => {
     if (!pages.ok) throw new Error(pages.error.message);
     expect(pages.value.models).toEqual(['first_touch', 'last_touch']);
     const page = (value: string, model: string) =>
-      pages.value.rows.find((r) => r.value === value)?.credits.find((c) => c.model === model)?.revenue_minor ?? 0;
+      pages.value.rows.find((r) => r.value === value)?.credits.find((c) => c.model === model)
+        ?.revenue_minor ?? 0;
     expect(page('/blog', 'first_touch')).toBe(1001);
     expect(page('/offer', 'first_touch')).toBe(500);
     expect(page('/pricing', 'last_touch')).toBe(1001);
@@ -167,8 +208,22 @@ describe('identity: visitor ↔ contact', () => {
     const { store, db } = seededStore();
     store.ingest(
       [
-        ev({ vid: 'laptop', sid: 'a1', ts: T0, channel: 'Paid social', source: 'Facebook', path: '/' }),
-        ev({ vid: 'phone', sid: 'b1', ts: T0 + DAY, channel: 'Direct', path: '/pricing', device: 'mobile' }),
+        ev({
+          vid: 'laptop',
+          sid: 'a1',
+          ts: T0,
+          channel: 'Paid social',
+          source: 'Facebook',
+          path: '/',
+        }),
+        ev({
+          vid: 'phone',
+          sid: 'b1',
+          ts: T0 + DAY,
+          channel: 'Direct',
+          path: '/pricing',
+          device: 'mobile',
+        }),
         ev({
           vid: 'phone',
           sid: 'b1',
@@ -179,18 +234,43 @@ describe('identity: visitor ↔ contact', () => {
       ],
       [],
     );
-    // identify queues the email for the core to resolve
+    // identify queues the email hash for the core to resolve
     const work = store.pullCoreWork();
     expect(work.identities).toEqual([
-      expect.objectContaining({ visitorId: 'phone', kind: 'email', value: 'ann@example.com' }),
+      expect.objectContaining({
+        visitorId: 'phone',
+        kind: 'email_hash',
+        value: sha256Hex('ann@example.com'),
+      }),
     ]);
     store.ackCoreWork({ identities: work.identities.map((i) => i.id) });
     expect(store.hasCoreWork()).toBe(false);
 
     const linked = store.applyCrmFacts([
-      { kind: 'link', id: 'l1', contactId: 'c_ann', visitorId: 'laptop', source: 'form', ts: T0 + 2 * DAY },
-      { kind: 'link', id: 'l2', contactId: 'c_ann', visitorId: 'phone', source: 'identify', ts: T0 + 2 * DAY },
-      { kind: 'link', id: 'l2', contactId: 'c_ann', visitorId: 'phone', source: 'identify', ts: T0 + 2 * DAY },
+      {
+        kind: 'link',
+        id: 'l1',
+        contactId: 'c_ann',
+        visitorId: 'laptop',
+        source: 'form',
+        ts: T0 + 2 * DAY,
+      },
+      {
+        kind: 'link',
+        id: 'l2',
+        contactId: 'c_ann',
+        visitorId: 'phone',
+        source: 'identify',
+        ts: T0 + 2 * DAY,
+      },
+      {
+        kind: 'link',
+        id: 'l2',
+        contactId: 'c_ann',
+        visitorId: 'phone',
+        source: 'identify',
+        ts: T0 + 2 * DAY,
+      },
     ]);
     expect(linked).toMatchObject({ applied: 2, duplicates: 1 });
     expect(linked?.linked.map((l) => l.visitorId).sort()).toEqual(['laptop', 'phone']);
@@ -216,9 +296,14 @@ describe('identity: visitor ↔ contact', () => {
     expect(profile?.payments).toHaveLength(1);
     expect(profile?.first_touch?.channel).toBe('Paid social');
     expect(profile?.last_non_direct_touch?.channel).toBe('Paid social');
-    expect(profile?.time_to_conversion).toMatchObject({ sessions_before_purchase: 2, days_to_purchase: 3 });
+    expect(profile?.time_to_conversion).toMatchObject({
+      sessions_before_purchase: 2,
+      days_to_purchase: 3,
+    });
     const channels = store.breakdown(range, 'channel', 10, 'first_touch');
-    expect(channels.ok && channels.value.rows.find((r) => r.value === 'Paid social')?.revenue_minor).toBe(5000);
+    expect(
+      channels.ok && channels.value.rows.find((r) => r.value === 'Paid social')?.revenue_minor,
+    ).toBe(5000);
     expect(db.all(`SELECT visitor_id FROM payments`)).toEqual([{ visitor_id: 'phone' }]);
   });
 
@@ -255,20 +340,42 @@ describe('revenue from CRM orders', () => {
       return o.ok ? o.value.revenue_minor : -1;
     };
     expect(revenue()).toBe(10_000);
-    expect(db.all(`SELECT revenue_minor FROM sessions WHERE id = 's1'`)).toEqual([{ revenue_minor: 10_000 }]);
+    expect(db.all(`SELECT revenue_minor FROM sessions WHERE id = 's1'`)).toEqual([
+      { revenue_minor: 10_000 },
+    ]);
     // The visitor id on the order is an identification too.
     expect(db.all(`SELECT contact_id, link_source FROM visitors WHERE id = 'v1'`)).toEqual([
       { contact_id: 'c1', link_source: 'order' },
     ]);
-    const refund = { kind: 'refund' as const, id: 'r1', transactionId: 'crm_pay1', orderId: 'ord1', amountMinor: 2500, ts: T0 + 2 * MIN };
+    const refund = {
+      kind: 'refund' as const,
+      id: 'r1',
+      transactionId: 'crm_pay1',
+      orderId: 'ord1',
+      amountMinor: 2500,
+      ts: T0 + 2 * MIN,
+    };
     store.applyCrmFacts([refund]);
     store.applyCrmFacts([refund]);
     expect(revenue()).toBe(7_500);
     // Order-level refund (no payment id): newest payments first.
     store.applyCrmFacts([pay('pay2', 4_000, T0 + 3 * MIN)]);
-    store.applyCrmFacts([{ kind: 'refund', id: 'r2', transactionId: null, orderId: 'ord1', amountMinor: 6_000, ts: T0 + 4 * MIN }]);
+    store.applyCrmFacts([
+      {
+        kind: 'refund',
+        id: 'r2',
+        transactionId: null,
+        orderId: 'ord1',
+        amountMinor: 6_000,
+        ts: T0 + 4 * MIN,
+      },
+    ]);
     expect(revenue()).toBe(5_500);
-    expect(db.all(`SELECT transaction_id, refunded, refunded_minor FROM payments ORDER BY transaction_id`)).toEqual([
+    expect(
+      db.all(
+        `SELECT transaction_id, refunded, refunded_minor FROM payments ORDER BY transaction_id`,
+      ),
+    ).toEqual([
       { transaction_id: 'crm_pay1', refunded: 0, refunded_minor: 4_500 },
       { transaction_id: 'crm_pay2', refunded: 1, refunded_minor: 4_000 },
     ]);
@@ -295,17 +402,26 @@ describe('revenue from CRM orders', () => {
       [],
     );
     store.applyCrmFacts([pay('late', 12_000, T0 + 5 * DAY)]);
-    const revenueBy = (dimension: 'device' | 'country', filters?: { dimension: 'device'; op: 'is'; value: string }[]) => {
+    const revenueBy = (
+      dimension: 'device' | 'country',
+      filters?: { dimension: 'device'; op: 'is'; value: string }[],
+    ) => {
       const r = store.breakdown({ ...range, filters }, dimension, 10);
       if (!r.ok) throw new Error(r.error.message);
       return Object.fromEntries(r.value.rows.map((row) => [row.value, row.revenue_minor]));
     };
     expect(revenueBy('device')).toEqual({ desktop: 12_000, mobile: 0 });
     expect(revenueBy('country')).toEqual({ IT: 12_000, FR: 0 });
-    const filtered = store.overview({ ...range, filters: [{ dimension: 'device', op: 'is', value: 'desktop' }] });
+    const filtered = store.overview({
+      ...range,
+      filters: [{ dimension: 'device', op: 'is', value: 'desktop' }],
+    });
     expect(filtered.ok && filtered.value.revenue_minor).toBe(12_000);
     expect(filtered.ok && filtered.value.customers).toBe(1);
-    const mobile = store.overview({ ...range, filters: [{ dimension: 'device', op: 'is', value: 'mobile' }] });
+    const mobile = store.overview({
+      ...range,
+      filters: [{ dimension: 'device', op: 'is', value: 'mobile' }],
+    });
     expect(mobile.ok && mobile.value.revenue_minor).toBe(0);
   });
 
@@ -313,17 +429,44 @@ describe('revenue from CRM orders', () => {
     const { store, db } = seededStore();
     store.ingest([ev({ vid: 'v1', sid: 's1', ts: T0 })], []);
     const alert = store.createAlert(
-      { name: 'Trials', goal: 'trial_started', enabled: true, email_recipients: [], webhook_url: null },
+      {
+        name: 'Trials',
+        goal: 'trial_started',
+        enabled: true,
+        email_recipients: [],
+        webhook_url: null,
+      },
       null,
     );
-    store.createAlert({ name: 'Off', goal: 'trial_started', enabled: false, email_recipients: [], webhook_url: null }, null);
+    store.createAlert(
+      {
+        name: 'Off',
+        goal: 'trial_started',
+        enabled: false,
+        email_recipients: [],
+        webhook_url: null,
+      },
+      null,
+    );
     const r = store.applyCrmFacts([
-      { kind: 'goal', id: 'g1', name: 'trial_started', contactId: 'c1', visitorId: 'v1', params: { planId: 'p1' }, ts: T0 + MIN },
+      {
+        kind: 'goal',
+        id: 'g1',
+        name: 'trial_started',
+        contactId: 'c1',
+        visitorId: 'v1',
+        params: { planId: 'p1' },
+        ts: T0 + MIN,
+      },
     ]);
     expect(r?.pending).toBe(true);
-    expect(db.all(`SELECT name, session_id FROM goals`)).toEqual([{ name: 'trial_started', session_id: 's1' }]);
+    expect(db.all(`SELECT name, session_id FROM goals`)).toEqual([
+      { name: 'trial_started', session_id: 's1' },
+    ]);
     const work = store.pullCoreWork();
-    expect(work.alerts).toEqual([expect.objectContaining({ alertId: alert.alert.id, goal: 'trial_started' })]);
+    expect(work.alerts).toEqual([
+      expect.objectContaining({ alertId: alert.alert.id, goal: 'trial_started' }),
+    ]);
     // Lifecycle goals reach automations through the CRM outbox, not twice.
     expect(work.automation).toEqual([]);
   });
@@ -331,12 +474,21 @@ describe('revenue from CRM orders', () => {
   it('queues web goals and first page visits of identified visitors for automations', () => {
     const { store } = seededStore();
     store.ingest([ev({ vid: 'v1', sid: 's1', ts: T0 })], []);
-    store.applyCrmFacts([{ kind: 'link', id: 'l', contactId: 'c1', visitorId: 'v1', source: 'form', ts: T0 }]);
+    store.applyCrmFacts([
+      { kind: 'link', id: 'l', contactId: 'c1', visitorId: 'v1', source: 'form', ts: T0 },
+    ]);
     store.ingest(
       [
         ev({ vid: 'v1', sid: 's1', ts: T0 + MIN, path: '/pricing' }),
         ev({ vid: 'v1', sid: 's1', ts: T0 + 2 * MIN, path: '/pricing' }),
-        ev({ vid: 'v1', sid: 's1', ts: T0 + 3 * MIN, type: 'goal', name: 'signup', path: '/pricing' }),
+        ev({
+          vid: 'v1',
+          sid: 's1',
+          ts: T0 + 3 * MIN,
+          type: 'goal',
+          name: 'signup',
+          path: '/pricing',
+        }),
         ev({ vid: 'other', sid: 'x', ts: T0 + 3 * MIN, type: 'goal', name: 'signup' }),
       ],
       [],
@@ -357,7 +509,12 @@ describe('funnels', () => {
   ];
 
   it('counts ordered steps per visitor with median times', () => {
-    const e = (visitor: string, ts: number, kind: 'pageview' | 'goal', value: string) => ({ visitor, ts, kind, value });
+    const e = (visitor: string, ts: number, kind: 'pageview' | 'goal', value: string) => ({
+      visitor,
+      ts,
+      kind,
+      value,
+    });
     const out = computeFunnel(
       steps,
       [
@@ -386,7 +543,14 @@ describe('funnels', () => {
       [
         ev({ vid: 'a', sid: 'a1', ts: T0, path: '/' }),
         ev({ vid: 'a', sid: 'a1', ts: T0 + MIN, path: '/pricing' }),
-        ev({ vid: 'a', sid: 'a1', ts: T0 + 2 * MIN, type: 'goal', name: 'signup', path: '/pricing' }),
+        ev({
+          vid: 'a',
+          sid: 'a1',
+          ts: T0 + 2 * MIN,
+          type: 'goal',
+          name: 'signup',
+          path: '/pricing',
+        }),
         ev({ vid: 'b', sid: 'b1', ts: T0, path: '/', device: 'mobile' }),
       ],
       [],
@@ -411,7 +575,10 @@ describe('funnels', () => {
         { visitors: 1, dropoff: 0 },
       ],
     });
-    const mobile = store.funnelResult(funnel.id, { ...range, filters: [{ dimension: 'device', op: 'is', value: 'mobile' }] });
+    const mobile = store.funnelResult(funnel.id, {
+      ...range,
+      filters: [{ dimension: 'device', op: 'is', value: 'mobile' }],
+    });
     expect(mobile.ok && mobile.value.entered).toBe(1);
     expect(store.updateFunnel(funnel.id, { name: 'Renamed' })?.name).toBe('Renamed');
     expect(store.deleteFunnel(funnel.id)).toBe(true);
@@ -439,9 +606,27 @@ describe('insights', () => {
         ev({ vid: 'b1', sid: 'b1a', ts: wed - 2 * DAY, device: 'desktop' }),
         ev({ vid: 'b1', sid: 'b1a', ts: wed - 2 * DAY + MIN, type: 'goal', name: 'demo' }),
         ev({ vid: 'b1', sid: 'b1b', ts: wed, device: 'desktop' }),
-        ev({ vid: 'b1', sid: 'b1b', ts: wed + MIN, type: 'payment', payment: payment('t1', 12_000) }),
-        ev({ vid: 'b2', sid: 'b2a', ts: wed, device: 'mobile', geo: { country: 'DE', region: null, city: null, latitude: null, longitude: null } }),
-        ev({ vid: 'b2', sid: 'b2a', ts: wed + MIN, type: 'payment', payment: payment('t2', 3_000) }),
+        ev({
+          vid: 'b1',
+          sid: 'b1b',
+          ts: wed + MIN,
+          type: 'payment',
+          payment: payment('t1', 12_000),
+        }),
+        ev({
+          vid: 'b2',
+          sid: 'b2a',
+          ts: wed,
+          device: 'mobile',
+          geo: { country: 'DE', region: null, city: null, latitude: null, longitude: null },
+        }),
+        ev({
+          vid: 'b2',
+          sid: 'b2a',
+          ts: wed + MIN,
+          type: 'payment',
+          payment: payment('t2', 3_000),
+        }),
         ev({ vid: 'n1', sid: 'n1a', ts: wed, device: 'mobile' }),
         ev({ vid: 'n1', sid: 'n1a', ts: wed + MIN, type: 'goal', name: 'demo' }),
         ev({ vid: 'n2', sid: 'n2a', ts: wed, device: 'mobile' }),
@@ -451,7 +636,12 @@ describe('insights', () => {
     const r = store.insights(range, 'week');
     if (!r.ok) throw new Error(r.error.message);
     const i = r.value;
-    expect(i).toMatchObject({ visitors: 4, customers: 2, revenue_minor: 15_000, median_hours_to_purchase: 24.02 });
+    expect(i).toMatchObject({
+      visitors: 4,
+      customers: 2,
+      revenue_minor: 15_000,
+      median_hours_to_purchase: 24.02,
+    });
     expect(i.revenue_by_device).toEqual([
       { value: 'desktop', visitors: 1, customers: 1, revenue_minor: 12_000, conversion_rate: 1 },
       { value: 'mobile', visitors: 3, customers: 1, revenue_minor: 3_000, conversion_rate: 0.3333 },
@@ -508,12 +698,41 @@ describe('conversion prediction', () => {
       base_rate: 0.2,
       aov_minor: 10_000,
     };
-    const engaged = scoreFacts(model, { first_channel: 'Email', device: 'desktop', country: 'IT', sessions: 3, pageviews: 6, duration: 400_000, paid: 0, goals: 1 });
-    const bounce = scoreFacts(model, { first_channel: 'Direct', device: 'mobile', country: 'FR', sessions: 1, pageviews: 1, duration: 1000, paid: 0, goals: 0 });
+    const engaged = scoreFacts(model, {
+      first_channel: 'Email',
+      device: 'desktop',
+      country: 'IT',
+      sessions: 3,
+      pageviews: 6,
+      duration: 400_000,
+      paid: 0,
+      goals: 1,
+    });
+    const bounce = scoreFacts(model, {
+      first_channel: 'Direct',
+      device: 'mobile',
+      country: 'FR',
+      sessions: 1,
+      pageviews: 1,
+      duration: 1000,
+      paid: 0,
+      goals: 0,
+    });
     expect(engaged.score).toBeGreaterThan(80);
     expect(bounce.score).toBeLessThan(20);
     expect(engaged.expected_value_minor).toBe(Math.round(engaged.conversion_rate * 10_000));
-    expect(scoreFacts(model, { first_channel: 'Email', device: 'desktop', country: 'IT', sessions: 3, pageviews: 6, duration: 400_000, paid: 0, goals: 1 })).toEqual(engaged);
+    expect(
+      scoreFacts(model, {
+        first_channel: 'Email',
+        device: 'desktop',
+        country: 'IT',
+        sessions: 3,
+        pageviews: 6,
+        duration: 400_000,
+        paid: 0,
+        goals: 1,
+      }),
+    ).toEqual(engaged);
   });
 
   it('trains the site model from history and scores visitors in the list', () => {
@@ -522,7 +741,15 @@ describe('conversion prediction', () => {
     for (let i = 0; i < 40; i += 1) {
       const buyer = i % 4 === 0;
       const vid = `vis-${String(i).padStart(3, '0')}`;
-      events.push(ev({ vid, sid: `s-${i}`, ts: T0 + i * MIN, channel: buyer ? 'Email' : 'Direct', path: '/' }));
+      events.push(
+        ev({
+          vid,
+          sid: `s-${i}`,
+          ts: T0 + i * MIN,
+          channel: buyer ? 'Email' : 'Direct',
+          path: '/',
+        }),
+      );
       if (buyer) {
         events.push(ev({ vid, sid: `s-${i}`, ts: T0 + i * MIN + 1000, path: '/pricing' }));
         events.push(
@@ -531,7 +758,16 @@ describe('conversion prediction', () => {
             sid: `s-${i}`,
             ts: T0 + i * MIN + 2000,
             type: 'payment',
-            payment: { amountMinor: 5000, currency: 'EUR', transactionId: `t${i}`, email: null, customerId: null, renewal: false, refunded: false, freeTrial: false },
+            payment: {
+              amountMinor: 5000,
+              currency: 'EUR',
+              transactionId: `t${i}`,
+              email: null,
+              customerId: null,
+              renewal: false,
+              refunded: false,
+              freeTrial: false,
+            },
           }),
         );
       }
@@ -539,7 +775,12 @@ describe('conversion prediction', () => {
     store.ingest(events, []);
     const first = store.trainPrediction();
     const second = store.trainPrediction();
-    expect(first).toMatchObject({ samples: 40, positives: 10, base_rate: 0.25, average_order_value_minor: 5000 });
+    expect(first).toMatchObject({
+      samples: 40,
+      positives: 10,
+      base_rate: 0.25,
+      average_order_value_minor: 5000,
+    });
     expect(second?.top_features).toEqual(first?.top_features);
     const list = store.visitors(range, { sort: 'score', limit: 5 });
     expect(list.ok && list.value.data[0]?.prediction?.score).toBeGreaterThan(50);
@@ -608,26 +849,43 @@ describe('realtime hub (hibernatable sockets)', () => {
   it('greets, answers pings and fans out events (identities only to private viewers)', () => {
     const priv = new FakeSocket();
     const pub = new FakeSocket();
-    const hub = new RealtimeHub((tag) => (tag === 'private' ? [priv] : [pub]), () => snapshot);
+    const hub = new RealtimeHub(
+      (tag) => (tag === 'private' ? [priv] : [pub]),
+      () => snapshot,
+    );
     hub.greet(priv, false);
     hub.greet(pub, true);
-    expect(JSON.parse(priv.sent[0] ?? '{}')).toMatchObject({ type: 'snapshot', data: { visitors: [{ name: 'Ann' }] } });
-    expect(JSON.parse(pub.sent[0] ?? '{}')).toMatchObject({ type: 'snapshot', data: { visitors: [{ name: null, contact_id: null }] } });
+    expect(JSON.parse(priv.sent[0] ?? '{}')).toMatchObject({
+      type: 'snapshot',
+      data: { visitors: [{ name: 'Ann' }] },
+    });
+    expect(JSON.parse(pub.sent[0] ?? '{}')).toMatchObject({
+      type: 'snapshot',
+      data: { visitors: [{ name: null, contact_id: null }] },
+    });
     hub.onMessage(priv, '{"type":"ping"}', false);
     expect(priv.sent.at(-1)).toBe('{"type":"pong"}');
     hub.onMessage(priv, 'garbage', false);
     hub.onMessage(priv, new ArrayBuffer(4), false);
     expect(priv.sent).toHaveLength(2);
     expect(hub.broadcast([event])).toBe(2);
-    expect(JSON.parse(priv.sent.at(-1) ?? '{}')).toMatchObject({ type: 'event', data: { label: 'Ann', name: 'signup' } });
-    expect(JSON.parse(pub.sent.at(-1) ?? '{}')).toMatchObject({ type: 'event', data: { label: null } });
+    expect(JSON.parse(priv.sent.at(-1) ?? '{}')).toMatchObject({
+      type: 'event',
+      data: { label: 'Ann', name: 'signup' },
+    });
+    expect(JSON.parse(pub.sent.at(-1) ?? '{}')).toMatchObject({
+      type: 'event',
+      data: { label: null },
+    });
     expect(hub.broadcast([])).toBe(0);
   });
 
   it('ingest returns live events for the socket fan-out', () => {
     const { store } = seededStore();
     const r = store.ingest([ev({ vid: 'v1', sid: 's1', ts: T0 })], []);
-    expect(r.live).toEqual([expect.objectContaining({ type: 'pageview', visitor_id: 'v1', path: '/', country: 'IT' })]);
+    expect(r.live).toEqual([
+      expect.objectContaining({ type: 'pageview', visitor_id: 'v1', path: '/', country: 'IT' }),
+    ]);
     expect(store.realtime()?.visitors).toHaveLength(0);
   });
 });
@@ -665,7 +923,14 @@ describe('crawler IP verification', () => {
     store.ingest([], [hit('verified'), hit('verified'), hit('spoofed'), hit('unknown')]);
     const r = store.bots(range);
     expect(r.ok && r.value.bots).toEqual([
-      { bot: 'Googlebot', provider: 'Google', category: 'indexing', hits: 4, verified_hits: 2, spoofed_hits: 1 },
+      {
+        bot: 'Googlebot',
+        provider: 'Google',
+        category: 'indexing',
+        hits: 4,
+        verified_hits: 2,
+        spoofed_hits: 1,
+      },
     ]);
     expect(r.ok && r.value.categories).toEqual([{ value: 'indexing', hits: 4 }]);
   });

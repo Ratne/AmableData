@@ -458,6 +458,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         permission: 'tenant:transfer',
       },
       {
+        id: 'operations',
+        path: 'settings/operations',
+        labelKey: 'nav.operations',
+        icon: Activity,
+        permission: 'settings:manage',
+      },
+      {
         id: 'billing',
         path: 'settings/billing',
         labelKey: 'nav.billing',

@@ -24,6 +24,7 @@ import { shortlinksRoutes } from './features/shortlinks/routes';
 import { formsRoutes } from './features/forms/routes';
 import { integrationsRoutes } from './features/integrations/routes';
 import { landingRoutes } from './features/landing/routes';
+import { opsRoutes } from './features/ops/routes';
 import { membersRoutes } from './features/members/routes';
 import { supportPublicRoutes, supportRoutes } from './features/support/routes';
 import { reportRoutes } from './features/reports/routes';
@@ -120,6 +121,7 @@ const featureRoutes = [
   ...membersRoutes,
   ...billingRoutes,
   ...workspaceRoutes,
+  ...opsRoutes,
 ] as const;
 
 const implemented = new Set<string>(

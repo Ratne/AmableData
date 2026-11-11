@@ -62,3 +62,6 @@ export * from './shortlinks/index';
 
 /** Developer settings: webhook endpoints and deliveries, tenant domains. */
 export * from './developers/index';
+
+/** Operations page: stuck queues and syncs of a workspace, recovery actions. */
+export * from './ops/index';

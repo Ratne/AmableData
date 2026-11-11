@@ -108,6 +108,10 @@ const ACTIVITY_LABELS: Readonly<Record<string, MessageKey>> = {
   'esign.signer_signed': 'crm.activity.esignSigned',
   'esign.request_completed': 'crm.activity.esignCompleted',
   'esign.request_declined': 'crm.activity.esignDeclined',
+  'web.linked': 'crm.activity.webLinked',
+  'web.session': 'crm.activity.webSession',
+  'web.goal': 'crm.activity.webGoal',
+  'web.payment': 'crm.activity.webPayment',
 };
 
 const EXACT_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -148,6 +152,7 @@ const PREFIX_ICONS: Readonly<Record<string, LucideIcon>> = {
   subscription: RefreshCw,
   conversation: MessagesSquare,
   message: MessageSquare,
+  web: Globe,
 };
 
 /** Catalog key of a known activity type, or null for types this build does not know. */
@@ -214,6 +219,16 @@ export function activityDetail(activity: Activity, ctx: ActivityDetailContext): 
   if (activity.type.startsWith('message.')) {
     return str(data['preview']) ?? str(data['status']) ?? '';
   }
+  if (activity.type === 'web.session') {
+    const pages = typeof data['pages'] === 'number' ? data['pages'] : 1;
+    return [str(data['hostname']), str(data['landing']), `${pages} ×`]
+      .filter((p) => p !== null)
+      .join(' · ');
+  }
+  if (activity.type === 'web.goal' || activity.type === 'web.payment') {
+    return [str(data['goal']), str(data['path'])].filter((p) => p !== null).join(' · ');
+  }
+  if (activity.type === 'web.linked') return str(data['source']) ?? '';
   if (activity.type.startsWith('email.')) {
     return str(data['subject']) ?? str(data['url']) ?? str(data['reason']) ?? '';
   }

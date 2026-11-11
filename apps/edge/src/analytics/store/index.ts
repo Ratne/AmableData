@@ -1,3 +1,12 @@
+import { runPurgeJob } from '../purge';
+import {
+  dropSuppressed,
+  listPurgeJobs,
+  nextPurgeAt,
+  suppress,
+  type SuppressInput,
+  type SuppressResult,
+} from './suppression';
 import type {
   AdEntity,
   AdPlatform,
@@ -17,6 +26,7 @@ import type {
   AttributionModel,
   AttributionReport,
   BotsReport,
+  TrackingCoverageReport,
   ConditionSuggestAttr,
   CreateAlertInput,
   CreateFunnelInput,
@@ -81,6 +91,7 @@ import { attributeRevenue, attributeRevenueByModel, isAttributionDimension } fro
 import {
   adsReport,
   botsReport,
+  trackingCoverageReport,
   getIntegration,
   listIntegrations,
   removeIntegration,
@@ -98,6 +109,8 @@ import {
   ackCoreWork,
   applyCrmFacts,
   knownVisitors,
+  visitorsLastSeen,
+  paymentOf,
   pendingCoreWork,
   pullCoreWork,
   recordAlertDelivery,
@@ -118,17 +131,28 @@ import {
   type ContactActivity,
   type VisitorListQuery,
 } from './visitors';
-import type { SqlDb } from '../db/sql';
+import { first, type SqlDb } from '../db/sql';
 import type { EdgeSiteConfig } from '../enrich';
 import type { BotHit, EnrichedEvent } from '../types';
 import { ingestBatch, type IngestResult } from './ingest';
+import { hashLegacyIdentities } from './legacy';
 import { breakdown, overview, resolveRange, timeseries, type ResolvedRange } from './query';
 import { runRetention, type ArchiveSink, type RetentionResult } from './retention';
-import { refreshDailyRollups, refreshRollups } from './rollups';
+import { DAY_MS } from '../time';
+import { dayFloorAfter, refreshDailyRollups, refreshRollups } from './rollups';
 import { cohortReport } from './reports-cohort';
-import { journeyReport, trackingQuality, trackingQualityQuerySchema, type TrackingQualityQuery } from './reports-journey';
+import {
+  journeyReport,
+  trackingQuality,
+  trackingQualityQuerySchema,
+  type TrackingQualityQuery,
+} from './reports-journey';
 import { ltvReport } from './reports-ltv';
-import { performanceContext, performanceReport, type PerformanceContext } from './reports-performance';
+import {
+  performanceContext,
+  performanceReport,
+  type PerformanceContext,
+} from './reports-performance';
 import { reportWindow, type ReportWindow } from './reports-shared';
 import {
   cohortQuerySchema,
@@ -162,12 +186,27 @@ import {
 export type { SiteInit, SiteRecord } from './site';
 export type { IngestResult } from './ingest';
 export type { ArchiveSink, RetentionResult } from './retention';
-export type { CrmFact, CrmApplyResult, CoreWork, IdentityItem, AutomationItem, AlertItem, AlertTarget, CrmLinkSource } from './crm';
+export type {
+  CrmFact,
+  CrmApplyResult,
+  CoreWork,
+  IdentityItem,
+  AutomationItem,
+  AlertItem,
+  AlertTarget,
+  CrmLinkSource,
+} from './crm';
 export type { ContactActivity, VisitorListQuery } from './visitors';
 export type { ShareRow } from './config';
 export type { IntegrationRow, IntegrationProviderId, AdSpendRow, SearchStatRow } from './bots';
 export type { ContactVisitor, SyncCursor } from './registry';
-export type { AdConnectionInput, AdConnectionRecord, AdEntityQuery, AdEntityRecord, AdSpendQuery } from './ad-entities';
+export type {
+  AdConnectionInput,
+  AdConnectionRecord,
+  AdEntityQuery,
+  AdEntityRecord,
+  AdSpendQuery,
+} from './ad-entities';
 export type { ConversionInput, ConversionQuery, ConversionRecord, TouchQuery } from './touches';
 export type { OutboundEnqueueInput, OutboundOutcome, OutboundQuery } from './outbound';
 export type { IdentityKeyRef } from './identity';
@@ -177,7 +216,10 @@ export type AnalyticsResult<T> =
   | { ok: true; value: T }
   | {
       ok: false;
-      error: { code: 'not_found' | 'invalid_range' | 'validation_failed' | 'conflict'; message: string };
+      error: {
+        code: 'not_found' | 'invalid_range' | 'validation_failed' | 'conflict';
+        message: string;
+      };
     };
 
 /** Parses `input` with a contract schema, as an AnalyticsResult. */
@@ -186,11 +228,17 @@ function parse<S extends z.ZodType>(schema: S, input: unknown): AnalyticsResult<
   if (parsed.success) return { ok: true, value: parsed.data };
   const issue = parsed.error.issues[0];
   const path = issue === undefined || issue.path.length === 0 ? '' : `${issue.path.join('.')}: `;
-  return { ok: false, error: { code: 'validation_failed', message: `${path}${issue?.message ?? 'invalid input'}` } };
+  return {
+    ok: false,
+    error: { code: 'validation_failed', message: `${path}${issue?.message ?? 'invalid input'}` },
+  };
 }
 
 /** Parses every item; the first invalid one fails the whole batch. */
-function parseAll<S extends z.ZodType>(schema: S, items: readonly unknown[]): AnalyticsResult<z.output<S>[]> {
+function parseAll<S extends z.ZodType>(
+  schema: S,
+  items: readonly unknown[],
+): AnalyticsResult<z.output<S>[]> {
   const out: z.output<S>[] = [];
   for (const [i, item] of items.entries()) {
     const r = parse(schema, item);
@@ -209,11 +257,57 @@ const notFound = (what: string): AnalyticsResult<never> => ({
  * Everything one AnalyticsDO instance can do, over the synchronous SQL port.
  * The DO delegates every RPC here; tests drive it on node:sqlite.
  */
+/**
+ * Dirty hourly rollups are reconciled from raw rows at most this often on the
+ * write path (an exact recount of a busy hour costs far more than a batch), and
+ * always before a read or a purge needs them.
+ */
+export const ROLLUP_REFRESH_MS = 60_000;
+
+function isStorageFull(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /SQLITE_FULL|database or disk is full|exceeded.*(storage|size)/i.test(error.message)
+  );
+}
+
 export class AnalyticsStore {
+  private lastRollupRefresh = 0;
+
   constructor(
     private readonly db: SqlDb,
     private readonly now: () => number = Date.now,
   ) {}
+
+  private refreshHourly(site: SiteRecord, force: boolean): void {
+    const now = this.now();
+    if (!force && now - this.lastRollupRefresh < ROLLUP_REFRESH_MS) return;
+    this.lastRollupRefresh = now;
+    refreshRollups(this.db, site.site.timezone, site.site.currency, this.purgeFloor());
+  }
+
+  /** Oldest bucket whose raw rows are all still here (set by each retention pass). */
+  private purgeFloor(): number {
+    const row = first<{ value: string }>(
+      this.db,
+      `SELECT value FROM analytics_meta WHERE key = 'purge_floor'`,
+    );
+    return row === undefined ? -Infinity : Number(row.value);
+  }
+
+  /**
+   * Age barrier: the oldest timestamp still applied. Older events would be
+   * purged by the next retention pass and would rewrite rollups whose raw rows
+   * are already partly gone, so they only go to the corrections ledger.
+   */
+  private hotFloor(site: SiteRecord): number {
+    if (site.site.retention_days <= 0) return this.purgeFloor();
+    const window = dayFloorAfter(
+      this.now() - site.site.retention_days * DAY_MS,
+      site.site.timezone,
+    );
+    return Math.max(window, this.purgeFloor());
+  }
 
   // --- site configuration (site:<id> instances)
   initSite(init: SiteInit): SiteRecord {
@@ -244,9 +338,48 @@ export class AnalyticsStore {
   ingest(events: readonly EnrichedEvent[], bots: readonly BotHit[]): IngestResult {
     const site = getSiteRecord(this.db);
     if (site === null)
-      return { ingested: 0, duplicates: 0, skipped: events.length, bots: 0, pending: false, live: [] };
-    const result = ingestBatch(this.db, events, bots, { currency: site.site.currency });
-    refreshRollups(this.db, site.site.timezone, site.site.currency);
+      return {
+        ingested: 0,
+        duplicates: 0,
+        skipped: events.length,
+        bots: 0,
+        pending: false,
+        live: [],
+        late: [],
+        poison: [],
+      };
+    const floor = this.hotFloor(site);
+    const kept = dropSuppressed(this.db, events, this.now());
+    const fresh = kept.filter((e) => e.ts >= floor);
+    const late = events.filter((e) => e.ts < floor).map((e) => e.eid);
+    const opts = { currency: site.site.currency, now: this.now() };
+    let result: IngestResult;
+    try {
+      result = ingestBatch(this.db, fresh, bots, opts);
+    } catch (error) {
+      // A full database is not the events' fault: let the caller retry.
+      if (isStorageFull(error)) throw error;
+      // One bad event must not block the batch: the batch rolled back, apply
+      // event by event and report the ones that still throw.
+      result = ingestBatch(this.db, [], bots, opts);
+      for (const e of fresh) {
+        try {
+          const one = ingestBatch(this.db, [e], [], opts);
+          result.ingested += one.ingested;
+          result.duplicates += one.duplicates;
+          result.skipped += one.skipped;
+          result.pending ||= one.pending;
+          result.live.push(...one.live);
+        } catch (error) {
+          if (isStorageFull(error)) throw error;
+          console.error('analytics ingest: event isolated', e.eid, error);
+          result.poison.push(e.eid);
+        }
+      }
+    }
+    result.skipped += late.length + (events.length - kept.length);
+    result.late = late;
+    this.refreshHourly(site, false);
     return result;
   }
 
@@ -296,7 +429,9 @@ export class AnalyticsStore {
     const r = this.range(input);
     if (!r.ok) return r;
     const { site } = r.value;
-    if (interval === 'day') refreshDailyRollups(this.db, site.site.timezone, site.site.currency);
+    this.refreshHourly(site, true);
+    if (interval === 'day')
+      refreshDailyRollups(this.db, site.site.timezone, site.site.currency, this.purgeFloor());
     return {
       ok: true,
       value: timeseries(this.db, r.value.range, interval, site.site.timezone, site.site.currency),
@@ -313,7 +448,10 @@ export class AnalyticsStore {
     if (!r.ok) return r;
     const max = Math.min(Math.max(limit, 1), 1000);
     if (!isAttributionDimension(dimension)) {
-      return { ok: true, value: breakdown(this.db, r.value.range, dimension, max, r.value.site.site.currency) };
+      return {
+        ok: true,
+        value: breakdown(this.db, r.value.range, dimension, max, r.value.site.site.currency),
+      };
     }
     // All values first: credited revenue may belong to values outside the top rows.
     const result = breakdown(this.db, r.value.range, dimension, 1000);
@@ -330,7 +468,13 @@ export class AnalyticsStore {
     // Values credited by older touches (sessions before the range) still get their revenue.
     for (const [value, c] of credited) {
       if (seen.has(value) || c.revenue === 0) continue;
-      result.rows.push({ value, visitors: 0, sessions: 0, revenue_minor: c.revenue, conversions: c.conversions });
+      result.rows.push({
+        value,
+        visitors: 0,
+        sessions: 0,
+        revenue_minor: c.revenue,
+        conversions: c.conversions,
+      });
     }
     return { ok: true, value: { ...result, rows: result.rows.slice(0, max), model: used } };
   }
@@ -382,7 +526,11 @@ export class AnalyticsStore {
     return site === null || site.deleted ? null : site;
   }
 
-  purchases(input: AnalyticsRange, limit: number, anonymous = false): AnalyticsResult<{ currency: string; data: AnalyticsPurchase[] }> {
+  purchases(
+    input: AnalyticsRange,
+    limit: number,
+    anonymous = false,
+  ): AnalyticsResult<{ currency: string; data: AnalyticsPurchase[] }> {
     const r = this.range(input);
     if (!r.ok) return r;
     return {
@@ -397,7 +545,10 @@ export class AnalyticsStore {
   insights(input: AnalyticsRange, interval: 'week' | 'month'): AnalyticsResult<AnalyticsInsights> {
     const r = this.range(input);
     if (!r.ok) return r;
-    return { ok: true, value: insights(this.db, r.value.range, r.value.site.site.currency, interval) };
+    return {
+      ok: true,
+      value: insights(this.db, r.value.range, r.value.site.site.currency, interval),
+    };
   }
 
   visitors(input: AnalyticsRange, query: VisitorListQuery): AnalyticsResult<VisitorsList> {
@@ -433,7 +584,8 @@ export class AnalyticsStore {
     const since = this.now() - 86_400_000;
     const n = (sql: string): number => this.db.all<{ n: number }>(sql, since)[0]?.n ?? 0;
     const events =
-      n(`SELECT COUNT(*) AS n FROM pageviews WHERE ts >= ?`) + n(`SELECT COUNT(*) AS n FROM goals WHERE ts >= ?`);
+      n(`SELECT COUNT(*) AS n FROM pageviews WHERE ts >= ?`) +
+      n(`SELECT COUNT(*) AS n FROM goals WHERE ts >= ?`);
     return {
       site_id: site.site.id,
       receiving: site.lastEventAt !== null && site.lastEventAt >= since,
@@ -449,6 +601,12 @@ export class AnalyticsStore {
     const r = this.range(input);
     if (!r.ok) return r;
     return { ok: true, value: botsReport(this.db, r.value.range) };
+  }
+
+  trackingCoverage(input: AnalyticsRange): AnalyticsResult<TrackingCoverageReport> {
+    const r = this.range(input);
+    if (!r.ok) return r;
+    return { ok: true, value: trackingCoverageReport(this.db, r.value.range) };
   }
 
   // funnels
@@ -471,7 +629,8 @@ export class AnalyticsStore {
     const r = this.range(input);
     if (!r.ok) return r;
     const funnel = config.getFunnel(this.db, id);
-    if (funnel === null) return { ok: false, error: { code: 'not_found', message: 'funnel not found' } };
+    if (funnel === null)
+      return { ok: false, error: { code: 'not_found', message: 'funnel not found' } };
     return { ok: true, value: funnelResult(this.db, funnel, r.value.range) };
   }
 
@@ -493,11 +652,18 @@ export class AnalyticsStore {
   listAlerts(): Alert[] {
     return config.listAlerts(this.db, this.now()).map(config.publicAlert);
   }
-  createAlert(input: CreateAlertInput, webhookSecret: string | null): { alert: Alert; webhook_secret: string | null } {
+  createAlert(
+    input: CreateAlertInput,
+    webhookSecret: string | null,
+  ): { alert: Alert; webhook_secret: string | null } {
     const a = config.createAlert(this.db, input, webhookSecret, this.now());
     return { alert: config.publicAlert(a), webhook_secret: a.webhook_secret };
   }
-  updateAlert(id: string, patch: UpdateAlertInput, webhookSecret: string | null): { alert: Alert; webhook_secret: string | null } | null {
+  updateAlert(
+    id: string,
+    patch: UpdateAlertInput,
+    webhookSecret: string | null,
+  ): { alert: Alert; webhook_secret: string | null } | null {
     const r = config.updateAlert(this.db, id, patch, webhookSecret, this.now());
     return r === null ? null : { alert: config.publicAlert(r.alert), webhook_secret: r.newSecret };
   }
@@ -511,7 +677,10 @@ export class AnalyticsStore {
   testAlert(id: string): boolean {
     return config.queueAlertTest(this.db, id, this.now());
   }
-  recordAlertDelivery(alertId: string, deliveries: Array<{ channel: 'email' | 'webhook'; ok: boolean }>): void {
+  recordAlertDelivery(
+    alertId: string,
+    deliveries: Array<{ channel: 'email' | 'webhook'; ok: boolean }>,
+  ): void {
     recordAlertDelivery(this.db, alertId, deliveries, this.now());
   }
 
@@ -533,7 +702,13 @@ export class AnalyticsStore {
   listSiteKeys(): SiteKey[] {
     return config.listSiteKeys(this.db);
   }
-  createSiteKey(input: { id: string; name: string; prefix: string; hash: string; scopes: SiteKeyScope[] }): SiteKey {
+  createSiteKey(input: {
+    id: string;
+    name: string;
+    prefix: string;
+    hash: string;
+    scopes: SiteKeyScope[];
+  }): SiteKey {
     return config.createSiteKey(this.db, input, this.now());
   }
   revokeSiteKey(id: string): boolean {
@@ -547,6 +722,10 @@ export class AnalyticsStore {
   predictionInfo(): PredictionModelInfo | null {
     const site = this.site();
     return site === null ? null : modelInfo(loadModel(this.db), site.site.currency);
+  }
+  /** Converts a page of pre-registry contact data to hashes; true when none is left. */
+  hashLegacyIdentities(limit = LEGACY_PAGE): boolean {
+    return hashLegacyIdentities(this.db, limit);
   }
   trainPrediction(): PredictionModelInfo | null {
     const site = this.site();
@@ -589,14 +768,20 @@ export class AnalyticsStore {
   /** Most visited paths (the dev search provider mirrors them). */
   topPaths(limit = 20): string[] {
     return this.db
-      .all<{ p: string }>(`SELECT path AS p FROM pageviews GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT ?`, limit)
+      .all<{ p: string }>(
+        `SELECT path AS p FROM pageviews GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT ?`,
+        limit,
+      )
       .map((r) => r.p);
   }
   ads(input: AnalyticsRange, model?: AttributionModel): AnalyticsResult<AdsReport> {
     const r = this.range(input);
     if (!r.ok) return r;
     const site = r.value.site.site;
-    return { ok: true, value: adsReport(this.db, r.value.range, site.currency, model ?? site.attribution_model) };
+    return {
+      ok: true,
+      value: adsReport(this.db, r.value.range, site.currency, model ?? site.attribution_model),
+    };
   }
   searchConsole(input: AnalyticsRange): AnalyticsResult<SearchConsoleReport> {
     const r = this.range(input);
@@ -609,11 +794,32 @@ export class AnalyticsStore {
     const site = this.site();
     if (site === null) return null;
     const result = applyCrmFacts(this.db, facts, site.site.currency);
-    refreshRollups(this.db, site.site.timezone, site.site.currency);
+    this.refreshHourly(site, false);
     return result;
   }
   knownVisitors(ids: readonly string[]): string[] {
     return knownVisitors(this.db, ids);
+  }
+  visitorsLastSeen(ids: readonly string[]): Array<{ visitorId: string; lastSeen: number }> {
+    return visitorsLastSeen(this.db, ids);
+  }
+  paymentOf(transactionId: string): { visitorId: string | null } | null {
+    return paymentOf(this.db, transactionId);
+  }
+  suppressVisitors(input: SuppressInput): SuppressResult {
+    return suppress(this.db, input, this.now());
+  }
+  purgeJobs(): ReturnType<typeof listPurgeJobs> {
+    return listPurgeJobs(this.db);
+  }
+  nextPurgeAt(): number | null {
+    return nextPurgeAt(this.db);
+  }
+  /** R2 side of the due purge job; true when work is left. */
+  runPurge(bucket: R2Bucket, budgetMs?: number): Promise<boolean> {
+    const site = getSiteRecord(this.db);
+    if (site === null) return Promise.resolve(false);
+    return runPurgeJob(this.db, bucket, site.site.id, this.now(), budgetMs);
   }
   pullCoreWork(limit = 200): CoreWork {
     return pullCoreWork(this.db, Math.min(Math.max(limit, 1), 500));
@@ -634,6 +840,9 @@ export class AnalyticsStore {
   }
   claimEvents(ids: readonly string[]): string[] {
     return registry.claimEvents(this.db, ids, this.now());
+  }
+  unlinkVisitors(siteId: string, visitorIds: readonly string[]): void {
+    registry.unlinkVisitors(this.db, siteId, visitorIds);
   }
   registerLinks(links: readonly registry.ContactVisitor[]): void {
     registry.registerLinks(this.db, links);
@@ -675,23 +884,37 @@ export class AnalyticsStore {
   /** Builder suggestions for a condition / tag value (tags, cities, regions, campaigns seen on the site). */
   conditionValues(attr: ConditionSuggestAttr, limit = MAX_CONDITION_VALUES): string[] {
     if (!(CONDITION_SUGGEST_ATTRS as readonly string[]).includes(attr)) return [];
-    return funnelGraphs.conditionValues(this.db, attr, Math.min(Math.max(1, limit), MAX_CONDITION_VALUES));
+    return funnelGraphs.conditionValues(
+      this.db,
+      attr,
+      Math.min(Math.max(1, limit), MAX_CONDITION_VALUES),
+    );
   }
   createFunnelGraph(input: FunnelGraphInput): AnalyticsResult<FunnelGraph> {
     const body = parse(funnelGraphInputSchema, input);
     if (!body.ok) return body;
-    return { ok: true, value: this.db.transaction(() => funnelGraphs.createFunnelGraph(this.db, body.value, this.now())) };
+    return {
+      ok: true,
+      value: this.db.transaction(() =>
+        funnelGraphs.createFunnelGraph(this.db, body.value, this.now()),
+      ),
+    };
   }
   /** `input.version` must be the stored version, else `conflict`. */
   updateFunnelGraph(id: string, input: FunnelGraphUpdate): AnalyticsResult<FunnelGraph> {
     const body = parse(funnelGraphUpdateSchema, input);
     if (!body.ok) return body;
-    const r = this.db.transaction(() => funnelGraphs.updateFunnelGraph(this.db, id, body.value, this.now()));
+    const r = this.db.transaction(() =>
+      funnelGraphs.updateFunnelGraph(this.db, id, body.value, this.now()),
+    );
     if (r.ok) return { ok: true, value: r.graph };
     if (r.reason === 'not_found') return notFound('funnel');
     return {
       ok: false,
-      error: { code: 'conflict', message: `funnel changed: current version is ${r.current_version}` },
+      error: {
+        code: 'conflict',
+        message: `funnel changed: current version is ${r.current_version}`,
+      },
     };
   }
   archiveFunnelGraph(id: string): FunnelGraph | null {
@@ -717,7 +940,9 @@ export class AnalyticsStore {
   updateTrafficSource(id: string, input: TrafficSourceInput): AnalyticsResult<TrafficSource> {
     const body = parse(trafficSourceInputSchema, input);
     if (!body.ok) return body;
-    const updated = this.db.transaction(() => trafficSources.updateTrafficSource(this.db, id, body.value, this.now()));
+    const updated = this.db.transaction(() =>
+      trafficSources.updateTrafficSource(this.db, id, body.value, this.now()),
+    );
     return updated === null ? notFound('traffic source') : { ok: true, value: updated };
   }
   archiveTrafficSource(id: string): TrafficSource | null {
@@ -733,7 +958,9 @@ export class AnalyticsStore {
     if (!t.ok) return t;
     return { ok: true, value: { id: t.value.id, created: touches.insertTouch(this.db, t.value) } };
   }
-  recordTouches(list: readonly FunnelTouch[]): AnalyticsResult<{ inserted: number; duplicates: number }> {
+  recordTouches(
+    list: readonly FunnelTouch[],
+  ): AnalyticsResult<{ inserted: number; duplicates: number }> {
     const all = parseAll(funnelTouchSchema, list);
     if (!all.ok) return all;
     return this.db.transaction(() => {
@@ -754,10 +981,15 @@ export class AnalyticsStore {
     return touches.listTouches(this.db, query);
   }
   /** Idempotent on hit + tx (+ event): same key updates, another tx is another conversion. */
-  recordConversionFromPostback(input: touches.ConversionInput): AnalyticsResult<{ id: string; created: boolean }> {
+  recordConversionFromPostback(
+    input: touches.ConversionInput,
+  ): AnalyticsResult<{ id: string; created: boolean }> {
     const c = parse(touches.conversionInputSchema, input);
     if (!c.ok) return c;
-    return { ok: true, value: this.db.transaction(() => touches.upsertConversion(this.db, c.value, this.now())) };
+    return {
+      ok: true,
+      value: this.db.transaction(() => touches.upsertConversion(this.db, c.value, this.now())),
+    };
   }
   getConversion(id: string): touches.ConversionRecord | null {
     return touches.getConversion(this.db, id);
@@ -778,20 +1010,30 @@ export class AnalyticsStore {
   listAdConnections(platform?: AdPlatform): adData.AdConnectionRecord[] {
     return adData.listAdConnections(this.db, platform);
   }
-  upsertAdEntities(entities: readonly AdEntity[], connectionId: string | null = null): AnalyticsResult<{ upserted: number }> {
+  upsertAdEntities(
+    entities: readonly AdEntity[],
+    connectionId: string | null = null,
+  ): AnalyticsResult<{ upserted: number }> {
     const all = parseAll(adEntitySchema, entities);
     if (!all.ok) return all;
-    const upserted = this.db.transaction(() => adData.upsertAdEntities(this.db, all.value, connectionId, this.now()));
+    const upserted = this.db.transaction(() =>
+      adData.upsertAdEntities(this.db, all.value, connectionId, this.now()),
+    );
     return { ok: true, value: { upserted } };
   }
   listAdEntities(query: adData.AdEntityQuery = {}): adData.AdEntityRecord[] {
     return adData.listAdEntities(this.db, query);
   }
   /** Overwrites the (platform, entity, day) rows: re-syncing a day replaces it. */
-  upsertAdSpend(rows: readonly AdSpendDay[], connectionId: string | null = null): AnalyticsResult<{ upserted: number }> {
+  upsertAdSpend(
+    rows: readonly AdSpendDay[],
+    connectionId: string | null = null,
+  ): AnalyticsResult<{ upserted: number }> {
     const all = parseAll(adSpendDaySchema, rows);
     if (!all.ok) return all;
-    const upserted = this.db.transaction(() => adData.upsertAdSpend(this.db, all.value, connectionId, this.now()));
+    const upserted = this.db.transaction(() =>
+      adData.upsertAdSpend(this.db, all.value, connectionId, this.now()),
+    );
     return { ok: true, value: { upserted } };
   }
   listAdSpend(query: adData.AdSpendQuery): AdSpendDay[] {
@@ -799,13 +1041,17 @@ export class AnalyticsStore {
   }
 
   // --- outbound conversions (queue consumed by the DO alarm)
-  enqueueOutbound(input: outbound.OutboundEnqueueInput): AnalyticsResult<{ id: string; created: boolean }> {
+  enqueueOutbound(
+    input: outbound.OutboundEnqueueInput,
+  ): AnalyticsResult<{ id: string; created: boolean }> {
     const job = parse(outbound.outboundEnqueueSchema, input);
     if (!job.ok) return job;
     return { ok: true, value: outbound.enqueueOutbound(this.db, job.value, this.now()) };
   }
   claimOutboundBatch(now: number, limit = 50): OutboundConversionJob[] {
-    return this.db.transaction(() => outbound.claimOutboundBatch(this.db, now, Math.min(Math.max(limit, 1), 500)));
+    return this.db.transaction(() =>
+      outbound.claimOutboundBatch(this.db, now, Math.min(Math.max(limit, 1), 500)),
+    );
   }
   settleOutbound(id: string, outcome: outbound.OutboundOutcome): OutboundConversionJob | null {
     return outbound.settleOutbound(this.db, id, outcome, this.now());
@@ -825,9 +1071,15 @@ export class AnalyticsStore {
     const req = parse(conversionOutboundRequestSchema, input);
     if (!req.ok) return req;
     const { conversion_id: conversionId, pii, click_ids: clickIds, consent } = req.value;
-    const conversion = conversionId === undefined ? (req.value.conversion ?? null) : this.getConversion(conversionId);
+    const conversion =
+      conversionId === undefined
+        ? (req.value.conversion ?? null)
+        : this.getConversion(conversionId);
     if (conversion === null) return notFound('conversion');
-    const source = conversion.traffic_source_id === null ? null : this.getTrafficSource(conversion.traffic_source_id);
+    const source =
+      conversion.traffic_source_id === null
+        ? null
+        : this.getTrafficSource(conversion.traffic_source_id);
     return {
       ok: true,
       value: await enqueueForConversion(this, { conversion, source, pii, clickIds, consent, rng }),
@@ -845,12 +1097,19 @@ export class AnalyticsStore {
   resendOutbound(ids: readonly string[]): { requeued: number } {
     return { requeued: outbound.resendOutbound(this.db, ids.slice(0, 1000), this.now()) };
   }
-  resendFailedOutbound(filter: outbound.OutboundResendFilter = {}): AnalyticsResult<{ requeued: number }> {
+  resendFailedOutbound(
+    filter: outbound.OutboundResendFilter = {},
+  ): AnalyticsResult<{ requeued: number }> {
     const f = parse(outbound.outboundResendFilterSchema, filter);
     if (!f.ok) return f;
-    return { ok: true, value: { requeued: outbound.resendFailedOutbound(this.db, f.value, this.now()) } };
+    return {
+      ok: true,
+      value: { requeued: outbound.resendFailedOutbound(this.db, f.value, this.now()) },
+    };
   }
-  outboundStats(query: Omit<outbound.OutboundQuery, 'status' | 'limit'> = {}): outbound.OutboundStats {
+  outboundStats(
+    query: Omit<outbound.OutboundQuery, 'status' | 'limit'> = {},
+  ): outbound.OutboundStats {
     return outbound.outboundStats(this.db, query);
   }
   processOutbound(
@@ -866,20 +1125,32 @@ export class AnalyticsStore {
   upsertIdentityKeys(keys: readonly IdentityKey[]): AnalyticsResult<{ added: number }> {
     const all = parseAll(identityKeySchema, keys);
     if (!all.ok) return all;
-    return { ok: true, value: { added: this.db.transaction(() => identity.upsertIdentityKeys(this.db, all.value)) } };
+    return {
+      ok: true,
+      value: { added: this.db.transaction(() => identity.upsertIdentityKeys(this.db, all.value)) },
+    };
   }
   findVisitorsByKey(keyType: IdentityKeyType, keyValue: string): IdentityKey[] {
     return identity.findVisitorsByKey(this.db, keyType, keyValue);
   }
   listIdentityKeys(visitorIds: string | readonly string[]): IdentityKey[] {
-    return identity.identityKeysOf(this.db, typeof visitorIds === 'string' ? [visitorIds] : visitorIds);
+    return identity.identityKeysOf(
+      this.db,
+      typeof visitorIds === 'string' ? [visitorIds] : visitorIds,
+    );
   }
   /** Flags the visitors' touches as identified (kept past the anonymous retention). */
   markTouchesIdentified(visitorIds: readonly string[]): void {
     touches.markTouchesIdentified(this.db, visitorIds);
   }
-  applyVisitorTags(visitorId: string, add: readonly string[], remove: readonly string[] = []): string[] {
-    return this.db.transaction(() => identity.applyVisitorTags(this.db, visitorId, add, remove, this.now()));
+  applyVisitorTags(
+    visitorId: string,
+    add: readonly string[],
+    remove: readonly string[] = [],
+  ): string[] {
+    return this.db.transaction(() =>
+      identity.applyVisitorTags(this.db, visitorId, add, remove, this.now()),
+    );
   }
   listVisitorTags(visitorId: string): string[] {
     return identity.visitorTags(this.db, visitorId);
@@ -904,10 +1175,16 @@ export class AnalyticsStore {
   ): AnalyticsResult<{ added: number; merged: number; skipped: number }> {
     const all = parseAll(identity.visitorIdentityInputSchema, items);
     if (!all.ok) return all;
-    return { ok: true, value: this.db.transaction(() => identity.identifyVisitors(this.db, all.value, this.now())) };
+    return {
+      ok: true,
+      value: this.db.transaction(() => identity.identifyVisitors(this.db, all.value, this.now())),
+    };
   }
   /** Merges the child's group into the origin's group (mechanism `manual`). */
-  mergeVisitors(originVisitorId: string, childVisitorId: string): AnalyticsResult<identity.VisitorIdentityGraph> {
+  mergeVisitors(
+    originVisitorId: string,
+    childVisitorId: string,
+  ): AnalyticsResult<identity.VisitorIdentityGraph> {
     const r = this.db.transaction(() =>
       identity.mergeVisitorsManually(this.db, originVisitorId, childVisitorId, this.now()),
     );
@@ -920,19 +1197,35 @@ export class AnalyticsStore {
     return graph === null ? notFound('visitor') : { ok: true, value: graph };
   }
   /** Disconnects the visitor from its origin; both profiles become whole again. */
-  unmergeVisitors(childVisitorId: string): AnalyticsResult<{ child: identity.VisitorIdentityGraph; origin: identity.VisitorIdentityGraph }> {
-    const r = this.db.transaction(() => identity.unmergeVisitor(this.db, childVisitorId, this.now()));
+  unmergeVisitors(childVisitorId: string): AnalyticsResult<{
+    child: identity.VisitorIdentityGraph;
+    origin: identity.VisitorIdentityGraph;
+  }> {
+    const r = this.db.transaction(() =>
+      identity.unmergeVisitor(this.db, childVisitorId, this.now()),
+    );
     if (r === null) return notFound('merge');
     const child = identity.visitorIdentityGraph(this.db, childVisitorId);
     const origin = identity.visitorIdentityGraph(this.db, r.origin_visitor_id);
-    return child === null || origin === null ? notFound('visitor') : { ok: true, value: { child, origin } };
+    return child === null || origin === null
+      ? notFound('visitor')
+      : { ok: true, value: { child, origin } };
   }
   /** Rebuilds merges from the identity keys first seen in [from, to) (epoch ms). */
-  reprocessVisitors(range: { from: number; to: number }): AnalyticsResult<{ keys: number; merges: number; visitors: number }> {
+  reprocessVisitors(range: {
+    from: number;
+    to: number;
+  }): AnalyticsResult<{ keys: number; merges: number; visitors: number }> {
     if (!Number.isFinite(range.from) || !Number.isFinite(range.to) || range.from >= range.to) {
-      return { ok: false, error: { code: 'validation_failed', message: 'range: from must be before to' } };
+      return {
+        ok: false,
+        error: { code: 'validation_failed', message: 'range: from must be before to' },
+      };
     }
-    return { ok: true, value: this.db.transaction(() => identity.reprocessIdentities(this.db, range, this.now())) };
+    return {
+      ok: true,
+      value: this.db.transaction(() => identity.reprocessIdentities(this.db, range, this.now())),
+    };
   }
   visitorIdentityGraph(visitorId: string): identity.VisitorIdentityGraph | null {
     return identity.visitorIdentityGraph(this.db, visitorId);
@@ -958,17 +1251,26 @@ export class AnalyticsStore {
 
   // ---- funnel link routing (sessions of the link routes)
   /** Site, funnel, source, visitor session and tags for one link hit; null when the site is unknown. */
-  funnelLinkContext(query: funnelSessions.FunnelLinkQuery): AnalyticsResult<funnelSessions.FunnelLinkContext> {
+  funnelLinkContext(
+    query: funnelSessions.FunnelLinkQuery,
+  ): AnalyticsResult<funnelSessions.FunnelLinkContext> {
     const q = parse(funnelSessions.funnelLinkQuerySchema, query);
     if (!q.ok) return q;
     const site = getSiteRecord(this.db);
     if (site === null || site.deleted) return notFound('site');
-    const { funnel_id: funnelId, traffic_source_id: sourceId, visitor_id: visitorId, latest_session: latest } = q.value;
+    const {
+      funnel_id: funnelId,
+      traffic_source_id: sourceId,
+      visitor_id: visitorId,
+      latest_session: latest,
+    } = q.value;
     const session =
       visitorId === undefined
         ? null
         : (funnelSessions.getFunnelSession(this.db, visitorId, funnelId) ??
-          (latest && funnelId !== undefined ? funnelSessions.getFunnelSession(this.db, visitorId) : null));
+          (latest && funnelId !== undefined
+            ? funnelSessions.getFunnelSession(this.db, visitorId)
+            : null));
     const graphId = session?.funnel_id ?? funnelId;
     const srcId = sourceId ?? session?.traffic_source_id ?? undefined;
     return {
@@ -984,17 +1286,27 @@ export class AnalyticsStore {
       },
     };
   }
-  getFunnelSession(visitorId: string, funnelId?: string | null): funnelSessions.FunnelSessionRecord | null {
+  getFunnelSession(
+    visitorId: string,
+    funnelId?: string | null,
+  ): funnelSessions.FunnelSessionRecord | null {
     return funnelSessions.getFunnelSession(this.db, visitorId, funnelId);
   }
   /** Tracker visitor of a funnel page ↔ funnel visitor of its redirect (session merge). */
-  linkFunnelVisitor(link: identity.FunnelVisitorLink): AnalyticsResult<ReturnType<typeof identity.linkFunnelVisitor>> {
+  linkFunnelVisitor(
+    link: identity.FunnelVisitorLink,
+  ): AnalyticsResult<ReturnType<typeof identity.linkFunnelVisitor>> {
     const l = parse(identity.funnelVisitorLinkSchema, link);
     if (!l.ok) return l;
-    return { ok: true, value: this.db.transaction(() => identity.linkFunnelVisitor(this.db, l.value, this.now())) };
+    return {
+      ok: true,
+      value: this.db.transaction(() => identity.linkFunnelVisitor(this.db, l.value, this.now())),
+    };
   }
   /** One routing step: its touches, the visitor's new session state and the tag effects, atomically. */
-  recordFunnelStep(step: funnelSessions.FunnelStepInput): AnalyticsResult<funnelSessions.FunnelStepResult> {
+  recordFunnelStep(
+    step: funnelSessions.FunnelStepInput,
+  ): AnalyticsResult<funnelSessions.FunnelStepResult> {
     const s = parse(funnelSessions.funnelStepInputSchema, step);
     if (!s.ok) return s;
     const { touches: list, session, tags } = s.value;
@@ -1003,12 +1315,19 @@ export class AnalyticsStore {
       value: this.db.transaction(() => {
         let inserted = 0;
         for (const t of list) if (touches.insertTouch(this.db, t)) inserted += 1;
-        if (session !== null && session !== undefined) funnelSessions.saveFunnelSession(this.db, session, this.now());
+        if (session !== null && session !== undefined)
+          funnelSessions.saveFunnelSession(this.db, session, this.now());
         const current =
           tags === null || tags === undefined
             ? []
             : tags.add.length + tags.remove.length > 0
-              ? identity.applyVisitorTags(this.db, tags.visitor_id, tags.add, tags.remove, this.now())
+              ? identity.applyVisitorTags(
+                  this.db,
+                  tags.visitor_id,
+                  tags.add,
+                  tags.remove,
+                  this.now(),
+                )
               : identity.visitorTags(this.db, tags.visitor_id);
         return { inserted, tags: current };
       }),
@@ -1016,7 +1335,10 @@ export class AnalyticsStore {
   }
 
   // --- ad attribution reports (click-log + ad spend + conversions and payments)
-  private adsReportOf<S extends z.ZodType<{ from: string; to: string; timezone?: string | undefined }>, T>(
+  private adsReportOf<
+    S extends z.ZodType<{ from: string; to: string; timezone?: string | undefined }>,
+    T,
+  >(
     schema: S,
     input: unknown,
     run: (ctx: PerformanceContext, q: z.output<S>) => T,
@@ -1029,9 +1351,18 @@ export class AnalyticsStore {
     try {
       window = reportWindow(q.value, site.site.timezone);
     } catch (error) {
-      return { ok: false, error: { code: 'invalid_range', message: error instanceof Error ? error.message : 'invalid range' } };
+      return {
+        ok: false,
+        error: {
+          code: 'invalid_range',
+          message: error instanceof Error ? error.message : 'invalid range',
+        },
+      };
     }
-    return { ok: true, value: run(performanceContext(this.db, window, site.site.currency), q.value) };
+    return {
+      ok: true,
+      value: run(performanceContext(this.db, window, site.site.currency), q.value),
+    };
   }
   adsPerformanceReport(query: PerformanceQuery): AnalyticsResult<PerformanceReport> {
     return this.adsReportOf(performanceQuerySchema, query, performanceReport);
@@ -1050,14 +1381,34 @@ export class AnalyticsStore {
   }
 
   // --- retention (+ nightly prediction training)
-  async retention(sink: ArchiveSink | null): Promise<(RetentionResult & { anonymous_touches: number }) | null> {
+  /** `retentionDays` overrides the configured hot window (storage auto-shrink). */
+  async retention(
+    sink: ArchiveSink | null,
+    retentionDays?: number,
+  ): Promise<(RetentionResult & touches.TouchRetentionResult) | null> {
     const site = getSiteRecord(this.db);
     if (site === null) return null;
-    // The purge keeps the rollups: rebuild the pending days while their raw rows still exist.
-    refreshDailyRollups(this.db, site.site.timezone, site.site.currency);
-    const result = await runRetention(this.db, sink, site.site.id, site.site.retention_days, this.now());
+    // The purge keeps the rollups: rebuild the pending hours and days while their raw rows still exist.
+    this.refreshHourly(site, true);
+    refreshDailyRollups(this.db, site.site.timezone, site.site.currency, this.purgeFloor());
+    const configured = site.site.retention_days;
+    const days =
+      retentionDays === undefined
+        ? configured
+        : configured <= 0
+          ? retentionDays
+          : Math.min(retentionDays, configured);
+    const result = await runRetention(this.db, sink, site.site.id, days, this.now());
+    if (result.cutoff !== null) {
+      const floor = Math.max(this.purgeFloor(), dayFloorAfter(result.cutoff, site.site.timezone));
+      this.db.run(
+        `INSERT INTO analytics_meta (key, value) VALUES ('purge_floor', ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+        String(floor),
+      );
+    }
     identity.flagMergedTouchesIdentified(this.db);
-    return { ...result, anonymous_touches: touches.purgeAnonymousTouches(this.db, this.now()) };
+    return { ...result, ...(await touches.purgeTouches(this.db, sink, site.site.id, this.now())) };
   }
 
   // --- tenant index (tenant:<id> instances)
@@ -1073,3 +1424,6 @@ export class AnalyticsStore {
     return indexList(this.db);
   }
 }
+
+/** Rows per table converted by one legacy pass (see `legacy.ts`). */
+const LEGACY_PAGE = 2000;

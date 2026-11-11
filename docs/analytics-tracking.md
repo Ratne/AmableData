@@ -21,7 +21,8 @@ The feature extends the web analytics module (tracker, ingest, `AnalyticsDO`); r
 10. [Outbound conversions](#outbound-conversions)
 11. [Custom tracking domains](#custom-tracking-domains)
 12. [Reports](#reports)
-13. [Development and tests](#development-and-tests)
+13. [Event pipeline and contact data](#event-pipeline-and-contact-data)
+14. [Development and tests](#development-and-tests)
 
 ## Overview
 
@@ -171,10 +172,11 @@ the slots holding adset and ad ids to the synced ad entities.
 A person may show up as several visitor ids: the funnel visitor of the redirects, the tracker
 visitor of each domain, other devices. The store keeps them apart and links them:
 
-- `identity_keys` maps keys to visitors: `email` (normalized, plus its SHA-256 so a hashed
-  `he=` link parameter matches), `phone` (E.164 digits), `session`, `ip`. Keys come from tracker
-  identify events (form capture sends phone-only identifies too), payments, `he=` landing links
-  and CRM contacts.
+- `identity_keys` maps keys to visitors: `email` and `phone` as SHA-256 of the normalized value
+  (lowercase email, E.164 digits), so a hashed `he=` link parameter matches directly, plus
+  `session` and `ip`. Keys come from tracker identify events (form capture sends phone-only
+  identifies too), payments, `he=` landing links and CRM contacts. The clear values never reach
+  the store: see [Event pipeline and contact data](#event-pipeline-and-contact-data).
 - `visitor_merges` links a child to an origin with a mechanism (`email`, `phone`, `session`,
   `manual`). Automatic mechanisms can be switched off per site; the visitor first seen stays the
   origin. Merges are reversible (`unmergeVisitors`) and an explicit disconnection is respected by
@@ -280,6 +282,38 @@ optional `timezone`:
 
 Rows whose key is null are the unattributed share. Cost comes from the synced spend of the
 platforms that have some in the range, else from the per-click cost of the touches.
+
+## Event pipeline and contact data
+
+```
+tracker / server API ──▶ edge ingest ──┬─▶ queue analytics ──▶ R2 archive (WAL) ──▶ AnalyticsDO ──▶ ack
+                                       │         └─ exhausted ─▶ analytics-dlq ─▶ DO, or parked on R2
+                                       │                                         (edge cron */5 replays)
+                                       └─▶ queue registry ──▶ core: workspace registry (CRM)
+                                                 └─ exhausted ─▶ registry-dlq ─▶ parked on R2
+                                                                                (operations page replays)
+```
+
+- Every event has an id (`eid`); the DO drops an id it has applied in the last 7 days, so the WAL,
+  the DLQ and the replays can redeliver freely.
+- The ingest splits contact data off the event: clear emails, phones and names go only to the
+  `registry` queue, consumed by the core into the workspace registry (`crm_identity_hashes`,
+  contacts, the compact web journey on the contact timeline). The `analytics` queue, the DO and the
+  R2 archive see their SHA-256 hashes. Form traits matching contact fields are dropped from the
+  visitor traits.
+- The DO keeps raw rows for the site's retention (30 to 395 days, default 90); R2 keeps the
+  archive from ingest on.
+- Sites created before this pipeline stored clear values. On boot each `AnalyticsDO` converts them
+  page by page (`store/legacy.ts`: identity keys and blacklist, visitor email, name and contact
+  traits, payment emails), then marks `analytics_meta.legacy_hashed`. The core indexes the
+  contacts that already existed in `crm_identity_hashes` through
+  `analytics.backfillIdentityHashes`, called by the sync until it reports `done`.
+- Per-site neutral paths (`/<dir>/<name>` for events and the cookie mode, `/<dir>/<name>.js` for
+  the script) look like landing page paths. The edge takes them only when the directory contains a
+  digit (`SCRIPT_PATH_RE`) and, for the mode `GET`, only with `?site=`; anything else goes on to the
+  landing pages, forms and the page catch-all.
+- A customer proxy forwards the visitor IP, host and geo in `x-amb-*` headers, trusted only with the
+  site's proxy key.
 
 ## Development and tests
 

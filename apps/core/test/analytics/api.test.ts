@@ -65,7 +65,10 @@ describe('analytics sites', () => {
     expect(String(res.body['secret'])).toMatch(new RegExp(`^amb_sk_${siteId}\\.`));
     const snippet = res.body['snippet'] as Record<string, string>;
     expect(snippet['html']).toContain(`data-site="${siteId}"`);
-    expect(snippet['html']).toContain('src="https://t.acme.test/s.js"');
+    expect(snippet['html']).toMatch(/src="https:\/\/t\.acme\.test\/[a-z0-9]{8}\/[a-z]+\.js"/);
+    const proxy = res.body['snippet'] as unknown as { proxy: Record<string, string> };
+    expect(proxy.proxy['path']).toMatch(/^\/[a-z0-9]{8}\/$/);
+    expect(proxy.proxy['nginx']).toContain('X-SA-Forwarded-For');
     expect(snippet['html']).toContain('window.amable');
     expect(snippet['server_endpoint']).toBe('https://t.acme.test/e/server');
   });
@@ -86,6 +89,24 @@ describe('analytics sites', () => {
     ).toBe(422);
   });
 
+  it('reads and toggles the identity merge mechanisms, ip_ua off by default', async () => {
+    const read = await viewer.get(`${BASE}/sites/${siteId}/identity-settings`);
+    expect(read.body).toEqual({ email: true, phone: true, session: true, ip_ua: false });
+    expect(
+      (await viewer.patch(`${BASE}/sites/${siteId}/identity-settings`, { ip_ua: true })).status,
+    ).toBe(403);
+    const on = await owner.patch(`${BASE}/sites/${siteId}/identity-settings`, { ip_ua: true });
+    expect(on.body).toMatchObject({ ip_ua: true, email: true });
+    expect(
+      (await owner.patch(`${BASE}/sites/${siteId}/identity-settings`, { other: true })).status,
+    ).toBe(422);
+    const path = await owner.patch(`${BASE}/sites/${siteId}`, { script_path: 'abcdef12/main' });
+    expect(path.body['script_path']).toBe('abcdef12/main');
+    expect((await owner.patch(`${BASE}/sites/${siteId}`, { script_path: '../x' })).status).toBe(
+      422,
+    );
+  });
+
   it('lists, reads, updates, rolls the secret and serves the snippet', async () => {
     const list = await viewer.get(`${BASE}/sites`);
     expect(list.status).toBe(200);
@@ -97,7 +118,7 @@ describe('analytics sites', () => {
     });
     expect(patched.body).toMatchObject({ cookieless: true, retention_days: 90 });
     const snippet = await viewer.get(`${BASE}/sites/${siteId}/snippet`);
-    expect(String(snippet.body['html'])).toContain('/s.cookieless.js');
+    expect(String(snippet.body['html'])).toMatch(/\/[a-z0-9]{8}\/[a-z]+-l\.js"/);
     const noStepUp = await owner.post(`${BASE}/sites/${siteId}/secret`);
     expect(noStepUp.status).toBe(403);
     expect(noStepUp.body['error']).toBe('step_up_required');
@@ -234,7 +255,10 @@ describe('without the binding', () => {
     const share = await viewer.get(`/api/public/analytics/not-a-token`);
     h.env.ANALYTICS = saved;
     expect(sites.status).toBe(503);
-    expect(sites.body).toMatchObject({ error: 'analytics_unavailable', reason: 'edge_unreachable' });
+    expect(sites.body).toMatchObject({
+      error: 'analytics_unavailable',
+      reason: 'edge_unreachable',
+    });
     expect(overview.status).toBe(503);
     expect(share.status).not.toBe(500);
   });

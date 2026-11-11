@@ -1,8 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { routePath } from 'hono/route';
-import { consumeAnalyticsBatch } from './analytics/pipeline';
+import { consumeAnalyticsBatch, consumeDeadLetters, replayPending } from './analytics/pipeline';
 import { directLinkViews, linkRoutes } from './analytics/link-routes';
-import { analyticsRoutes } from './analytics/routes';
+import { analyticsRoutes, NEUTRAL_EVENT_PATH } from './analytics/routes';
 import { bookingEdgeRoutes } from './booking/routes';
 import { checkoutEdgeRoutes } from './checkout/routes';
 import { formsEdgeRoutes } from './forms/routes';
@@ -23,7 +23,10 @@ export const app = new Hono<{ Bindings: Env }>();
 const BASELINE_HEADERS: ReadonlyArray<[string, string]> = [
   ['x-content-type-options', 'nosniff'],
   ['referrer-policy', 'strict-origin-when-cross-origin'],
-  ['permissions-policy', 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()'],
+  [
+    'permissions-policy',
+    'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()',
+  ],
 ];
 
 /**
@@ -54,8 +57,9 @@ app.use('*', async (c, next) => {
 /** Dedicated shortlink hostnames: `/<key>` redirects, everything else 404 (`/health` passes). */
 app.use('*', shortlinkHostMiddleware);
 
-/** Web analytics: `POST /e`, `POST /e/server`, tracker scripts `/s.js` and variants. */
+/** Web analytics: `POST /e` (or the neutral `/<dir>/<name>`), `POST /e/server`, tracker scripts. */
 app.use('/e', directLinkViews);
+app.use(NEUTRAL_EVENT_PATH, directLinkViews);
 app.route('/', analyticsRoutes);
 
 /** Funnel tracking links `/go/…`, action links `/a/:n`, postbacks `/pb`, `/pb/event`. */
@@ -89,7 +93,11 @@ function routePattern(c: Context<{ Bindings: Env }>): string | null {
 }
 
 app.onError((error, c) => {
-  const report = reportEdgeError(c.env, error, { source: 'edge', module: 'edge', route: routePattern(c) });
+  const report = reportEdgeError(c.env, error, {
+    source: 'edge',
+    module: 'edge',
+    route: routePattern(c),
+  });
   try {
     c.executionCtx.waitUntil(report);
   } catch {
@@ -99,18 +107,34 @@ app.onError((error, c) => {
 });
 
 const handler = {
-  fetch: (request, env, ctx) => httpsRedirect(request, env.ENVIRONMENT) ?? app.fetch(request, env, ctx),
+  fetch: (request, env, ctx) =>
+    httpsRedirect(request, env.ENVIRONMENT) ?? app.fetch(request, env, ctx),
 
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     // `amable-analytics` on installations made by the managed installer (shared accounts).
     const queue = batch.queue.replace(/^amable-/, '');
-    if (queue === 'analytics') {
+    if (queue === 'analytics-dlq') {
       await withEdgeErrorReporting(env, { source: 'queue', module: queue }, () =>
+        consumeDeadLetters(batch as MessageBatch<AnalyticsMessage>, env),
+      );
+      return;
+    }
+    if (/^analytics(-\d+)?$/.test(queue)) {
+      await withEdgeErrorReporting(env, { source: 'queue', module: 'analytics' }, () =>
         consumeAnalyticsBatch(batch as MessageBatch<AnalyticsMessage>, env),
       );
       return;
     }
     batch.ackAll();
+  },
+
+  /** Replays parked WAL segments (producer fallback, DLQ) into the site DOs. */
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    await withEdgeErrorReporting(env, { source: 'cron', module: 'analytics-replay' }, async () => {
+      const result = await replayPending(env, Date.now());
+      if (result.replayed + result.failed + result.stale > 0)
+        console.log('analytics replay', result);
+    });
   },
 } satisfies ExportedHandler<Env>;
 

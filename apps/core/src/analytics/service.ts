@@ -1,3 +1,6 @@
+import { callCrm } from '../crm/api/core';
+import { proxyRecipes } from './snippets';
+import { seedSiteSuppressions } from './suppressions';
 import {
   ANALYTICS_FILTER_DIMENSIONS,
   type AnalyticsFilter,
@@ -16,6 +19,7 @@ import {
   newSiteId,
   newSiteKey,
   newSiteSecret,
+  proxyKeyFor,
   siteStub,
   SITE_ID_RE,
   tenantSitesStub,
@@ -62,18 +66,29 @@ export function namespace(c: Ctx): AnalyticsNamespace {
   return ns;
 }
 
-export function snippetFor(site: Pick<Site, 'id' | 'cookieless'>, origin: string): SiteSnippet {
+export function snippetFor(
+  site: Pick<Site, 'id' | 'cookieless' | 'script_path'>,
+  origin: string,
+  proxyKey: string | null = null,
+): SiteSnippet {
+  const base = `${origin}/${site.script_path}`;
   const scripts = {
-    default: `${origin}/s.js`,
-    cookieless: `${origin}/s.cookieless.js`,
-    hash: `${origin}/s.hash.js`,
+    default: `${base}.js`,
+    cookieless: `${base}-l.js`,
+    hash: `${base}-h.js`,
   };
   const src = site.cookieless ? scripts.cookieless : scripts.default;
   const html = [
     '<script>window.amable=window.amable||function(){(window.amable.q=window.amable.q||[]).push(arguments)};</script>',
     `<script defer data-site="${site.id}" src="${src}"></script>`,
   ].join('\n');
-  return { site_id: site.id, html, scripts, server_endpoint: `${origin}/e/server` };
+  return {
+    site_id: site.id,
+    html,
+    scripts,
+    server_endpoint: `${origin}/e/server`,
+    proxy: proxyRecipes(site, origin, proxyKey),
+  };
 }
 
 /** Site of the verified tenant; any other site (or a deleted one) is a 404. */
@@ -119,8 +134,21 @@ export async function createSite(c: Ctx, input: CreateSiteInput): Promise<SiteWi
     attributionModel: input.attribution_model,
     secretHash: await sha256Hex(secret),
   });
+  await seedSiteSuppressions(
+    (op, input) => callCrm(c, op as 'analytics.listSuppressions', input as never) as never,
+    ns,
+    siteId,
+  );
   await tenantSitesStub(ns, tenantId).indexAdd(siteId);
-  return { site: record.site, secret, snippet: snippetFor(record.site, edgeOrigin(c.env)) };
+  return {
+    site: record.site,
+    secret,
+    snippet: snippetFor(
+      record.site,
+      edgeOrigin(c.env),
+      await proxyKeyFor(c.env.EDGE_GATEWAY_SECRET, record.site.id),
+    ),
+  };
 }
 
 export async function updateSite(c: Ctx, siteId: string, patch: UpdateSiteInput): Promise<Site> {
@@ -148,7 +176,8 @@ export async function rollSecret(c: Ctx, siteId: string): Promise<string> {
 }
 
 export async function siteSnippet(c: Ctx, siteId: string): Promise<SiteSnippet> {
-  return snippetFor((await siteRecord(c, siteId)).site, edgeOrigin(c.env));
+  const { site } = await siteRecord(c, siteId);
+  return snippetFor(site, edgeOrigin(c.env), await proxyKeyFor(c.env.EDGE_GATEWAY_SECRET, site.id));
 }
 
 // --------------------------------------------------------------------- queries
@@ -196,7 +225,9 @@ export function rangeOf(c: Ctx, params: AnalyticsQueryParams): AnalyticsRange {
 export function unwrap<T>(result: AnalyticsResult<T>): T {
   if (result.ok) return result.value;
   const code =
-    result.error.code === 'not_found' || result.error.code === 'conflict' ? result.error.code : 'validation_failed';
+    result.error.code === 'not_found' || result.error.code === 'conflict'
+      ? result.error.code
+      : 'validation_failed';
   throw new CrmError(code, result.error.message);
 }
 
@@ -234,6 +265,11 @@ export async function createSiteKey(
 
 // -------------------------------------------------------- CRM contact labels
 
+/** Sites hold the SHA-256 of emails, never the address: a hash is no label. */
+export function clearEmail(siteEmail: string | null): string | null {
+  return siteEmail === null || /^[0-9a-f]{64}$/.test(siteEmail) ? null : siteEmail;
+}
+
 export interface ContactLabel {
   name: string | null;
   email: string | null;
@@ -243,11 +279,16 @@ export interface ContactLabel {
  * Names / emails of linked CRM contacts (visitors identified by forms or email
  * clicks often have no identify traits). Empty when the caller cannot read contacts.
  */
-export async function contactLabels(c: Ctx, ids: ReadonlyArray<string | null>): Promise<Map<string, ContactLabel>> {
+export async function contactLabels(
+  c: Ctx,
+  ids: ReadonlyArray<string | null>,
+): Promise<Map<string, ContactLabel>> {
   const unique = [...new Set(ids.filter((id): id is string => id !== null))];
   const out = new Map<string, ContactLabel>();
   if (unique.length === 0 || !getTenant(c).can('contacts:read')) return out;
-  const result = (await tenantDb(c).crm('analytics.contactsBrief', actorOf(c), { ids: unique })) as CrmResult<
+  const result = (await tenantDb(c).crm('analytics.contactsBrief', actorOf(c), {
+    ids: unique,
+  })) as CrmResult<
     Array<{ id: string; name: string | null; email: string | null; deleted: boolean }>
   >;
   if (!result.ok) return out;

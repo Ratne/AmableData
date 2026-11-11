@@ -28,3 +28,16 @@ export async function cookielessVisitorId(
   const digest = await sha256Hex(`${salt}\n${siteId}\n${ip}\n${userAgent}`);
   return `h${digest.slice(0, 32)}`;
 }
+
+/**
+ * Same-day fingerprint of a cookie visitor (IP + user agent) for the optional
+ * `ip_ua` merge: salted like the cookieless ids, so it dies with the salt.
+ */
+export async function ipUaHash(
+  salt: string,
+  siteId: string,
+  ip: string,
+  userAgent: string,
+): Promise<string> {
+  return (await sha256Hex(`ip_ua\n${salt}\n${siteId}\n${ip}\n${userAgent}`)).slice(0, 32);
+}

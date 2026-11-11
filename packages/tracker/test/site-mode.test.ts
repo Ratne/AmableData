@@ -4,17 +4,23 @@ import type { EventPayload } from '../src/protocol';
 import { boot } from '../src/tracker';
 import { cookieMap } from './helpers';
 
-function page(answer: () => Promise<Response>, cookies: string[] = []) {
+function page(
+  answer: () => Promise<Response>,
+  cookies: string[] = [],
+  src = 'https://t.example.com/s.js',
+) {
   const dom = new JSDOM(
-    '<!doctype html><html><head><script data-site="site_test" src="https://t.example.com/s.js"></script></head><body></body></html>',
+    `<!doctype html><html><head><script data-site="site_test" src="${src}"></script></head><body></body></html>`,
     { url: 'https://www.example.com/pricing', pretendToBeVisual: true },
   );
   const win = dom.window as unknown as Window;
   for (const c of cookies) win.document.cookie = c;
   const lookups: string[] = [];
+  const credentials: Array<string | undefined> = [];
   Object.assign(win, {
-    fetch: (url: string) => {
+    fetch: (url: string, init?: RequestInit) => {
       lookups.push(url);
+      credentials.push(init?.credentials);
       return answer();
     },
   });
@@ -22,7 +28,7 @@ function page(answer: () => Promise<Response>, cookies: string[] = []) {
   const transport = (_endpoint: string, body: string) => {
     sent.push(JSON.parse(body) as EventPayload);
   };
-  return { win, lookups, sent, transport };
+  return { win, lookups, credentials, sent, transport };
 }
 
 const json = (body: unknown) => () => Promise.resolve(new Response(JSON.stringify(body)));
@@ -35,7 +41,9 @@ describe('standard build on a cookieless site', () => {
     const ready = boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
     (p.win as unknown as { amable: (...a: unknown[]) => void }).amable('goal', 'signup');
     await ready;
-    expect(p.lookups).toEqual(['https://t.example.com/e?site=site_test']);
+    expect(p.lookups).toEqual([
+      'https://t.example.com/e?site=site_test&vid=11111111-1111-4111-8111-111111111111',
+    ]);
     expect(Object.keys(cookieMap(p.win)).filter((k) => k.startsWith('amb_'))).toEqual([]);
     expect(p.sent.map((e) => [e.type, e.cl, e.vid])).toEqual([
       ['pageview', 1, undefined],
@@ -61,5 +69,61 @@ describe('standard build on a cookieless site', () => {
     await boot(p.win, { cookieless: true, hashRouting: false }, p.transport);
     expect(p.lookups).toEqual([]);
     expect(p.sent[0]?.cl).toBe(1);
+  });
+});
+
+describe('server-set visitor cookie on the tracking domain', () => {
+  const VID = '22222222-2222-4222-8222-222222222222';
+
+  it('a same-site tracking domain is asked with credentials and restores a lost id', async () => {
+    const p = page(json({ cookieless: false, vid: VID }));
+    await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+    expect(p.credentials).toEqual(['include']);
+    expect(p.lookups).toEqual(['https://t.example.com/e?site=site_test']);
+    expect(cookieMap(p.win).amb_vid).toBe(VID);
+    expect(p.sent[0]?.vid).toBe(VID);
+  });
+
+  it('the script cookie wins over the server one', async () => {
+    const own = '33333333-3333-4333-8333-333333333333';
+    const p = page(json({ cookieless: false, vid: VID }), [
+      `amb_vid=${own}; path=/; domain=example.com`,
+    ]);
+    await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+    expect(p.sent[0]?.vid).toBe(own);
+  });
+
+  it('another site domain is asked without credentials nor id', async () => {
+    const p = page(json({ cookieless: false, vid: VID }), [], 'https://cdn.other.net/s.js');
+    await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+    expect(p.credentials).toEqual(['omit']);
+    expect(p.lookups).toEqual(['https://cdn.other.net/e?site=site_test']);
+    expect(cookieMap(p.win).amb_vid).not.toBe(VID);
+  });
+});
+
+describe('neutral script path', () => {
+  it('asks the site mode and posts events on /<dir>/<name> of the script', async () => {
+    const p = page(json({ cookieless: false }), [], 'https://t.example.com/k3x9ab2q/app.js');
+    const endpoints: string[] = [];
+    const ready = boot(p.win, { cookieless: false, hashRouting: false }, (endpoint, body) => {
+      endpoints.push(endpoint);
+      p.transport(endpoint, body);
+    });
+    await ready;
+    expect(p.lookups[0]).toMatch(/^https:\/\/t\.example\.com\/k3x9ab2q\/app\?site=site_test/);
+    expect(endpoints[0]).toBe('https://t.example.com/k3x9ab2q/app');
+  });
+
+  it('keeps /e for the classic script names and data-api wins', async () => {
+    const p = page(json({ cookieless: false }), [], 'https://t.example.com/s.cookieless.js');
+    await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+    expect(p.lookups[0]).toMatch(/^https:\/\/t\.example\.com\/e\?/);
+  });
+
+  it('keeps /e for a self-hosted classic bundle under a word directory', async () => {
+    const p = page(json({ cookieless: false }), [], 'https://www.example.com/static/sa.js');
+    await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+    expect(p.lookups[0]).toMatch(/^https:\/\/www\.example\.com\/e\?/);
   });
 });

@@ -355,9 +355,9 @@ describe('attribution report contracts', () => {
 
   it('applies performance query defaults and bounds the window', () => {
     const q = performanceQuerySchema.parse({ site_id: 'st_1', from: '2026-10-01', to: '2026-10-15' });
-    expect(q).toMatchObject({ model: 'last_click', window_days: 7, group_by: 'source', basis: 'click_date', filters: [] });
+    expect(q).toMatchObject({ model: 'last_click', window_days: 30, group_by: 'source', basis: 'click_date', filters: [] });
     expect(performanceQuerySchema.parse({ site_id: 'st_1', from: '2026-10-01', to: '2026-10-15', window_days: '30' }).window_days).toBe(30);
-    expect(performanceQuerySchema.safeParse({ site_id: 'st_1', from: '2026-10-01', to: '2026-10-15', window_days: 31 }).success).toBe(false);
+    expect(performanceQuerySchema.safeParse({ site_id: 'st_1', from: '2026-10-01', to: '2026-10-15', window_days: 366 }).success).toBe(false);
     expect(performanceQuerySchema.safeParse({ site_id: 'st_1', from: '2026-10-01', to: '2026-10-15', model: 'last_touch' }).success).toBe(false);
   });
 

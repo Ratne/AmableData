@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { analyticsMigrations } from '../src/analytics/migrations';
 import type { ArchiveSink } from '../src/analytics/store/index';
 import { createStore, ev, siteInit, T0 } from './helpers';
+import { sha256Hex } from '../src/analytics/store/identity';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -242,7 +243,9 @@ describe('session aggregation', () => {
     const visitor = db.all<{ user_id: string; email: string; traits: string }>(
       `SELECT user_id, email, traits FROM visitors`,
     );
-    expect(visitor).toEqual([{ user_id: 'u1', email: 'a@b.co', traits: '{"plan":"pro"}' }]);
+    expect(visitor).toEqual([
+      { user_id: 'u1', email: sha256Hex('a@b.co'), traits: '{"plan":"pro"}' },
+    ]);
   });
 });
 
@@ -338,7 +341,9 @@ describe('rollups and queries', () => {
     ]);
     // Daily rows are rebuilt when a daily series is read, not on every ingest batch.
     expect(db.all(`SELECT * FROM rollup_daily`)).toEqual([]);
-    expect(db.all(`SELECT grain, key FROM rollup_dirty`)).toEqual([{ grain: 'day', key: '2026-10-15' }]);
+    expect(db.all(`SELECT grain, key FROM rollup_dirty`)).toEqual([
+      { grain: 'day', key: '2026-10-15' },
+    ]);
     store.timeseries({ from: '2026-10-15', to: '2026-10-16' }, 'day');
     expect(db.all(`SELECT day, visitors, sessions, pageviews FROM rollup_daily`)).toEqual([
       { day: '2026-10-15', visitors: 3, sessions: 3, pageviews: 5 },
@@ -385,6 +390,24 @@ describe('rollups and queries', () => {
       ok: false,
       error: { code: 'invalid_range' },
     });
+  });
+
+  it('reconciles dirty hours off the ingest path, but always before a read', () => {
+    const clock = { now: T0 };
+    const { store, db } = createStore(clock);
+    store.initSite(siteInit());
+    const hourRow = () => db.all<{ pageviews: number }>(`SELECT pageviews FROM rollup_hourly`);
+    store.ingest([ev({ eid: 't:1' })], []);
+    expect(hourRow()).toEqual([{ pageviews: 1 }]);
+    clock.now = T0 + 1_000;
+    store.ingest([ev({ eid: 't:2', vid: 'v2', sid: 's2', ts: T0 + 1_000 })], []);
+    expect(hourRow()).toEqual([{ pageviews: 1 }]);
+    const hourly = store.timeseries(
+      { from: '2026-10-15T10:00:00Z', to: '2026-10-15T11:00:00Z' },
+      'hour',
+    );
+    expect(hourly.ok && hourly.value.points.map((p) => p.pageviews)).toEqual([2]);
+    expect(hourRow()).toEqual([{ pageviews: 2 }]);
   });
 
   it('timeseries from rollups and from raw rows (filters, other zones)', () => {
@@ -511,17 +534,27 @@ describe('rollups and queries', () => {
 });
 
 describe('retention', () => {
-  it('archives raw rows older than the retention to the sink, then purges them', async () => {
-    const clock = { now: T0 };
-    const { store, db } = createStore(clock);
+  it('refuses events older than the hot window (age barrier)', () => {
+    const { store, db } = createStore({ now: T0 });
     store.initSite(siteInit({ retentionDays: 30 }));
-    store.ingest(
+    const result = store.ingest(
       [
-        ev({ ts: T0 - 40 * DAY, path: '/old' }),
-        ev({ vid: 'v2', sid: 's2', ts: T0 - DAY, path: '/new' }),
+        ev({ ts: T0 - 31 * DAY, path: '/late' }),
+        ev({ vid: 'v2', sid: 's2', ts: T0 - 29 * DAY, path: '/fresh' }),
       ],
       [],
     );
+    expect(result).toMatchObject({ ingested: 1, skipped: 1 });
+    expect(db.all<{ path: string }>(`SELECT path FROM pageviews`)).toEqual([{ path: '/fresh' }]);
+  });
+
+  it('archives raw rows older than the retention to the sink, then purges them', async () => {
+    const clock = { now: T0 - 40 * DAY };
+    const { store, db } = createStore(clock);
+    store.initSite(siteInit({ retentionDays: 30 }));
+    store.ingest([ev({ ts: T0 - 40 * DAY, path: '/old' })], []);
+    clock.now = T0;
+    store.ingest([ev({ vid: 'v2', sid: 's2', ts: T0 - DAY, path: '/new' })], []);
     const puts: Array<{ key: string; body: string }> = [];
     const sink: ArchiveSink = {
       put(key, body) {

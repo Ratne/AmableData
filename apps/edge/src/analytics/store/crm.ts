@@ -1,3 +1,4 @@
+import { claimEvent } from './dedupe';
 import type { RealtimeEvent } from '@amable/api-types';
 import { first, type SqlDb } from '../db/sql';
 import { afterGoal, markDirty, newBatchState, refundPayment, type BatchState } from './ingest';
@@ -66,8 +67,13 @@ export function crmTransactionId(paymentId: string): string {
   return `crm_${paymentId}`;
 }
 
+/** Suppressed visitors count as unknown: CRM facts never attach to a tombstone. */
+const LIVE = `id NOT IN (SELECT vid FROM suppressed_visitors)`;
+
 function visitorExists(db: SqlDb, id: string): boolean {
-  return first<{ id: string }>(db, `SELECT id FROM visitors WHERE id = ?`, id) !== undefined;
+  return (
+    first<{ id: string }>(db, `SELECT id FROM visitors WHERE id = ? AND ${LIVE}`, id) !== undefined
+  );
 }
 
 /** Most recently seen visitor of a contact in this site. */
@@ -75,7 +81,7 @@ function latestVisitorOf(db: SqlDb, contactId: string): string | null {
   return (
     first<{ id: string }>(
       db,
-      `SELECT id FROM visitors WHERE contact_id = ? ORDER BY last_seen DESC, id LIMIT 1`,
+      `SELECT id FROM visitors WHERE contact_id = ? AND ${LIVE} ORDER BY last_seen DESC, id LIMIT 1`,
       contactId,
     )?.id ?? null
   );
@@ -103,7 +109,11 @@ function linkVisitor(
   source: CrmLinkSource,
   ts: number,
 ): boolean {
-  const row = first<{ contact_id: string | null }>(db, `SELECT contact_id FROM visitors WHERE id = ?`, visitorId);
+  const row = first<{ contact_id: string | null }>(
+    db,
+    `SELECT contact_id FROM visitors WHERE id = ? AND ${LIVE}`,
+    visitorId,
+  );
   if (row === undefined) return false;
   if (row.contact_id === contactId) return false;
   db.run(
@@ -113,7 +123,11 @@ function linkVisitor(
     source,
     visitorId,
   );
-  db.run(`UPDATE payments SET visitor_id = ? WHERE contact_id = ? AND visitor_id IS NULL`, visitorId, contactId);
+  db.run(
+    `UPDATE payments SET visitor_id = ? WHERE contact_id = ? AND visitor_id IS NULL`,
+    visitorId,
+    contactId,
+  );
   return true;
 }
 
@@ -157,7 +171,14 @@ function applyPayment(
       JSON.stringify({ transaction_id: f.transactionId, order_id: f.orderId ?? '' }),
     );
     // CRM payments already reach automations through the outbox: alerts only.
-    afterGoal(db, out, { vid: visitor, ts: f.ts, name: 'payment', path: null, hostname: null, data: null }, null, null, false);
+    afterGoal(
+      db,
+      out,
+      { vid: visitor, ts: f.ts, name: 'payment', path: null, hostname: null, data: null },
+      null,
+      null,
+      false,
+    );
   }
   if (session !== null) {
     db.run(
@@ -169,7 +190,11 @@ function applyPayment(
   return true;
 }
 
-function applyRefund(db: SqlDb, f: Extract<CrmFact, { kind: 'refund' }>, currency: string): boolean {
+function applyRefund(
+  db: SqlDb,
+  f: Extract<CrmFact, { kind: 'refund' }>,
+  currency: string,
+): boolean {
   const inserted = db.all<{ refund_key: string }>(
     `INSERT INTO payment_refunds (refund_key, transaction_id, order_id, amount_minor, ts) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (refund_key) DO NOTHING RETURNING refund_key`,
@@ -181,7 +206,11 @@ function applyRefund(db: SqlDb, f: Extract<CrmFact, { kind: 'refund' }>, currenc
   );
   if (inserted.length === 0) return false;
   if (f.transactionId !== null) {
-    const known = first<{ id: number }>(db, `SELECT id FROM payments WHERE transaction_id = ?`, f.transactionId);
+    const known = first<{ id: number }>(
+      db,
+      `SELECT id FROM payments WHERE transaction_id = ?`,
+      f.transactionId,
+    );
     if (known !== undefined) {
       refundPayment(db, f.transactionId, f.amountMinor, currency);
       return true;
@@ -210,24 +239,38 @@ function applyGoal(db: SqlDb, f: Extract<CrmFact, { kind: 'goal' }>, out: BatchS
     f.name,
     f.params === null ? null : JSON.stringify(f.params),
   );
-  if (session !== null) db.run(`UPDATE sessions SET goals = goals + 1, bounce = 0 WHERE id = ?`, session);
+  if (session !== null)
+    db.run(`UPDATE sessions SET goals = goals + 1, bounce = 0 WHERE id = ?`, session);
   markDirty(db, f.ts);
   // Lifecycle goals come from outbox events the engine already receives: alerts only.
-  afterGoal(db, out, { vid: f.visitorId, ts: f.ts, name: f.name, path: null, hostname: null, data: f.params }, null, null, false);
+  afterGoal(
+    db,
+    out,
+    { vid: f.visitorId, ts: f.ts, name: f.name, path: null, hostname: null, data: f.params },
+    null,
+    null,
+    false,
+  );
   return true;
 }
 
-export function applyCrmFacts(db: SqlDb, facts: readonly CrmFact[], currency: string): CrmApplyResult {
+export function applyCrmFacts(
+  db: SqlDb,
+  facts: readonly CrmFact[],
+  currency: string,
+): CrmApplyResult {
   return db.transaction(() => {
     const out = newBatchState();
-    const result: CrmApplyResult = { applied: 0, duplicates: 0, skipped: 0, linked: [], pending: false, live: out.live };
+    const result: CrmApplyResult = {
+      applied: 0,
+      duplicates: 0,
+      skipped: 0,
+      linked: [],
+      pending: false,
+      live: out.live,
+    };
     for (const f of [...facts].sort((a, b) => a.ts - b.ts)) {
-      const fresh = db.all<{ eid: string }>(
-        `INSERT INTO ingested_events (eid, ts) VALUES (?, ?) ON CONFLICT (eid) DO NOTHING RETURNING eid`,
-        `crm:${f.id}`,
-        f.ts,
-      );
-      if (fresh.length === 0) {
+      if (!claimEvent(db, `crm:${f.id}`, Date.now())) {
         result.duplicates += 1;
         continue;
       }
@@ -235,7 +278,13 @@ export function applyCrmFacts(db: SqlDb, facts: readonly CrmFact[], currency: st
       switch (f.kind) {
         case 'link':
           ok = linkVisitor(db, f.visitorId, f.contactId, f.source, f.ts);
-          if (ok) result.linked.push({ visitorId: f.visitorId, contactId: f.contactId, source: f.source, ts: f.ts });
+          if (ok)
+            result.linked.push({
+              visitorId: f.visitorId,
+              contactId: f.contactId,
+              source: f.source,
+              ts: f.ts,
+            });
           break;
         case 'payment':
           ok = applyPayment(db, f, currency, out);
@@ -262,20 +311,59 @@ export function applyCrmFacts(db: SqlDb, facts: readonly CrmFact[], currency: st
   });
 }
 
-/** Which of these visitor ids exist in the site. */
+/** Which of these visitor ids exist in the site (suppressed ones do not). */
 export function knownVisitors(db: SqlDb, ids: readonly string[]): string[] {
   if (ids.length === 0) return [];
   return db
-    .all<{ id: string }>(`SELECT id FROM visitors WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(ids))
+    .all<{ id: string }>(
+      `SELECT id FROM visitors WHERE id IN (SELECT value FROM json_each(?)) AND ${LIVE}`,
+      JSON.stringify(ids),
+    )
     .map((r) => r.id);
+}
+
+/** Payment already recorded with this transaction id (any source); null when none. */
+export function paymentOf(db: SqlDb, transactionId: string): { visitorId: string | null } | null {
+  const row = first<{ visitor_id: string | null }>(
+    db,
+    `SELECT visitor_id FROM payments WHERE transaction_id = ?`,
+    transactionId,
+  );
+  return row === undefined ? null : { visitorId: row.visitor_id };
+}
+
+/** Last activity of the given visitors (unknown and suppressed ids are omitted). */
+export function visitorsLastSeen(
+  db: SqlDb,
+  ids: readonly string[],
+): Array<{ visitorId: string; lastSeen: number }> {
+  if (ids.length === 0) return [];
+  return db.all<{ visitorId: string; lastSeen: number }>(
+    `SELECT id AS visitorId, last_seen AS lastSeen FROM visitors
+     WHERE id IN (SELECT value FROM json_each(?)) AND ${LIVE}`,
+    JSON.stringify(ids),
+  );
 }
 
 // ---------------------------------------------------------------- core queues
 
+/**
+ * Identity to resolve (seam contract, additive): `email` (clear, legacy) and
+ * `contact_token` keep their meaning; `email_hash` / `phone_hash` carry the
+ * SHA-256 of the normalized value (the site holds no clear contact data).
+ */
+export type IdentityKind = 'email' | 'contact_token' | 'email_hash' | 'phone_hash';
+const IDENTITY_KINDS: ReadonlySet<string> = new Set<IdentityKind>([
+  'email',
+  'contact_token',
+  'email_hash',
+  'phone_hash',
+]);
+
 export interface IdentityItem {
   id: number;
   visitorId: string;
-  kind: 'email' | 'contact_token';
+  kind: IdentityKind;
   value: string;
   ts: number;
 }
@@ -341,7 +429,7 @@ export function pullCoreWork(db: SqlDb, limit: number): CoreWork {
     .map((r) => ({
       id: r.id,
       visitorId: r.visitor_id,
-      kind: r.kind === 'email' ? ('email' as const) : ('contact_token' as const),
+      kind: (IDENTITY_KINDS.has(r.kind) ? r.kind : 'contact_token') as IdentityKind,
       value: r.value,
       ts: r.ts,
     }));
@@ -371,11 +459,22 @@ export function pullCoreWork(db: SqlDb, limit: number): CoreWork {
       ts: r.ts,
     }));
   const alerts = db
-    .all<{ id: number; alert_id: string; goal: string; visitor_id: string | null; test: number; ts: number }>(
-      `SELECT * FROM alert_queue ORDER BY id LIMIT ?`,
-      limit,
-    )
-    .map((r) => ({ id: r.id, alertId: r.alert_id, goal: r.goal, visitorId: r.visitor_id, test: r.test === 1, ts: r.ts }));
+    .all<{
+      id: number;
+      alert_id: string;
+      goal: string;
+      visitor_id: string | null;
+      test: number;
+      ts: number;
+    }>(`SELECT * FROM alert_queue ORDER BY id LIMIT ?`, limit)
+    .map((r) => ({
+      id: r.id,
+      alertId: r.alert_id,
+      goal: r.goal,
+      visitorId: r.visitor_id,
+      test: r.test === 1,
+      ts: r.ts,
+    }));
   const ids = [...new Set(alerts.map((a) => a.alertId))];
   const alertTargets =
     ids.length === 0
@@ -390,13 +489,18 @@ export function pullCoreWork(db: SqlDb, limit: number): CoreWork {
             webhook_url: string | null;
             webhook_secret: string | null;
             last_triggered_at: number | null;
-          }>(`SELECT * FROM alerts WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(ids))
+          }>(
+            `SELECT * FROM alerts WHERE id IN (SELECT value FROM json_each(?))`,
+            JSON.stringify(ids),
+          )
           .map((a) => ({
             id: a.id,
             name: a.name,
             goal: a.goal,
             enabled: a.enabled === 1,
-            emailRecipients: (JSON.parse(a.email_recipients) as unknown[]).filter((x): x is string => typeof x === 'string'),
+            emailRecipients: (JSON.parse(a.email_recipients) as unknown[]).filter(
+              (x): x is string => typeof x === 'string',
+            ),
             webhookUrl: a.webhook_url,
             webhookSecret: a.webhook_secret,
             lastTriggeredAt: a.last_triggered_at,
@@ -411,7 +515,10 @@ export function ackCoreWork(
   db.transaction(() => {
     const del = (table: string, ids: number[] | undefined): void => {
       if (ids === undefined || ids.length === 0) return;
-      db.run(`DELETE FROM ${table} WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(ids));
+      db.run(
+        `DELETE FROM ${table} WHERE id IN (SELECT value FROM json_each(?))`,
+        JSON.stringify(ids),
+      );
     };
     del('identity_queue', ack.identities);
     del('automation_queue', ack.automation);
@@ -441,6 +548,7 @@ export function recordAlertDelivery(
 }
 
 export function pendingCoreWork(db: SqlDb): boolean {
-  const n = (table: string): number => first<{ n: number }>(db, `SELECT COUNT(*) AS n FROM ${table}`)?.n ?? 0;
+  const n = (table: string): number =>
+    first<{ n: number }>(db, `SELECT COUNT(*) AS n FROM ${table}`)?.n ?? 0;
   return n('identity_queue') + n('automation_queue') + n('alert_queue') > 0;
 }

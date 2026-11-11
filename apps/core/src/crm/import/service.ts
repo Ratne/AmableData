@@ -187,7 +187,11 @@ export function importRows(
       } else {
         contactId = createContact(ctx, data, { lenient: true, listDelimiter: delimiter }).id;
         created += 1;
-        createdContacts.push({ id: contactId, email: mapped.primaryEmail, phone: data.phones?.[0]?.number ?? null });
+        createdContacts.push({
+          id: contactId,
+          email: mapped.primaryEmail,
+          phone: data.phones?.[0]?.number ?? null,
+        });
       }
       if (tagIds.length > 0) applyTagsToContact(ctx, contactId, tagIds);
     } catch (error) {
@@ -214,7 +218,7 @@ export function importRows(
   return { ...getImport(ctx, { id: job.id }), created_contacts: createdContacts };
 }
 
-function mergeEmails(
+export function mergeEmails(
   ctx: CrmContext,
   contactId: string,
   incoming: NonNullable<CreateContactInput['emails']>,
@@ -233,7 +237,7 @@ function mergeEmails(
   return merged;
 }
 
-function mergePhones(
+export function mergePhones(
   ctx: CrmContext,
   contactId: string,
   incoming: NonNullable<CreateContactInput['phones']>,
@@ -273,7 +277,7 @@ const ADDRESS_PARTS = [
   'country_code',
 ] as const;
 
-function mergeAddresses(
+export function mergeAddresses(
   ctx: CrmContext,
   contactId: string,
   incoming: NonNullable<CreateContactInput['addresses']>,

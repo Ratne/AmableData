@@ -125,7 +125,7 @@ export function AnalyticsSettingsPage() {
       );
     switch (tab) {
       case 'tracking':
-        return <TrackingTab tenant={tenant} site={site} />;
+        return <TrackingTab tenant={tenant} site={site} onSetupDomain={() => setTab('domains')} />;
       case 'keys':
         return <KeysTab tenant={tenant} site={site} canConfigure={permissions.configure} />;
       case 'alerts':

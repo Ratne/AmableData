@@ -1,3 +1,4 @@
+import { fakeTenantDbNamespace } from '../crm/helpers';
 import initArgon2 from '@phi-ag/argon2/node';
 import {
   createArgon2idHasher,
@@ -73,7 +74,11 @@ export async function createHarness(options: { turnstile?: TurnstileVerifier } =
     },
     turnstileSiteKey: null,
   };
-  const env = { DB: db, ENVIRONMENT: 'test' } as unknown as Env;
+  const env = {
+    DB: db,
+    ENVIRONMENT: 'test',
+    TENANT_DB: fakeTenantDbNamespace(() => clock.now),
+  } as unknown as Env;
   overrideAuthServices(() => Promise.resolve(services));
   const harness: Harness = {
     env,

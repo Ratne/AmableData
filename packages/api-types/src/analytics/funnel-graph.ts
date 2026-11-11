@@ -82,7 +82,16 @@ export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 
 /** Values the edge user-agent parser produces for `device`, `os` and `browser`. */
 export const DEVICE_TYPES = ['desktop', 'mobile', 'tablet'] as const;
-export const KNOWN_OS_NAMES = ['Windows', 'macOS', 'iOS', 'iPadOS', 'Android', 'ChromeOS', 'Linux', 'Unknown'] as const;
+export const KNOWN_OS_NAMES = [
+  'Windows',
+  'macOS',
+  'iOS',
+  'iPadOS',
+  'Android',
+  'ChromeOS',
+  'Linux',
+  'Unknown',
+] as const;
 export const KNOWN_BROWSER_NAMES = [
   'Chrome',
   'Safari',
@@ -270,15 +279,20 @@ const funnelGraphBody = {
   ip_anonymize: z.boolean().default(false),
 };
 
-function uniqueIds(graph: { nodes: { id: string }[]; edges: { id: string }[] }, ctx: z.RefinementCtx) {
+function uniqueIds(
+  graph: { nodes: { id: string }[]; edges: { id: string }[] },
+  ctx: z.RefinementCtx,
+) {
   const seen = new Set<string>();
   graph.nodes.forEach((n, i) => {
-    if (seen.has(n.id)) ctx.addIssue({ code: 'custom', message: 'duplicate node id', path: ['nodes', i, 'id'] });
+    if (seen.has(n.id))
+      ctx.addIssue({ code: 'custom', message: 'duplicate node id', path: ['nodes', i, 'id'] });
     seen.add(n.id);
   });
   const edges = new Set<string>();
   graph.edges.forEach((e, i) => {
-    if (edges.has(e.id)) ctx.addIssue({ code: 'custom', message: 'duplicate edge id', path: ['edges', i, 'id'] });
+    if (edges.has(e.id))
+      ctx.addIssue({ code: 'custom', message: 'duplicate edge id', path: ['edges', i, 'id'] });
     edges.add(e.id);
   });
 }

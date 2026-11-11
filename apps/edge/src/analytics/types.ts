@@ -62,6 +62,12 @@ export interface EnrichedEvent {
     content: string | null;
   };
   clickIds: Record<string, string> | null;
+  /** Ad ids of the tracked link (`amb_*` params filled by the platform macros). */
+  ad?: AdIds | null;
+  /** How the event reached the edge: tracking domain, shared host or reverse proxy. */
+  collector?: 'first_party' | 'third_party' | 'proxy' | null;
+  /** Salted same-day hash of IP + user agent (cookie pageviews), for the `ip_ua` merge. */
+  ipUa?: string | null;
   geo: Geo;
   device: DeviceType | null;
   browser: string | null;
@@ -84,6 +90,15 @@ export interface EnrichedEvent {
   landing?: LandingParams | null;
 }
 
+export interface AdIds {
+  campaignId: string | null;
+  adSetId: string | null;
+  adId: string | null;
+  placement: string | null;
+  keyword: string | null;
+  network: string | null;
+}
+
 interface LandingParams {
   /** SHA-256 of the normalized `he` email: the clear address is never kept. */
   emailHash: string | null;
@@ -95,6 +110,8 @@ interface LandingParams {
 
 /** A request recognised as a bot or crawler (aggregated, never a visitor). */
 export interface BotHit {
+  /** Request id (client or server event id): dedupes redeliveries. Absent on legacy messages. */
+  id?: string;
   site: string;
   ts: number;
   name: string;

@@ -1,4 +1,10 @@
-import type { AdsReport, BotsReport, SearchConsoleReport } from '@amable/api-types';
+import {
+  TRACKING_COLLECTORS,
+  type AdsReport,
+  type BotsReport,
+  type SearchConsoleReport,
+  type TrackingCoverageReport,
+} from '@amable/api-types';
 import { first, type SqlDb, type SqlValue } from '../db/sql';
 import { CRAWLER_LIST_VERSION } from '../crawlers';
 import { DAY_MS } from '../time';
@@ -8,11 +14,41 @@ import type { ResolvedRange } from './query';
 const utcDay = (ts: number): string => new Date(ts).toISOString().slice(0, 10);
 
 /** Bot and crawler traffic (UTC days): categories, bots with IP verification, pages, daily split. */
+type Collector = TrackingCoverageReport['rows'][number]['collector'];
+const toCollector = (v: string): Collector =>
+  (TRACKING_COLLECTORS as readonly string[]).includes(v) ? (v as Collector) : 'unknown';
+
+/** Sessions per browser × collector with cookie survival, identification and ad attribution. */
+export function trackingCoverageReport(db: SqlDb, r: ResolvedRange): TrackingCoverageReport {
+  const rows = db.all<
+    Omit<TrackingCoverageReport['rows'][number], 'collector'> & { collector: string }
+  >(
+    `SELECT COALESCE(s.browser, 'Unknown') AS browser, COALESCE(s.collector, 'unknown') AS collector,
+       COUNT(*) AS sessions, COUNT(DISTINCT s.visitor_id) AS visitors,
+       SUM(s.session_number > 1) AS returning_sessions,
+       COUNT(DISTINCT CASE WHEN ik.visitor_id IS NOT NULL THEN s.visitor_id END) AS identified_visitors,
+       SUM(s.click_ids IS NOT NULL OR s.ad_id IS NOT NULL OR s.ad_campaign_id IS NOT NULL) AS ad_sessions
+     FROM sessions s
+     LEFT JOIN (SELECT DISTINCT visitor_id FROM identity_keys WHERE key_type IN ('email', 'phone')) ik
+       ON ik.visitor_id = s.visitor_id
+     WHERE s.started_at >= ? AND s.started_at < ?
+     GROUP BY 1, 2 ORDER BY sessions DESC, browser LIMIT 60`,
+    r.from,
+    r.to,
+  );
+  return { rows: rows.map((row) => ({ ...row, collector: toCollector(row.collector) })) };
+}
+
 export function botsReport(db: SqlDb, r: ResolvedRange): BotsReport {
   const from = utcDay(r.from);
   const to = utcDay(r.to - 1);
   const total =
-    first<{ n: number | null }>(db, `SELECT SUM(hits) AS n FROM bot_hits WHERE day >= ? AND day <= ?`, from, to)?.n ?? 0;
+    first<{ n: number | null }>(
+      db,
+      `SELECT SUM(hits) AS n FROM bot_hits WHERE day >= ? AND day <= ?`,
+      from,
+      to,
+    )?.n ?? 0;
   const categories = db.all<{ value: string; hits: number }>(
     `SELECT category AS value, SUM(hits) AS hits FROM bot_hits WHERE day >= ? AND day <= ?
      GROUP BY category ORDER BY hits DESC, value`,
@@ -48,10 +84,18 @@ export function botsReport(db: SqlDb, r: ResolvedRange): BotsReport {
   )) {
     const d = daily.get(row.day);
     if (d === undefined) continue;
-    if (row.category === 'ai_answers' || row.category === 'training' || row.category === 'indexing') d[row.category] += row.hits;
+    if (row.category === 'ai_answers' || row.category === 'training' || row.category === 'indexing')
+      d[row.category] += row.hits;
     else d.other += row.hits;
   }
-  return { list_version: CRAWLER_LIST_VERSION, total_hits: total, categories, bots, pages, daily: [...daily.values()] };
+  return {
+    list_version: CRAWLER_LIST_VERSION,
+    total_hits: total,
+    categories,
+    bots,
+    pages,
+    daily: [...daily.values()],
+  };
 }
 
 // ------------------------------------------------------------- integrations
@@ -73,7 +117,9 @@ export function listIntegrations(db: SqlDb): IntegrationRow[] {
 }
 
 export function getIntegration(db: SqlDb, provider: IntegrationProviderId): IntegrationRow | null {
-  return first<IntegrationRow>(db, `SELECT * FROM integrations WHERE provider = ?`, provider) ?? null;
+  return (
+    first<IntegrationRow>(db, `SELECT * FROM integrations WHERE provider = ?`, provider) ?? null
+  );
 }
 
 export function saveIntegration(db: SqlDb, row: IntegrationRow): void {
@@ -122,7 +168,11 @@ export interface SearchStatRow {
 export function storeAdSpend(db: SqlDb, provider: 'meta_ads', rows: readonly AdSpendRow[]): void {
   db.transaction(() => {
     const days = [...new Set(rows.map((r) => r.day))];
-    db.run(`DELETE FROM ad_spend WHERE provider = ? AND day IN (SELECT value FROM json_each(?))`, provider, JSON.stringify(days));
+    db.run(
+      `DELETE FROM ad_spend WHERE provider = ? AND day IN (SELECT value FROM json_each(?))`,
+      provider,
+      JSON.stringify(days),
+    );
     for (const r of rows) {
       db.run(
         `INSERT INTO ad_spend (day, provider, campaign_id, campaign_name, spend_minor, currency, impressions, clicks)
@@ -143,7 +193,10 @@ export function storeAdSpend(db: SqlDb, provider: 'meta_ads', rows: readonly AdS
 export function storeSearchStats(db: SqlDb, rows: readonly SearchStatRow[]): void {
   db.transaction(() => {
     const days = [...new Set(rows.map((r) => r.day))];
-    db.run(`DELETE FROM search_stats WHERE day IN (SELECT value FROM json_each(?))`, JSON.stringify(days));
+    db.run(
+      `DELETE FROM search_stats WHERE day IN (SELECT value FROM json_each(?))`,
+      JSON.stringify(days),
+    );
     for (const r of rows) {
       db.run(
         `INSERT INTO search_stats (day, kind, key, clicks, impressions, position_weighted) VALUES (?, ?, ?, ?, ?, ?)
@@ -199,7 +252,13 @@ export function adsReport(
     if (row.campaign !== null) visitors.set(row.campaign, row.n);
   }
   const attributed = new Map<string, { revenue: number; conversions: number }>();
-  for (const [value, v] of attributeRevenue(db, { ...r, filters: [] }, 'campaign', model, currency)) {
+  for (const [value, v] of attributeRevenue(
+    db,
+    { ...r, filters: [] },
+    'campaign',
+    model,
+    currency,
+  )) {
     if (value === null) continue;
     const key = norm(value);
     const cur = attributed.get(key) ?? { revenue: 0, conversions: 0 };
@@ -210,7 +269,10 @@ export function adsReport(
   const campaigns = spend.map((c) => {
     const keys = [norm(c.campaign_name), norm(c.campaign_id)];
     const vis = Math.max(...keys.map((k) => visitors.get(k) ?? 0));
-    const att = keys.map((k) => attributed.get(k)).find((a) => a !== undefined) ?? { revenue: 0, conversions: 0 };
+    const att = keys.map((k) => attributed.get(k)).find((a) => a !== undefined) ?? {
+      revenue: 0,
+      conversions: 0,
+    };
     const customers = Math.round(att.conversions);
     return {
       campaign_id: c.campaign_id,
@@ -244,14 +306,26 @@ export function adsReport(
     )
     .map((d) => {
       const start = Date.parse(`${d.day}T00:00:00Z`);
-      const rev = attributeRevenue(db, { ...r, from: start, to: start + DAY_MS, filters: [] }, 'campaign', model, currency);
+      const rev = attributeRevenue(
+        db,
+        { ...r, from: start, to: start + DAY_MS, filters: [] },
+        'campaign',
+        model,
+        currency,
+      );
       let revenue = 0;
       for (const [value, v] of rev) if (value !== null) revenue += v.revenue;
       return { label: d.day, spend_minor: d.spend, revenue_minor: revenue };
     });
   return {
     currency,
-    totals: { ...totals, roas: totals.spend_minor === 0 ? null : Math.round((totals.revenue_minor / totals.spend_minor) * 100) / 100 },
+    totals: {
+      ...totals,
+      roas:
+        totals.spend_minor === 0
+          ? null
+          : Math.round((totals.revenue_minor / totals.spend_minor) * 100) / 100,
+    },
     campaigns,
     daily,
   };

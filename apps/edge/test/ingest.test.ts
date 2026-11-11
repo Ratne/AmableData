@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TRACKER_BUNDLES } from '@amable/tracker/bundles';
+import { Hono } from 'hono';
 import {
   clearSiteConfigCache,
   consumeAnalyticsBatch,
   localCounters,
 } from '../src/analytics/pipeline';
 import { analyticsRoutes } from '../src/analytics/routes';
-import { newSiteSecret } from '../src/analytics/rpc';
+import { newSiteSecret, proxyKeyFor } from '../src/analytics/rpc';
 import type { AnalyticsMessage } from '../src/analytics/types';
 import type { Env } from '../src/env';
 import { edgeEnv, FakeAnalyticsNamespace, FakeQueue, SITE_ID, siteInit, T0 } from './helpers';
@@ -102,6 +103,29 @@ describe('POST /e (browser)', () => {
     expect(localCounters.get(`${SITE_ID}:pageview`)).toBe(1);
   });
 
+  it('keeps the ad ids of the tracked link on the session, dropping unfilled macros', async () => {
+    const env = edgeEnv(ns);
+    await post(
+      env,
+      pageview({
+        src: {
+          utm_source: 'facebook',
+          amb_cid: '120200',
+          amb_asid: '{{adset.id}}',
+          amb_adid: '120299',
+          amb_pl: 'Feed',
+        },
+      }),
+    );
+    const range = { from: '2026-10-15', to: '2026-10-15' };
+    const ad = siteDb().breakdown(range, 'ad', 5);
+    expect(ad.ok && ad.value.rows.map((r) => r.value)).toEqual(['120299']);
+    const campaign = siteDb().breakdown(range, 'ad_campaign', 5);
+    expect(campaign.ok && campaign.value.rows.map((r) => r.value)).toEqual(['120200']);
+    const set = siteDb().breakdown(range, 'ad_set', 5);
+    expect(set.ok && set.value.rows.map((r) => r.value)).toEqual([null]);
+  });
+
   it('enqueues when the queue binding exists and the consumer batches per site', async () => {
     const queue = new FakeQueue();
     const env = edgeEnv(ns, queue);
@@ -135,6 +159,38 @@ describe('POST /e (browser)', () => {
     expect(goals.ok && goals.value.rows).toEqual([
       { value: 'signup', visitors: 1, completions: 1 },
     ]);
+  });
+
+  it('dedupes on the client event id and keeps the client time (never in the future)', async () => {
+    const queue = new FakeQueue();
+    const env = edgeEnv(ns, queue);
+    const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    await post(env, pageview({ id, at: T0 - 60_000 }));
+    await post(env, pageview({ id, at: T0 - 60_000 }));
+    await post(env, pageview({ id: 'ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee', at: T0 + 3_600_000 }));
+    const events = queue.sent.flatMap((m) => (m.kind === 'event' ? [m.event] : []));
+    expect(events.map((e) => e.eid)).toEqual([
+      `t:${id}`,
+      `t:${id}`,
+      't:ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    ]);
+    expect(events.map((e) => e.ts)).toEqual([T0 - 60_000, T0 - 60_000, T0]);
+    await consumeAnalyticsBatch(
+      {
+        queue: 'analytics',
+        messages: queue.sent.map((body, i) => ({
+          id: String(i),
+          body,
+          attempts: 1,
+          timestamp: new Date(),
+          ack: () => undefined,
+          retry: () => undefined,
+        })),
+      } as unknown as MessageBatch<AnalyticsMessage>,
+      env,
+    );
+    const ov = siteDb().overview({ from: '2026-10-15', to: '2026-10-15' });
+    expect(ov).toMatchObject({ ok: true, value: { pageviews: 2 } });
   });
 
   it('rejects foreign origins, unknown sites, bad payloads and oversize bodies', async () => {
@@ -208,6 +264,39 @@ describe('POST /e (browser)', () => {
     expect((await ask('nope')).status).toBe(404);
   });
 
+  it('a tracking domain of the site keeps the visitor id in its own cookie', async () => {
+    const env = edgeEnv(ns, new FakeQueue());
+    const VID = '55555555-5555-4555-8555-555555555555';
+    const ask = (query: string, headers: Record<string, string>) =>
+      analyticsRoutes.fetch(
+        new Request(`https://t.example.com/e?site=${SITE_ID}${query}`, { headers }),
+        env,
+      );
+    const fresh = await ask(`&vid=${VID}`, { origin: 'https://www.example.com' });
+    expect(fresh.headers.get('access-control-allow-origin')).toBe('https://www.example.com');
+    expect(fresh.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(fresh.headers.get('cache-control')).toBe('private, no-store');
+    expect(fresh.headers.get('set-cookie')).toMatch(
+      new RegExp(`^amb_vid=${VID}; Domain=example.com; Path=/; Max-Age=\\d+; Secure; SameSite=Lax$`),
+    );
+    expect(await fresh.json()).toEqual({ cookieless: false });
+
+    const lost = await ask('', { origin: 'https://www.example.com', cookie: `x=1; amb_vid=${VID}` });
+    expect(await lost.json()).toEqual({ cookieless: false, vid: VID });
+
+    // Foreign origins and shared endpoints never get a cookie.
+    const foreign = await ask(`&vid=${VID}`, { origin: 'https://evil.test' });
+    expect(foreign.headers.get('set-cookie')).toBeNull();
+    expect(foreign.headers.get('access-control-allow-origin')).toBe('*');
+    const shared = await analyticsRoutes.fetch(
+      new Request(`https://edge.amable.net/e?site=${SITE_ID}&vid=${VID}`, {
+        headers: { origin: 'https://www.example.com' },
+      }),
+      env,
+    );
+    expect(shared.headers.get('set-cookie')).toBeNull();
+  });
+
   it('allows localhost only when the site opts in', async () => {
     siteDb().updateSite({ allow_localhost: true });
     const env = edgeEnv(ns);
@@ -254,6 +343,26 @@ describe('POST /e/server (SDK)', () => {
     expect((await server(env, { type: 'goal', name: 'missing_visitor' })).status).toBe(400);
   });
 
+  it('makes server retries idempotent with event_id and back-dates with occurred_at', async () => {
+    const env = edgeEnv(ns);
+    await post(env, pageview());
+    const vid = '11111111-2222-4333-8444-555555555555';
+    const goal = {
+      type: 'goal',
+      visitor_id: vid,
+      name: 'demo_booked',
+      event_id: 'crm-123',
+      occurred_at: new Date(T0 - 5 * 60_000).toISOString(),
+    };
+    expect((await server(env, goal)).status).toBe(202);
+    expect((await server(env, goal)).status).toBe(202);
+    const goals = siteDb().breakdown({ from: '2026-10-15', to: '2026-10-15' }, 'goal', 5);
+    expect(goals.ok && goals.value.rows).toEqual([
+      { value: 'demo_booked', visitors: 1, completions: 1 },
+    ]);
+    expect((await server(env, { ...goal, occurred_at: 'yesterday' })).status).toBe(400);
+  });
+
   it('records goals, identify and payments against the browser visitor', async () => {
     const env = edgeEnv(ns);
     await post(env, pageview());
@@ -291,8 +400,14 @@ describe('POST /e/server (SDK)', () => {
         user_agent: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
         ip,
       }).then((res) => res.json() as Promise<{ bot: { name: string; verification: string } }>);
-    expect((await report('66.249.66.1')).bot).toMatchObject({ name: 'Googlebot', verification: 'verified' });
-    expect((await report('203.0.113.9')).bot).toMatchObject({ name: 'Googlebot', verification: 'spoofed' });
+    expect((await report('66.249.66.1')).bot).toMatchObject({
+      name: 'Googlebot',
+      verification: 'verified',
+    });
+    expect((await report('203.0.113.9')).bot).toMatchObject({
+      name: 'Googlebot',
+      verification: 'spoofed',
+    });
     const hit = queue.sent.at(-1);
     expect(hit?.kind === 'bot' && hit.hit.verification).toBe('spoofed');
   });
@@ -340,5 +455,172 @@ describe('tracker script', () => {
       );
       expect(again.status).toBe(304);
     }
+  });
+});
+
+type Db = { all: <T>(q: string, ...p: unknown[]) => T[] };
+const rows = <T>(q: string): T[] => (siteDb() as unknown as { db: Db }).db.all<T>(q);
+
+describe('neutral path, proxy recipes and ip_ua matching', () => {
+  const send = (env: Env, url: string, body: unknown, headers: Record<string, string> = {}) => {
+    const req = new Request(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'text/plain;charset=UTF-8',
+        'user-agent': CHROME,
+        'cf-connecting-ip': '203.0.113.7',
+        origin: 'https://www.example.com',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    });
+    Object.defineProperty(req, 'cf', { value: { country: 'IT' } });
+    return analyticsRoutes.fetch(req, env);
+  };
+
+  it('serves the script and takes events on /<dir>/<name>, any neutral path', async () => {
+    const env = edgeEnv(ns);
+    for (const [file, variant] of [
+      ['app.js', 'default'],
+      ['app-l.js', 'cookieless'],
+      ['main-h.js', 'hash'],
+    ] as const) {
+      const res = await analyticsRoutes.fetch(
+        new Request(`https://t.example.com/k3x9ab2q/${file}`),
+        env,
+      );
+      expect(await res.text()).toBe(TRACKER_BUNDLES[variant]);
+    }
+    const mode = await analyticsRoutes.request(`/k3x9ab2q/app?site=${SITE_ID}`, {}, env);
+    expect(await mode.json()).toEqual({ cookieless: false });
+    const res = await send(env, 'https://t.example.com/zz99yy88/core', pageview());
+    expect(res.status).toBe(202);
+    expect(rows<{ collector: string }>(`SELECT collector FROM sessions`)).toEqual([
+      { collector: 'first_party' },
+    ]);
+    const short = await analyticsRoutes.fetch(new Request('https://t.example.com/ab/app.js'), env);
+    expect(short.status).toBe(404);
+  });
+
+  it('leaves landing page paths of the same shape to the routes after it', async () => {
+    const env = edgeEnv(ns);
+    const app = new Hono<{ Bindings: Env }>();
+    app.route('/', analyticsRoutes);
+    app.all('*', (c) => c.text(`page ${c.req.method} ${c.req.path}`));
+    for (const [method, path] of [
+      ['GET', '/offerta/estate'],
+      ['GET', '/webinar2026/iscriviti'],
+      ['GET', '/offerta/estate.js'],
+      ['POST', '/contatti/invia'],
+      ['OPTIONS', '/offerta/estate'],
+    ] as const) {
+      const res = await app.request(path, { method, body: method === 'POST' ? '{}' : undefined }, env);
+      expect(await res.text()).toBe(`page ${method} ${path}`);
+    }
+    const mode = await app.request(`/k3x9ab2q/app?site=${SITE_ID}`, {}, env);
+    expect(await mode.json()).toEqual({ cookieless: false });
+  });
+
+  it('trusts the proxy headers only with the site proxy key', async () => {
+    const env = { ...edgeEnv(ns), EDGE_GATEWAY_SECRET: 'gateway-secret-for-tests' };
+    const key = (await proxyKeyFor(env.EDGE_GATEWAY_SECRET, SITE_ID)) as string;
+    const forwarded = {
+      'x-amb-forwarded-for': '198.51.100.9',
+      'x-amb-forwarded-host': 'www.example.com',
+      'x-amb-geo-country': 'FR',
+      'x-amb-geo-city': encodeURIComponent('Saint-Étienne'),
+    };
+    await send(env, 'https://edge.amable.net/e', pageview());
+    // Forged headers without the key: ignored (request IP, request host, cf geo).
+    await send(
+      env,
+      'https://edge.amable.net/k3x9ab2q/app',
+      pageview({
+        vid: '55555555-5555-4555-8555-555555555555',
+        sid: 's5555555555555555555555555555555a',
+      }),
+      { ...forwarded, 'x-amb-proxy-key': 'forged-key-forged-key-forged-key' },
+    );
+    await send(
+      env,
+      'https://edge.amable.net/k3x9ab2q/app',
+      pageview({
+        vid: '22222222-2222-4222-8222-222222222222',
+        sid: 's1111111111111111111111111111111a',
+      }),
+      { ...forwarded, 'x-amb-proxy-key': key },
+    );
+    expect(
+      rows<{ collector: string; country: string; city: string | null }>(
+        `SELECT collector, country, city FROM sessions ORDER BY collector, country`,
+      ),
+    ).toEqual([
+      { collector: 'proxy', country: 'FR', city: 'Saint-Étienne' },
+      { collector: 'third_party', country: 'IT', city: null },
+      { collector: 'third_party', country: 'IT', city: null },
+    ]);
+    const coverage = siteDb().trackingCoverage({ from: '2026-10-15', to: '2026-10-15' });
+    expect(
+      coverage.ok && coverage.value.rows.map((r) => [r.browser, r.collector, r.sessions]),
+    ).toEqual([
+      ['Chrome', 'third_party', 2],
+      ['Chrome', 'proxy', 1],
+    ]);
+    // Behind the proxy the cookie goes on the site's root domain, like the tracker's.
+    const mode = (headers: Record<string, string>) =>
+      analyticsRoutes.fetch(
+        new Request(
+          `https://edge.amable.net/k3x9ab2q/app?site=${SITE_ID}&vid=22222222-2222-4222-8222-222222222222`,
+          {
+            headers: {
+              origin: 'https://www.example.com',
+              'x-amb-forwarded-host': 'www.example.com',
+              ...headers,
+            },
+          },
+        ),
+        env,
+      );
+    expect((await mode({ 'x-amb-proxy-key': key })).headers.get('set-cookie')).toMatch(
+      /Domain=example\.com;/,
+    );
+    expect((await mode({})).headers.get('set-cookie')).toBeNull();
+  });
+
+  it('never verifies a crawler on a forged forwarded IP', async () => {
+    const queue = new FakeQueue();
+    const env = edgeEnv(ns, queue);
+    await send(env, 'https://t.example.com/e', pageview(), {
+      'user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      'x-amb-forwarded-for': '66.249.66.1',
+    });
+    const hit = queue.sent.at(-1);
+    expect(hit?.kind === 'bot' && hit.hit.verification).toBe('spoofed');
+  });
+
+  it('merges a new visitor with the only same-day IP + UA match when ip_ua is on', async () => {
+    const env = edgeEnv(ns);
+    const A = '33333333-3333-4333-8333-333333333333';
+    const B = '44444444-4444-4444-8444-444444444444';
+    const C = '66666666-6666-4666-8666-666666666666';
+    const D = '77777777-7777-4777-8777-777777777777';
+    const view = (vid: string, sid: string) => pageview({ vid, sid, fs: T0, sn: 1 });
+    await send(env, 'https://t.example.com/e', view(A, 's3333333333333333333333333333333a'));
+    await send(env, 'https://t.example.com/e', view(B, 's4444444444444444444444444444444a'));
+    expect(rows(`SELECT * FROM visitor_merges`)).toEqual([]);
+
+    siteDb().updateIdentitySettings({ ip_ua: true });
+    await send(env, 'https://t.example.com/e', view(C, 's6666666666666666666666666666666a'), {
+      'cf-connecting-ip': '198.51.100.20',
+    });
+    await send(env, 'https://t.example.com/e', view(D, 's7777777777777777777777777777777a'), {
+      'cf-connecting-ip': '198.51.100.20',
+    });
+    // A and B share 203.0.113.7: a shared network, never merged; C → D is the only match.
+    expect(
+      rows<{ child_visitor_id: string; origin_visitor_id: string; mechanism: string }>(
+        `SELECT child_visitor_id, origin_visitor_id, mechanism FROM visitor_merges`,
+      ),
+    ).toEqual([{ child_visitor_id: D, origin_visitor_id: C, mechanism: 'ip_ua' }]);
   });
 });

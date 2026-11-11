@@ -18,6 +18,7 @@ import type {
   AttributionModel,
   AttributionReport,
   BotsReport,
+  TrackingCoverageReport,
   ConditionSuggestAttr,
   CreateAlertInput,
   CreateFunnelInput,
@@ -57,6 +58,12 @@ import { tenantSitesStub } from './rpc';
 import { RealtimeHub } from './store/realtime';
 import { r2ArchiveSink } from './store/retention';
 import {
+  DO_STORAGE_LIMIT_BYTES,
+  shrunkRetentionDays,
+  storagePressure,
+  type StoragePressure,
+} from './store/storage';
+import {
   AnalyticsStore,
   type AdConnectionInput,
   type AdConnectionRecord,
@@ -92,6 +99,7 @@ import {
   type VisitorListQuery,
 } from './store/index';
 import type { TrackingQualityQuery } from './store/index';
+import type { SuppressInput, SuppressResult } from './store/suppression';
 import type {
   CohortQuery,
   CohortReport,
@@ -103,7 +111,7 @@ import type {
   PerformanceReport,
   TrackingQuality,
 } from '@amable/api-types';
-import { withEdgeErrorReporting } from '../errors';
+import { reportEdgeError, withEdgeErrorReporting } from '../errors';
 import {
   coreProviderResolver,
   type ConversionOutboundRequest,
@@ -151,6 +159,9 @@ export class AnalyticsDO extends DurableObject<Env> {
         createDoSqliteMigrationStore(ctx.storage, { metaTable: 'analytics_meta' }),
         analyticsMigrations,
       );
+      // Sites from before the registry split: one page per start, the alarm finishes the rest.
+      if (!this.store.hashLegacyIdentities() && this.store.getSite() !== null)
+        await ctx.storage.setAlarm(Date.now() + LEGACY_CONTINUE_MS);
     });
   }
 
@@ -169,7 +180,8 @@ export class AnalyticsDO extends DurableObject<Env> {
       return new Response('expected websocket', { status: 426 });
     }
     if (this.store.getSite() === null) return new Response('not found', { status: 404 });
-    const audience = new URL(request.url).searchParams.get('audience') === 'public' ? 'public' : 'private';
+    const audience =
+      new URL(request.url).searchParams.get('audience') === 'public' ? 'public' : 'private';
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server, [audience]);
@@ -233,11 +245,25 @@ export class AnalyticsDO extends DurableObject<Env> {
     return { ...result, live: [] };
   }
 
+  /**
+   * Realtime broadcast, then the "core work pending" signal to the tenant
+   * index. The write is already committed: a failed signal is remembered and
+   * retried on the next write or alarm instead of failing the caller (whose
+   * retry would be deduped and would never send it).
+   */
   private async afterWrite(pending: boolean, live: IngestResult['live']): Promise<void> {
     this.hub.broadcast(live);
-    if (!pending) return;
+    const owed = (await this.ctx.storage.get<boolean>(DIRTY_SIGNAL_KEY)) === true;
+    if (!pending && !owed) return;
     const site = this.store.getSite();
-    if (site !== null) await tenantSitesStub(this.env.ANALYTICS, site.tenantId).markDirtySite(site.site.id);
+    if (site === null) return;
+    try {
+      await tenantSitesStub(this.env.ANALYTICS, site.tenantId).markDirtySite(site.site.id);
+      if (owed) await this.ctx.storage.delete(DIRTY_SIGNAL_KEY);
+    } catch (error) {
+      await this.ctx.storage.put(DIRTY_SIGNAL_KEY, true);
+      console.error('analytics: dirty-site signal deferred', error);
+    }
   }
 
   overview(range: AnalyticsRange): AnalyticsResult<AnalyticsOverview> {
@@ -269,7 +295,11 @@ export class AnalyticsDO extends DurableObject<Env> {
     return this.store.attribution(range, dimension, models, limit);
   }
 
-  purchases(range: AnalyticsRange, limit: number, anonymous?: boolean): AnalyticsResult<{ currency: string; data: AnalyticsPurchase[] }> {
+  purchases(
+    range: AnalyticsRange,
+    limit: number,
+    anonymous?: boolean,
+  ): AnalyticsResult<{ currency: string; data: AnalyticsPurchase[] }> {
     return this.store.purchases(range, limit, anonymous);
   }
 
@@ -299,6 +329,10 @@ export class AnalyticsDO extends DurableObject<Env> {
 
   bots(range: AnalyticsRange): AnalyticsResult<BotsReport> {
     return this.store.bots(range);
+  }
+
+  trackingCoverage(range: AnalyticsRange): AnalyticsResult<TrackingCoverageReport> {
+    return this.store.trackingCoverage(range);
   }
 
   listFunnels(): Funnel[] {
@@ -336,10 +370,17 @@ export class AnalyticsDO extends DurableObject<Env> {
   listAlerts(): Alert[] {
     return this.store.listAlerts();
   }
-  createAlert(input: CreateAlertInput, webhookSecret: string | null): { alert: Alert; webhook_secret: string | null } {
+  createAlert(
+    input: CreateAlertInput,
+    webhookSecret: string | null,
+  ): { alert: Alert; webhook_secret: string | null } {
     return this.store.createAlert(input, webhookSecret);
   }
-  updateAlert(id: string, patch: UpdateAlertInput, webhookSecret: string | null): { alert: Alert; webhook_secret: string | null } | null {
+  updateAlert(
+    id: string,
+    patch: UpdateAlertInput,
+    webhookSecret: string | null,
+  ): { alert: Alert; webhook_secret: string | null } | null {
     return this.store.updateAlert(id, patch, webhookSecret);
   }
   rotateAlertSecret(id: string, secret: string): { alert: Alert; webhook_secret: string } | null {
@@ -353,7 +394,10 @@ export class AnalyticsDO extends DurableObject<Env> {
     if (ok) await this.afterWrite(true, []);
     return ok;
   }
-  recordAlertDelivery(alertId: string, deliveries: Array<{ channel: 'email' | 'webhook'; ok: boolean }>): void {
+  recordAlertDelivery(
+    alertId: string,
+    deliveries: Array<{ channel: 'email' | 'webhook'; ok: boolean }>,
+  ): void {
     this.store.recordAlertDelivery(alertId, deliveries);
   }
 
@@ -373,7 +417,13 @@ export class AnalyticsDO extends DurableObject<Env> {
   listSiteKeys(): SiteKey[] {
     return this.store.listSiteKeys();
   }
-  createSiteKey(input: { id: string; name: string; prefix: string; hash: string; scopes: SiteKeyScope[] }): SiteKey {
+  createSiteKey(input: {
+    id: string;
+    name: string;
+    prefix: string;
+    hash: string;
+    scopes: SiteKeyScope[];
+  }): SiteKey {
     return this.store.createSiteKey(input);
   }
   revokeSiteKey(id: string): boolean {
@@ -477,7 +527,9 @@ export class AnalyticsDO extends DurableObject<Env> {
   listTouches(query: TouchQuery): FunnelTouch[] {
     return this.store.listTouches(query);
   }
-  recordConversionFromPostback(input: ConversionInput): AnalyticsResult<{ id: string; created: boolean }> {
+  recordConversionFromPostback(
+    input: ConversionInput,
+  ): AnalyticsResult<{ id: string; created: boolean }> {
     return this.store.recordConversionFromPostback(input);
   }
   getConversion(id: string): ConversionRecord | null {
@@ -510,13 +562,19 @@ export class AnalyticsDO extends DurableObject<Env> {
   listAdConnections(platform?: AdPlatform): AdConnectionRecord[] {
     return this.store.listAdConnections(platform);
   }
-  upsertAdEntities(entities: AdEntity[], connectionId?: string | null): AnalyticsResult<{ upserted: number }> {
+  upsertAdEntities(
+    entities: AdEntity[],
+    connectionId?: string | null,
+  ): AnalyticsResult<{ upserted: number }> {
     return this.store.upsertAdEntities(entities, connectionId ?? null);
   }
   listAdEntities(query?: AdEntityQuery): AdEntityRecord[] {
     return this.store.listAdEntities(query);
   }
-  upsertAdSpend(rows: AdSpendDay[], connectionId?: string | null): AnalyticsResult<{ upserted: number }> {
+  upsertAdSpend(
+    rows: AdSpendDay[],
+    connectionId?: string | null,
+  ): AnalyticsResult<{ upserted: number }> {
     return this.store.upsertAdSpend(rows, connectionId ?? null);
   }
   listAdSpend(query: AdSpendQuery): AdSpendDay[] {
@@ -540,7 +598,9 @@ export class AnalyticsDO extends DurableObject<Env> {
   }
 
   // ---- outbound conversions: enqueue from traffic source mapping, sending, resend
-  async enqueueConversionOutbound(input: ConversionOutboundRequest): Promise<AnalyticsResult<EnqueueForConversionResult>> {
+  async enqueueConversionOutbound(
+    input: ConversionOutboundRequest,
+  ): Promise<AnalyticsResult<EnqueueForConversionResult>> {
     const result = await this.store.enqueueConversionOutbound(input);
     await this.scheduleOutboundAlarm();
     return result;
@@ -550,7 +610,9 @@ export class AnalyticsDO extends DurableObject<Env> {
     await this.scheduleOutboundAlarm();
     return result;
   }
-  async resendFailedOutbound(filter?: OutboundResendFilter): Promise<AnalyticsResult<{ requeued: number }>> {
+  async resendFailedOutbound(
+    filter?: OutboundResendFilter,
+  ): Promise<AnalyticsResult<{ requeued: number }>> {
     const result = this.store.resendFailedOutbound(filter);
     await this.scheduleOutboundAlarm();
     return result;
@@ -609,16 +671,26 @@ export class AnalyticsDO extends DurableObject<Env> {
   }
 
   // ---- identity merge
-  identifyVisitors(items: VisitorIdentityInput[]): AnalyticsResult<{ added: number; merged: number; skipped: number }> {
+  identifyVisitors(
+    items: VisitorIdentityInput[],
+  ): AnalyticsResult<{ added: number; merged: number; skipped: number }> {
     return this.store.identifyVisitors(items);
   }
-  mergeVisitors(originVisitorId: string, childVisitorId: string): AnalyticsResult<VisitorIdentityGraph> {
+  mergeVisitors(
+    originVisitorId: string,
+    childVisitorId: string,
+  ): AnalyticsResult<VisitorIdentityGraph> {
     return this.store.mergeVisitors(originVisitorId, childVisitorId);
   }
-  unmergeVisitors(childVisitorId: string): AnalyticsResult<{ child: VisitorIdentityGraph; origin: VisitorIdentityGraph }> {
+  unmergeVisitors(
+    childVisitorId: string,
+  ): AnalyticsResult<{ child: VisitorIdentityGraph; origin: VisitorIdentityGraph }> {
     return this.store.unmergeVisitors(childVisitorId);
   }
-  reprocessVisitors(range: { from: number; to: number }): AnalyticsResult<{ keys: number; merges: number; visitors: number }> {
+  reprocessVisitors(range: {
+    from: number;
+    to: number;
+  }): AnalyticsResult<{ keys: number; merges: number; visitors: number }> {
     return this.store.reprocessVisitors(range);
   }
   visitorIdentityGraph(visitorId: string): VisitorIdentityGraph | null {
@@ -630,7 +702,9 @@ export class AnalyticsDO extends DurableObject<Env> {
   getIdentitySettings(): IdentityMergeSettings {
     return this.store.getIdentitySettings();
   }
-  updateIdentitySettings(patch: Partial<IdentityMergeSettings>): AnalyticsResult<IdentityMergeSettings> {
+  updateIdentitySettings(
+    patch: Partial<IdentityMergeSettings>,
+  ): AnalyticsResult<IdentityMergeSettings> {
     return this.store.updateIdentitySettings(patch);
   }
   blacklistVisitorKeys(visitorId: string): number {
@@ -639,6 +713,26 @@ export class AnalyticsDO extends DurableObject<Env> {
 
   knownVisitors(ids: string[]): string[] {
     return this.store.knownVisitors(ids);
+  }
+  visitorsLastSeen(ids: string[]): Array<{ visitorId: string; lastSeen: number }> {
+    return this.store.visitorsLastSeen(ids);
+  }
+  /** Payment already on the site with this transaction id (the browser may have sent it). */
+  paymentOf(transactionId: string): { visitorId: string | null } | null {
+    return this.store.paymentOf(transactionId);
+  }
+  /** Tombstones the visitors (and carriers of the hashed identities); `purge` also erases their data. */
+  async suppressVisitors(input: SuppressInput): Promise<SuppressResult> {
+    const result = this.store.suppressVisitors(input);
+    const at = this.store.nextPurgeAt();
+    if (at !== null) {
+      const current = await this.ctx.storage.getAlarm();
+      if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+    }
+    return result;
+  }
+  purgeJobs(): ReturnType<AnalyticsStore['purgeJobs']> {
+    return this.store.purgeJobs();
   }
   pullCoreWork(limit?: number): CoreWork {
     return this.store.pullCoreWork(limit);
@@ -667,26 +761,78 @@ export class AnalyticsDO extends DurableObject<Env> {
     return this.store.trackingQuality(range);
   }
 
+  /** Storage telemetry (AE `do_storage` points) and an alert when the DO nears its size limit. */
+  private reportStorage(
+    siteId: string,
+    bytes: number,
+    pressure: StoragePressure,
+    shrunkTo: number | undefined,
+  ): void {
+    this.env.AE?.writeDataPoint({
+      blobs: ['do_storage', siteId, pressure],
+      doubles: [bytes],
+      indexes: [siteId],
+    });
+    if (pressure === 'ok') return;
+    const pct = Math.round((bytes / DO_STORAGE_LIMIT_BYTES) * 100);
+    const action = shrunkTo === undefined ? 'no action' : `retention shrunk to ${shrunkTo} days`;
+    this.ctx.waitUntil(
+      reportEdgeError(
+        this.env,
+        new Error(`analytics DO ${siteId} storage at ${pct}% of the limit (${action})`),
+        { source: 'durable_object', module: 'analytics', route: 'storage' },
+      ),
+    );
+  }
+
   /** Daily: retention (archive + purge raw rows), then retrain the conversion model. */
   override async alarm(): Promise<void> {
-    await withEdgeErrorReporting(this.env, { source: 'durable_object', module: 'analytics', route: 'alarm' }, async () => {
-      const site = this.store.getSite();
-      if (site === null) return;
-      // The alarm also wakes up for outbound jobs: daily work runs only when its own deadline passed.
-      let dailyAt = (await this.ctx.storage.get<number>(DAILY_WORK_AT_KEY)) ?? 0;
-      if (Date.now() >= dailyAt) {
-        const sink = this.env.FILES === undefined ? null : r2ArchiveSink(this.env.FILES);
-        await this.store.retention(sink);
-        this.store.trainPrediction();
-        dailyAt = Date.now() + DAY_MS;
-        await this.ctx.storage.put(DAILY_WORK_AT_KEY, dailyAt);
-      }
-      await this.store.processOutbound(this.outboundResolver(site), Date.now());
-      const nextOutbound = this.store.nextOutboundAttemptAt();
-      await this.ctx.storage.setAlarm(
-        nextOutbound === null ? dailyAt : Math.min(dailyAt, Math.max(nextOutbound, Date.now() + OUTBOUND_MIN_ALARM_GAP_MS)),
-      );
-    });
+    await withEdgeErrorReporting(
+      this.env,
+      { source: 'durable_object', module: 'analytics', route: 'alarm' },
+      async () => {
+        const site = this.store.getSite();
+        if (site === null) return;
+        let legacyDone = false;
+        for (let page = 0; page < LEGACY_PAGES_PER_ALARM && !legacyDone; page++)
+          legacyDone = this.store.hashLegacyIdentities();
+        // The alarm also wakes up for outbound jobs: daily work runs only when its own deadline passed.
+        let dailyAt = (await this.ctx.storage.get<number>(DAILY_WORK_AT_KEY)) ?? 0;
+        if (Date.now() >= dailyAt) {
+          const sink = this.env.FILES === undefined ? null : r2ArchiveSink(this.env.FILES);
+          const bytes = this.ctx.storage.sql.databaseSize;
+          const pressure = storagePressure(bytes);
+          const days =
+            pressure === 'shrink' ? shrunkRetentionDays(site.site.retention_days) : undefined;
+          const purged = await this.store.retention(sink, days);
+          this.reportStorage(site.site.id, bytes, pressure, days);
+          // A capped pass leaves work: come back shortly, train once it is done.
+          const more = purged !== null && (purged.more || purged.touches_more);
+          if (!more) this.store.trainPrediction();
+          dailyAt = Date.now() + (more ? RETENTION_CONTINUE_MS : DAY_MS);
+          await this.ctx.storage.put(DAILY_WORK_AT_KEY, dailyAt);
+        }
+        await this.afterWrite(false, []);
+        await this.store.processOutbound(this.outboundResolver(site), Date.now());
+        let nextPurge: number | null;
+        try {
+          const purgeMore =
+            this.env.FILES !== undefined && (await this.store.runPurge(this.env.FILES));
+          nextPurge = purgeMore ? Date.now() + PURGE_CONTINUE_MS : this.store.nextPurgeAt();
+        } catch (error) {
+          // R2 unavailable: the job keeps its progress; the other alarm work must not stop.
+          console.error('purge pass failed', error);
+          nextPurge = Date.now() + PURGE_RETRY_MS;
+        }
+        const nextOutbound = this.store.nextOutboundAttemptAt();
+        let next = legacyDone ? dailyAt : Date.now() + LEGACY_CONTINUE_MS;
+        if (nextOutbound !== null)
+          next = Math.min(next, Math.max(nextOutbound, Date.now() + OUTBOUND_MIN_ALARM_GAP_MS));
+        if (nextPurge !== null)
+          next = Math.min(next, Math.max(nextPurge, Date.now() + OUTBOUND_MIN_ALARM_GAP_MS));
+        await this.ctx.storage.setAlarm(next);
+      },
+    );
   }
 
   // ---------------------------------------------------------- tenant instance
@@ -714,6 +860,9 @@ export class AnalyticsDO extends DurableObject<Env> {
   }
   registerLinks(links: ContactVisitor[]): void {
     this.store.registerLinks(links);
+  }
+  unlinkVisitors(siteId: string, visitorIds: string[]): void {
+    this.store.unlinkVisitors(siteId, visitorIds);
   }
   mergeContactLinks(from: string[], to: string): void {
     this.store.mergeContactLinks(from, to);
@@ -743,6 +892,14 @@ export class AnalyticsDO extends DurableObject<Env> {
 
 /** Storage key of the next retention + training run (the alarm also fires for outbound jobs). */
 const DAILY_WORK_AT_KEY = 'daily_work_at';
+/** A dirty-site signal that failed after its write committed (retried by the next write or alarm). */
+const DIRTY_SIGNAL_KEY = 'dirty_signal_owed';
+const RETENTION_CONTINUE_MS = 60_000;
+/** Pre-registry contact data still to hash: pages per alarm, then the next alarm soon after. */
+const LEGACY_PAGES_PER_ALARM = 10;
+const LEGACY_CONTINUE_MS = 30_000;
+const PURGE_RETRY_MS = 60_000;
+const PURGE_CONTINUE_MS = 5_000;
 const OUTBOUND_MIN_ALARM_GAP_MS = 1_000;
 
 function emptySnapshot(): AnalyticsRealtime {

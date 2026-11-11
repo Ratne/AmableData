@@ -1,3 +1,4 @@
+import { sha256Hex } from '../src/analytics/store/identity';
 import type {
   FunnelGraphInput,
   FunnelTouch,
@@ -7,7 +8,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { analyticsMigrations } from '../src/analytics/migrations';
 import { OUTBOUND_CLAIM_LEASE_MS } from '../src/analytics/store/outbound';
-import { ANALYTICS_DO_RPC_METHODS, createStore, siteInit, T0 } from './helpers';
+import { ANALYTICS_DO_RPC_METHODS, createStore, SITE_ID, siteInit, T0 } from './helpers';
 
 const DAY = 86_400_000;
 
@@ -190,8 +191,16 @@ describe('funnel graphs', () => {
       ],
     });
     store.applyVisitorTags('v1', ['vip', 'lead']);
-    store.recordTouches([touch({ id: 'a', campaign: 'spring' }), touch({ id: 'b', campaign: 'spring' })]);
-    for (const [id, city] of [['s1', 'Rome'], ['s2', 'Rome'], ['s3', 'Milan'], ['s4', null]] as const) {
+    store.recordTouches([
+      touch({ id: 'a', campaign: 'spring' }),
+      touch({ id: 'b', campaign: 'spring' }),
+    ]);
+    for (const [id, city] of [
+      ['s1', 'Rome'],
+      ['s2', 'Rome'],
+      ['s3', 'Milan'],
+      ['s4', null],
+    ] as const) {
       db.run(
         `INSERT INTO sessions (id, visitor_id, session_number, started_at, last_seen, channel, city) VALUES (?, 'v1', 1, ?, ?, 'direct', ?)`,
         id,
@@ -624,9 +633,10 @@ describe('identity keys and blacklist', () => {
       ok: true,
       value: { added: 0 },
     });
+    const ada = sha256Hex('ada@example.com');
     expect(store.findVisitorsByKey('email', 'ada@example.com')).toEqual([
-      { key_type: 'email', key_value: 'ada@example.com', visitor_id: 'v1', first_seen: T0 },
-      { key_type: 'email', key_value: 'ada@example.com', visitor_id: 'v2', first_seen: T0 + 20 },
+      { key_type: 'email', key_value: ada, visitor_id: 'v1', first_seen: T0 },
+      { key_type: 'email', key_value: ada, visitor_id: 'v2', first_seen: T0 + 20 },
     ]);
     expect(store.findVisitorsByKey('phone', '+390000000000')).toEqual([]);
     expect(store.listIdentityKeys('v2').map((k) => k.key_type)).toEqual(['email', 'phone']);
@@ -660,11 +670,11 @@ describe('identity keys and blacklist', () => {
 });
 
 describe('retention of anonymous touches', () => {
-  it('deletes anonymous touches older than 90 days and keeps identified ones', async () => {
+  it('deletes anonymous touches older than 365 days and keeps identified ones', async () => {
     const clock = { now: T0 };
     const { store, db } = createStore(clock);
     store.initSite(siteInit({ retentionDays: 0 }));
-    const old = T0 - 91 * DAY;
+    const old = T0 - 366 * DAY;
     store.recordTouches([
       touch({ id: 'old_anon', ts: old, visitor_id: 'anon' }),
       touch({ id: 'recent_anon', ts: T0 - 10 * DAY, visitor_id: 'anon' }),
@@ -699,6 +709,53 @@ describe('retention of anonymous touches', () => {
       { id: 'old_contact', identified: 1 },
       { id: 'old_known', identified: 1 },
       { id: 'recent_anon', identified: 0 },
+    ]);
+  });
+
+  it('drops identified touches after 13 months and forgets dormant anonymous visitors', async () => {
+    const { store, db } = createStore({ now: T0 });
+    store.initSite(siteInit({ retentionDays: 0 }));
+    const ancient = T0 - 396 * DAY;
+    store.upsertIdentityKeys([
+      { key_type: 'email', key_value: 'k@example.com', visitor_id: 'known', first_seen: ancient },
+      { key_type: 'session', key_value: 's1', visitor_id: 'dormant', first_seen: ancient },
+    ]);
+    store.recordTouches([
+      touch({ id: 'ancient_known', ts: ancient, visitor_id: 'known' }),
+      touch({ id: 'recent_known', ts: T0 - 300 * DAY, visitor_id: 'known' }),
+    ]);
+    for (const [id, lastSeen] of [
+      ['dormant', ancient],
+      ['active', T0 - DAY],
+      ['known', ancient],
+    ] as const) {
+      db.run(
+        `INSERT INTO visitors (id, first_seen, last_seen) VALUES (?, ?, ?)`,
+        id,
+        ancient,
+        lastSeen,
+      );
+    }
+    const puts: string[] = [];
+    const result = await store.retention({
+      put: (key) => {
+        puts.push(key.replace(/\/[^/]+$/, ''));
+        return Promise.resolve();
+      },
+    });
+    expect(result).toMatchObject({ identified_touches: 1, dormant_visitors: 1 });
+    expect(puts.sort()).toEqual([
+      `analytics-archive/${SITE_ID}/identity_keys`,
+      `analytics-archive/${SITE_ID}/touches`,
+      `analytics-archive/${SITE_ID}/visitors`,
+    ]);
+    expect(db.all<{ id: string }>(`SELECT id FROM touches`)).toEqual([{ id: 'recent_known' }]);
+    expect(db.all<{ id: string }>(`SELECT id FROM visitors ORDER BY id`)).toEqual([
+      { id: 'active' },
+      { id: 'known' },
+    ]);
+    expect(db.all<{ visitor_id: string }>(`SELECT visitor_id FROM identity_keys`)).toEqual([
+      { visitor_id: 'known' },
     ]);
   });
 });

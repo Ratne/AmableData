@@ -111,13 +111,56 @@ export function writeIds(jar: CookieJar, ids: Ids): Ids {
   return ids;
 }
 
-/** Parses handoff params from a URL; undefined when absent, stale or malformed. */
-/** Expires the ids written by a cookie build (the site switched to cookieless). */
-export function clearIds(jar: CookieJar): void {
+/** Expires the ids written by a cookie build (the site switched to cookieless, or opt-out). */
+export function clearIds(jar: CookieJar, storage?: Storage): void {
   for (const name of [COOKIE_VISITOR, COOKIE_FIRST_SEEN, COOKIE_SESSION_COUNT, COOKIE_SESSION]) {
     jar.set(name, '', 0);
   }
+  try {
+    storage?.removeItem(MIRROR_KEY);
+  } catch {
+    // storage disabled
+  }
 }
+
+/** localStorage copy of the visitor id: brings it back when the browser expired the cookie. */
+const MIRROR_KEY = 'amb_id';
+
+export function restoreIds(jar: CookieJar, storage: Storage | undefined): void {
+  const vid = jar.get(COOKIE_VISITOR);
+  if (storage === undefined || (vid !== undefined && ID_RE.test(vid))) return;
+  try {
+    const saved = JSON.parse(storage.getItem(MIRROR_KEY) ?? 'null') as {
+      vid?: unknown;
+      fs?: unknown;
+    } | null;
+    if (typeof saved?.vid !== 'string' || !ID_RE.test(saved.vid)) return;
+    jar.set(COOKIE_VISITOR, saved.vid, VISITOR_MAX_AGE_S);
+    if (typeof saved.fs === 'number' && saved.fs > 0)
+      jar.set(COOKIE_FIRST_SEEN, String(saved.fs), VISITOR_MAX_AGE_S);
+  } catch {
+    // storage disabled or corrupt
+  }
+}
+
+export function mirrorIds(storage: Storage | undefined, ids: Ids): void {
+  try {
+    const value = JSON.stringify({ vid: ids.vid, fs: ids.fs });
+    if (storage !== undefined && storage.getItem(MIRROR_KEY) !== value)
+      storage.setItem(MIRROR_KEY, value);
+  } catch {
+    // storage disabled or full
+  }
+}
+
+/** Ad platform browser cookies, sent with the click ids (conversion APIs match on them). */
+export const PLATFORM_COOKIES: ReadonlyArray<readonly [cookie: string, key: string]> = [
+  ['_fbp', 'fbp'],
+  ['_fbc', 'fbc'],
+  ['_ttp', 'ttp'],
+];
+
+/** Parses handoff params from a URL; undefined when absent, stale or malformed. */
 
 export function readHandoff(url: URL, now: number): Ids | undefined {
   const p = url.searchParams;

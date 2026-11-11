@@ -1,6 +1,7 @@
 import { safeFetch } from '@amable/auth/security';
 import { siteStub, tenantSitesStub, type AnalyticsNamespace } from '@amable/app-edge/analytics';
 import { SYSTEM_ACTOR } from '../crm/context';
+import { sweepSales } from './sales-dispatch';
 import type { CrmResult } from '../crm/ops';
 import { getAuthServices } from '../auth/services';
 import type { Env } from '../env';
@@ -106,7 +107,10 @@ export async function runTenantSync(env: Env, tenantId: string): Promise<SyncRep
   const ns = env.ANALYTICS;
   if (ns === undefined) return null;
   try {
-    return await syncTenant(syncPorts(env, ns, tenantId), tenantId);
+    const ports = syncPorts(env, ns, tenantId);
+    const report = await syncTenant(ports, tenantId);
+    if (!report.skipped) await sweepSales(ports, tenantId);
+    return report;
   } catch (error) {
     console.error(`[analytics] sync of ${tenantId} failed: ${String(error)}`);
     return null;

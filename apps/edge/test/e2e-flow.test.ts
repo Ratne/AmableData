@@ -265,7 +265,11 @@ function syncSpend(store: AnalyticsStore): void {
   ).toBe(true);
 }
 
-function campaignRows(store: AnalyticsStore, model: AttributionModelV2, windowDays = 7): Record<string, PerformanceRow> {
+function campaignRows(
+  store: AnalyticsStore,
+  model: AttributionModelV2,
+  windowDays = model === 'windowed_hybrid' ? 7 : 365,
+): Record<string, PerformanceRow> {
   const r = store.adsPerformanceReport({
     site_id: SITE_ID,
     from: '2026-10-01',

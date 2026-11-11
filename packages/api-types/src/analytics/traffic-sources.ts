@@ -9,7 +9,18 @@ import { AD_PLATFORMS } from './ads';
  */
 
 /** Parameters owned by the link routes; never usable as tracking fields or data params. */
-export const RESERVED_URL_PARAMS = ['vid', 'n', 'c', 'ts', 'f', 'p', 'hit', 'rev', 'tx', 'rn'] as const;
+export const RESERVED_URL_PARAMS = [
+  'vid',
+  'n',
+  'c',
+  'ts',
+  'f',
+  'p',
+  'hit',
+  'rev',
+  'tx',
+  'rn',
+] as const;
 
 export const MAX_CUSTOM_TRACKING_FIELDS = 20;
 export const TRACKING_FIELD_SLOTS = Array.from(
@@ -53,7 +64,9 @@ export const TRAFFIC_SOURCE_TEMPLATES = ['meta', 'google', 'tiktok', 'custom'] a
 export type TrafficSourceTemplate = (typeof TRAFFIC_SOURCE_TEMPLATES)[number];
 
 /** Conversion event of this CRM: `sale`, `lead`, or a numbered custom event `event:N`. */
-export const conversionEventSchema = z.string().regex(/^(?:sale|lead|event:\d{1,3})$/, 'invalid event');
+export const conversionEventSchema = z
+  .string()
+  .regex(/^(?:sale|lead|event:\d{1,3})$/, 'invalid event');
 
 export const conversionConfigSchema = z.object({
   /** Server-to-server postback fired on conversions (`{token}` placeholders). */
@@ -103,19 +116,33 @@ type FieldsShape = {
 function checkFields(src: FieldsShape, ctx: z.RefinementCtx) {
   const slots = new Set<string>();
   src.fields.forEach((f, i) => {
-    if (slots.has(f.slot)) ctx.addIssue({ code: 'custom', message: 'duplicate slot', path: ['fields', i, 'slot'] });
+    if (slots.has(f.slot))
+      ctx.addIssue({ code: 'custom', message: 'duplicate slot', path: ['fields', i, 'slot'] });
     slots.add(f.slot);
   });
   const params = new Map<string, (string | number)[]>();
-  params.set(src.reserved_fields.campaign.url_param.toLowerCase(), ['reserved_fields', 'campaign', 'url_param']);
+  params.set(src.reserved_fields.campaign.url_param.toLowerCase(), [
+    'reserved_fields',
+    'campaign',
+    'url_param',
+  ]);
   const ext = src.reserved_fields.external.url_param.toLowerCase();
   if (params.has(ext)) {
-    ctx.addIssue({ code: 'custom', message: 'duplicate URL parameter', path: ['reserved_fields', 'external', 'url_param'] });
+    ctx.addIssue({
+      code: 'custom',
+      message: 'duplicate URL parameter',
+      path: ['reserved_fields', 'external', 'url_param'],
+    });
   }
   params.set(ext, ['reserved_fields', 'external', 'url_param']);
   src.fields.forEach((f, i) => {
     const key = f.url_param.toLowerCase();
-    if (params.has(key)) ctx.addIssue({ code: 'custom', message: 'duplicate URL parameter', path: ['fields', i, 'url_param'] });
+    if (params.has(key))
+      ctx.addIssue({
+        code: 'custom',
+        message: 'duplicate URL parameter',
+        path: ['fields', i, 'url_param'],
+      });
     params.set(key, ['fields', i, 'url_param']);
   });
 }

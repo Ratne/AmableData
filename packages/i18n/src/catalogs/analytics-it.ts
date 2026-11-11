@@ -96,6 +96,10 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.dim.utm_medium': 'UTM medium',
   'analytics.dim.utm_term': 'UTM term',
   'analytics.dim.utm_content': 'UTM content',
+  'analytics.dim.ad_campaign': 'Campagna ads',
+  'analytics.dim.ad_set': 'Gruppo di inserzioni',
+  'analytics.dim.ad': 'Inserzione',
+  'analytics.dim.ad_placement': 'Posizionamento',
   'analytics.dim.country': 'Paese',
   'analytics.dim.region': 'Regione',
   'analytics.dim.city': 'Città',
@@ -378,7 +382,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.sites.timezone': 'Fuso orario',
   'analytics.sites.currency': 'Valuta',
   'analytics.sites.retention': 'Conservazione (giorni)',
-  'analytics.sites.retentionHint': '0 conserva i dati grezzi per sempre, altrimenti 30–3650.',
+  'analytics.sites.retentionHint':
+    'Giorni di dati grezzi tenuti caldi (30–395); i più vecchi restano in archivio e nei rollup.',
   'analytics.sites.cookieless': 'Senza cookie',
   'analytics.sites.cookielessHint':
     'Nessun identificativo salvato nel browser; i visitatori sono contati con un hash che ruota ogni giorno.',
@@ -429,6 +434,52 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.tracking.serverEndpoint': 'Endpoint server',
   'analytics.tracking.serverHint':
     'Invia obiettivi, pagamenti e identify dal tuo backend con il segreto del sito come token Bearer.',
+  'analytics.links.title': 'Link tracciati',
+  'analytics.links.ads': 'Ads',
+  'analytics.links.email': 'Email',
+  'analytics.links.destination': 'URL di destinazione',
+  'analytics.links.platform': 'Piattaforma',
+  'analytics.links.provider': 'Provider email',
+  'analytics.links.campaign': 'Etichetta campagna',
+  'analytics.links.suffixHint':
+    'Incolla questi parametri in: {field}. La piattaforma compila le macro a ogni clic.',
+  'analytics.links.fullUrl': 'Oppure usa l’URL completo:',
+  'analytics.links.adsHint':
+    'Gli id di campagna, gruppo e inserzione finiscono sulla sessione: lead e vendite vengono collegati all’inserzione esatta, anche quando la piattaforma non li attribuisce.',
+  'analytics.links.emailHint':
+    '{tag} è il merge tag del provider con l’email del destinatario: il clic identifica il contatto (l’indirizzo viene hashato all’edge e tolto dall’URL).',
+  'analytics.path.title': 'Percorso dello script',
+  'analytics.path.rotate': 'Nuovo percorso',
+  'analytics.path.rotated':
+    'Nuovo percorso dello script: aggiorna il tag sul sito (il vecchio continua a funzionare).',
+  'analytics.path.hint':
+    'Il tag carica il tracker da {path}, un percorso casuale di questo sito che nessuna lista di filtri conosce. Servilo da un dominio di tracking o dal tuo host con un proxy qui sotto.',
+  'analytics.path.proxy': 'Reverse proxy',
+  'analytics.path.proxyHint':
+    'Inoltra {path} del tuo sito all’edge: il tracker diventa first party senza toccare il DNS.',
+  'analytics.matching.title': 'Abbinamento visitatori',
+  'analytics.matching.ipUa': 'Abbina per IP e browser (stesso giorno)',
+  'analytics.matching.ipUaHint':
+    'Collega un nuovo visitatore all’unica persona vista nello stesso giorno con stesso IP e user agent (tipicamente cookie cancellati). Le reti condivise (uffici, operatori mobili) vengono escluse. È una stima: due persone sulla stessa rete di casa con lo stesso telefono possono essere unite e la navigazione dell’una finisce sul contatto dell’altra. Opt-out e cancellazioni non si estendono ai visitatori uniti così. Spegnerlo non annulla gli abbinamenti già fatti. Disattivato di default.',
+  'analytics.coverage.title': 'Copertura del tracking (30 giorni)',
+  'analytics.coverage.empty': 'Nessuna sessione negli ultimi 30 giorni.',
+  'analytics.coverage.hint':
+    'Di ritorno: sessioni di un visitatore già noto (il cookie è sopravvissuto). Identificati: visitatori con email o telefono. Ads: sessioni con click id o id inserzione.',
+  'analytics.coverage.domainCta':
+    'Il {share} delle sessioni passa da un host condiviso: i cookie durano poco su Safari e i blocchi lo filtrano. Configura un dominio di tracking o un proxy.',
+  'analytics.coverage.domainAction': 'Configura dominio',
+  'analytics.path.rotateTitle': 'Generare un nuovo percorso?',
+  'analytics.path.rotateBody':
+    'Il tag del sito va aggiornato. Se usi un proxy, aggiorna anche la sua route con la nuova directory. Il vecchio percorso continua a funzionare.',
+  'analytics.coverage.collector': 'Raccolta',
+  'analytics.coverage.sessions': 'Sessioni',
+  'analytics.coverage.returning': 'Di ritorno',
+  'analytics.coverage.identified': 'Identificati',
+  'analytics.coverage.ads': 'Ads',
+  'analytics.coverage.mode.first_party': 'Dominio di tracking',
+  'analytics.coverage.mode.third_party': 'Host condiviso',
+  'analytics.coverage.mode.proxy': 'Proxy',
+  'analytics.coverage.mode.unknown': 'Sconosciuta',
   'analytics.tracking.crawlers': 'Tracciamento crawler AI (lato server)',
   'analytics.tracking.crawlersHint':
     'I crawler non eseguono JavaScript: aggiungi questo codice al tuo server per contarli. Sostituisci {placeholder} con il segreto del sito.',
@@ -485,7 +536,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.alerts.rotateConfirmTitle': 'Generare un nuovo segreto del webhook?',
   'analytics.alerts.rotateConfirmBody':
     'Il segreto attuale smette subito di funzionare: aggiorna il ricevitore con quello nuovo. Le modifiche non salvate in questo modulo vanno perse.',
-  'analytics.alerts.rotateHint': 'Il segreto si vede una sola volta. Perso? Generane uno nuovo: il vecchio smette subito di funzionare.',
+  'analytics.alerts.rotateHint':
+    'Il segreto si vede una sola volta. Perso? Generane uno nuovo: il vecchio smette subito di funzionare.',
 
   'analytics.share.title': 'Condividi {site}',
   'analytics.share.hint':
@@ -682,7 +734,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.journeys.empty': 'Nessun percorso in questo periodo.',
   'analytics.journeys.contact.touches': 'Touch di funnel e annunci',
   'analytics.journeys.contact.mergedVisitors': 'Visitatori uniti',
-  'analytics.journeys.contact.mergedHint': 'Stessa persona riconosciuta su un altro dispositivo o browser',
+  'analytics.journeys.contact.mergedHint':
+    'Stessa persona riconosciuta su un altro dispositivo o browser',
   'analytics.journeys.contact.tags': 'Tag',
   'analytics.journeys.contact.kind.entrance': 'Ingresso',
   'analytics.journeys.contact.kind.view': 'Visualizzazione',
@@ -695,7 +748,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.adsWidgets.roas': 'ROAS',
   'analytics.adsWidgets.revenue': 'Ricavi attribuiti',
   'analytics.adsWidgets.quality': 'Qualità del tracciamento',
-  'analytics.adsWidgets.qualityHint': '{conversions} conversioni · {identity} identificate · {click} con click ID',
+  'analytics.adsWidgets.qualityHint':
+    '{conversions} conversioni · {identity} identificate · {click} con click ID',
   'analytics.adsWidgets.modelHint': 'Ultimo clic',
   'analytics.adsWidgets.open': 'Report performance',
   'analytics.sources.title': 'Sorgenti di traffico',
@@ -744,8 +798,10 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.domains.status.active': 'Attivo',
   'analytics.domains.status.error': 'Errore',
   'analytics.domains.error.taken': 'Questo hostname è già collegato.',
-  'analytics.domains.error.invalid': 'Inserisci un hostname valido di tua proprietà (gli hostname della piattaforma non sono ammessi).',
-  'analytics.domains.error.unavailable': 'I domini di tracciamento personalizzati non sono configurati su questa installazione.',
+  'analytics.domains.error.invalid':
+    'Inserisci un hostname valido di tua proprietà (gli hostname della piattaforma non sono ammessi).',
+  'analytics.domains.error.unavailable':
+    'I domini di tracciamento personalizzati non sono configurati su questa installazione.',
   'analytics.domains.error.provider': 'Il servizio certificati non ha risposto. Riprova tra poco.',
   'analytics.settings.tab.domains': 'Domini',
 
@@ -934,7 +990,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
 
   'analytics.funnelBuilder.saving': 'Salvataggio…',
   'analytics.funnelBuilder.savedVersion': 'Salvato · versione {version}',
-  'analytics.funnelBuilder.saveInvalid': 'Il server ha rifiutato il funnel: correggi i nodi evidenziati.',
+  'analytics.funnelBuilder.saveInvalid':
+    'Il server ha rifiutato il funnel: correggi i nodi evidenziati.',
   'analytics.funnelBuilder.conflict.toast': 'Qualcun altro ha salvato questo funnel nel frattempo.',
   'analytics.funnelBuilder.conflict.body':
     'È stata salvata altrove una versione più recente ({version}). Ricaricala (perdi le tue modifiche) oppure mantieni le tue modifiche e salvale sopra.',
@@ -981,7 +1038,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.funnelBuilder.links.directSuffixHint':
     'Per le piattaforme che vietano i redirect: punta l’annuncio alla pagina e incolla questo come suffisso URL.',
   'analytics.funnelBuilder.links.directUrl': 'URL diretto completo (per test)',
-  'analytics.funnelBuilder.links.noDirect': 'Nessuna pagina raggiungibile da questo nodo: niente link diretto.',
+  'analytics.funnelBuilder.links.noDirect':
+    'Nessuna pagina raggiungibile da questo nodo: niente link diretto.',
   'analytics.funnelBuilder.links.actions': 'Link di azione della pagina',
   'analytics.funnelBuilder.links.action': 'Azione {n}',
   'analytics.funnelBuilder.links.actionDefaultHint':
@@ -1032,7 +1090,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.sources.tab.conversion': 'Conversioni',
   'analytics.sources.tab.advanced': 'Avanzate',
   'analytics.sources.category': 'Categoria',
-  'analytics.sources.categoryHint': 'Raggruppamento facoltativo nei report (Social, Search, Push…).',
+  'analytics.sources.categoryHint':
+    'Raggruppamento facoltativo nei report (Social, Search, Push…).',
   'analytics.sources.template': 'Template',
   'analytics.sources.template.meta': 'Meta Ads',
   'analytics.sources.template.google': 'Google Ads',
@@ -1074,7 +1133,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
     'Il token sorgente è la macro della piattaforma scritta nei link generati; se vuoto il parametro non viene accodato ma viene comunque catturato dagli URL in ingresso.',
   'analytics.sources.error.required': 'Obbligatorio.',
   'analytics.sources.error.urlParam.invalid': 'Usa da 1 a 64 lettere, cifre, _ . -',
-  'analytics.sources.error.urlParam.reserved': 'Riservato dai link di tracciamento (vid, n, c, ts, f, p, hit, rev, tx, rn).',
+  'analytics.sources.error.urlParam.reserved':
+    'Riservato dai link di tracciamento (vid, n, c, ts, f, p, hit, rev, tx, rn).',
   'analytics.sources.error.urlParam.duplicate': 'Già usato da un altro campo.',
   'analytics.sources.conversion.mode': 'Invia le conversioni',
   'analytics.sources.conversion.mode.integration': 'API piattaforma ads',
@@ -1166,8 +1226,10 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.ads.connections.disconnected': 'Account pubblicitario disconnesso',
   'analytics.ads.connections.error.unavailable':
     'Le integrazioni con le piattaforme ads non sono configurate su questa installazione.',
-  'analytics.ads.connections.error.authExpired': 'L’autorizzazione è scaduta: riconnetti l’account.',
-  'analytics.ads.connections.error.provider': 'La piattaforma ads non ha risposto. Riprova tra poco.',
+  'analytics.ads.connections.error.authExpired':
+    'L’autorizzazione è scaduta: riconnetti l’account.',
+  'analytics.ads.connections.error.provider':
+    'La piattaforma ads non ha risposto. Riprova tra poco.',
   'analytics.ads.outbound.title': 'Conversioni inviate',
   'analytics.ads.outbound.hint':
     'Conversioni lato server in coda verso le piattaforme ads. I job falliti si possono reinviare.',
@@ -1184,7 +1246,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.ads.outbound.value': 'Valore',
   'analytics.ads.outbound.attempts': 'Tentativi',
   'analytics.ads.outbound.empty': 'Nessuna conversione in coda.',
-  'analytics.ads.outbound.truncated': 'Mostrate le {count} più recenti: restringi i filtri per vedere le altre.',
+  'analytics.ads.outbound.truncated':
+    'Mostrate le {count} più recenti: restringi i filtri per vedere le altre.',
   'analytics.ads.outbound.resend': 'Reinvia',
   'analytics.ads.outbound.resendSelected': 'Reinvia selezionate ({count})',
   'analytics.ads.outbound.resendFailed': 'Reinvia tutte le fallite',

@@ -95,6 +95,7 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.sourceType.form': 'Form',
   'crm.sourceType.booking': 'Prenotazione',
   'crm.sourceType.checkout': 'Checkout',
+  'crm.sourceType.web': 'Tracking web',
   'crm.sourceType.other': 'Altro',
   'crm.marketable.unknown': 'Sconosciuto',
   'crm.marketable.single_opt_in': 'Opt-in singolo',
@@ -333,6 +334,10 @@ export const crmIt: Readonly<Record<CrmMessageKey, string>> = {
   'crm.activity.subscriptionTrialStarted': 'Prova avviata',
   'crm.activity.subscriptionTrialConverted': 'Prova convertita',
   'crm.activity.checkoutAbandoned': 'Carrello abbandonato',
+  'crm.activity.webLinked': 'Collegato al tracking web',
+  'crm.activity.webSession': 'Visita del sito',
+  'crm.activity.webGoal': 'Obiettivo raggiunto sul sito',
+  'crm.activity.webPayment': 'Pagamento sul sito',
   'crm.activity.companyDeleted': 'Azienda archiviata',
 
   'crm.notes.new': 'Nuova nota',

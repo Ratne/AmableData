@@ -14,7 +14,16 @@ export const MARKETABLE_STATUSES = [
 export const marketableStatusSchema = z.enum(MARKETABLE_STATUSES);
 export type MarketableStatus = z.infer<typeof marketableStatusSchema>;
 
-export const SOURCE_TYPES = ['manual', 'api', 'import', 'form', 'booking', 'checkout', 'other'] as const;
+export const SOURCE_TYPES = [
+  'manual',
+  'api',
+  'import',
+  'form',
+  'booking',
+  'checkout',
+  'web',
+  'other',
+] as const;
 export const sourceTypeSchema = z.enum(SOURCE_TYPES);
 export type SourceType = z.infer<typeof sourceTypeSchema>;
 
@@ -247,7 +256,10 @@ export const activitySchema = z.object({
   contact_id: idSchema.nullable(),
   company_id: idSchema.nullable(),
   opportunity_id: idSchema.nullable(),
-  actor: z.object({ type: z.enum(['user', 'api_key', 'system', 'app']), id: z.string().nullable() }),
+  actor: z.object({
+    type: z.enum(['user', 'api_key', 'system', 'app']),
+    id: z.string().nullable(),
+  }),
   data: z.record(z.string(), z.unknown()),
   occurred_at: timestampSchema,
 });

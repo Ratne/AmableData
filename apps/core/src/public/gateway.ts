@@ -154,7 +154,7 @@ async function resolveTenant(env: Env, ref: GatewayTenantRef): Promise<GatewayTe
 }
 
 const edgeErrorSchema = z.strictObject({
-  source: z.enum(['edge', 'queue', 'durable_object']),
+  source: z.enum(['edge', 'queue', 'durable_object', 'cron']),
   module: z.string().max(100).nullable(),
   route: z.string().max(300).nullable(),
   errorType: z.string().min(1).max(100),
@@ -163,7 +163,11 @@ const edgeErrorSchema = z.strictObject({
 });
 
 /** Edge errors go through this installation's reporter: same sink, same scrubbing, core release. */
-async function reportEdgeError(env: Env, executionCtx: ExecutionContext, input: unknown): Promise<Response> {
+async function reportEdgeError(
+  env: Env,
+  executionCtx: ExecutionContext,
+  input: unknown,
+): Promise<Response> {
   const report = edgeErrorSchema.safeParse(input);
   if (!report.success) return failure(new GatewayError(400, 'bad_request', 'invalid error report'));
   const { source, module, route, errorType, message, stack } = report.data;
@@ -171,15 +175,23 @@ async function reportEdgeError(env: Env, executionCtx: ExecutionContext, input: 
   error.name = errorType;
   error.stack = stack ?? `${errorType}: ${message}`;
   await ensureInstallationMigrated(env.DB);
-  await reportError(env, error, { source, module, route }, { waitUntil: (p) => executionCtx.waitUntil(p) });
-  return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } });
+  await reportError(
+    env,
+    error,
+    { source, module, route },
+    { waitUntil: (p) => executionCtx.waitUntil(p) },
+  );
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 /** Custom tracking hostnames are not workspace hostnames: resolved before (and instead of) `resolveTenant`. */
 async function trackingHost(env: Env, ref: GatewayTenantRef): Promise<Response> {
   await ensureInstallationMigrated(env.DB);
   const found = 'host' in ref ? await findTrackingHost(env.DB, ref.host) : null;
-  if (found === null) return failure(new GatewayError(404, 'not_found', 'tracking domain not found'));
+  if (found === null)
+    return failure(new GatewayError(404, 'not_found', 'tracking domain not found'));
   return reply({ ok: true, tenant: found.tenant, value: { site_id: found.site_id } });
 }
 
@@ -218,7 +230,9 @@ export async function handleEdgeGateway(
   const { pathname } = new URL(request.url);
   const raw = pathname === EDGE_GATEWAY_RAW_PATH;
   const upgrade =
-    raw && request.method === 'GET' && request.headers.get('upgrade')?.toLowerCase() === 'websocket';
+    raw &&
+    request.method === 'GET' &&
+    request.headers.get('upgrade')?.toLowerCase() === 'websocket';
   if ((request.method !== 'POST' && !upgrade) || (!raw && pathname !== EDGE_GATEWAY_PATH)) {
     return new Response('Not found', { status: 404 });
   }

@@ -2,6 +2,9 @@ import {
   ATTRIBUTION_MODELS,
   type AttributionModel,
   type CreateSiteInput,
+  DEFAULT_RETENTION_DAYS,
+  RETENTION_MAX_DAYS,
+  RETENTION_MIN_DAYS,
   type Site,
 } from '@amable/api-types';
 import { DashboardButton } from '@amable/ui';
@@ -116,7 +119,9 @@ export function SiteFormDialog({
   const [currency, setCurrency] = useState(site?.currency ?? 'EUR');
   const [cookieless, setCookieless] = useState(site?.cookieless ?? false);
   const [allowLocalhost, setAllowLocalhost] = useState(site?.allow_localhost ?? false);
-  const [retention, setRetention] = useState(String(site?.retention_days ?? 395));
+  const [retention, setRetention] = useState(
+    String(site?.retention_days ?? DEFAULT_RETENTION_DAYS),
+  );
   const [model, setModel] = useState<AttributionModel>(
     site?.attribution_model ?? 'last_non_direct',
   );
@@ -139,7 +144,8 @@ export function SiteFormDialog({
   const retentionDays = Number(retention);
   const retentionValid =
     Number.isInteger(retentionDays) &&
-    (retentionDays === 0 || (retentionDays >= 30 && retentionDays <= 3650));
+    retentionDays >= RETENTION_MIN_DAYS &&
+    retentionDays <= RETENTION_MAX_DAYS;
   const pendingHost = normalizeHost(hostDraft);
   const allHosts =
     pendingHost && HOSTNAME.test(pendingHost) && !hostnames.includes(pendingHost)
@@ -256,8 +262,8 @@ export function SiteFormDialog({
               <Input
                 id="amb-site-retention"
                 type="number"
-                min={0}
-                max={3650}
+                min={RETENTION_MIN_DAYS}
+                max={RETENTION_MAX_DAYS}
                 value={retention}
                 aria-invalid={!retentionValid}
                 onChange={(event) => setRetention(event.target.value)}

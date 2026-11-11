@@ -11,8 +11,10 @@ const site: EdgeSiteConfig = {
   cookieless: false,
   allowLocalhost: false,
   currency: 'EUR',
+  retentionDays: 395,
   secretHash: null,
   salt: { day: '2026-10-15', value: 'salt' },
+  suppressed: { visitors: [], keys: [] },
 };
 
 const ctx = (eid: string): RequestContext => ({
@@ -91,7 +93,9 @@ describe('landing link params (he / sl / el)', () => {
     const event = await pageview(`https://www.example.com/landing?he=${EMAIL}&el=email`, { la: { he: EMAIL, el: 'email' } });
     store.ingest([event], []);
     expect(store.findVisitorsByKey('email', sha(EMAIL)).map((k) => k.visitor_id)).toEqual(['visitor-12345678']);
-    expect(store.findVisitorsByKey('email', EMAIL)).toEqual([]);
+    expect(db.raw.prepare(`SELECT key_value FROM identity_keys WHERE key_type = 'email'`).all()).toEqual([
+      { key_value: sha(EMAIL) },
+    ]);
     expect(db.raw.prepare(`SELECT channel, source FROM sessions`).all()).toEqual([{ channel: 'Email', source: '@email' }]);
     const tables = db.raw
       .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)

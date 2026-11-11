@@ -19,6 +19,7 @@ import {
   crawlerSnippetsSchema,
   installCheckSchema,
   searchConsoleReportSchema,
+  trackingCoverageReportSchema,
   visitorProfileSchema,
   visitorsListParamsSchema,
   visitorsListSchema,
@@ -32,7 +33,15 @@ import type { CrmResult } from '../crm/ops';
 import type { CrmJourneyFacts } from './crm-ops';
 import { contactJourney } from './journey';
 import { runTenantSync } from './runtime';
-import { contactLabels, namespace, rangeOf, siteForQuery, siteRecord, unwrap } from './service';
+import {
+  clearEmail,
+  contactLabels,
+  namespace,
+  rangeOf,
+  siteForQuery,
+  siteRecord,
+  unwrap,
+} from './service';
 import { crawlerSnippets } from './snippets';
 import { forwardRealtimeSocket } from './ws';
 import { edgeOrigin } from '../env';
@@ -57,13 +66,20 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       const params = c.req.valid('query');
       const stub = await siteForQuery(c, params.site_id);
       const result = unwrap(await stub.purchases(rangeOf(c, params), params.limit));
-      const labels = await contactLabels(c, result.data.map((p) => p.contact_id));
+      const labels = await contactLabels(
+        c,
+        result.data.map((p) => p.contact_id),
+      );
       return c.json(
         {
           ...result,
           data: result.data.map((p) => {
             const l = p.contact_id === null ? undefined : labels.get(p.contact_id);
-            return { ...p, name: p.name ?? l?.name ?? null, email: p.email ?? l?.email ?? null };
+            return {
+              ...p,
+              name: p.name ?? l?.name ?? null,
+              email: l?.email ?? clearEmail(p.email),
+            };
           }),
         },
         200,
@@ -76,7 +92,8 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       method: 'get',
       path: '/attribution',
       tags,
-      summary: 'Revenue credited to channels, sources, campaigns or landing pages, per attribution model',
+      summary:
+        'Revenue credited to channels, sources, campaigns or landing pages, per attribution model',
       description: `Models: ${ATTRIBUTION_MODELS.join(', ')} (\`models=a,b\`, default all). Touches are the sessions of the buyer (every visitor of its CRM contact) up to each payment; internal orders paid in the CRM count as payments. ${filterNote}`,
       request: { query: analyticsQueryParamsSchema.extend(attributionQuerySchema.shape) },
       responses: { 200: json(attributionReportSchema, 'Attributed revenue per value and model') },
@@ -86,10 +103,17 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       const models = (params.models ?? '')
         .split(',')
         .map((m) => m.trim())
-        .filter((m): m is AttributionModel => (ATTRIBUTION_MODELS as readonly string[]).includes(m));
+        .filter((m): m is AttributionModel =>
+          (ATTRIBUTION_MODELS as readonly string[]).includes(m),
+        );
       const stub = await siteForQuery(c, params.site_id);
       const report = unwrap(
-        await stub.attribution(rangeOf(c, params), params.dimension ?? 'channel', models, params.limit ?? 50),
+        await stub.attribution(
+          rangeOf(c, params),
+          params.dimension ?? 'channel',
+          models,
+          params.limit ?? 50,
+        ),
       );
       return c.json(report, 200);
     },
@@ -108,7 +132,10 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       const stub = await siteForQuery(c, c.req.valid('query').site_id);
       const snapshot = await stub.realtime();
       if (snapshot === null) throw new CrmError('not_found', 'site not found');
-      const labels = await contactLabels(c, snapshot.visitors.map((v) => v.contact_id));
+      const labels = await contactLabels(
+        c,
+        snapshot.visitors.map((v) => v.contact_id),
+      );
       const byVisitor = new Map<string, string>();
       const visitors = snapshot.visitors.map((v) => {
         const l = v.contact_id === null ? undefined : labels.get(v.contact_id);
@@ -117,7 +144,14 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
         return { ...v, name };
       });
       return c.json(
-        { ...snapshot, visitors, events: snapshot.events.map((e) => ({ ...e, label: e.label ?? byVisitor.get(e.visitor_id) ?? null })) },
+        {
+          ...snapshot,
+          visitors,
+          events: snapshot.events.map((e) => ({
+            ...e,
+            label: e.label ?? byVisitor.get(e.visitor_id) ?? null,
+          })),
+        },
         200,
       );
     },
@@ -135,7 +169,8 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       method: 'get',
       path: '/insights',
       tags,
-      summary: 'Revenue by device / OS / browser / country, time to purchase, converting goals, heatmap',
+      summary:
+        'Revenue by device / OS / browser / country, time to purchase, converting goals, heatmap',
       description: filterNote,
       request: { query: analyticsInsightsParamsSchema },
       responses: { 200: json(analyticsInsightsSchema, 'Insights') },
@@ -172,13 +207,20 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
           cursor: params.cursor,
         }),
       );
-      const labels = await contactLabels(c, list.data.map((v) => v.contact_id));
+      const labels = await contactLabels(
+        c,
+        list.data.map((v) => v.contact_id),
+      );
       return c.json(
         {
           ...list,
           data: list.data.map((v) => {
             const l = v.contact_id === null ? undefined : labels.get(v.contact_id);
-            return { ...v, name: v.name ?? l?.name ?? null, email: v.email ?? l?.email ?? null };
+            return {
+              ...v,
+              name: v.name ?? l?.name ?? null,
+              email: l?.email ?? clearEmail(v.email),
+            };
           }),
         },
         200,
@@ -202,13 +244,25 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       const stub = await siteForQuery(c, c.req.valid('query').site_id);
       const profile = await stub.visitorProfile(c.req.valid('param').visitorId);
       if (profile === null) throw new CrmError('not_found', 'visitor not found');
-      const labels = await contactLabels(c, [profile.visitor.contact_id, ...profile.payments.map((p) => p.contact_id)]);
-      const l = profile.visitor.contact_id === null ? undefined : labels.get(profile.visitor.contact_id);
+      const labels = await contactLabels(c, [
+        profile.visitor.contact_id,
+        ...profile.payments.map((p) => p.contact_id),
+      ]);
+      const l =
+        profile.visitor.contact_id === null ? undefined : labels.get(profile.visitor.contact_id);
       return c.json(
         {
           ...profile,
-          visitor: { ...profile.visitor, name: profile.visitor.name ?? l?.name ?? null, email: profile.visitor.email ?? l?.email ?? null },
-          payments: profile.payments.map((p) => ({ ...p, name: p.name ?? l?.name ?? null, email: p.email ?? l?.email ?? null })),
+          visitor: {
+            ...profile.visitor,
+            name: profile.visitor.name ?? l?.name ?? null,
+            email: l?.email ?? clearEmail(profile.visitor.email),
+          },
+          payments: profile.payments.map((p) => ({
+            ...p,
+            name: p.name ?? l?.name ?? null,
+            email: l?.email ?? clearEmail(p.email),
+          })),
         },
         200,
       );
@@ -221,7 +275,10 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       path: '/contacts/{contactId}/journey',
       tags,
       summary: 'Web journey of a CRM contact across sites, with orders, emails, forms and bookings',
-      request: { params: z.object({ contactId: z.string().min(1).max(64) }), query: contactJourneyParamsSchema },
+      request: {
+        params: z.object({ contactId: z.string().min(1).max(64) }),
+        query: contactJourneyParamsSchema,
+      },
       responses: { 200: json(contactJourneySchema, 'Journey') },
     }),
     async (c) => {
@@ -254,6 +311,23 @@ export function registerReportRoutes(api: OpenAPIHono<AppEnv>): void {
       const params = c.req.valid('query');
       const stub = await siteForQuery(c, params.site_id);
       return c.json(unwrap(await stub.bots(rangeOf(c, params))), 200);
+    },
+  );
+
+  api.openapi(
+    crmRoute('analytics:read', {
+      method: 'get',
+      path: '/tracking-coverage',
+      tags,
+      summary:
+        'Sessions per browser and collector (tracking domain, shared host, proxy): cookie survival, identification, ad ids',
+      request: { query: analyticsQueryParamsSchema },
+      responses: { 200: json(trackingCoverageReportSchema, 'Tracking coverage') },
+    }),
+    async (c) => {
+      const params = c.req.valid('query');
+      const stub = await siteForQuery(c, params.site_id);
+      return c.json(unwrap(await stub.trackingCoverage(rangeOf(c, params))), 200);
     },
   );
 

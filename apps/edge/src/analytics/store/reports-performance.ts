@@ -8,7 +8,9 @@ import type {
   PerformanceReport,
   PerformanceRow,
 } from '@amable/api-types';
+import { MAX_ATTRIBUTION_WINDOW_DAYS } from '@amable/api-types';
 import type { SqlDb, SqlValue } from '../db/sql';
+import { DAY_MS } from '../time';
 import { listAdSpend } from './ad-entities';
 import { splitMinor } from './attribution';
 import { touchDayRollups } from './rollups';
@@ -528,6 +530,8 @@ function attributeInto(
   });
   const firsts = firstConversions(ctx.db, ctx.groups);
   const inRange = (ts: number): boolean => ts >= w.from && ts < w.to;
+  const lookbackMs =
+    (q.model === 'windowed_hybrid' ? MAX_ATTRIBUTION_WINDOW_DAYS : q.window_days) * DAY_MS;
   for (const e of events) {
     const isSale = e.kind === 'sale';
     const firstOf = e.person === null ? undefined : firsts.get(e.person);
@@ -555,7 +559,9 @@ function attributeInto(
       });
     };
     const path =
-      (e.person === null ? undefined : paths.get(e.person))?.filter((t) => t.ts <= e.ts) ?? [];
+      (e.person === null ? undefined : paths.get(e.person))?.filter(
+        (t) => t.ts <= e.ts && e.ts - t.ts <= lookbackMs,
+      ) ?? [];
     if (path.length === 0) {
       if (filters.length > 0 || (q.basis === 'click_date' && !inRange(e.ts))) continue;
       credit(groupBy === 'day' ? day(e.ts) : null, null, 1, e.amount, e.costs);

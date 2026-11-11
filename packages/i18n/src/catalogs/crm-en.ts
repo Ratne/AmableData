@@ -92,6 +92,7 @@ export const crmEn = {
   'crm.sourceType.form': 'Form',
   'crm.sourceType.booking': 'Booking',
   'crm.sourceType.checkout': 'Checkout',
+  'crm.sourceType.web': 'Web tracking',
   'crm.sourceType.other': 'Other',
   'crm.marketable.unknown': 'Unknown',
   'crm.marketable.single_opt_in': 'Single opt-in',
@@ -331,6 +332,10 @@ export const crmEn = {
   'crm.activity.subscriptionTrialStarted': 'Trial started',
   'crm.activity.subscriptionTrialConverted': 'Trial converted',
   'crm.activity.checkoutAbandoned': 'Cart abandoned',
+  'crm.activity.webLinked': 'Linked to web tracking',
+  'crm.activity.webSession': 'Website visit',
+  'crm.activity.webGoal': 'Website goal reached',
+  'crm.activity.webPayment': 'Website payment',
   'crm.activity.companyDeleted': 'Company archived',
 
   'crm.notes.new': 'New note',

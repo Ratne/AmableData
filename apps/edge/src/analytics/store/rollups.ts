@@ -1,6 +1,11 @@
 import { first, type SqlDb, type SqlValue } from '../db/sql';
 import { dayKey, dayStart, HOUR_MS, nextDay } from '../time';
 
+/** Start of the first whole local day after `ts`: the oldest bucket a purge at `ts` left intact. */
+export function dayFloorAfter(ts: number, timeZone: string): number {
+  return dayStart(nextDay(dayKey(ts, timeZone)), timeZone);
+}
+
 interface RollupTotals {
   visitors: number;
   sessions: number;
@@ -16,12 +21,7 @@ interface RollupTotals {
  * duration) count sessions that *started* in the range; pageviews, goals and
  * revenue count rows whose timestamp falls in it.
  */
-function aggregateRange(
-  db: SqlDb,
-  from: number,
-  to: number,
-  currency: string,
-): RollupTotals {
+function aggregateRange(db: SqlDb, from: number, to: number, currency: string): RollupTotals {
   const s = first<{
     visitors: number;
     sessions: number;
@@ -64,12 +64,19 @@ function aggregateRange(
  * are rebuilt by {@link refreshDailyRollups} when read, so a busy day is not
  * re-aggregated on every batch. Returns the number of hours refreshed.
  */
-export function refreshRollups(db: SqlDb, timeZone: string, currency: string): number {
+export function refreshRollups(
+  db: SqlDb,
+  timeZone: string,
+  currency: string,
+  floor = -Infinity,
+): number {
   return db.transaction(() => {
+    // Hours before `floor` lost raw rows to the retention: a recount would
+    // overwrite the rollup with a fragment, so they stay as they are.
     const hours = db
       .all<{ key: string }>(`SELECT key FROM rollup_dirty WHERE grain = 'hour'`)
       .map((r) => Number(r.key))
-      .filter((h) => Number.isFinite(h));
+      .filter((h) => Number.isFinite(h) && h >= floor);
     const days = new Set<string>();
     for (const h of hours) {
       const t = aggregateRange(db, h, h + HOUR_MS, currency);
@@ -91,18 +98,27 @@ export function refreshRollups(db: SqlDb, timeZone: string, currency: string): n
       days.add(dayKey(h, timeZone));
       days.add(dayKey(h + HOUR_MS - 1, timeZone));
     }
-    for (const day of days) db.run(`INSERT OR IGNORE INTO rollup_dirty (grain, key) VALUES ('day', ?)`, day);
+    for (const day of days)
+      db.run(`INSERT OR IGNORE INTO rollup_dirty (grain, key) VALUES ('day', ?)`, day);
     db.run(`DELETE FROM rollup_dirty WHERE grain = 'hour'`);
     return hours.length;
   });
 }
 
 /** Rebuilds the daily rollups of the dirty days; returns how many. */
-export function refreshDailyRollups(db: SqlDb, timeZone: string, currency: string): number {
+export function refreshDailyRollups(
+  db: SqlDb,
+  timeZone: string,
+  currency: string,
+  floor = -Infinity,
+): number {
   return db.transaction(() => {
-    const days = db.all<{ key: string }>(`SELECT key FROM rollup_dirty WHERE grain = 'day'`).map((r) => r.key);
+    const days = db
+      .all<{ key: string }>(`SELECT key FROM rollup_dirty WHERE grain = 'day'`)
+      .map((r) => r.key);
     for (const day of days) {
       const start = dayStart(day, timeZone);
+      if (start < floor) continue;
       const t = aggregateRange(db, start, dayStart(nextDay(day), timeZone), currency);
       db.run(
         `INSERT INTO rollup_daily (day, start_ts, visitors, sessions, pageviews, bounces, duration_ms, goals, revenue_minor)
@@ -171,10 +187,14 @@ export function touchDayRollups(
     byZone = new Map();
     touchRollups.set(db, byZone);
   }
-  const head = first<{ n: number; max: number | null }>(db, `SELECT COUNT(*) AS n, MAX(rowid) AS max FROM touches`);
+  const head = first<{ n: number; max: number | null }>(
+    db,
+    `SELECT COUNT(*) AS n, MAX(rowid) AS max FROM touches`,
+  );
   const count = head?.n ?? 0;
   const maxRowid = head?.max ?? 0;
-  const lastId = first<{ id: string }>(db, `SELECT id FROM touches WHERE rowid = ?`, maxRowid)?.id ?? null;
+  const lastId =
+    first<{ id: string }>(db, `SELECT id FROM touches WHERE rowid = ?`, maxRowid)?.id ?? null;
   let state = byZone.get(timeZone);
   const appendOnly =
     state !== undefined &&

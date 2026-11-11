@@ -14,6 +14,8 @@ import type {
   AttributionModel,
   AttributionReport,
   BotsReport,
+  IdentityMergeSettingsBody,
+  TrackingCoverageReport,
   ContactJourney,
   CrawlerSnippets,
   CreateAlertInput,
@@ -316,6 +318,15 @@ export function useBots(source: AnalyticsSource | null, query: AnalyticsQuery) {
   );
 }
 
+export function useTrackingCoverage(source: AnalyticsSource | null, query: AnalyticsQuery) {
+  return useReport<TrackingCoverageReport>(
+    source?.kind === 'tenant' ? source : null,
+    'tracking-coverage',
+    (s) => reportUrl(s, 'tracking-coverage', {}, query),
+    [query],
+  );
+}
+
 export function useAdsReport(
   source: AnalyticsSource | null,
   query: AnalyticsQuery,
@@ -467,6 +478,8 @@ export const useSnippet = (tenant: string, siteId: string | null) =>
   useSiteSub<SiteSnippet>(tenant, siteId, 'snippet');
 export const useInstallCheck = (tenant: string, siteId: string | null) =>
   useSiteSub<InstallCheck>(tenant, siteId, 'install-check');
+export const useIdentitySettings = (tenant: string, siteId: string | null) =>
+  useSiteSub<IdentityMergeSettingsBody>(tenant, siteId, 'identity-settings');
 export const useCrawlerSnippets = (tenant: string, siteId: string | null) =>
   useSiteSub<CrawlerSnippets>(tenant, siteId, 'crawler-snippets');
 export const useSiteKeys = (tenant: string, siteId: string | null) =>
@@ -495,6 +508,11 @@ export function analyticsApi(tenant: string) {
       update: (id: string, input: UpdateSiteInput) =>
         request<Site>(`${base}/sites/${enc(id)}`, patch(input)),
       remove: (id: string) => request<unknown>(`${base}/sites/${enc(id)}`, del),
+      updateIdentitySettings: (id: string, input: Partial<IdentityMergeSettingsBody>) =>
+        request<IdentityMergeSettingsBody>(
+          `${base}/sites/${enc(id)}/identity-settings`,
+          patch(input),
+        ),
       rollSecret: (id: string) =>
         request<{ secret: string }>(`${base}/sites/${enc(id)}/secret`, post()),
       createKey: (id: string, input: { name: string; scopes: SiteKeyScope[] }) =>

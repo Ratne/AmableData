@@ -113,7 +113,14 @@ export function ev(overrides: Partial<EnrichedEvent> = {}): EnrichedEvent {
 
 type StubMethods = Record<string, (...args: never[]) => unknown>;
 
-const DO_LIFECYCLE = new Set(['constructor', 'fetch', 'alarm', 'webSocketMessage', 'webSocketClose', 'webSocketError']);
+const DO_LIFECYCLE = new Set([
+  'constructor',
+  'fetch',
+  'alarm',
+  'webSocketMessage',
+  'webSocketClose',
+  'webSocketError',
+]);
 
 /**
  * Public RPC methods of AnalyticsDO, parsed from its source (the class only loads
@@ -121,7 +128,10 @@ const DO_LIFECYCLE = new Set(['constructor', 'fetch', 'alarm', 'webSocketMessage
  * method the DO does not have fails in tests instead of in production.
  */
 export const ANALYTICS_DO_RPC_METHODS: ReadonlySet<string> = (() => {
-  const source = readFileSync(decodeURIComponent(new URL('../src/analytics/do.ts', import.meta.url).pathname), 'utf8');
+  const source = readFileSync(
+    decodeURIComponent(new URL('../src/analytics/do.ts', import.meta.url).pathname),
+    'utf8',
+  );
   const body = source.slice(source.indexOf('export class AnalyticsDO'));
   const names = new Set<string>();
   for (const match of body.matchAll(/^ {2}(?:async )?([a-zA-Z]\w*)\(/gm)) {
@@ -186,4 +196,77 @@ export function edgeEnv(ns: FakeAnalyticsNamespace, queue?: FakeQueue): Env {
       ? {}
       : { ANALYTICS_QUEUE: queue as unknown as Queue<AnalyticsMessage> }),
   };
+}
+
+interface FakeR2Object {
+  body: Uint8Array;
+  customMetadata: Record<string, string>;
+  httpMetadata: R2HTTPMetadata;
+  uploaded: Date;
+}
+
+/** In-memory R2 bucket with the subset of the API the analytics WAL uses. */
+export class FakeR2 {
+  readonly objects = new Map<string, FakeR2Object>();
+  /** Keys in write order (to assert WAL-before-DO ordering). */
+  readonly writes: string[] = [];
+  fail = false;
+
+  async put(
+    key: string,
+    value: ArrayBuffer | Uint8Array | string,
+    opts: R2PutOptions = {},
+  ): Promise<void> {
+    if (this.fail) throw new Error('r2 down');
+    const body =
+      typeof value === 'string'
+        ? new TextEncoder().encode(value)
+        : new Uint8Array(value instanceof Uint8Array ? value : value);
+    this.objects.set(key, {
+      body: body.slice(),
+      customMetadata: (opts.customMetadata ?? {}) as Record<string, string>,
+      httpMetadata: (opts.httpMetadata ?? {}) as R2HTTPMetadata,
+      uploaded: new Date(Date.now()),
+    });
+    this.writes.push(key);
+    return Promise.resolve();
+  }
+
+  get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null> {
+    const object = this.objects.get(key);
+    if (object === undefined) return Promise.resolve(null);
+    return Promise.resolve({ arrayBuffer: () => Promise.resolve(object.body.slice().buffer) });
+  }
+
+  delete(key: string): Promise<void> {
+    this.objects.delete(key);
+    return Promise.resolve();
+  }
+
+  /** Cursor = last key returned (like R2, stable under deletes of listed keys). */
+  list(opts: { prefix?: string; limit?: number; cursor?: string; startAfter?: string } = {}): Promise<{
+    objects: Array<{ key: string } & FakeR2Object>;
+    truncated: boolean;
+    cursor?: string;
+  }> {
+    const keys = [...this.objects.keys()]
+      .filter(
+        (k) =>
+          k.startsWith(opts.prefix ?? '') &&
+          (opts.cursor === undefined || k > opts.cursor) &&
+          (opts.startAfter === undefined || k > opts.startAfter),
+      )
+      .sort();
+    const page = keys.slice(0, opts.limit ?? 1000);
+    const truncated = keys.length > page.length;
+    return Promise.resolve({
+      objects: page.map((key) => ({ key, ...(this.objects.get(key) as FakeR2Object) })),
+      truncated,
+      ...(truncated ? { cursor: page.at(-1) } : {}),
+    });
+  }
+
+  keys(prefix: string): string[] {
+    return [...this.objects.keys()].filter((k) => k.startsWith(prefix)).sort();
+  }
 }

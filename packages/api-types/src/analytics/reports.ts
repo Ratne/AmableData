@@ -359,7 +359,12 @@ export const visitorProfileSchema = z.object({
   linked_visitor_ids: z.array(z.string()),
   sessions: z.array(visitorSessionSchema),
   completed_goals: z.array(
-    z.object({ name: z.string(), count: z.number().int(), first_at: z.string(), last_at: z.string() }),
+    z.object({
+      name: z.string(),
+      count: z.number().int(),
+      first_at: z.string(),
+      last_at: z.string(),
+    }),
   ),
   visited_pages: z.array(
     z.object({ path: z.string(), count: z.number().int(), last_at: z.string() }),
@@ -427,7 +432,14 @@ export type ContactFunnelTouch = z.infer<typeof contactFunnelTouchSchema>;
 export const contactJourneySchema = z.object({
   contact_id: z.string(),
   sites: z.array(z.object({ site_id: z.string(), name: z.string(), currency: z.string() })),
-  visitors: z.array(z.object({ site_id: z.string(), visitor_id: z.string(), linked_at: z.string(), source: z.string() })),
+  visitors: z.array(
+    z.object({
+      site_id: z.string(),
+      visitor_id: z.string(),
+      linked_at: z.string(),
+      source: z.string(),
+    }),
+  ),
   first_visit: z
     .object({
       ts: z.string(),
@@ -449,7 +461,9 @@ export const contactJourneySchema = z.object({
     emails_opened: z.number().int(),
     emails_clicked: z.number().int(),
   }),
-  sources: z.array(z.object({ channel: z.string(), source: z.string().nullable(), sessions: z.number().int() })),
+  sources: z.array(
+    z.object({ channel: z.string(), source: z.string().nullable(), sessions: z.number().int() }),
+  ),
   top_pages: z.array(z.object({ path: z.string(), count: z.number().int() })),
   goals: z.array(z.object({ name: z.string(), count: z.number().int(), last_at: z.string() })),
   first_touch: touchSchema.nullable(),
@@ -693,7 +707,10 @@ export const apiIdentifySchema = z.strictObject({
 
 /** `POST /api/v2/analytics/payments` (site key with `write`). */
 export const apiPaymentSchema = z.strictObject({
-  visitor_id: z.string().regex(/^[A-Za-z0-9-]{8,64}$/).optional(),
+  visitor_id: z
+    .string()
+    .regex(/^[A-Za-z0-9-]{8,64}$/)
+    .optional(),
   amount: z.number().finite().nonnegative(),
   currency: z.string().regex(/^[A-Za-z]{3}$/),
   transaction_id: z.string().min(1).max(255),
@@ -776,6 +793,29 @@ export const searchConsoleReportSchema = z.object({
   pages: z.array(searchRowSchema),
 });
 export type SearchConsoleReport = z.infer<typeof searchConsoleReportSchema>;
+
+// ----------------------------------------------------------- tracking coverage
+
+export const TRACKING_COLLECTORS = ['first_party', 'third_party', 'proxy', 'unknown'] as const;
+
+/** How well tracking survives per browser and collector (tracking domain, shared host, proxy). */
+export const trackingCoverageReportSchema = z.object({
+  rows: z.array(
+    z.object({
+      browser: z.string(),
+      collector: z.enum(TRACKING_COLLECTORS),
+      sessions: z.number().int(),
+      visitors: z.number().int(),
+      /** Sessions of a visitor already known (the cookie survived). */
+      returning_sessions: z.number().int(),
+      /** Visitors with an email or phone key. */
+      identified_visitors: z.number().int(),
+      /** Sessions with an ad click id or ad ids of a tracked link. */
+      ad_sessions: z.number().int(),
+    }),
+  ),
+});
+export type TrackingCoverageReport = z.infer<typeof trackingCoverageReportSchema>;
 
 // ------------------------------------------------------------------------ bots
 

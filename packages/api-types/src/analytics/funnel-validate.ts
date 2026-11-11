@@ -24,7 +24,12 @@ const ALLOWED_VIA: Record<FunnelNodeKind, readonly FunnelEdgeVia['type'][]> = {
   webhook: ['default'],
 };
 
-const SINGLE_EXIT_KINDS: ReadonlySet<FunnelNodeKind> = new Set(['traffic', 'action_proxy', 'tag', 'webhook']);
+const SINGLE_EXIT_KINDS: ReadonlySet<FunnelNodeKind> = new Set([
+  'traffic',
+  'action_proxy',
+  'tag',
+  'webhook',
+]);
 const TERMINAL_KINDS: ReadonlySet<FunnelNodeKind> = new Set(['page_group', 'external_url']);
 
 /**
@@ -34,8 +39,11 @@ const TERMINAL_KINDS: ReadonlySet<FunnelNodeKind> = new Set(['page_group', 'exte
  */
 export function validateGraph(graph: ValidatableGraph): FunnelGraphError[] {
   const errors: FunnelGraphError[] = [];
-  const push = (code: FunnelGraphErrorCode, message: string, ids: { node_id?: string; edge_id?: string } = {}) =>
-    errors.push({ code, message, ...ids });
+  const push = (
+    code: FunnelGraphErrorCode,
+    message: string,
+    ids: { node_id?: string; edge_id?: string } = {},
+  ) => errors.push({ code, message, ...ids });
 
   const live = new Map<string, FunnelNode>();
   const deleted = new Set<string>();
@@ -47,7 +55,9 @@ export function validateGraph(graph: ValidatableGraph): FunnelGraphError[] {
   const traffic = [...live.values()].filter((n) => n.kind === 'traffic');
   if (traffic.length === 0) push('no_traffic_node', 'the funnel has no active traffic node');
   for (const extra of traffic.slice(1)) {
-    push('multiple_traffic_nodes', 'only one active traffic node is allowed', { node_id: extra.id });
+    push('multiple_traffic_nodes', 'only one active traffic node is allowed', {
+      node_id: extra.id,
+    });
   }
 
   const out = new Map<string, FunnelEdge[]>();
@@ -55,12 +65,17 @@ export function validateGraph(graph: ValidatableGraph): FunnelGraphError[] {
     if (deleted.has(edge.from)) continue;
     const from = live.get(edge.from);
     if (from === undefined) {
-      push('edge_unknown_node', `edge starts from unknown node "${edge.from}"`, { edge_id: edge.id });
+      push('edge_unknown_node', `edge starts from unknown node "${edge.from}"`, {
+        edge_id: edge.id,
+      });
       continue;
     }
     if (!live.has(edge.to)) {
       const why = deleted.has(edge.to) ? 'deleted' : 'unknown';
-      push('edge_unknown_node', `edge points to ${why} node "${edge.to}"`, { edge_id: edge.id, node_id: from.id });
+      push('edge_unknown_node', `edge points to ${why} node "${edge.to}"`, {
+        edge_id: edge.id,
+        node_id: from.id,
+      });
       continue;
     }
     const via = edge.via;
@@ -80,11 +95,21 @@ export function validateGraph(graph: ValidatableGraph): FunnelGraphError[] {
       continue;
     }
     if (via.type === 'weight' && !(via.weight > 0)) {
-      push('non_positive_weight', 'rotation weights must be positive', { edge_id: edge.id, node_id: from.id });
+      push('non_positive_weight', 'rotation weights must be positive', {
+        edge_id: edge.id,
+        node_id: from.id,
+      });
       continue;
     }
-    if (via.type === 'route' && from.kind === 'condition' && !from.config.routes.some((r) => r.id === via.route_id)) {
-      push('edge_unknown_route', `route "${via.route_id}" does not exist`, { edge_id: edge.id, node_id: from.id });
+    if (
+      via.type === 'route' &&
+      from.kind === 'condition' &&
+      !from.config.routes.some((r) => r.id === via.route_id)
+    ) {
+      push('edge_unknown_route', `route "${via.route_id}" does not exist`, {
+        edge_id: edge.id,
+        node_id: from.id,
+      });
       continue;
     }
     list.push(edge);
@@ -98,13 +123,18 @@ export function validateGraph(graph: ValidatableGraph): FunnelGraphError[] {
       push('missing_fallback', `the ${node.kind} node needs an exit`, { node_id: node.id });
     }
     if (node.kind === 'rotator' && list.length === 0) {
-      push('missing_fallback', 'the rotator needs at least one weighted exit', { node_id: node.id });
+      push('missing_fallback', 'the rotator needs at least one weighted exit', {
+        node_id: node.id,
+      });
     }
     if (node.kind === 'condition') {
-      if (!hasDefault) push('missing_fallback', 'the condition needs a default route', { node_id: node.id });
+      if (!hasDefault)
+        push('missing_fallback', 'the condition needs a default route', { node_id: node.id });
       for (const route of node.config.routes) {
         if (!list.some((e) => e.via.type === 'route' && e.via.route_id === route.id)) {
-          push('route_without_edge', `route "${route.label}" is not connected`, { node_id: node.id });
+          push('route_without_edge', `route "${route.label}" is not connected`, {
+            node_id: node.id,
+          });
         }
       }
     }
@@ -130,12 +160,15 @@ export function validateGraph(graph: ValidatableGraph): FunnelGraphError[] {
       }
     }
     for (const node of live.values()) {
-      if (!seen.has(node.id)) push('unreachable_node', 'the node cannot be reached from traffic', { node_id: node.id });
+      if (!seen.has(node.id))
+        push('unreachable_node', 'the node cannot be reached from traffic', { node_id: node.id });
     }
   }
 
   for (const cycle of deadEndCycles(live, out)) {
-    push('dead_end_cycle', `nodes ${cycle.join(', ')} loop without reaching a page`, { node_id: cycle[0] });
+    push('dead_end_cycle', `nodes ${cycle.join(', ')} loop without reaching a page`, {
+      node_id: cycle[0],
+    });
   }
 
   return errors;

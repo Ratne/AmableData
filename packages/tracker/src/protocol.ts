@@ -23,6 +23,14 @@ export const SOURCE_PARAMS = [
   'ref',
   'source',
   'via',
+  'utm_id',
+  /** Ad ids filled by the platform macros of the tracked links. */
+  'amb_cid',
+  'amb_asid',
+  'amb_adid',
+  'amb_pl',
+  'amb_kw',
+  'amb_net',
 ] as const;
 
 /** Signed contact identity appended by email click tracking (verified server-side). */
@@ -39,6 +47,8 @@ export const ACTION_LINK_ATTR = 'data-amb-action';
  * `data: ConversionData` so the v1 ingest schema accepts it unchanged.
  */
 export const CONVERSION_GOAL = 'conversion';
+/** Goal sent on every form submission (`data.form`, `data.fields`, opt-in payload). */
+export const FORM_SUBMIT_GOAL = 'form_submit';
 
 export interface ConversionData {
   /** Major units (12.99), like `payment.amount`. */
@@ -77,6 +87,10 @@ export type ExtraValue = string | number | boolean;
 /** Body of `POST /e` (sent as text/plain JSON to stay a CORS-simple request). */
 export interface EventPayload {
   type: EventType;
+  /** Client event id: stable across retries and offline replays (dedupe key). */
+  id?: string;
+  /** When the event happened on the client (ms since epoch). */
+  at?: number;
   /** Public site id from `data-site`. */
   site: string;
   /** Full page URL (hash included only by the hash-routing build). */

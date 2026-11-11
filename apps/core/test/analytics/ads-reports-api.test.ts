@@ -71,7 +71,7 @@ describe('ad attribution report routes', () => {
       group_by: 'campaign',
       basis: 'sale_date',
       currency: 'EUR',
-      window_days: 7,
+      window_days: 30,
     });
     expect(res.body['totals']).toMatchObject({
       visits: 2,

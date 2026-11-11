@@ -8,9 +8,10 @@ import { AD_PLATFORMS } from './ads';
  */
 
 /**
- * Attribution models of the ad reports. `windowed_hybrid` credits the first
- * click when it happened within `window_days` of the conversion, the last click
- * otherwise. The legacy site models live in `base.ts` (`ATTRIBUTION_MODELS`).
+ * Attribution models of the ad reports. Only touches within `window_days`
+ * before the conversion are credited (lookback). `windowed_hybrid` instead uses
+ * `window_days` as its switch: the first click when it happened within it, the
+ * last click otherwise (lookback = {@link MAX_ATTRIBUTION_WINDOW_DAYS}). The legacy site models live in `base.ts` (`ATTRIBUTION_MODELS`).
  */
 export const ATTRIBUTION_MODELS_V2 = [
   'first_click',
@@ -23,13 +24,19 @@ export const ATTRIBUTION_MODELS_V2 = [
 export type AttributionModelV2 = (typeof ATTRIBUTION_MODELS_V2)[number];
 
 export const DEFAULT_ATTRIBUTION_MODEL_V2: AttributionModelV2 = 'last_click';
-export const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 7;
+export const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
+/** Longest lookback: anonymous touches are kept 365 days, so a later identify still finds them. */
+export const MAX_ATTRIBUTION_WINDOW_DAYS = 365;
 /** Half-life of `time_decay`. */
 export const TIME_DECAY_HALF_LIFE_DAYS = 7;
 /** Shares of first / middle / last touches in `u_shaped`. */
 export const U_SHAPED_WEIGHTS = { first: 0.4, middle: 0.2, last: 0.4 } as const;
 
-export const attributionWindowDaysSchema = z.coerce.number().int().min(1).max(30);
+export const attributionWindowDaysSchema = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(MAX_ATTRIBUTION_WINDOW_DAYS);
 
 export const PERFORMANCE_GROUP_BY = [
   'platform',
