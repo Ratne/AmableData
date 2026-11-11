@@ -64,6 +64,18 @@
       { "queue": "form-submissions", "max_batch_size": 10, "max_batch_timeout": 2, "max_retries": 10 },
       // One PDF per invocation; lost jobs come back through the TenantDb alarm lease.
       { "queue": "esign-seal", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 2 },
+      // Workspace registry: contact data of the tracking events (producer: amable-edge).
+      // Exhausted messages wait in registry-dlq (14-day retention set at creation)
+      // for the replay page; registrations are idempotent per event id.
+      {
+        "queue": "registry",
+        "max_batch_size": 100,
+        "max_batch_timeout": 2,
+        "max_retries": 10,
+        "dead_letter_queue": "registry-dlq",
+      },
+      // Parks the dead letters in R2 (dlq/registry/<workspace>/), replayed from the operations page.
+      { "queue": "registry-dlq", "max_batch_size": 100, "max_retries": 100 },
     ],
   },
 

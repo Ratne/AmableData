@@ -48,7 +48,10 @@ automatically when the workers boot, so upgrading is just a deploy.
 - **Landing pages:** a section-based page builder, server-side rendered on your domain,
   with SEO settings and versions.
 - **Web analytics:** a first-party tracker served from your domain, goals, funnels,
-  revenue attribution, realtime and journeys linked to CRM contacts.
+  revenue attribution, realtime and journeys linked to CRM contacts. Up to 395 days of
+  detailed data per site, events archived on R2 before they are applied (nothing lost on
+  errors), and contact data (emails, phones, names) kept only in the CRM: the analytics
+  side stores their hashes.
 - **Reports and dashboards:** about 30 built-in reports, custom reports and CSV export.
 - **Developers:** REST API v2 with an OpenAPI reference (`/docs/api`), API keys and
   signed outgoing webhooks with retries and replay.
@@ -156,12 +159,13 @@ self-hosted installation never needs the cloud.
 │     Engine (automations), MailDb (email), BookingCalendar,   │
 │     EditSession                                              │
 │   Queues: email-send, webhooks-out, form-submissions,        │
-│     esign-seal                                               │
-│   R2: files and backups                                      │
+│     esign-seal, registry (+ dlq)                             │
+│   R2: files, backups, tracking event archive                 │
 │                                                              │
 │ amable-edge (Worker, on your domains)                        │
 │   tracking ingest · hosted forms · booking and landing pages │
 │   email redirects · unsubscribe · AnalyticsDO per site       │
+│   Queues: analytics (+ dlq) · cron: replay of parked events  │
 └──────────────────────────────────────────────────────────────┘
 ```
 

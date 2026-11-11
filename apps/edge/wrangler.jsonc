@@ -15,16 +15,48 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AnalyticsDO"] }],
 
-  // Enriched events are batched into the AnalyticsDO by this same worker.
+  // Enriched events are batched into the AnalyticsDO by this same worker, in WAL
+  // order (R2 archive → DO → ack, see src/analytics/wal.ts). More shards
+  // (ANALYTICS_QUEUE_1..3 → analytics-1..3) spread sites by hash when one queue
+  // saturates: a shard needs both its producer binding and a consumer entry here,
+  // or its messages are never applied. Exhausted messages land in analytics-dlq, whose consumer applies
+  // them or parks them on R2 for the replay cron. Retention (14 days) is set on
+  // the queues at creation; replay stays inside the 7-day dedupe horizon.
   "queues": {
-    "producers": [{ "binding": "ANALYTICS_QUEUE", "queue": "analytics" }],
-    "consumers": [{ "queue": "analytics", "max_batch_size": 100, "max_batch_timeout": 2 }],
+    // REGISTRY_QUEUE: contact data split off the events (clear emails, phones,
+    // names), consumed by amable-core into the workspace registry. The analytics
+    // queue, the DOs and the WAL only ever see their hashes.
+    "producers": [
+      { "binding": "ANALYTICS_QUEUE", "queue": "analytics" },
+      { "binding": "REGISTRY_QUEUE", "queue": "registry" },
+    ],
+    "consumers": [
+      {
+        "queue": "analytics",
+        "max_batch_size": 100,
+        "max_batch_timeout": 2,
+        "max_retries": 5,
+        "dead_letter_queue": "analytics-dlq",
+      },
+      // Last line of defence: keeps retrying (and alerting) while neither the DO nor R2 accept.
+      {
+        "queue": "analytics-dlq",
+        "max_batch_size": 50,
+        "max_batch_timeout": 5,
+        "max_retries": 100,
+        "retry_delay": 300,
+      },
+    ],
   },
+
+  // Replay of parked WAL segments (wal-pending/).
+  "triggers": { "crons": ["*/5 * * * *"] },
 
   // Realtime / high-volume counters (optional: without the binding, counts stay in memory).
   "analytics_engine_datasets": [{ "binding": "AE", "dataset": "amable_analytics" }],
 
-  // Raw analytics archive (prefix analytics-archive/) — same bucket as the core worker.
+  // Analytics WAL / cold archive (events/, wal-pending/, wal-stale/, corrections/) and
+  // the retention archive (analytics-archive/) — same bucket as the core worker.
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "amable-files" }],
 
   // Tenant data (forms, bookings, published pages, media) comes from the core worker

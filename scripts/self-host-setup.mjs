@@ -43,7 +43,20 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const D1_NAME = 'amable-installation';
 export const R2_BUCKET = 'amable-files';
-export const QUEUES = ['email-send', 'events-rollup', 'webhooks-out', 'form-submissions', 'esign-seal', 'analytics'];
+export const QUEUES = [
+  'email-send',
+  'events-rollup',
+  'webhooks-out',
+  'form-submissions',
+  'esign-seal',
+  'analytics',
+  'analytics-dlq',
+  'registry',
+  'registry-dlq',
+];
+/** Tracking queues keep messages 14 days (the maximum), so an outage can still be replayed. */
+const TRACKING_QUEUES = new Set(['analytics', 'analytics-dlq', 'registry', 'registry-dlq']);
+const QUEUE_RETENTION_S = 14 * 24 * 3600;
 export const SECRETS = {
   core: ['PASSWORD_PEPPER', 'AUTH_ENCRYPTION_KEY', 'EMAIL_TOKEN_SECRET', 'EDGE_GATEWAY_SECRET'],
   edge: ['EDGE_GATEWAY_SECRET'],
@@ -213,7 +226,12 @@ function provision(wrangler, dryRun) {
     d1Id = '00000000-0000-0000-0000-000000000000';
   }
   wrangler(['r2', 'bucket', 'create', R2_BUCKET], { allowFailure: true });
-  for (const queue of QUEUES) wrangler(['queues', 'create', queue], { allowFailure: true });
+  for (const queue of QUEUES) {
+    const retention = TRACKING_QUEUES.has(queue)
+      ? ['--message-retention-period-secs', String(QUEUE_RETENTION_S)]
+      : [];
+    wrangler(['queues', 'create', queue, ...retention], { allowFailure: true });
+  }
   return d1Id;
 }
 

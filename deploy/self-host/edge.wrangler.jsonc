@@ -14,10 +14,33 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AnalyticsDO"] }],
 
+  // Events go R2 archive → AnalyticsDO → ack; exhausted ones land in analytics-dlq.
+  // REGISTRY_QUEUE carries the contact data (clear emails, phones, names) to amable-core.
   "queues": {
-    "producers": [{ "binding": "ANALYTICS_QUEUE", "queue": "analytics" }],
-    "consumers": [{ "queue": "analytics", "max_batch_size": 100, "max_batch_timeout": 2 }],
+    "producers": [
+      { "binding": "ANALYTICS_QUEUE", "queue": "analytics" },
+      { "binding": "REGISTRY_QUEUE", "queue": "registry" },
+    ],
+    "consumers": [
+      {
+        "queue": "analytics",
+        "max_batch_size": 100,
+        "max_batch_timeout": 2,
+        "max_retries": 5,
+        "dead_letter_queue": "analytics-dlq",
+      },
+      {
+        "queue": "analytics-dlq",
+        "max_batch_size": 50,
+        "max_batch_timeout": 5,
+        "max_retries": 100,
+        "retry_delay": 300,
+      },
+    ],
   },
+
+  // Replay of parked WAL segments (wal-pending/).
+  "triggers": { "crons": ["*/5 * * * *"] },
 
   "analytics_engine_datasets": [{ "binding": "AE", "dataset": "amable_analytics" }],
 
