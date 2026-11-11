@@ -1,7 +1,7 @@
 import { claimEvent } from './dedupe';
 import type { RealtimeEvent } from '@amable/api-types';
 import { first, type SqlDb } from '../db/sql';
-import { afterGoal, markDirty, newBatchState, refundPayment, type BatchState } from './ingest';
+import { afterGoal, convertGoal, markDirty, newBatchState, refundPayment, type BatchState } from './ingest';
 
 /**
  * Facts the core pushes into a site from the CRM (TenantDb outbox events,
@@ -228,11 +228,16 @@ function applyRefund(
   return left < f.amountMinor;
 }
 
-function applyGoal(db: SqlDb, f: Extract<CrmFact, { kind: 'goal' }>, out: BatchState): boolean {
+function applyGoal(
+  db: SqlDb,
+  f: Extract<CrmFact, { kind: 'goal' }>,
+  out: BatchState,
+  currency: string,
+): boolean {
   if (!visitorExists(db, f.visitorId)) return false;
   const session = sessionAround(db, f.visitorId, f.ts);
-  db.run(
-    `INSERT INTO goals (session_id, visitor_id, ts, name, path, params) VALUES (?, ?, ?, ?, NULL, ?)`,
+  const [goal] = db.all<{ id: number }>(
+    `INSERT INTO goals (session_id, visitor_id, ts, name, path, params) VALUES (?, ?, ?, ?, NULL, ?) RETURNING id`,
     session,
     f.visitorId,
     f.ts,
@@ -251,6 +256,15 @@ function applyGoal(db: SqlDb, f: Extract<CrmFact, { kind: 'goal' }>, out: BatchS
     null,
     false,
   );
+  if (goal !== undefined) {
+    convertGoal(db, out, currency, Date.now(), {
+      visitorId: f.visitorId,
+      sessionId: session,
+      ts: f.ts,
+      goalId: goal.id,
+      name: f.name,
+    });
+  }
   return true;
 }
 
@@ -293,7 +307,7 @@ export function applyCrmFacts(
           ok = applyRefund(db, f, currency);
           break;
         case 'goal':
-          ok = applyGoal(db, f, out);
+          ok = applyGoal(db, f, out, currency);
           break;
         case 'merge':
           for (const from of f.fromContactIds) {

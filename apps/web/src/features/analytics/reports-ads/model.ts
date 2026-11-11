@@ -44,6 +44,9 @@ const PERFORMANCE_COLUMNS = {
   aov_minor: 'money',
   cpa_minor: 'money',
   cvr: 'percent',
+  conversions: 'number',
+  cost_per_conversion_minor: 'money',
+  conversion_rate: 'percent',
   reported_conversions: 'number',
   reported_revenue_minor: 'money',
   reported_vs_revenue_minor: 'money',
@@ -68,6 +71,7 @@ const LOWER_IS_BETTER: ReadonlySet<PerformanceColumn> = new Set([
   'cost_minor',
   'hard_costs_minor',
   'cpa_minor',
+  'cost_per_conversion_minor',
 ]);
 
 function isPerformanceColumn(value: unknown): value is PerformanceColumn {
@@ -141,6 +145,8 @@ export interface PerformanceSearchParams {
   readonly view?: PerformanceView;
   readonly cmp?: '1';
   readonly metric?: PerformanceColumn;
+  /** Custom conversion counted in `conversions` (absent = every one). */
+  readonly conv?: string;
 }
 
 const includes = <T extends string>(list: readonly T[], value: unknown): value is T =>
@@ -184,6 +190,8 @@ export function parsePerformanceSearch(raw: Record<string, unknown>): Performanc
   if (includes(PERFORMANCE_VIEWS, raw['view'])) out.view = raw['view'];
   if (searchString(raw['cmp']) === '1') out.cmp = '1';
   if (isPerformanceColumn(raw['metric'])) out.metric = raw['metric'];
+  const conv = searchString(raw['conv']);
+  if (conv && conv.length <= 64) out.conv = conv;
   return out;
 }
 
@@ -200,6 +208,7 @@ export interface PerformanceOptions {
   readonly view: PerformanceView;
   readonly compare: boolean;
   readonly chartMetric: PerformanceColumn;
+  readonly conversionId: string | null;
 }
 
 /** Next level of the ad hierarchy, or null at the leaf / outside the hierarchy. */
@@ -227,6 +236,7 @@ export function resolvePerformance(search: PerformanceSearchParams): Performance
     view: search.view ?? 'table',
     compare: search.cmp === '1',
     chartMetric: search.metric ?? (columns.includes('revenue_minor') ? 'revenue_minor' : columns[0]!),
+    conversionId: search.conv ?? null,
   };
 }
 
@@ -270,6 +280,7 @@ export interface PerformanceRequest extends ReportRange {
   readonly group_by: PerformanceGroupBy;
   readonly basis: ReportBasis;
   readonly filters?: readonly PerformanceFilter[];
+  readonly conversion_id?: string;
   readonly limit?: number;
 }
 
@@ -286,6 +297,7 @@ export function performanceQueryString(request: PerformanceRequest): string {
       window_days: rest.model === 'windowed_hybrid' ? rest.window_days : undefined,
       group_by: rest.group_by,
       basis: rest.basis,
+      conversion_id: rest.conversion_id,
       limit: rest.limit,
     },
     filters,
@@ -295,7 +307,8 @@ export function performanceQueryString(request: PerformanceRequest): string {
 export function performanceRequest(
   siteId: string,
   range: ReportRange,
-  options: Pick<PerformanceOptions, 'model' | 'windowDays' | 'basis' | 'groupBy' | 'drill'>,
+  options: Pick<PerformanceOptions, 'model' | 'windowDays' | 'basis' | 'groupBy' | 'drill'> &
+    Partial<Pick<PerformanceOptions, 'conversionId'>>,
 ): PerformanceRequest {
   return {
     site_id: siteId,
@@ -307,6 +320,7 @@ export function performanceRequest(
     group_by: options.groupBy,
     basis: options.basis,
     filters: options.drill,
+    ...(options.conversionId ? { conversion_id: options.conversionId } : {}),
   };
 }
 

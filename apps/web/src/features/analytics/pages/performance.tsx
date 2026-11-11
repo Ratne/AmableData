@@ -6,6 +6,7 @@ import { ChevronRight, Download, GitCompareArrows, TrendingUp } from 'lucide-rea
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
 import { tenantRoute } from '../../../routes/tenant';
+import { useConversionRules } from '../api';
 import { usePerformanceReport } from '../api-reports-ads';
 import { AnalyticsFrame } from '../components/analytics-layout';
 import { EmptyNote, ErrorState, Panel, Segmented } from '../components/ui';
@@ -16,6 +17,7 @@ import {
   AttributionModelControls,
   BasisPicker,
   ColumnPicker,
+  ConversionPicker,
 } from '../reports-ads/controls';
 import { columnLabel, groupLabel, platformLabel } from '../reports-ads/labels';
 import {
@@ -96,6 +98,10 @@ function PerformanceReportPanel({
     ? performanceRequest(site.id, { ...range, ...before }, options)
     : null;
   const report = usePerformanceReport(state.tenant, request);
+  const rules = useConversionRules(state.tenant, site.id).data?.data ?? [];
+  const conversionColumns = options.columns.some((c) =>
+    ['conversions', 'cost_per_conversion_minor', 'conversion_rate'].includes(c),
+  );
   const previous = usePerformanceReport(state.tenant, previousRequest, options.compare);
   const data = report.data;
   const prev = options.compare ? previous.data : undefined;
@@ -149,6 +155,13 @@ function PerformanceReportPanel({
             <GitCompareArrows aria-hidden />
             <span className="hidden sm:inline">{t('analytics.performance.compare')}</span>
           </DashboardButton>
+          {rules.length > 0 && conversionColumns ? (
+            <ConversionPicker
+              rules={rules}
+              value={options.conversionId}
+              onChange={(conv) => update({ conv: conv ?? undefined })}
+            />
+          ) : null}
           <ColumnPicker
             columns={options.columns}
             onChange={(columns) => update({ cols: serializeColumns(columns) })}

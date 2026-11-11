@@ -13,6 +13,7 @@ import type { SqlDb, SqlValue } from '../db/sql';
 import { DAY_MS } from '../time';
 import { listAdSpend } from './ad-entities';
 import { splitMinor } from './attribution';
+import { RULE_SOURCE } from './conversion-rules';
 import { touchDayRollups } from './rollups';
 import {
   dayKeyer,
@@ -106,6 +107,7 @@ interface Acc {
   events: Set<string>;
   reportedConversions: number | null;
   reportedRevenue: number | null;
+  conversions: number;
 }
 
 const newAcc = (key: string | null, parent: string | null): Acc => ({
@@ -124,6 +126,7 @@ const newAcc = (key: string | null, parent: string | null): Acc => ({
   events: new Set(),
   reportedConversions: null,
   reportedRevenue: null,
+  conversions: 0,
 });
 
 class Rows {
@@ -498,25 +501,39 @@ export function costRows(ctx: PerformanceContext, opts: CostOptions): Rows {
   return rows;
 }
 
-/** Credits the revenue events to the rows with the model. */
-function attributeInto(
+interface Creditable {
+  id: string;
+  ts: number;
+  person: PersonKey | null;
+  amount: number;
+  costs: number;
+}
+
+type CreditFn<E> = (
+  e: E,
+  key: string | null,
+  parentKey: string | null,
+  weight: number,
+  amount: number,
+  costs: number,
+) => void;
+
+/**
+ * Splits each event over the arrival touches of its person's path (lookback
+ * of the model) and hands every share to `credit` with its row key.
+ */
+function creditEvents<E extends Creditable>(
   ctx: PerformanceContext,
-  rows: Rows,
   q: Pick<PerformanceQueryParsed, 'model' | 'window_days' | 'group_by' | 'basis'>,
   filters: readonly PerformanceFilter[],
+  events: readonly E[],
+  credit: CreditFn<E>,
 ): void {
+  if (events.length === 0) return;
   const { window: w } = ctx;
   const groupBy = q.group_by;
   const parent = parentDim(groupBy);
   const day = dayKeyer(w.timeZone);
-  const events = revenueEvents(
-    ctx.db,
-    ctx.groups,
-    w.from,
-    q.basis === 'sale_date' ? w.to : Number.MAX_SAFE_INTEGER,
-    ctx.currency,
-  );
-  if (events.length === 0) return;
   const persons = new Set(events.map((e) => e.person).filter((p): p is PersonKey => p !== null));
   const until = events.reduce((m, e) => Math.max(m, e.ts), 0);
   const used = new Set<PerformanceGroupBy>([groupBy, ...filters.map((f) => f.dimension)]);
@@ -528,43 +545,17 @@ function attributeInto(
     nodes: used.has('funnel') || used.has('node'),
     ...(used.has('adset') || used.has('ad') ? { slots: ctx.sources } : {}),
   });
-  const firsts = firstConversions(ctx.db, ctx.groups);
   const inRange = (ts: number): boolean => ts >= w.from && ts < w.to;
   const lookbackMs =
     (q.model === 'windowed_hybrid' ? MAX_ATTRIBUTION_WINDOW_DAYS : q.window_days) * DAY_MS;
   for (const e of events) {
-    const isSale = e.kind === 'sale';
-    const firstOf = e.person === null ? undefined : firsts.get(e.person);
-    const newLead = e.kind === 'lead' && (firstOf?.lead === undefined || firstOf.lead >= e.ts);
-    const returning =
-      isSale && e.person !== null && firstOf?.sale !== undefined && firstOf.sale < e.ts;
-    const credit = (
-      key: string | null,
-      parentKey: string | null,
-      weight: number,
-      amount: number,
-      costs: number,
-    ): void => {
-      rows.add(key, parentKey, (a) => {
-        a.revenue += amount;
-        a.costs += costs;
-        if (isSale) a.sales += weight;
-        else a.leads += weight;
-        if (newLead) a.newLeads += weight;
-        if (returning && e.person !== null) a.returning.add(e.person);
-        if (!a.events.has(e.id)) {
-          a.events.add(e.id);
-          a.totalRevenue += e.amount;
-        }
-      });
-    };
     const path =
       (e.person === null ? undefined : paths.get(e.person))?.filter(
         (t) => t.ts <= e.ts && e.ts - t.ts <= lookbackMs,
       ) ?? [];
     if (path.length === 0) {
       if (filters.length > 0 || (q.basis === 'click_date' && !inRange(e.ts))) continue;
-      credit(groupBy === 'day' ? day(e.ts) : null, null, 1, e.amount, e.costs);
+      credit(e, groupBy === 'day' ? day(e.ts) : null, null, 1, e.amount, e.costs);
       continue;
     }
     const weights = modelWeights(
@@ -583,15 +574,75 @@ function attributeInto(
       if (!passes(dims, filters)) return;
       const key =
         groupBy === 'day' && q.basis === 'sale_date' ? day(e.ts) : (dims[groupBy] ?? null);
-      credit(
-        key,
-        parent === null ? null : (dims[parent] ?? null),
-        weight,
-        amounts[i] ?? 0,
-        costs[i] ?? 0,
-      );
+      credit(e, key, parent === null ? null : (dims[parent] ?? null), weight, amounts[i] ?? 0, costs[i] ?? 0);
     });
   }
+}
+
+/** Credits the revenue events to the rows with the model. */
+function attributeInto(
+  ctx: PerformanceContext,
+  rows: Rows,
+  q: Pick<PerformanceQueryParsed, 'model' | 'window_days' | 'group_by' | 'basis'>,
+  filters: readonly PerformanceFilter[],
+): void {
+  const { window: w } = ctx;
+  const events = revenueEvents(
+    ctx.db,
+    ctx.groups,
+    w.from,
+    q.basis === 'sale_date' ? w.to : Number.MAX_SAFE_INTEGER,
+    ctx.currency,
+  );
+  if (events.length === 0) return;
+  const firsts = firstConversions(ctx.db, ctx.groups);
+  creditEvents(ctx, q, filters, events, (e, key, parentKey, weight, amount, costs) => {
+    const isSale = e.kind === 'sale';
+    const firstOf = e.person === null ? undefined : firsts.get(e.person);
+    const newLead = e.kind === 'lead' && (firstOf?.lead === undefined || firstOf.lead >= e.ts);
+    const returning =
+      isSale && e.person !== null && firstOf?.sale !== undefined && firstOf.sale < e.ts;
+    rows.add(key, parentKey, (a) => {
+      a.revenue += amount;
+      a.costs += costs;
+      if (isSale) a.sales += weight;
+      else a.leads += weight;
+      if (newLead) a.newLeads += weight;
+      if (returning && e.person !== null) a.returning.add(e.person);
+      if (!a.events.has(e.id)) {
+        a.events.add(e.id);
+        a.totalRevenue += e.amount;
+      }
+    });
+  });
+}
+
+/** Custom conversions (one rule, else every rule) of the window, credited like the sales. */
+function attributeConversionsInto(
+  ctx: PerformanceContext,
+  rows: Rows,
+  q: Pick<PerformanceQueryParsed, 'model' | 'window_days' | 'group_by' | 'basis' | 'conversion_id'>,
+  filters: readonly PerformanceFilter[],
+): void {
+  const { window: w } = ctx;
+  const params: SqlValue[] = [RULE_SOURCE, w.from, q.basis === 'sale_date' ? w.to : Number.MAX_SAFE_INTEGER];
+  let only = '';
+  if (q.conversion_id !== undefined) {
+    only = 'AND event = (SELECT \'event:\' || event_number FROM conversion_rules WHERE id = ?)';
+    params.push(q.conversion_id);
+  }
+  const events = ctx.db
+    .all<{ id: string; ts: number; visitor_id: string | null }>(
+      `SELECT id, ts, visitor_id FROM conversion_log
+       WHERE source = ? AND status = 'approved' AND ts >= ? AND ts < ? ${only} ORDER BY ts, id`,
+      ...params,
+    )
+    .map((c) => ({ id: c.id, ts: c.ts, person: ctx.groups.personOf(c.visitor_id), amount: 0, costs: 0 }));
+  creditEvents(ctx, q, filters, events, (_e, key, parentKey, weight) => {
+    rows.add(key, parentKey, (a) => {
+      a.conversions += weight;
+    });
+  });
 }
 
 export function labelOf(
@@ -635,6 +686,9 @@ function toRow(a: Acc, label: string | null): PerformanceRow {
     reported_conversions: a.reportedConversions === null ? null : round3(a.reportedConversions),
     reported_revenue_minor: a.reportedRevenue,
     reported_vs_revenue_minor: a.reportedRevenue === null ? null : a.revenue - a.reportedRevenue,
+    conversions: round3(a.conversions),
+    cost_per_conversion_minor: a.conversions === 0 ? null : Math.round(a.cost / a.conversions),
+    conversion_rate: a.visits === 0 ? null : round4(a.conversions / a.visits),
   };
 }
 
@@ -645,6 +699,7 @@ export function performanceReport(
   const filters = queryFilters(q);
   const rows = costRows(ctx, { groupBy: q.group_by, filters });
   attributeInto(ctx, rows, q, filters);
+  attributeConversionsInto(ctx, rows, q, filters);
   const funnels = q.group_by === 'funnel' ? funnelNames(ctx.db) : new Map<string, string>();
   const sorted = [...rows.byKey.values()].sort(
     (a, b) =>

@@ -151,6 +151,13 @@ const analyticsFunnelsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/funnels'), 'AnalyticsFunnelsPage'),
 });
 
+const analyticsConversionsRoute = createRoute({
+  getParentRoute: () => tenantRoute,
+  path: 'analytics/conversions',
+  validateSearch: validateAnalyticsSearch,
+  component: lazyRouteComponent(() => import('./pages/conversions'), 'AnalyticsConversionsPage'),
+});
+
 export const analyticsFunnelBuilderRoute = createRoute({
   getParentRoute: () => tenantRoute,
   path: 'analytics/funnels/$funnelId/builder',
@@ -218,6 +225,7 @@ export const analyticsRoutes = [
   analyticsVisitorsRoute,
   analyticsVisitorRoute,
   analyticsFunnelsRoute,
+  analyticsConversionsRoute,
   analyticsFunnelBuilderRoute,
   analyticsPerformanceRoute,
   analyticsLtvRoute,

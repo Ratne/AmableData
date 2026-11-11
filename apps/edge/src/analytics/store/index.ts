@@ -1,4 +1,16 @@
+import {
+  conversionReportQuerySchema,
+  createConversionRuleSchema,
+  updateConversionRuleSchema,
+  type ConversionReport,
+  type ConversionReportQuery,
+  type ConversionRule,
+  type CreateConversionRuleInput,
+  type UpdateConversionRuleInput,
+} from '@amable/api-types';
 import { runPurgeJob } from '../purge';
+import * as conversionRules from './conversion-rules';
+import { conversionReport } from './reports-conversions';
 import {
   dropSuppressed,
   listPurgeJobs,
@@ -632,6 +644,46 @@ export class AnalyticsStore {
     if (funnel === null)
       return { ok: false, error: { code: 'not_found', message: 'funnel not found' } };
     return { ok: true, value: funnelResult(this.db, funnel, r.value.range) };
+  }
+
+  // custom conversions
+  listConversionRules(): ConversionRule[] {
+    return conversionRules.listRules(this.db).map(conversionRules.publicRule);
+  }
+  /** With `backfill`, the pageviews / goals already stored are converted too. */
+  createConversionRule(input: CreateConversionRuleInput): AnalyticsResult<ConversionRule> {
+    const site = getSiteRecord(this.db);
+    if (site === null || site.deleted) return notFound('site');
+    const q = parse(createConversionRuleSchema, input);
+    if (!q.ok) return q;
+    return this.db.transaction(() =>
+      conversionRules.createRule(this.db, q.value, site.site.currency, this.now()),
+    );
+  }
+  updateConversionRule(id: string, patch: UpdateConversionRuleInput): AnalyticsResult<ConversionRule> {
+    const q = parse(updateConversionRuleSchema, patch);
+    if (!q.ok) return q;
+    return conversionRules.updateRule(this.db, id, q.value, this.now());
+  }
+  deleteConversionRule(id: string): boolean {
+    return this.db.transaction(() => conversionRules.deleteRule(this.db, id));
+  }
+  conversionReport(
+    input: AnalyticsRange,
+    query: ConversionReportQuery = {},
+  ): AnalyticsResult<ConversionReport> {
+    const r = this.range(input);
+    if (!r.ok) return r;
+    const q = parse(conversionReportQuerySchema, query);
+    if (!q.ok) return q;
+    const site = r.value.site.site;
+    if (q.value.rule_id !== undefined && conversionRules.getRule(this.db, q.value.rule_id) === null) {
+      return notFound('conversion');
+    }
+    return {
+      ok: true,
+      value: conversionReport(this.db, r.value.range, q.value, site.attribution_model, site.currency),
+    };
   }
 
   // segments

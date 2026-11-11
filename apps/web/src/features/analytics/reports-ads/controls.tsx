@@ -2,6 +2,7 @@ import {
   ATTRIBUTION_MODELS_V2,
   REPORT_BASIS,
   type AttributionModelV2,
+  type ConversionRule,
   type ReportBasis,
 } from '@amable/api-types';
 import {
@@ -92,6 +93,32 @@ function ModelExplainer({ model }: { model: AttributionModelV2 }) {
         </dl>
       </DashboardPopoverContent>
     </DashboardPopover>
+  );
+}
+
+const ALL_CONVERSIONS = '*';
+
+/** Custom conversion counted in the `conversions` columns (all of them by default). */
+export function ConversionPicker({
+  rules,
+  value,
+  onChange,
+}: {
+  rules: readonly ConversionRule[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <DashboardFilterMenu
+      label={t('analytics.performance.conversion')}
+      value={value ?? ALL_CONVERSIONS}
+      options={[
+        { value: ALL_CONVERSIONS, label: t('analytics.conversions.all') },
+        ...rules.map((rule) => ({ value: rule.id, label: rule.name })),
+      ]}
+      onValueChange={(id) => onChange(id === ALL_CONVERSIONS ? null : id)}
+    />
   );
 }
 

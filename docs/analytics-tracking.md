@@ -21,8 +21,9 @@ The feature extends the web analytics module (tracker, ingest, `AnalyticsDO`); r
 10. [Outbound conversions](#outbound-conversions)
 11. [Custom tracking domains](#custom-tracking-domains)
 12. [Reports](#reports)
-13. [Event pipeline and contact data](#event-pipeline-and-contact-data)
-14. [Development and tests](#development-and-tests)
+13. [Custom conversions](#custom-conversions)
+14. [Event pipeline and contact data](#event-pipeline-and-contact-data)
+15. [Development and tests](#development-and-tests)
 
 ## Overview
 
@@ -278,10 +279,35 @@ optional `timezone`:
 | `GET /ads-reports/cohorts` | Weekly or monthly cohorts of first clicks with cumulative revenue and ROI at 0/30/60/90 days |
 | `GET /ads-reports/journeys` | Most frequent paths (by source, campaign or node) with conversions and revenue |
 | `GET /ads-reports/tracking-quality` | Share of conversions with a resolved identity, with a platform click id, with a funnel touch; `score` is their mean |
+| `GET /conversions/report` | Custom conversions per rule, credited to a source dimension (channel, UTM, entry page, ad campaign / set / ad) with a legacy attribution model, plus the latest 20 with their entry page and ad |
 | `GET /funnels-v2/{id}/heatmap` | Visits, flow %, CVR and ROI per node and edge for the canvas overlay |
 
 Rows whose key is null are the unattributed share. Cost comes from the synced spend of the
 platforms that have some in the range, else from the per-click cost of the touches.
+
+## Custom conversions
+
+Site rules that turn a pageview ("reached `/thank-you`", exact, prefix or substring, optional
+hostname) or a goal into a conversion, whatever the entry page and however many visits it took.
+`once` counts the first match of a visitor, `every` each match; an optional fixed value is in
+the site currency.
+
+- **Storage:** `conversion_rules` (AnalyticsDO migration 11, `store/conversion-rules.ts`).
+  Conversions are `conversion_log` rows with `source = 'rule'`, `event = 'event:N'`
+  (N 100–999, freed on delete) and `hit = 'r:<visitorId>'`; `UNIQUE(hit, event, tx)` makes them
+  idempotent (`tx` is empty for `once`, `pv:<id>` / `g:<id>` for `every`).
+- **Ingest:** each new pageview and goal (tracker or CRM) is checked against the enabled rules.
+  A page rule also records a goal named after the rule `key`, so alerts, automations, funnels
+  the realtime feed and the automations (`goal` trigger) see it; goals written by rules never trigger rules.
+- **Backfill:** `backfill: true` on create converts the raw pageviews / goals still in
+  retention in one `INSERT … SELECT`, without goals.
+- **Reports:** `/conversions/report` credits each conversion to the sessions of the person
+  (a CRM contact across its visitors, else the visitor) before it. The performance report adds
+  `conversions`, `cost_per_conversion_minor` and `conversion_rate`, credited over the arrival
+  touches with the V2 models; `conversion_id` restricts them to one rule. The ad only shows
+  there for traffic that came through funnel or traffic-source links.
+- **API:** `GET/POST /conversions`, `PATCH/DELETE /conversions/{id}` (writers:
+  `analytics:configure` or `reports:create`).
 
 ## Event pipeline and contact data
 

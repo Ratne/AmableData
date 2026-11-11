@@ -17,7 +17,11 @@ import type {
   IdentityMergeSettingsBody,
   TrackingCoverageReport,
   ContactJourney,
+  ConversionDimension,
+  ConversionReport,
+  ConversionRule,
   CrawlerSnippets,
+  CreateConversionRuleInput,
   CreateAlertInput,
   CreateFunnelInput,
   CreateSiteInput,
@@ -37,6 +41,7 @@ import type {
   SiteSnippet,
   SiteWithSecret,
   UpdateAlertInput,
+  UpdateConversionRuleInput,
   UpdateFunnelInput,
   UpdateSiteInput,
   VisitorProfile,
@@ -454,6 +459,28 @@ export function useFunnelResult(
   });
 }
 
+export const useConversionRules = (tenant: string, siteId: string | null) =>
+  useSiteResource<{ data: ConversionRule[] }>(tenant, siteId, 'conversions', 'conversions');
+
+export function useConversionReport(
+  tenant: string,
+  siteId: string | null,
+  query: AnalyticsQuery,
+  params: { rule_id?: string | null; dimension: ConversionDimension; model: AttributionModel },
+) {
+  return useQuery({
+    queryKey: analyticsKeys.site(tenant, siteId ?? '', 'conversions', 'report', params, query),
+    queryFn: () =>
+      request<ConversionReport>(
+        `${tenantBase(tenant)}/conversions/report${buildSearch({ site_id: siteId, ...params }, query)}`,
+      ),
+    enabled: siteId !== null,
+    placeholderData: keepPreviousData,
+    staleTime: REPORT_STALE_MS,
+    retry: false,
+  });
+}
+
 export const useSegments = (tenant: string, siteId: string | null) =>
   useSiteResource<{ data: Segment[] }>(tenant, siteId, 'segments', 'segments');
 export const useAlerts = (tenant: string, siteId: string | null) =>
@@ -527,6 +554,14 @@ export function analyticsApi(tenant: string) {
         request<Funnel>(sited(siteId, `funnels/${enc(id)}`), patch(input)),
       remove: (siteId: string, id: string) =>
         request<unknown>(sited(siteId, `funnels/${enc(id)}`), del),
+    },
+    conversions: {
+      create: (siteId: string, input: CreateConversionRuleInput) =>
+        request<ConversionRule>(sited(siteId, 'conversions'), post(input)),
+      update: (siteId: string, id: string, input: UpdateConversionRuleInput) =>
+        request<ConversionRule>(sited(siteId, `conversions/${enc(id)}`), patch(input)),
+      remove: (siteId: string, id: string) =>
+        request<unknown>(sited(siteId, `conversions/${enc(id)}`), del),
     },
     segments: {
       create: (siteId: string, input: { name: string; filters: AnalyticsFilter[] }) =>

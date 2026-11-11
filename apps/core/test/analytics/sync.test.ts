@@ -181,6 +181,24 @@ describe('CRM → analytics sync', () => {
     expect(new Set(w.engine.map((e) => e.id)).size).toBe(w.engine.length);
   });
 
+  it('publishes the goal of a custom conversion page rule to the automation engine', async () => {
+    w.emit('form.submitted', { formId: 'f1', submissionId: 'sub1', contactId: 'c1', visitorId: 'visitor-1', fields: {}, source: {}, contactCreated: false });
+    await syncTenant(w.ports, TENANT);
+    const rule = site(w).createConversionRule({ name: 'Grazie', value: '/grazie' });
+    expect(rule.ok).toBe(true);
+    site(w).ingest(
+      [
+        ev({ vid: 'visitor-1', sid: 's2', ts: T0 + 2 * MIN, path: '/grazie', sessionNumber: 2 }),
+        ev({ vid: 'visitor-1', sid: 's2', ts: T0 + 3 * MIN, path: '/grazie', sessionNumber: 2 }),
+      ],
+      [],
+    );
+    await syncTenant(w.ports, TENANT);
+    expect(w.engine.filter((e) => e.type === 'analytics.goal')).toEqual([
+      expect.objectContaining({ payload: { contactId: 'c1', siteId: SITE, goalName: 'grazie' } }),
+    ]);
+  });
+
   it('delivers goal alerts once per minute with aggregated completions', async () => {
     const created = site(w).createAlert(
       { name: 'Signups', goal: 'signup', enabled: true, email_recipients: [], webhook_url: 'https://hooks.example.com/x' },

@@ -641,4 +641,27 @@ export const analyticsMigrations: readonly Migration[] = [
       `CREATE INDEX ip_ua_seen_time ON ip_ua_seen (last_seen)`,
     ],
   },
+  {
+    id: 11,
+    name: 'analytics_conversion_rules',
+    statements: [
+      // Custom conversions: matching pageviews / goals become `event:N` rows of conversion_log.
+      `CREATE TABLE conversion_rules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        key TEXT NOT NULL UNIQUE,
+        trigger TEXT NOT NULL,
+        value TEXT NOT NULL,
+        match TEXT NOT NULL,
+        hostname TEXT,
+        count TEXT NOT NULL,
+        value_minor INTEGER,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        event_number INTEGER NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX conversion_log_event ON conversion_log (event, ts)`,
+    ],
+  },
 ];

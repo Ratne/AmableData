@@ -5,7 +5,7 @@ import {
   type Touch,
 } from '@amable/api-types';
 import { first, type SqlDb, type SqlValue } from '../db/sql';
-import { filterSql, SESSION_COLUMNS, type ResolvedRange } from './query';
+import { filterSql, SESSION_COLUMNS, type ResolvedRange, type SessionDimension } from './query';
 
 /** Channel of sessions without any campaign, referrer or click id. */
 const DIRECT_CHANNEL = 'Direct';
@@ -72,6 +72,9 @@ export interface TouchRow {
   os: string | null;
   browser: string | null;
   country: string | null;
+  entry_path: string | null;
+  ad_campaign_id: string | null;
+  ad_id: string | null;
   value: string | null;
 }
 
@@ -82,7 +85,7 @@ export interface TouchRow {
 export function touchesOf(
   db: SqlDb,
   persons: readonly PersonKey[],
-  opts: { until?: number; dimension?: AttributionDimension; filters?: ResolvedRange['filters'] } = {},
+  opts: { until?: number; dimension?: SessionDimension; filters?: ResolvedRange['filters'] } = {},
 ): Map<PersonKey, TouchRow[]> {
   const contacts = persons.filter((p) => p.startsWith('c:')).map((p) => p.slice(2));
   const visitors = persons.filter((p) => p.startsWith('v:')).map((p) => p.slice(2));
@@ -103,11 +106,15 @@ export function touchesOf(
     os: string | null;
     browser: string | null;
     country: string | null;
+    entry_path: string | null;
+    ad_campaign_id: string | null;
+    ad_id: string | null;
     value: string | null;
   }>(
     `SELECT v.contact_id AS contact_id, s.visitor_id AS visitor_id, s.started_at AS started_at, s.channel AS channel,
        s.source AS source, s.referrer_host AS referrer_host, s.utm_campaign AS campaign, s.device AS device,
-       s.os AS os, s.browser AS browser, s.country AS country, ${column} AS value
+       s.os AS os, s.browser AS browser, s.country AS country, s.entry_path AS entry_path,
+       s.ad_campaign_id AS ad_campaign_id, s.ad_id AS ad_id, ${column} AS value
      FROM sessions s JOIN visitors v ON v.id = s.visitor_id
      WHERE (v.contact_id IN (SELECT value FROM json_each(?)) OR s.visitor_id IN (SELECT value FROM json_each(?)))
        AND s.started_at <= ? AND ${where}
@@ -137,6 +144,9 @@ export function touchesOf(
       os: row.os,
       browser: row.browser,
       country: row.country,
+      entry_path: row.entry_path,
+      ad_campaign_id: row.ad_campaign_id,
+      ad_id: row.ad_id,
       value: row.value,
     });
   }
@@ -240,6 +250,20 @@ export function attributeRevenueByModel(
   const conversions = conversionsIn(db, r.from, r.to, currency);
   const persons = [...new Set(conversions.map((c) => c.person).filter((p): p is string => p !== null))];
   const touches = touchesOf(db, persons, { until: r.to, dimension, filters: r.filters });
+  return attributeConversions(conversions, touches, models, r.filters.length > 0);
+}
+
+/**
+ * Credits each conversion (amount = its value) to the touches of its person
+ * before it, per model. `filtered`: touches were restricted by query filters,
+ * so conversions without any are left out instead of credited to `null`.
+ */
+export function attributeConversions(
+  conversions: readonly Pick<ConversionRow, 'ts' | 'amount' | 'person'>[],
+  touches: ReadonlyMap<PersonKey, readonly TouchRow[]>,
+  models: readonly AttributionModel[],
+  filtered: boolean,
+): AttributionPass {
   const byModel = new Map<AttributionModel, Map<string | null, AttributedValue>>();
   for (const m of models) byModel.set(m, new Map());
   const credit = (
@@ -260,7 +284,7 @@ export function attributeRevenueByModel(
       (t) => t.started_at <= c.ts,
     );
     if (before.length === 0) {
-      if (r.filters.length === 0) {
+      if (!filtered) {
         for (const out of byModel.values()) credit(out, null, c.amount, 1);
         totalRevenue += c.amount;
         totalConversions += 1;

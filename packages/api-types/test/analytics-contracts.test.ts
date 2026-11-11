@@ -386,8 +386,14 @@ describe('attribution report contracts', () => {
       reported_revenue_minor: 4000,
       reported_vs_revenue_minor: -1000,
     };
-    // Rows without hard costs (older servers) read as 0.
-    expect(performanceRowSchema.parse(row)).toEqual({ ...row, hard_costs_minor: 0 });
+    // Rows without hard costs or custom conversions (older servers) read as 0 / null.
+    expect(performanceRowSchema.parse(row)).toEqual({
+      ...row,
+      hard_costs_minor: 0,
+      conversions: 0,
+      cost_per_conversion_minor: null,
+      conversion_rate: null,
+    });
     expect(performanceRowSchema.parse({ ...row, hard_costs_minor: 200 }).hard_costs_minor).toBe(200);
     expect(ltvQuerySchema.parse({ site_id: 's', from: '2026-01-01', to: '2026-10-01' }).model).toBe('first_click');
     expect(cohortQuerySchema.parse({ site_id: 's', from: '2026-01-01', to: '2026-10-01' }).granularity).toBe('month');

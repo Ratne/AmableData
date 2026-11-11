@@ -133,6 +133,9 @@ describe('ads performance report (fixture: 20 visitors, 2 sources)', () => {
       reported_conversions: 3,
       reported_revenue_minor: 12_000,
       reported_vs_revenue_minor: -4500,
+      conversions: 0,
+      cost_per_conversion_minor: null,
+      conversion_rate: 0,
     });
     expect(rows.get('m2')).toMatchObject({
       cost_minor: 500,

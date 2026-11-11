@@ -137,12 +137,12 @@ describe('pipeline hardening', () => {
 
   it('isolates an event whose apply throws, applies the rest and archives it to poison/', async () => {
     const store = ns.store(`site:${SITE_ID}`) as unknown as {
-      db: { run(q: string, ...p: unknown[]): void };
+      db: { all(q: string, ...p: unknown[]): unknown[] };
     };
-    const run = store.db.run.bind(store.db);
-    vi.spyOn(store.db, 'run').mockImplementation((q: string, ...p: unknown[]) => {
+    const all = store.db.all.bind(store.db);
+    vi.spyOn(store.db, 'all').mockImplementation((q: string, ...p: unknown[]) => {
       if (q.startsWith('INSERT INTO pageviews') && p.includes('/poison')) throw new Error('boom');
-      run(q, ...p);
+      return all(q, ...p);
     });
     const [b, outcome] = batch([
       { kind: 'event', event: ev({ eid: 't:ok', path: '/fine' }) },

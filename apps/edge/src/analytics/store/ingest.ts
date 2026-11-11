@@ -2,6 +2,7 @@ import type { RealtimeEvent } from '@amable/api-types';
 import { first, type SqlDb } from '../db/sql';
 import { HOUR_MS } from '../time';
 import type { BotHit, EnrichedEvent } from '../types';
+import { activeRules, pageMatches, recordRuleConversion, type Rule } from './conversion-rules';
 import { claimEvent } from './dedupe';
 import {
   identityKeyRefs,
@@ -230,6 +231,16 @@ function touchSession(
   );
   if (started !== s.started_at) markDirty(db, s.started_at);
   markDirty(db, started);
+  // The row is written with absolute values: keep it current for a second touch of the same event.
+  Object.assign(s, {
+    started_at: started,
+    last_seen: last,
+    entry_path: entry,
+    exit_path: exit,
+    pageviews,
+    goals,
+    revenue_minor: s.revenue_minor + (delta.revenue ?? 0),
+  });
   // Ad platform cookies often appear after the landing (their pixel loads later).
   const cookies = platformCookies(e.clickIds);
   if (cookies !== null) {
@@ -361,6 +372,69 @@ export interface BatchState {
   live: RealtimeEvent[];
   /** `session:path` pairs already queued for automations in this batch. */
   pagesQueued: Set<string>;
+  /** Enabled conversion rules, read once per batch. */
+  rules?: Rule[];
+}
+
+function rulesOf(db: SqlDb, out: BatchState): Rule[] {
+  out.rules ??= activeRules(db);
+  return out.rules;
+}
+
+/**
+ * Pageview rules matching a stored pageview: each new conversion also records
+ * a goal named after the rule (`params.rule`), so it shows in realtime,
+ * journeys, funnels, alerts and automations. Those goals never trigger rules.
+ */
+function convertPageview(
+  db: SqlDb,
+  out: BatchState,
+  opts: IngestOptions,
+  e: EnrichedEvent,
+  session: SessionRow,
+  pageviewId: number,
+): void {
+  const path = e.path;
+  if (path === null) return;
+  for (const rule of rulesOf(db, out)) {
+    if (rule.trigger !== 'pageview' || !pageMatches(rule, e.hostname, path)) continue;
+    const match = { visitorId: e.vid, sessionId: session.id, ts: e.ts, ref: `pv:${pageviewId}`, trigger: path };
+    if (!recordRuleConversion(db, rule, match, opts.currency, opts.now ?? Date.now())) continue;
+    const data = { rule: rule.id };
+    db.run(
+      `INSERT INTO goals (session_id, visitor_id, ts, name, path, params) VALUES (?, ?, ?, ?, ?, ?)`,
+      session.id,
+      e.vid,
+      e.ts,
+      rule.key,
+      path,
+      JSON.stringify(data),
+    );
+    touchSession(db, session, e, { goals: 1 });
+    const goal: EnrichedEvent = { ...e, type: 'goal', name: rule.key, data };
+    afterGoal(db, out, goal, session, null);
+    out.live.push(liveEvent(db, goal, session));
+  }
+}
+
+/** Goal rules matching a stored goal (browser, server or CRM). */
+export function convertGoal(
+  db: SqlDb,
+  out: BatchState,
+  currency: string,
+  now: number,
+  g: { visitorId: string; sessionId: string | null; ts: number; goalId: number; name: string },
+): void {
+  for (const rule of rulesOf(db, out)) {
+    if (rule.trigger !== 'goal' || rule.value !== g.name) continue;
+    recordRuleConversion(
+      db,
+      rule,
+      { visitorId: g.visitorId, sessionId: g.sessionId, ts: g.ts, ref: `g:${g.goalId}`, trigger: g.name },
+      currency,
+      now,
+    );
+  }
 }
 
 export function newBatchState(): BatchState {
@@ -536,32 +610,46 @@ function ingestOne(
   switch (event.type) {
     case 'pageview':
       if (session === null || event.path === null) return 'skipped';
-      db.run(
-        `INSERT INTO pageviews (session_id, visitor_id, ts, hostname, path) VALUES (?, ?, ?, ?, ?)`,
-        session.id,
-        vid,
-        event.ts,
-        event.hostname ?? '',
-        event.path,
-      );
-      touchSession(db, session, event, { pageviews: 1 });
-      afterPageview(db, out, event, session);
-      out.live.push(liveEvent(db, event, session));
+      {
+        const [pv] = db.all<{ id: number }>(
+          `INSERT INTO pageviews (session_id, visitor_id, ts, hostname, path) VALUES (?, ?, ?, ?, ?) RETURNING id`,
+          session.id,
+          vid,
+          event.ts,
+          event.hostname ?? '',
+          event.path,
+        );
+        touchSession(db, session, event, { pageviews: 1 });
+        afterPageview(db, out, event, session);
+        out.live.push(liveEvent(db, event, session));
+        if (pv !== undefined) convertPageview(db, out, opts, event, session, pv.id);
+      }
       break;
     case 'goal':
       if (event.name === null) return 'skipped';
-      db.run(
-        `INSERT INTO goals (session_id, visitor_id, ts, name, path, params) VALUES (?, ?, ?, ?, ?, ?)`,
-        session?.id ?? null,
-        vid,
-        event.ts,
-        event.name,
-        event.path,
-        event.data === null ? null : JSON.stringify(event.data),
-      );
-      if (session !== null) touchSession(db, session, event, { goals: 1 });
-      if (!RESERVED_GOALS.has(event.name)) afterGoal(db, out, event, session, null);
-      out.live.push(liveEvent(db, event, session));
+      {
+        const [goal] = db.all<{ id: number }>(
+          `INSERT INTO goals (session_id, visitor_id, ts, name, path, params) VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+          session?.id ?? null,
+          vid,
+          event.ts,
+          event.name,
+          event.path,
+          event.data === null ? null : JSON.stringify(event.data),
+        );
+        if (session !== null) touchSession(db, session, event, { goals: 1 });
+        if (!RESERVED_GOALS.has(event.name)) afterGoal(db, out, event, session, null);
+        out.live.push(liveEvent(db, event, session));
+        if (goal !== undefined) {
+          convertGoal(db, out, opts.currency, opts.now ?? Date.now(), {
+            visitorId: vid,
+            sessionId: session?.id ?? null,
+            ts: event.ts,
+            goalId: goal.id,
+            name: event.name,
+          });
+        }
+      }
       break;
     case 'external_link': {
       const url = typeof event.data?.['url'] === 'string' ? event.data['url'] : null;

@@ -5,7 +5,12 @@ import {
   alertSchema,
   alertWithSecretSchema,
   analyticsQueryParamsSchema,
+  ATTRIBUTION_MODELS,
+  CONVERSION_DIMENSIONS,
+  conversionReportSchema,
+  conversionRuleSchema,
   createAlertSchema,
+  createConversionRuleSchema,
   createFunnelSchema,
   createSegmentSchema,
   createShareSchema,
@@ -21,6 +26,7 @@ import {
   siteKeySchema,
   siteKeyWithSecretSchema,
   updateAlertSchema,
+  updateConversionRuleSchema,
   updateFunnelSchema,
   updateSegmentSchema,
   type Share,
@@ -221,6 +227,56 @@ export function registerConfigRoutes(api: OpenAPIHono<AppEnv>): void {
       const params = c.req.valid('query');
       const { stub } = await siteOf(c);
       return c.json(unwrap(await stub.funnelResult(c.req.valid('param').id, rangeOf(c, params))), 200);
+    },
+  );
+
+  // ------------------------------------------------- custom conversions
+  savedViewRoutes(api, {
+    path: '/conversions',
+    noun: 'conversion',
+    schema: conversionRuleSchema,
+    createSchema: createConversionRuleSchema,
+    updateSchema: updateConversionRuleSchema,
+    summaries: {
+      list: 'Custom conversions of a site',
+      create: 'Create a custom conversion (page reached or goal completed; `backfill` converts past data too)',
+      update: 'Update a custom conversion',
+      remove: 'Delete a custom conversion and the conversions it recorded',
+    },
+    list: (stub) => stub.listConversionRules(),
+    create: async (stub, input) => unwrap(await stub.createConversionRule(input)),
+    update: async (stub, id, patch) => {
+      const r = await stub.updateConversionRule(id, patch);
+      return !r.ok && r.error.code === 'not_found' ? null : unwrap(r);
+    },
+    remove: (stub, id) => stub.deleteConversionRule(id),
+  });
+  api.openapi(
+    crmRoute('analytics:read', {
+      method: 'get',
+      path: '/conversions/report',
+      tags,
+      summary: 'Custom conversions of a range: per rule, credited to a source dimension, latest ones',
+      description: `Each conversion is credited to the sessions of the person before it (every visitor of a CRM contact) with the attribution model (${ATTRIBUTION_MODELS.join(', ')}, default the site's).`,
+      request: {
+        query: analyticsQueryParamsSchema.extend({
+          rule_id: z.string().min(1).max(64).optional(),
+          dimension: z.enum(CONVERSION_DIMENSIONS).optional(),
+          model: z.enum(ATTRIBUTION_MODELS).optional(),
+          limit: z.coerce.number().int().min(1).max(200).optional(),
+        }),
+      },
+      responses: { 200: json(conversionReportSchema, 'Conversion report') },
+    }),
+    async (c) => {
+      const params = c.req.valid('query');
+      const { stub } = await siteOf(c);
+      const query = Object.fromEntries(
+        (['rule_id', 'dimension', 'model', 'limit'] as const)
+          .filter((k) => params[k] !== undefined)
+          .map((k) => [k, params[k]]),
+      );
+      return c.json(unwrap(await stub.conversionReport(rangeOf(c, params), query)), 200);
     },
   );
 

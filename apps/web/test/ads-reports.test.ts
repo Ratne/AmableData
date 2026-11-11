@@ -54,6 +54,9 @@ function row(patch: Partial<PerformanceRow> = {}): PerformanceRow {
     reported_conversions: 3,
     reported_revenue_minor: 30_000,
     reported_vs_revenue_minor: -4_950,
+    conversions: 2,
+    cost_per_conversion_minor: 5_000,
+    conversion_rate: 0.2,
     ...patch,
   };
 }
@@ -178,6 +181,15 @@ describe('performance query params', () => {
     expect(new URLSearchParams(performanceQueryString(performanceRequest('s', range, linear))).has('window_days')).toBe(false);
   });
 
+  it('sends the custom conversion picked with `conv`', () => {
+    const options = resolvePerformance(parsePerformanceSearch({ conv: 'cr_1' }));
+    expect(options.conversionId).toBe('cr_1');
+    const qs = new URLSearchParams(performanceQueryString(performanceRequest('s', range, options)));
+    expect(qs.get('conversion_id')).toBe('cr_1');
+    expect(new URLSearchParams(performanceQueryString(performanceRequest('s', range, resolvePerformance({})))).has('conversion_id')).toBe(false);
+    expect(parsePerformanceSearch({ conv: 'x'.repeat(65) })).toEqual({});
+  });
+
   it('repeats a filter dimension', () => {
     const qs = performanceQueryString({
       site_id: 's',
@@ -215,6 +227,9 @@ describe('metric formatting', () => {
     expect(changeTone('revenue_minor', 0.2)).toBe('positive');
     expect(changeTone('cost_minor', 0.2)).toBe('negative');
     expect(changeTone('cpa_minor', -0.1)).toBe('positive');
+    expect(changeTone('cost_per_conversion_minor', 0.1)).toBe('negative');
+    expect(formatMetric(f, 'conversion_rate', 0.2, 'EUR')).toBe('20%');
+    expect(formatMetric(f, 'cost_per_conversion_minor', null, 'EUR')).toBe('—');
     expect(changeTone('clicks', null)).toBe('neutral');
   });
 

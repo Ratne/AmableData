@@ -293,6 +293,13 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
         permission: 'analytics:read',
       },
       {
+        id: 'conversions',
+        path: 'analytics/conversions',
+        labelKey: 'analytics.conversions.title',
+        icon: Target,
+        permission: 'analytics:read',
+      },
+      {
         id: 'funnels-v2',
         path: 'analytics/funnels-v2',
         labelKey: 'analytics.funnelsV2.title',

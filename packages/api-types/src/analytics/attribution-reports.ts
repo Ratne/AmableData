@@ -80,6 +80,8 @@ export const performanceQuerySchema = z.object({
   platform: z.enum(AD_PLATFORMS).optional(),
   traffic_source_id: z.string().max(64).optional(),
   funnel_id: z.string().max(64).optional(),
+  /** Custom conversion rule counted in `conversions`; all rules when absent. */
+  conversion_id: z.string().min(1).max(64).optional(),
   /** Drill-down: rows restricted to children of these values. */
   filters: z.array(performanceFilterSchema).max(10).default([]),
   limit: z.coerce.number().int().min(1).max(1000).default(200),
@@ -125,6 +127,12 @@ export const performanceRowSchema = z.object({
   reported_revenue_minor: z.number().int().nullable(),
   /** `revenue_minor - reported_revenue_minor` (null without platform data). */
   reported_vs_revenue_minor: z.number().int().nullable(),
+  /** Credited custom conversions (`conversion_id`, else every rule), fractional with the multi-touch models. */
+  conversions: z.number().default(0),
+  /** Cost / conversions; null without either. */
+  cost_per_conversion_minor: z.number().nullable().default(null),
+  /** Conversions / visits; null without visits. */
+  conversion_rate: z.number().nullable().default(null),
 });
 export type PerformanceRow = z.infer<typeof performanceRowSchema>;
 

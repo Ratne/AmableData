@@ -43,6 +43,8 @@ const performanceParams = z.object({
   platform: z.enum(AD_PLATFORMS).optional(),
   traffic_source_id: z.string().max(64).optional(),
   funnel_id: z.string().max(64).optional(),
+  /** Custom conversion counted in `conversions` (default: every rule). */
+  conversion_id: z.string().min(1).max(64).optional(),
   limit: z.coerce.number().int().min(1).max(1000).optional(),
 });
 const ltvParams = z.object({

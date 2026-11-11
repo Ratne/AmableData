@@ -1,5 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import type {
+  ConversionReport,
+  ConversionReportQuery,
+  ConversionRule,
+  CreateConversionRuleInput,
+  UpdateConversionRuleInput,
   AdEntity,
   AdPlatform,
   AdSpendDay,
@@ -352,6 +357,25 @@ export class AnalyticsDO extends DurableObject<Env> {
   }
   funnelResult(id: string, range: AnalyticsRange): AnalyticsResult<FunnelResult> {
     return this.store.funnelResult(id, range);
+  }
+
+  listConversionRules(): ConversionRule[] {
+    return this.store.listConversionRules();
+  }
+  createConversionRule(input: CreateConversionRuleInput): AnalyticsResult<ConversionRule> {
+    return this.store.createConversionRule(input);
+  }
+  updateConversionRule(id: string, patch: UpdateConversionRuleInput): AnalyticsResult<ConversionRule> {
+    return this.store.updateConversionRule(id, patch);
+  }
+  deleteConversionRule(id: string): boolean {
+    return this.store.deleteConversionRule(id);
+  }
+  conversionReport(
+    range: AnalyticsRange,
+    query: ConversionReportQuery,
+  ): AnalyticsResult<ConversionReport> {
+    return this.store.conversionReport(range, query);
   }
 
   listSegments(): Segment[] {

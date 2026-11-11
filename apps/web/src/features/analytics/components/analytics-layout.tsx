@@ -13,7 +13,13 @@ import { SegmentsMenu } from './segments-menu';
 import { ShareDialog } from './share-dialog';
 import { ErrorState, panelClass } from './ui';
 
-export type AnalyticsTab = 'dashboard' | 'realtime' | 'insights' | 'visitors' | 'funnels';
+export type AnalyticsTab =
+  | 'dashboard'
+  | 'realtime'
+  | 'insights'
+  | 'visitors'
+  | 'funnels'
+  | 'conversions';
 
 const TAB_PATHS = {
   dashboard: '/t/$tenant/analytics',
@@ -21,13 +27,14 @@ const TAB_PATHS = {
   insights: '/t/$tenant/analytics/insights',
   visitors: '/t/$tenant/analytics/visitors',
   funnels: '/t/$tenant/analytics/funnels',
+  conversions: '/t/$tenant/analytics/conversions',
 } as const;
 
 function isTab(value: string): value is AnalyticsTab {
   return value in TAB_PATHS;
 }
 
-/** Header of the analytics pages: title and the Dashboard/Realtime/Insights/Visitors/Funnels tabs. */
+/** Header of the analytics pages: title and the Dashboard/Realtime/Insights/Visitors/Funnels/Conversions tabs. */
 export function useAnalyticsChrome(
   state: AnalyticsState,
   tab: AnalyticsTab | null,
@@ -43,6 +50,7 @@ export function useAnalyticsChrome(
       { value: 'insights', label: t('analytics.tabs.insights') },
       { value: 'visitors', label: t('analytics.tabs.visitors') },
       { value: 'funnels', label: t('analytics.tabs.funnels') },
+      { value: 'conversions', label: t('analytics.tabs.conversions') },
     ],
     tab: tab ?? undefined,
     onTabChange: (value) => {
