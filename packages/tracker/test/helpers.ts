@@ -14,7 +14,8 @@ export interface Page {
 
 export interface PageOptions {
   url?: string;
-  attrs?: Record<string, string>;
+  /** `undefined` removes the attribute from the script tag (what GTM does to data-site). */
+  attrs?: Record<string, string | undefined>;
   body?: string;
   options?: Partial<BuildOptions>;
   cookies?: string[];
@@ -27,6 +28,7 @@ export function openPage(opts: PageOptions = {}): Page {
   const url = opts.url ?? 'https://www.example.com/pricing?utm_source=news&gclid=abc';
   const attrs = { 'data-site': 'site_test', src: 'https://t.example.com/s.js', ...opts.attrs };
   const attrText = Object.entries(attrs)
+    .filter((e): e is [string, string] => e[1] !== undefined)
     .map(([k, v]) => `${k}="${v}"`)
     .join(' ');
   const html = `<!doctype html><html><head><script ${attrText}></script></head><body>${opts.body ?? ''}</body></html>`;

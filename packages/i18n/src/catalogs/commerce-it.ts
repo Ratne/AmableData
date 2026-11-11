@@ -127,7 +127,8 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
     'La fattura viene annullata e l’eventuale codice promo torna disponibile.',
   'commerce.order.deleteDraft': 'Elimina bozza',
   'commerce.order.deleteDraftConfirm': 'Eliminare questa bozza?',
-  'commerce.order.deleteDraftBody': 'La bozza non è ancora stata finalizzata né fatturata, quindi verrà rimossa. Il suo numero d’ordine non viene riutilizzato.',
+  'commerce.order.deleteDraftBody':
+    'La bozza non è ancora stata finalizzata né fatturata, quindi verrà rimossa. Il suo numero d’ordine non viene riutilizzato.',
   'commerce.order.deleted': 'Bozza eliminata',
 
   'commerce.timeline.created': 'Creato',
@@ -161,8 +162,10 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.refund.submit': 'Rimborsa',
   'commerce.refund.recorded': 'Rimborso registrato',
   'commerce.refund.viaStripe': 'Rimborsa la carta tramite Stripe',
-  'commerce.refund.viaStripeHint': 'I soldi tornano sulla carta del cliente; pagati con Stripe fino a {amount}.',
-  'commerce.refund.recordOnlyHint': 'Registra il rimborso solo nel CRM: la restituzione dei soldi la fai tu.',
+  'commerce.refund.viaStripeHint':
+    'I soldi tornano sulla carta del cliente; pagati con Stripe fino a {amount}.',
+  'commerce.refund.recordOnlyHint':
+    'Registra il rimborso solo nel CRM: la restituzione dei soldi la fai tu.',
   'commerce.refund.submitStripe': 'Rimborsa su Stripe',
   'commerce.refund.stripeDone': 'Rimborsato su Stripe',
 
@@ -218,7 +221,8 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.plan.trialDays': 'Giorni di prova',
   'commerce.plan.trial': 'prova di {days} giorni',
   'commerce.plan.setupFee': 'Costo di attivazione',
-  'commerce.plan.setupFeeHint': 'Importo una tantum addebitato con il primo pagamento, oltre al prezzo del piano (0 = nessuno).',
+  'commerce.plan.setupFeeHint':
+    'Importo una tantum addebitato con il primo pagamento, oltre al prezzo del piano (0 = nessuno).',
   'commerce.plan.setupFeeShort': '+ {amount} di attivazione',
   'commerce.plan.saveFirst': 'Salva il prodotto per aggiungere piani di abbonamento.',
 
@@ -234,9 +238,12 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.promo.duration.once': 'Solo il primo pagamento',
   'commerce.promo.duration.repeating': 'Per un numero di periodi',
   'commerce.promo.duration.forever': 'Per sempre',
-  'commerce.promo.duration.once.hint': 'Lo sconto vale sul primo pagamento; i rinnovi sono addebitati a prezzo pieno.',
-  'commerce.promo.duration.repeating.hint': 'Lo sconto vale sul primo pagamento e sui rinnovi successivi, fino al numero di periodi scelto.',
-  'commerce.promo.duration.forever.hint': 'Lo sconto vale su ogni rinnovo per tutta la durata dell\'abbonamento.',
+  'commerce.promo.duration.once.hint':
+    'Lo sconto vale sul primo pagamento; i rinnovi sono addebitati a prezzo pieno.',
+  'commerce.promo.duration.repeating.hint':
+    'Lo sconto vale sul primo pagamento e sui rinnovi successivi, fino al numero di periodi scelto.',
+  'commerce.promo.duration.forever.hint':
+    "Lo sconto vale su ogni rinnovo per tutta la durata dell'abbonamento.",
   'commerce.promo.durationPeriods': 'Numero di periodi',
   'commerce.promo.durationPeriodsInvalid': 'Inserisci un numero intero tra 1 e 120.',
   'commerce.promo.fixed': 'Importo fisso',
@@ -315,26 +322,34 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.settings.paymentTerms': 'Termini di pagamento (giorni)',
   'commerce.settings.paymentTermsHint': 'Giorni tra la fattura e la sua scadenza.',
   'commerce.stripe.title': 'Pagamenti Stripe',
-  'commerce.stripe.intro': 'Collega il tuo account Stripe con le sue chiavi API per accettare pagamenti con carta nei checkout e addebitare automaticamente i rinnovi degli abbonamenti. Le chiavi sono salvate cifrate e non vengono più mostrate.',
+  'commerce.stripe.intro':
+    'Collega il tuo account Stripe con le sue chiavi API per accettare pagamenti con carta nei checkout e addebitare automaticamente i rinnovi degli abbonamenti. Le chiavi sono salvate cifrate e non vengono più mostrate.',
   'commerce.stripe.mode.test': 'Modalità test',
   'commerce.stripe.mode.live': 'Modalità live',
   'commerce.stripe.publishable': 'Chiave pubblicabile',
   'commerce.stripe.publishableInvalid': 'Serve una chiave pubblicabile (pk_test_… o pk_live_…).',
   'commerce.stripe.secret': 'Chiave segreta',
-  'commerce.stripe.secretHint': 'Una chiave segreta (sk_…) o una chiave limitata (rk_…) con scrittura su PaymentIntents, SetupIntents, Customers, PaymentMethods, Refunds e Webhook Endpoints.',
+  'commerce.stripe.secretHint':
+    'Una chiave segreta (sk_…) o una chiave limitata (rk_…) con scrittura su PaymentIntents, SetupIntents, Customers, PaymentMethods, Refunds e Webhook Endpoints.',
   'commerce.stripe.secretInvalid': 'Serve una chiave segreta (sk_… o rk_…).',
-  'commerce.stripe.mixedModes': 'Chiave segreta e chiave pubblicabile devono essere entrambe test o entrambe live.',
+  'commerce.stripe.mixedModes':
+    'Chiave segreta e chiave pubblicabile devono essere entrambe test o entrambe live.',
   'commerce.stripe.keepHint': 'Salvata (…{hint}). Lascia vuoto per mantenerla.',
   'commerce.stripe.webhookSecret': 'Segreto di firma del webhook',
-  'commerce.stripe.webhookSecretHint': 'Il segreto whsec_… dell\'endpoint qui sotto, da Stripe → Sviluppatori → Webhook.',
+  'commerce.stripe.webhookSecretHint':
+    "Il segreto whsec_… dell'endpoint qui sotto, da Stripe → Sviluppatori → Webhook.",
   'commerce.stripe.webhookManaged': 'Webhook creato e configurato automaticamente in Stripe.',
   'commerce.stripe.webhookManual': 'Webhook manuale',
-  'commerce.stripe.webhookManualHint': 'Di solito non serve: salvando la chiave segreta il CRM crea da solo il webhook in Stripe con gli eventi giusti. Inserisci il segreto a mano solo se la chiave non può gestire i webhook.',
-  'commerce.stripe.webhookAutoFailed': 'Il webhook non è stato creato automaticamente ({message}). Crealo in Stripe e inserisci qui il segreto di firma.',
+  'commerce.stripe.webhookManualHint':
+    'Di solito non serve: salvando la chiave segreta il CRM crea da solo il webhook in Stripe con gli eventi giusti. Inserisci il segreto a mano solo se la chiave non può gestire i webhook.',
+  'commerce.stripe.webhookAutoFailed':
+    'Il webhook non è stato creato automaticamente ({message}). Crealo in Stripe e inserisci qui il segreto di firma.',
   'commerce.stripe.webhookSecretInvalid': 'Serve un segreto di firma (whsec_…).',
-  'commerce.stripe.webhookMissing': 'Webhook non configurato: i pagamenti completati dopo un redirect e i rimborsi non verranno sincronizzati.',
+  'commerce.stripe.webhookMissing':
+    'Webhook non configurato: i pagamenti completati dopo un redirect e i rimborsi non verranno sincronizzati.',
   'commerce.stripe.webhookUrl': 'Endpoint del webhook',
-  'commerce.stripe.webhookEvents': 'Eventi da inviare: payment_intent.succeeded, payment_intent.processing, payment_intent.payment_failed, payment_intent.canceled, setup_intent.succeeded, setup_intent.setup_failed, charge.refunded; con Managed Payments anche checkout.session.completed, checkout.session.async_payment_succeeded, checkout.session.async_payment_failed.',
+  'commerce.stripe.webhookEvents':
+    'Eventi da inviare: payment_intent.succeeded, payment_intent.processing, payment_intent.payment_failed, payment_intent.canceled, setup_intent.succeeded, setup_intent.setup_failed, charge.refunded; con Managed Payments anche checkout.session.completed, checkout.session.async_payment_succeeded, checkout.session.async_payment_failed.',
   'commerce.stripe.saved': 'Impostazioni Stripe salvate',
   'commerce.stripe.check': 'Verifica connessione',
   'commerce.stripe.checkOk': 'Stripe ha accettato le chiavi.',
@@ -344,46 +359,56 @@ export const commerceIt: Readonly<Record<CommerceMessageKey, string>> = {
   'commerce.stripe.switchToLive': 'Passare Stripe in modalità live?',
   'commerce.stripe.switchToTest': 'Passare Stripe in modalità test?',
   'commerce.stripe.switchWarning':
-    'Clienti e carte salvati nella modalità attuale non esistono nell\'altra: {count} abbonamenti smettono di rinnovarsi in automatico (i rinnovi andranno pagati a mano) e gli acquisti in corso vengono chiusi.',
+    "Clienti e carte salvati nella modalità attuale non esistono nell'altra: {count} abbonamenti smettono di rinnovarsi in automatico (i rinnovi andranno pagati a mano) e gli acquisti in corso vengono chiusi.",
   'commerce.stripe.switchWarningEmpty':
-    'Clienti e carte salvati nella modalità attuale non esistono nell\'altra: vengono scollegati e gli acquisti in corso vengono chiusi.',
+    "Clienti e carte salvati nella modalità attuale non esistono nell'altra: vengono scollegati e gli acquisti in corso vengono chiusi.",
   'commerce.stripe.secretForSwitch': 'Inserisci la chiave segreta della nuova modalità.',
   'commerce.stripe.accountChanged':
     'Queste chiavi appartengono a un altro account Stripe: clienti e carte salvati sul precedente sono stati scollegati e i rinnovi automatici su di essi si sono fermati.',
-  'commerce.stripe.disconnectBody': 'I checkout smettono di accettare pagamenti e i rinnovi non vengono più addebitati automaticamente. Gli ordini esistenti restano.',
+  'commerce.stripe.disconnectBody':
+    'I checkout smettono di accettare pagamenti e i rinnovi non vengono più addebitati automaticamente. Gli ordini esistenti restano.',
   'commerce.stripe.disconnected': 'Stripe scollegato',
   'commerce.managed.toggle': 'Stripe Managed Payments',
   'commerce.managed.intro':
-    'Con Managed Payments Stripe diventa il venditore di riferimento (merchant of record): calcola, incassa e versa le imposte (IVA, GST…) di ogni pagamento dei checkout, e l\'acquirente paga sulla pagina Stripe Checkout.',
-  'commerce.managed.connectFirst': 'Salva prima le chiavi Stripe qui sopra, poi potrai attivare Managed Payments.',
-  'commerce.managed.enableInStripe': 'Managed Payments va attivato anche nella Dashboard di Stripe, altrimenti Stripe rifiuta i pagamenti.',
-  'commerce.managed.taxes': 'Le imposte le aggiunge e gestisce Stripe: le aliquote del CRM non vengono applicate ai pagamenti dei checkout, imposta invece i tax code dei prodotti.',
-  'commerce.managed.upsells': 'Le offerte post-acquisto funzionano, ma ogni offerta accettata riapre Stripe Checkout (niente addebito con un clic sulla carta salvata).',
-  'commerce.managed.noSubscriptions': 'I checkout che vendono piani in abbonamento non sono supportati: tienili su un checkout senza piani o disattiva Managed Payments.',
+    "Con Managed Payments Stripe diventa il venditore di riferimento (merchant of record): calcola, incassa e versa le imposte (IVA, GST…) di ogni pagamento dei checkout, e l'acquirente paga sulla pagina Stripe Checkout.",
+  'commerce.managed.connectFirst':
+    'Salva prima le chiavi Stripe qui sopra, poi potrai attivare Managed Payments.',
+  'commerce.managed.enableInStripe':
+    'Managed Payments va attivato anche nella Dashboard di Stripe, altrimenti Stripe rifiuta i pagamenti.',
+  'commerce.managed.taxes':
+    'Le imposte le aggiunge e gestisce Stripe: le aliquote del CRM non vengono applicate ai pagamenti dei checkout, imposta invece i tax code dei prodotti.',
+  'commerce.managed.upsells':
+    'Le offerte post-acquisto funzionano, ma ogni offerta accettata riapre Stripe Checkout (niente addebito con un clic sulla carta salvata).',
+  'commerce.managed.noSubscriptions':
+    'I checkout che vendono piani in abbonamento non sono supportati: tienili su un checkout senza piani o disattiva Managed Payments.',
   'commerce.managed.taxCode': 'Tax code Stripe predefinito',
-  'commerce.managed.taxCodeHint': 'Usato per i prodotti senza un codice proprio (es. txcd_10000000 per servizi digitali generici). Vuoto: il predefinito dell\'account Stripe.',
+  'commerce.managed.taxCodeHint':
+    "Usato per i prodotti senza un codice proprio (es. txcd_10000000 per servizi digitali generici). Vuoto: il predefinito dell'account Stripe.",
   'commerce.managed.taxCodeInvalid': 'Serve un tax code Stripe (txcd_ seguito da 8 cifre).',
   'commerce.bank.title': 'Conti bancari',
-  'commerce.bank.intro': 'Conti che i checkout possono proporre per il pagamento con bonifico. L\'acquirente vede le coordinate dopo l\'acquisto e nell\'email di riepilogo.',
+  'commerce.bank.intro':
+    "Conti che i checkout possono proporre per il pagamento con bonifico. L'acquirente vede le coordinate dopo l'acquisto e nell'email di riepilogo.",
   'commerce.bank.add': 'Aggiungi conto',
   'commerce.bank.edit': 'Modifica conto bancario',
   'commerce.bank.empty': 'Nessun conto bancario.',
   'commerce.bank.label': 'Nome',
-  'commerce.bank.labelHint': 'Solo per te, per sceglierlo nell\'editor del checkout.',
+  'commerce.bank.labelHint': "Solo per te, per sceglierlo nell'editor del checkout.",
   'commerce.bank.holder': 'Intestatario',
   'commerce.bank.iban': 'IBAN',
   'commerce.bank.ibanInvalid': 'Serve un IBAN valido.',
   'commerce.bank.bic': 'BIC / SWIFT',
   'commerce.bank.bicInvalid': 'Servono 8 o 11 caratteri.',
   'commerce.bank.bankName': 'Banca',
-  'commerce.bank.instructions': 'Istruzioni per l\'acquirente',
+  'commerce.bank.instructions': "Istruzioni per l'acquirente",
   'commerce.bank.instructionsHint': 'Facoltative: scadenza, cosa scrivere nella causale…',
   'commerce.bank.deleted': 'Conto bancario eliminato',
   'commerce.bank.deleteConfirm': 'Eliminare “{label}”?',
-  'commerce.bank.deleteBody': 'I checkout che usano questo conto smettono di proporre il bonifico. Gli ordini già fatti mantengono le coordinate ricevute.',
+  'commerce.bank.deleteBody':
+    'I checkout che usano questo conto smettono di proporre il bonifico. Gli ordini già fatti mantengono le coordinate ricevute.',
   'commerce.paymentMethod.bank_transfer': 'Bonifico',
   'commerce.field.stripeTaxCode': 'Tax code Stripe',
-  'commerce.products.stripeTaxCodeHint': 'Solo con Stripe Managed Payments (txcd_…). Vuoto: il tax code predefinito delle impostazioni Stripe.',
+  'commerce.products.stripeTaxCodeHint':
+    'Solo con Stripe Managed Payments (txcd_…). Vuoto: il tax code predefinito delle impostazioni Stripe.',
 
   'commerce.contactPanel.title': 'Ordini',
   'commerce.contactPanel.empty': 'Nessun ordine per questo contatto.',

@@ -53,9 +53,11 @@ export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
   'booking.list.empty': 'Nessuna prenotazione corrisponde ai filtri.',
   'booking.list.rescheduled': 'spostata',
   'booking.list.cancelled': 'Prenotazione annullata',
-  'booking.list.cancelHint': 'L’invitato riceve una email di annullamento; l’appuntamento nel CRM viene annullato.',
+  'booking.list.cancelHint':
+    'L’invitato riceve una email di annullamento; l’appuntamento nel CRM viene annullato.',
   'booking.calendars.new': 'Nuovo calendario',
-  'booking.calendars.empty': 'Nessun calendario. Creane uno per ogni organizzatore per iniziare a ricevere prenotazioni.',
+  'booking.calendars.empty':
+    'Nessun calendario. Creane uno per ogni organizzatore per iniziare a ricevere prenotazioni.',
   'booking.calendars.saved': 'Calendario salvato',
   'booking.calendars.hostHint': 'Le prenotazioni diventano appuntamenti assegnati a questo membro.',
   'booking.calendars.pickHost': 'Scegli un membro',
@@ -78,19 +80,23 @@ export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
   'booking.google.disconnected': 'Google Calendar scollegato',
   'booking.google.notConnected': 'Non collegato',
   'booking.google.syncNow': 'Sincronizza ora gli impegni',
-  'booking.google.needsReconnect': 'Le prenotazioni non vengono scritte su Google Calendar: scollega e ricollega Google per consentirlo.',
+  'booking.google.needsReconnect':
+    'Le prenotazioni non vengono scritte su Google Calendar: scollega e ricollega Google per consentirlo.',
   'booking.google.writeError': 'Ultima prenotazione non scritta su Google Calendar: {error}',
   'booking.google.sync.ok': 'Impegni aggiornati',
   'booking.google.sync.stub': 'Modalità sviluppo: Google non è stato contattato',
   'booking.google.sync.not_connected': 'Nessun account Google collegato',
-  'booking.google.sync.unavailable': 'I collegamenti a Google non sono disponibili su questa installazione',
+  'booking.google.sync.unavailable':
+    'I collegamenti a Google non sono disponibili su questa installazione',
   'booking.google.sync.error': 'Non è stato possibile sincronizzare Google Calendar',
   'booking.eventTypes.new': 'Nuovo tipo di evento',
   'booking.eventTypes.create': 'Crea',
   'booking.eventTypes.empty': 'Nessun tipo di evento.',
-  'booking.eventTypes.needCalendar': 'Crea prima un calendario: ogni tipo di evento ha almeno un organizzatore.',
+  'booking.eventTypes.needCalendar':
+    'Crea prima un calendario: ogni tipo di evento ha almeno un organizzatore.',
   'booking.eventTypes.saved': 'Tipo di evento salvato',
-  'booking.eventTypes.slugHint': 'Usato nell’indirizzo della pagina di prenotazione. Lettere minuscole, cifre e trattini.',
+  'booking.eventTypes.slugHint':
+    'Usato nell’indirizzo della pagina di prenotazione. Lettere minuscole, cifre e trattini.',
   'booking.editor.basics': 'Dettagli',
   'booking.editor.scheduling': 'Limiti di prenotazione',
   'booking.editor.form': 'Modulo di prenotazione',
@@ -98,7 +104,8 @@ export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
   'booking.editor.notifications': 'Email e promemoria',
   'booking.editor.afterBooking': 'Dopo la prenotazione',
   'booking.editor.active': 'Accetta prenotazioni',
-  'booking.editor.locationHint': 'Indirizzo, telefono o link della videochiamata mostrato all’invitato.',
+  'booking.editor.locationHint':
+    'Indirizzo, telefono o link della videochiamata mostrato all’invitato.',
   'booking.editor.intervalHint': 'Vuoto: uguale alla durata.',
   'booking.editor.dailyCapHint': 'Per organizzatore; vuoto per nessun limite.',
   'booking.editor.minutesHint': '1440 = un giorno.',
@@ -110,8 +117,10 @@ export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
   'booking.editor.defaultText': 'Testo predefinito',
   'booking.notify.before': 'Email prima dell’evento',
   'booking.notify.after': 'Email dopo l’evento',
-  'booking.notify.beforeHint': 'Promemoria inviati prima dell’inizio, massimo 3. Testo predefinito: un promemoria con orario e link di gestione.',
-  'booking.notify.afterHint': 'Follow-up inviati dopo la fine, massimo 3. Testo predefinito: un ringraziamento. Non partono se la prenotazione è annullata.',
+  'booking.notify.beforeHint':
+    'Promemoria inviati prima dell’inizio, massimo 3. Testo predefinito: un promemoria con orario e link di gestione.',
+  'booking.notify.afterHint':
+    'Follow-up inviati dopo la fine, massimo 3. Testo predefinito: un ringraziamento. Non partono se la prenotazione è annullata.',
   'booking.notify.add': 'Aggiungi email',
   'booking.notify.remove': 'Rimuovi email',
   'booking.notify.amount': 'Quanto',
@@ -125,21 +134,29 @@ export const bookingIt: Readonly<Record<BookingMessageKey, string>> = {
   'booking.notify.body': 'Testo',
   'booking.notify.range': 'Tra 5 minuti e 14 giorni.',
   'booking.notify.duplicate': 'C’è già un’altra email a questo orario.',
-  'booking.permissions.reschedule': 'Gli invitati possono spostare la prenotazione dal link di gestione',
-  'booking.permissions.cancel': 'Gli invitati possono annullare la prenotazione dal link di gestione',
-  'booking.permissions.hint': 'Il tuo team può sempre spostare o annullare le prenotazioni dal CRM.',
-  'booking.editor.redirectHint': 'Facoltativo: porta l’invitato a questa pagina invece di mostrare il messaggio.',
+  'booking.permissions.reschedule':
+    'Gli invitati possono spostare la prenotazione dal link di gestione',
+  'booking.permissions.cancel':
+    'Gli invitati possono annullare la prenotazione dal link di gestione',
+  'booking.permissions.hint':
+    'Il tuo team può sempre spostare o annullare le prenotazioni dal CRM.',
+  'booking.editor.redirectHint':
+    'Facoltativo: porta l’invitato a questa pagina invece di mostrare il messaggio.',
   'booking.editor.turnstile': 'Controllo anti-spam (Turnstile) se attivo su questa installazione',
   'booking.locale.auto': 'Lingua del visitatore',
   'booking.locale.en': 'Inglese',
   'booking.locale.it': 'Italiano',
   'booking.assignment.round_robin': 'A rotazione',
   'booking.assignment.collective': 'Collettivo',
-  'booking.assignment.round_robinHint': 'Un orario è disponibile se almeno un organizzatore è libero; lo riceve quello meno impegnato.',
-  'booking.assignment.collectiveHint': 'Un orario è disponibile solo se tutti gli organizzatori sono liberi; partecipano tutti.',
+  'booking.assignment.round_robinHint':
+    'Un orario è disponibile se almeno un organizzatore è libero; lo riceve quello meno impegnato.',
+  'booking.assignment.collectiveHint':
+    'Un orario è disponibile solo se tutti gli organizzatori sono liberi; partecipano tutti.',
   'booking.weights.custom': 'Distribuzione personalizzata',
-  'booking.weights.evenHint': 'Gli appuntamenti sono distribuiti in parti uguali tra gli organizzatori liberi.',
-  'booking.weights.customHint': 'Quota degli appuntamenti che ogni organizzatore deve ricevere. Se chi è più indietro è occupato, viene assegnato il successivo libero.',
+  'booking.weights.evenHint':
+    'Gli appuntamenti sono distribuiti in parti uguali tra gli organizzatori liberi.',
+  'booking.weights.customHint':
+    'Quota degli appuntamenti che ogni organizzatore deve ricevere. Se chi è più indietro è occupato, viene assegnato il successivo libero.',
   'booking.weights.share': 'Quota di {name} in percentuale',
   'booking.weights.total': 'Totale {total}%',
   'booking.weights.totalInvalid': 'Totale {total}%: le quote devono sommare 100%',

@@ -30,7 +30,8 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.list.new': 'Nuovo form',
   'forms.list.create': 'Crea form',
   'forms.list.nameHint': 'Visibile solo al tuo team.',
-  'forms.list.empty': 'Nessun form. Creane uno per raccogliere contatti sul sito e sulle landing page.',
+  'forms.list.empty':
+    'Nessun form. Creane uno per raccogliere contatti sul sito e sulle landing page.',
   'forms.list.connections': '{count} connessioni',
   'forms.list.duplicated': 'Form duplicato (copia non attiva)',
   'forms.list.archived': 'Form archiviato',
@@ -69,13 +70,15 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.builder.maxRating': 'Numero di stelle',
   'forms.builder.linkUrl': 'URL del link',
   'forms.builder.linkText': 'Testo del link',
-  'forms.builder.marketingConsent': 'Selezionando la casella si dà il consenso al marketing via email',
+  'forms.builder.marketingConsent':
+    'Selezionando la casella si dà il consenso al marketing via email',
   'forms.builder.prefillParam': 'Precompila da parametro URL',
   'forms.builder.urlParam': 'Parametro URL',
   'forms.builder.prefillHint': 'Es. "email" compila il campo da ?email=… nell’URL della pagina.',
   'forms.builder.defaultValue': 'Valore predefinito',
   'forms.builder.mapTo': 'Salva nel contatto',
-  'forms.builder.mapToHint': 'Attributo o campo personalizzato del contatto aggiornato da questo valore.',
+  'forms.builder.mapToHint':
+    'Attributo o campo personalizzato del contatto aggiornato da questo valore.',
   'forms.builder.required': 'Obbligatorio',
   'forms.builder.halfWidth': 'Metà larghezza',
   'forms.builder.sensitive': 'Sensibile (escluso da notifiche e automazioni)',
@@ -133,8 +136,10 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.crm.appValidation': 'Verifica email/telefono dalle app',
   'forms.crm.appValidation.advisory': 'Solo segnalazione',
   'forms.crm.appValidation.blocking': 'Bloccante',
-  'forms.crm.appValidation.advisory.hint': '{apps} etichettano o annotano i contatti; le risposte sono sempre accettate.',
-  'forms.crm.appValidation.blocking.hint': 'Le risposte che {apps} segnalano come non valide vengono rifiutate. Se un\'app non risponde in tempo la risposta viene accettata.',
+  'forms.crm.appValidation.advisory.hint':
+    '{apps} etichettano o annotano i contatti; le risposte sono sempre accettate.',
+  'forms.crm.appValidation.blocking.hint':
+    "Le risposte che {apps} segnalano come non valide vengono rifiutate. Se un'app non risponde in tempo la risposta viene accettata.",
   'forms.crm.policy.fill_empty': 'Compila solo i campi vuoti',
   'forms.crm.policy.overwrite': 'Sovrascrivi con la risposta',
   'forms.crm.policy.fill_empty.hint': 'I valori già presenti sul contatto restano.',
@@ -161,7 +166,8 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.settings.locale.en': 'Inglese',
   'forms.settings.locale.it': 'Italiano',
   'forms.settings.allowedDomains': 'Siti autorizzati',
-  'forms.settings.allowedDomainsHint': 'Domini dove il form può essere incorporato, separati da virgola. Vuoto: tutti.',
+  'forms.settings.allowedDomainsHint':
+    'Domini dove il form può essere incorporato, separati da virgola. Vuoto: tutti.',
   'forms.settings.turnstile': 'Richiedi la verifica anti-bot (Turnstile)',
   'forms.settings.hosted': 'Pagina pubblica ospitata',
 
@@ -177,15 +183,18 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.style.max_width': 'Larghezza massima',
   'forms.style.font_family': 'Font',
   'forms.style.custom_css': 'CSS personalizzato',
-  'forms.style.customCssHint': 'Limitato al form. Classi: .af-root, .af-field, .af-input, .af-button…',
+  'forms.style.customCssHint':
+    'Limitato al form. Classi: .af-root, .af-field, .af-input, .af-button…',
 
   'forms.embed.snippet': 'Codice da incorporare',
   'forms.embed.snippetHint': 'Incollalo nel punto del sito dove deve apparire il form.',
   'forms.embed.hosted': 'Pagina ospitata',
   'forms.embed.hostedDisabled': 'La pagina ospitata è disattivata nelle impostazioni.',
   'forms.embed.open': 'Apri',
-  'forms.embed.unsaved': 'Hai modifiche non salvate: i form incorporati mostrano l’ultima versione salvata.',
-  'forms.embed.landingHint': 'Nelle landing page amable trascina il widget Form e scegli questo form.',
+  'forms.embed.unsaved':
+    'Hai modifiche non salvate: i form incorporati mostrano l’ultima versione salvata.',
+  'forms.embed.landingHint':
+    'Nelle landing page amable trascina il widget Form e scegli questo form.',
   'forms.preview.title': 'Anteprima dal vivo',
   'forms.preview.unavailable': 'Impossibile caricare l’anteprima.',
 
@@ -199,7 +208,8 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.submissions.empty': 'Nessuna risposta.',
   'forms.submissions.period': 'Periodo',
   'forms.submissions.periodLive': 'Recenti',
-  'forms.submissions.archivedNotice': 'Risposte archiviate: si possono consultare ma non rielaborare o eliminare.',
+  'forms.submissions.archivedNotice':
+    'Risposte archiviate: si possono consultare ma non rielaborare o eliminare.',
   'forms.submissions.detail': 'Risposta del {date}',
   'forms.submissions.values': 'Risposte',
   'forms.submissions.source': 'Provenienza',
@@ -221,8 +231,10 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.connector.google_sheets': 'Google Sheets',
   'forms.connector.email_notification': 'Notifica email',
   'forms.connector.docuseal': 'DocuSeal',
-  'forms.connector.webhook.hint': 'Invia ogni risposta al tuo URL, firmata con un segreto (header Amable-Signature).',
-  'forms.connector.google_sheets.hint': 'Aggiunge una riga a un foglio Google, scritta da un service account con cui condividi il foglio.',
+  'forms.connector.webhook.hint':
+    'Invia ogni risposta al tuo URL, firmata con un segreto (header Amable-Signature).',
+  'forms.connector.google_sheets.hint':
+    'Aggiunge una riga a un foglio Google, scritta da un service account con cui condividi il foglio.',
   'forms.connector.email_notification.hint': 'Invia le risposte via email al tuo team.',
   'forms.connector.docuseal.hint': 'Invia un documento da firmare, precompilato con le risposte.',
   'forms.connector.app': 'App',
@@ -253,11 +265,13 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.connections.fieldMapHint': 'Vuoto: viene inviato il JSON completo della risposta.',
   'forms.connections.bodyTemplate': 'Template del corpo (JSON)',
   'forms.connections.bodyTemplatePlaceholder': '{ "email": "{{email}}" }',
-  'forms.connections.bodyTemplateHint': 'I valori di testo possono usare {{chiave_campo}} e {{submitted_at}}, {{form_id}}, {{form_name}}, {{page_url}}, {{utm_source}}… Se presente, sostituisce la mappatura dei campi qui sotto.',
+  'forms.connections.bodyTemplateHint':
+    'I valori di testo possono usare {{chiave_campo}} e {{submitted_at}}, {{form_id}}, {{form_name}}, {{page_url}}, {{utm_source}}… Se presente, sostituisce la mappatura dei campi qui sotto.',
   'forms.connections.bodyTemplateInvalid': 'Il template deve essere un oggetto JSON.',
   'forms.connections.mapAll': 'Mappa tutti i campi',
   'forms.connections.mapAllTitle': 'Mappa tutti i campi',
-  'forms.connections.mapAllBody': 'Il corpo contiene già dei dati. Unisci aggiunge i campi mancanti e mantiene i tuoi; Sostituisci lo sovrascrive.',
+  'forms.connections.mapAllBody':
+    'Il corpo contiene già dei dati. Unisci aggiunge i campi mancanti e mantiene i tuoi; Sostituisci lo sovrascrive.',
   'forms.connections.mapAllMerge': 'Unisci',
   'forms.connections.mapAllReplace': 'Sostituisci',
   'forms.connections.parameter': 'Parametro',
@@ -266,15 +280,21 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.connections.spreadsheet': 'Foglio di calcolo',
   'forms.connections.spreadsheetHint': 'Link del foglio o il suo id (la parte dopo /d/ nel link).',
   'forms.connections.sheetsSetup': 'Come configurarlo',
-  'forms.connections.sheetsSetup.1': 'In Google Cloud Console crea un progetto (o scegline uno) e abilita la Google Sheets API.',
-  'forms.connections.sheetsSetup.2': 'In IAM e amministrazione → Account di servizio crea un service account (non servono ruoli).',
-  'forms.connections.sheetsSetup.3': 'Aprilo, vai in Chiavi → Aggiungi chiave → Crea nuova chiave → JSON e scarica il file.',
+  'forms.connections.sheetsSetup.1':
+    'In Google Cloud Console crea un progetto (o scegline uno) e abilita la Google Sheets API.',
+  'forms.connections.sheetsSetup.2':
+    'In IAM e amministrazione → Account di servizio crea un service account (non servono ruoli).',
+  'forms.connections.sheetsSetup.3':
+    'Aprilo, vai in Chiavi → Aggiungi chiave → Crea nuova chiave → JSON e scarica il file.',
   'forms.connections.sheetsSetup.4': 'Carica qui il file JSON.',
-  'forms.connections.sheetsSetup.5': 'Apri il foglio in Google Sheets, clicca Condividi e aggiungi l’email del service account come Editor.',
+  'forms.connections.sheetsSetup.5':
+    'Apri il foglio in Google Sheets, clicca Condividi e aggiungi l’email del service account come Editor.',
   'forms.connections.serviceKey': 'Chiave del service account (JSON)',
-  'forms.connections.serviceKeyHint': 'Il file JSON scaricato da Google Cloud. Viene salvato cifrato.',
+  'forms.connections.serviceKeyHint':
+    'Il file JSON scaricato da Google Cloud. Viene salvato cifrato.',
   'forms.connections.serviceKeyKeep': 'Carica un nuovo file solo per sostituire la chiave attuale.',
-  'forms.connections.serviceKeyInvalid': 'Questa non è una chiave di service account: scarica la chiave JSON da Google Cloud.',
+  'forms.connections.serviceKeyInvalid':
+    'Questa non è una chiave di service account: scarica la chiave JSON da Google Cloud.',
   'forms.connections.shareWith': 'Condividi il foglio con questa email come Editor:',
   'forms.connections.sheet': 'Nome della scheda',
   'forms.connections.columns': 'Colonne',

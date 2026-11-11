@@ -46,10 +46,12 @@ export const developersEn = {
   'dev.webhooks.secret': 'Signing secret',
   'dev.webhooks.createdTitle': 'Endpoint added — signing secret',
   'dev.webhooks.newSecret': 'New signing secret',
-  'dev.webhooks.secretHint': 'Store it in your receiver to verify the Amable-Signature header. It will not be shown again.',
+  'dev.webhooks.secretHint':
+    'Store it in your receiver to verify the Amable-Signature header. It will not be shown again.',
   'dev.webhooks.endpoint.active': 'Active',
   'dev.webhooks.endpoint.disabled': 'Disabled',
-  'dev.webhooks.autoDisabled': 'Disabled automatically after {count} failed attempts in a row. Fix the receiver, then enable it again.',
+  'dev.webhooks.autoDisabled':
+    'Disabled automatically after {count} failed attempts in a row. Fix the receiver, then enable it again.',
   'dev.webhooks.sendTest': 'Send test',
   'dev.webhooks.testSent': 'Test delivery sent',
   'dev.webhooks.rotate': 'Rotate secret',
@@ -95,18 +97,25 @@ export const developersEn = {
 
   'dev.domains.title': 'Domains',
   'dev.domains.connect': 'Connect a domain',
-  'dev.domains.automation.cloudflare': 'DNS changes are applied on your Cloudflare zone automatically.',
-  'dev.domains.automation.fake': 'Local development: DNS changes go to a simulated zone (no network).',
-  'dev.domains.automation.manual': 'No Cloudflare API token is configured: create the records below on your DNS provider.',
+  'dev.domains.automation.cloudflare':
+    'DNS changes are applied on your Cloudflare zone automatically.',
+  'dev.domains.automation.fake':
+    'Local development: DNS changes go to a simulated zone (no network).',
+  'dev.domains.automation.manual':
+    'No Cloudflare API token is configured: create the records below on your DNS provider.',
   'dev.domains.edgeHost': 'Edge hostname: {host}.',
   'dev.domains.kind.sending': 'Sending domain',
   'dev.domains.kind.tracking': 'Tracking domain',
   'dev.domains.kind.app': 'Landing & booking site',
-  'dev.domains.kindHelp.sending': 'Required before any marketing email can be sent (SPF, DKIM, DMARC).',
-  'dev.domains.kindHelp.tracking': 'Your own hostname for click/open tracking links and the web tracker.',
+  'dev.domains.kindHelp.sending':
+    'Required before any marketing email can be sent (SPF, DKIM, DMARC).',
+  'dev.domains.kindHelp.tracking':
+    'Your own hostname for click/open tracking links and the web tracker.',
   'dev.domains.kind.shortlink': 'Short links',
-  'dev.domains.kindHelp.app': 'Landing pages and booking pages on your hostname, or on some paths of your site.',
-  'dev.domains.kindHelp.shortlink': "Dedicated hostname for short links (go.example.com/promo) with QR codes and click stats.",
+  'dev.domains.kindHelp.app':
+    'Landing pages and booking pages on your hostname, or on some paths of your site.',
+  'dev.domains.kindHelp.shortlink':
+    'Dedicated hostname for short links (go.example.com/promo) with QR codes and click stats.',
   'dev.domains.hostname': 'Hostname',
   'dev.domains.paths': 'Paths (optional)',
   'dev.domains.pathsHelp':
@@ -119,12 +128,16 @@ export const developersEn = {
   'dev.domains.dnsChanged.title': 'Update the DNS of this domain',
   'dev.domains.dnsChanged.body':
     'Your email sending moved to new infrastructure, so the DNS records of this domain changed (since {at}). Until you publish them, deliverability can suffer.',
-  'dev.domains.dnsChanged.stepAuto': '1. Click "{button}": the records below are written on your Cloudflare zone.',
-  'dev.domains.dnsChanged.stepManual': '1. At your DNS provider, replace the records of this domain with the ones below.',
-  'dev.domains.dnsChanged.stepVerify': '2. Click "{button}". DNS changes can take a few minutes: if it fails, try again later.',
+  'dev.domains.dnsChanged.stepAuto':
+    '1. Click "{button}": the records below are written on your Cloudflare zone.',
+  'dev.domains.dnsChanged.stepManual':
+    '1. At your DNS provider, replace the records of this domain with the ones below.',
+  'dev.domains.dnsChanged.stepVerify':
+    '2. Click "{button}". DNS changes can take a few minutes: if it fails, try again later.',
   'dev.domains.dnsChanged.pill': 'DNS to update',
   'dev.domains.dnsChanged.bannerTitle': 'DNS update needed',
-  'dev.domains.dnsChanged.bannerBody': '{count} sending domain(s) need new DNS records after a change of the email infrastructure. Follow the steps on each highlighted domain.',
+  'dev.domains.dnsChanged.bannerBody':
+    '{count} sending domain(s) need new DNS records after a change of the email infrastructure. Follow the steps on each highlighted domain.',
   'dev.domains.dnsApplied': 'DNS changes applied',
   'dev.domains.verify': 'Verify',
   'dev.domains.removed': 'Domain removed',
@@ -136,11 +149,16 @@ export const developersEn = {
   'dev.domains.step.dns': 'DNS on Cloudflare',
   'dev.domains.step.dnsManual': 'DNS records created',
   'dev.domains.step.verified': 'Verified',
-  'dev.domains.help.sending': 'Create these records on the zone, then verify. Sending stays blocked until the domain is verified.',
-  'dev.domains.help.tracking': 'Point the hostname at the edge worker (CNAME, or a Workers custom domain when automated), then verify.',
-  'dev.domains.help.app': 'Point the hostname at the edge worker; published landing pages answer on their path.',
-  'dev.domains.help.shortlink': "Point the hostname at the edge worker (CNAME, or a Workers custom domain when automated), then verify: every path answers with your short links. Disconnecting it deletes its links.",
-  'dev.domains.help.paths': 'These Workers Routes send the listed paths of your site to the edge worker.',
+  'dev.domains.help.sending':
+    'Create these records on the zone, then verify. Sending stays blocked until the domain is verified.',
+  'dev.domains.help.tracking':
+    'Point the hostname at the edge worker (CNAME, or a Workers custom domain when automated), then verify.',
+  'dev.domains.help.app':
+    'Point the hostname at the edge worker; published landing pages answer on their path.',
+  'dev.domains.help.shortlink':
+    'Point the hostname at the edge worker (CNAME, or a Workers custom domain when automated), then verify: every path answers with your short links. Disconnecting it deletes its links.',
+  'dev.domains.help.paths':
+    'These Workers Routes send the listed paths of your site to the edge worker.',
   'dev.domains.type': 'Type',
   'dev.domains.name': 'Name',
   'dev.domains.value': 'Value',
@@ -150,9 +168,11 @@ export const developersEn = {
   'dev.domains.lastError': 'Last error: {error}',
 
   'dev.sending.blockedTitle': 'Email sending is blocked',
-  'dev.sending.blockedBody': 'Connect and verify a sending domain before broadcasts and automation emails can go out.',
+  'dev.sending.blockedBody':
+    'Connect and verify a sending domain before broadcasts and automation emails can go out.',
   'dev.sending.overrideTitle': 'No verified sending domain (allowed in local development)',
-  'dev.sending.overrideBody': 'In production, sending stays blocked until a sending domain is verified.',
+  'dev.sending.overrideBody':
+    'In production, sending stays blocked until a sending domain is verified.',
   'dev.sending.connect': 'Set up a sending domain',
   'dev.sending.updateDns': 'Update the domains DNS',
 } as const;

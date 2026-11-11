@@ -58,10 +58,18 @@ export function AdsDashboardWidgets() {
           <KpiCard icon={Banknote} label={t('analytics.adsWidgets.spend')}>
             {totals ? f.money(totals.cost_minor, currency) : loading}
           </KpiCard>
-          <KpiCard icon={TrendingUp} label={t('analytics.adsWidgets.roas')} hint={t('analytics.adsWidgets.modelHint')}>
+          <KpiCard
+            icon={TrendingUp}
+            label={t('analytics.adsWidgets.roas')}
+            hint={t('analytics.adsWidgets.modelHint')}
+          >
             {totals ? formatMetric(f, 'roas', totals.roas, currency) : loading}
           </KpiCard>
-          <KpiCard icon={Coins} label={t('analytics.adsWidgets.revenue')} hint={t('analytics.adsWidgets.modelHint')}>
+          <KpiCard
+            icon={Coins}
+            label={t('analytics.adsWidgets.revenue')}
+            hint={t('analytics.adsWidgets.modelHint')}
+          >
             {totals ? f.money(totals.revenue_minor, currency) : loading}
           </KpiCard>
           <KpiCard
@@ -77,7 +85,13 @@ export function AdsDashboardWidgets() {
                 : undefined
             }
           >
-            {quality.error ? '—' : q ? (q.conversions === 0 ? '—' : f.percent(q.score, 0)) : loading}
+            {quality.error
+              ? '—'
+              : q
+                ? q.conversions === 0
+                  ? '—'
+                  : f.percent(q.score, 0)
+                : loading}
           </KpiCard>
         </ul>
       )}

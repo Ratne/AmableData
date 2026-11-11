@@ -54,11 +54,7 @@ import { KIND_META } from '../funnel-builder/nodes/kind-meta';
 import { FunnelPalette, type PaletteItem } from '../funnel-builder/palette';
 import { EdgePanel } from '../funnel-builder/panels/edge-panel';
 import { NodePanel } from '../funnel-builder/panels/node-panel';
-import {
-  BuilderResourcesProvider,
-  pageResources,
-  resourcePage,
-} from '../funnel-builder/resources';
+import { BuilderResourcesProvider, pageResources, resourcePage } from '../funnel-builder/resources';
 import {
   builderReducer,
   canSave,
@@ -184,7 +180,9 @@ function Builder({
     onSuccess: (graph) => {
       dispatch({ type: 'saved', graph });
       queryClient.setQueryData(funnelKeys.graph(tenant, site.id, funnelId), graph);
-      void queryClient.invalidateQueries({ queryKey: [...funnelKeys.graphs(tenant, site.id), 'list'] });
+      void queryClient.invalidateQueries({
+        queryKey: [...funnelKeys.graphs(tenant, site.id), 'list'],
+      });
       toast.success(t('analytics.funnelBuilder.saved'));
     },
     onError: async (error) => {
@@ -216,7 +214,9 @@ function Builder({
     onSuccess: (graph) => {
       if (!isDirty(state)) dispatch({ type: 'saved', graph });
       queryClient.setQueryData(funnelKeys.graph(tenant, site.id, funnelId), graph);
-      void queryClient.invalidateQueries({ queryKey: [...funnelKeys.graphs(tenant, site.id), 'list'] });
+      void queryClient.invalidateQueries({
+        queryKey: [...funnelKeys.graphs(tenant, site.id), 'list'],
+      });
     },
     onError: (error) => toast.error(analyticsErrorMessage(t, error)),
   });
@@ -377,7 +377,9 @@ function Builder({
           data-testid="funnel-builder-save"
         >
           <Save aria-hidden />
-          {saveMutation.isPending ? t('analytics.funnelBuilder.saving') : t('analytics.funnelBuilder.save')}
+          {saveMutation.isPending
+            ? t('analytics.funnelBuilder.saving')
+            : t('analytics.funnelBuilder.save')}
         </DashboardButton>
       </div>
       {conflict ? (
@@ -549,8 +551,7 @@ export function AnalyticsFunnelBuilderPage() {
         <Skeleton className="h-[60vh] w-full" />
       </div>
     );
-  if (!site || !graph.data)
-    return <EmptyNote>{t('analytics.funnelsV2.noSite')}</EmptyNote>;
+  if (!site || !graph.data) return <EmptyNote>{t('analytics.funnelsV2.noSite')}</EmptyNote>;
   return (
     <ReactFlowProvider>
       <BuilderResourcesProvider

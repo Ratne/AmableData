@@ -17,12 +17,7 @@ import {
 import { useI18n } from '../../../i18n';
 import { currencyExponent, minorToMajor } from '../../../lib/money';
 import { usePurchases, useTimeseries } from '../api';
-import {
-  avatarHue,
-  initials,
-  useFormatters,
-  type Formatters,
-} from '../lib/format';
+import { avatarHue, initials, useFormatters, type Formatters } from '../lib/format';
 import { useReportScope } from './scope';
 import { ErrorState, panelClass, Segmented } from './ui';
 

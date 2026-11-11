@@ -27,7 +27,8 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.apiKeys.revoke': 'Revoca',
   'dev.apiKeys.revoked': 'Chiave API revocata',
   'dev.apiKeys.revokedPill': 'Revocata',
-  'dev.apiKeys.confirmRevoke': 'Revocare "{name}"? Le integrazioni che la usano smettono subito di funzionare.',
+  'dev.apiKeys.confirmRevoke':
+    'Revocare "{name}"? Le integrazioni che la usano smettono subito di funzionare.',
   'dev.apiKeys.preset.read': 'Solo lettura',
   'dev.apiKeys.preset.full': 'Tutto ciò che il mio ruolo consente',
   'dev.apiKeys.preset.custom': 'Personalizzati',
@@ -37,7 +38,7 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
 
   'dev.webhooks.title': 'Webhook',
   'dev.webhooks.intro':
-    "I webhook inviano un evento JSON firmato al tuo endpoint ogni volta che succede qualcosa nello spazio di lavoro. Le consegne fallite vengono ritentate con backoff per circa un giorno; un endpoint che fallisce di continuo viene disattivato in automatico.",
+    'I webhook inviano un evento JSON firmato al tuo endpoint ogni volta che succede qualcosa nello spazio di lavoro. Le consegne fallite vengono ritentate con backoff per circa un giorno; un endpoint che fallisce di continuo viene disattivato in automatico.',
   'dev.webhooks.new': 'Aggiungi endpoint',
   'dev.webhooks.create': 'Aggiungi endpoint',
   'dev.webhooks.empty': 'Nessun endpoint.',
@@ -48,10 +49,12 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.webhooks.secret': 'Segreto di firma',
   'dev.webhooks.createdTitle': 'Endpoint aggiunto — segreto di firma',
   'dev.webhooks.newSecret': 'Nuovo segreto di firma',
-  'dev.webhooks.secretHint': "Salvalo nel ricevitore per verificare l'header Amable-Signature. Non verrà più mostrato.",
+  'dev.webhooks.secretHint':
+    "Salvalo nel ricevitore per verificare l'header Amable-Signature. Non verrà più mostrato.",
   'dev.webhooks.endpoint.active': 'Attivo',
   'dev.webhooks.endpoint.disabled': 'Disattivato',
-  'dev.webhooks.autoDisabled': 'Disattivato in automatico dopo {count} tentativi falliti di fila. Correggi il ricevitore e riattivalo.',
+  'dev.webhooks.autoDisabled':
+    'Disattivato in automatico dopo {count} tentativi falliti di fila. Correggi il ricevitore e riattivalo.',
   'dev.webhooks.sendTest': 'Invia test',
   'dev.webhooks.testSent': 'Consegna di test inviata',
   'dev.webhooks.rotate': 'Ruota segreto',
@@ -97,18 +100,25 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
 
   'dev.domains.title': 'Domini',
   'dev.domains.connect': 'Collega un dominio',
-  'dev.domains.automation.cloudflare': 'Le modifiche DNS vengono applicate in automatico sulla tua zona Cloudflare.',
-  'dev.domains.automation.fake': 'Sviluppo locale: le modifiche DNS vanno su una zona simulata (nessuna rete).',
-  'dev.domains.automation.manual': 'Nessun token API Cloudflare configurato: crea i record qui sotto dal tuo provider DNS.',
+  'dev.domains.automation.cloudflare':
+    'Le modifiche DNS vengono applicate in automatico sulla tua zona Cloudflare.',
+  'dev.domains.automation.fake':
+    'Sviluppo locale: le modifiche DNS vanno su una zona simulata (nessuna rete).',
+  'dev.domains.automation.manual':
+    'Nessun token API Cloudflare configurato: crea i record qui sotto dal tuo provider DNS.',
   'dev.domains.edgeHost': 'Hostname edge: {host}.',
   'dev.domains.kind.sending': 'Dominio di invio',
   'dev.domains.kind.tracking': 'Dominio di tracciamento',
   'dev.domains.kind.app': 'Sito landing e prenotazioni',
-  'dev.domains.kindHelp.sending': 'Necessario prima di inviare qualsiasi email marketing (SPF, DKIM, DMARC).',
-  'dev.domains.kindHelp.tracking': 'Il tuo hostname per i link tracciati di click/aperture e per il tracker web.',
+  'dev.domains.kindHelp.sending':
+    'Necessario prima di inviare qualsiasi email marketing (SPF, DKIM, DMARC).',
+  'dev.domains.kindHelp.tracking':
+    'Il tuo hostname per i link tracciati di click/aperture e per il tracker web.',
   'dev.domains.kind.shortlink': 'Short link',
-  'dev.domains.kindHelp.app': 'Landing page e pagine di prenotazione sul tuo hostname, o su alcuni percorsi del tuo sito.',
-  'dev.domains.kindHelp.shortlink': "Hostname dedicato ai link brevi (go.example.com/promo) con QR code e statistiche dei click.",
+  'dev.domains.kindHelp.app':
+    'Landing page e pagine di prenotazione sul tuo hostname, o su alcuni percorsi del tuo sito.',
+  'dev.domains.kindHelp.shortlink':
+    'Hostname dedicato ai link brevi (go.example.com/promo) con QR code e statistiche dei click.',
   'dev.domains.hostname': 'Hostname',
   'dev.domains.paths': 'Percorsi (facoltativi)',
   'dev.domains.pathsHelp':
@@ -121,12 +131,16 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.domains.dnsChanged.title': 'Aggiorna i DNS di questo dominio',
   'dev.domains.dnsChanged.body':
     "L'invio delle tue email è passato a una nuova infrastruttura, quindi i record DNS di questo dominio sono cambiati (dal {at}). Finché non li pubblichi la consegna delle email può peggiorare.",
-  'dev.domains.dnsChanged.stepAuto': '1. Premi "{button}": i record qui sotto vengono scritti sulla tua zona Cloudflare.',
-  'dev.domains.dnsChanged.stepManual': '1. Dal pannello del tuo provider DNS sostituisci i record di questo dominio con quelli qui sotto.',
-  'dev.domains.dnsChanged.stepVerify': '2. Premi "{button}". Le modifiche DNS possono richiedere qualche minuto: se non riesce, riprova più tardi.',
+  'dev.domains.dnsChanged.stepAuto':
+    '1. Premi "{button}": i record qui sotto vengono scritti sulla tua zona Cloudflare.',
+  'dev.domains.dnsChanged.stepManual':
+    '1. Dal pannello del tuo provider DNS sostituisci i record di questo dominio con quelli qui sotto.',
+  'dev.domains.dnsChanged.stepVerify':
+    '2. Premi "{button}". Le modifiche DNS possono richiedere qualche minuto: se non riesce, riprova più tardi.',
   'dev.domains.dnsChanged.pill': 'DNS da aggiornare',
   'dev.domains.dnsChanged.bannerTitle': 'Aggiornamento DNS richiesto',
-  'dev.domains.dnsChanged.bannerBody': "Domini di invio da aggiornare: {count}. Servono nuovi record DNS dopo un cambio dell'infrastruttura email. Segui i passaggi su ogni dominio evidenziato.",
+  'dev.domains.dnsChanged.bannerBody':
+    "Domini di invio da aggiornare: {count}. Servono nuovi record DNS dopo un cambio dell'infrastruttura email. Segui i passaggi su ogni dominio evidenziato.",
   'dev.domains.dnsApplied': 'Modifiche DNS applicate',
   'dev.domains.verify': 'Verifica',
   'dev.domains.removed': 'Dominio rimosso',
@@ -138,11 +152,16 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.domains.step.dns': 'DNS su Cloudflare',
   'dev.domains.step.dnsManual': 'Record DNS creati',
   'dev.domains.step.verified': 'Verificato',
-  'dev.domains.help.sending': "Crea questi record sulla zona, poi verifica. L'invio resta bloccato finché il dominio non è verificato.",
-  'dev.domains.help.tracking': "Punta l'hostname al worker edge (CNAME, o dominio personalizzato Workers se automatico), poi verifica.",
-  'dev.domains.help.app': "Punta l'hostname al worker edge; le landing pubblicate rispondono sul loro percorso.",
-  'dev.domains.help.shortlink': "Punta l'hostname al worker edge (CNAME, o dominio personalizzato Workers se automatico), poi verifica: ogni percorso risponde con i tuoi short link. Scollegandolo i suoi link vengono eliminati.",
-  'dev.domains.help.paths': 'Queste Workers Routes mandano i percorsi indicati del tuo sito al worker edge.',
+  'dev.domains.help.sending':
+    "Crea questi record sulla zona, poi verifica. L'invio resta bloccato finché il dominio non è verificato.",
+  'dev.domains.help.tracking':
+    "Punta l'hostname al worker edge (CNAME, o dominio personalizzato Workers se automatico), poi verifica.",
+  'dev.domains.help.app':
+    "Punta l'hostname al worker edge; le landing pubblicate rispondono sul loro percorso.",
+  'dev.domains.help.shortlink':
+    "Punta l'hostname al worker edge (CNAME, o dominio personalizzato Workers se automatico), poi verifica: ogni percorso risponde con i tuoi short link. Scollegandolo i suoi link vengono eliminati.",
+  'dev.domains.help.paths':
+    'Queste Workers Routes mandano i percorsi indicati del tuo sito al worker edge.',
   'dev.domains.type': 'Tipo',
   'dev.domains.name': 'Nome',
   'dev.domains.value': 'Valore',
@@ -152,9 +171,11 @@ export const developersIt: Readonly<Record<DevelopersMessageKey, string>> = {
   'dev.domains.lastError': 'Ultimo errore: {error}',
 
   'dev.sending.blockedTitle': "L'invio email è bloccato",
-  'dev.sending.blockedBody': 'Collega e verifica un dominio di invio prima che broadcast ed email delle automazioni possano partire.',
+  'dev.sending.blockedBody':
+    'Collega e verifica un dominio di invio prima che broadcast ed email delle automazioni possano partire.',
   'dev.sending.overrideTitle': 'Nessun dominio di invio verificato (consentito in sviluppo locale)',
-  'dev.sending.overrideBody': "In produzione l'invio resta bloccato finché un dominio di invio non è verificato.",
+  'dev.sending.overrideBody':
+    "In produzione l'invio resta bloccato finché un dominio di invio non è verificato.",
   'dev.sending.connect': 'Configura un dominio di invio',
   'dev.sending.updateDns': 'Aggiorna i DNS dei domini',
 };

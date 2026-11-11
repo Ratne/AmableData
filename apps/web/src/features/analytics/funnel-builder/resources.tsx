@@ -40,7 +40,10 @@ export function BuilderResourcesProvider({
   sources,
   children,
 }: BuilderResources & { children: ReactNode }) {
-  const value = useMemo(() => ({ tenant, siteId, pages, sources }), [tenant, siteId, pages, sources]);
+  const value = useMemo(
+    () => ({ tenant, siteId, pages, sources }),
+    [tenant, siteId, pages, sources],
+  );
   return <ResourcesContext.Provider value={value}>{children}</ResourcesContext.Provider>;
 }
 

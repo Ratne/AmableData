@@ -403,6 +403,10 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.sites.createdTitle': '{name} è pronto',
   'analytics.sites.createdHint':
     'Salva il segreto del sito per gli eventi lato server, poi aggiungi lo snippet a ogni pagina.',
+  'analytics.sites.createdSecret': 'Segreto del sito (eventi lato server)',
+  'analytics.sites.createdGtm':
+    'Va bene anche in Google Tag Manager: incolla le due righe in un tag HTML personalizzato con attivazione su tutte le pagine.',
+  'analytics.sites.createdDone': 'Ho copiato tutto',
   'analytics.sites.updated': 'Sito salvato',
   'analytics.sites.deleted': 'Sito eliminato',
   'analytics.sites.deleteTitle': 'Eliminare il sito “{name}”?',
@@ -1279,7 +1283,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.conversions.new': 'Nuova conversione',
   'analytics.conversions.newTitle': 'Nuova conversione',
   'analytics.conversions.editTitle': 'Modifica conversione',
-  'analytics.conversions.editorHint': "La visita alla pagina o l'obiettivo completato conta come conversione, ovunque il visitatore sia entrato e dopo quante visite. Viene attribuita alla pagina d'ingresso, al canale, alla campagna e all'inserzione delle sessioni precedenti.",
+  'analytics.conversions.editorHint':
+    "La visita alla pagina o l'obiettivo completato conta come conversione, ovunque il visitatore sia entrato e dopo quante visite. Viene attribuita alla pagina d'ingresso, al canale, alla campagna e all'inserzione delle sessioni precedenti.",
   'analytics.conversions.namePlaceholder': 'es. Acquisto completato',
   'analytics.conversions.when': 'Conta quando il visitatore',
   'analytics.conversions.trigger': 'Evento',
@@ -1289,8 +1294,10 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.conversions.match.starts_with': 'inizia con',
   'analytics.conversions.match.contains': 'contiene',
   'analytics.conversions.value': 'Pagina o obiettivo',
-  'analytics.conversions.pageHint': 'Percorso come /grazie (va bene anche un URL completo); la query string viene ignorata.',
-  'analytics.conversions.goalHint': "Nome dell'obiettivo inviato dal tracker o dal CRM (es. signup).",
+  'analytics.conversions.pageHint':
+    'Percorso come /grazie (va bene anche un URL completo); la query string viene ignorata.',
+  'analytics.conversions.goalHint':
+    "Nome dell'obiettivo inviato dal tracker o dal CRM (es. signup).",
   'analytics.conversions.hostname': 'Solo sul dominio (facoltativo)',
   'analytics.conversions.hostnamePlaceholder': 'shop.esempio.it',
   'analytics.conversions.countLabel': 'Conteggio',
@@ -1299,7 +1306,8 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.conversions.amount': 'Valore per conversione ({currency}, facoltativo)',
   'analytics.conversions.amountPlaceholder': 'es. 25',
   'analytics.conversions.backfill': 'Converti anche i dati già raccolti',
-  'analytics.conversions.backfillHint': 'Le visite passate entro la conservazione dei dati grezzi vengono contate subito.',
+  'analytics.conversions.backfillHint':
+    'Le visite passate entro la conservazione dei dati grezzi vengono contate subito.',
   'analytics.conversions.summary.exact': 'Pagina {value}',
   'analytics.conversions.summary.starts_with': 'Pagine che iniziano con {value}',
   'analytics.conversions.summary.contains': 'Pagine che contengono {value}',
@@ -1308,9 +1316,11 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.conversions.updated': 'Conversione aggiornata',
   'analytics.conversions.deleted': 'Conversione eliminata',
   'analytics.conversions.deleteTitle': 'Eliminare "{name}"?',
-  'analytics.conversions.deleteBody': 'Vengono eliminate anche le conversioni registrate. Gli obiettivi già registrati restano.',
+  'analytics.conversions.deleteBody':
+    'Vengono eliminate anche le conversioni registrate. Gli obiettivi già registrati restano.',
   'analytics.conversions.empty': 'Ancora nessuna conversione.',
-  'analytics.conversions.intro': 'Crea una conversione (es. "arrivato a /grazie") per vedere quanti visitatori ci arrivano e da quale pagina, campagna e inserzione sono partiti.',
+  'analytics.conversions.intro':
+    'Crea una conversione (es. "arrivato a /grazie") per vedere quanti visitatori ci arrivano e da quale pagina, campagna e inserzione sono partiti.',
   'analytics.conversions.all': 'Tutte le conversioni',
   'analytics.conversions.kpi.conversions': 'Conversioni',
   'analytics.conversions.kpi.persons': 'Persone',

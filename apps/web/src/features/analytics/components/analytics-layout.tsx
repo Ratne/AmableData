@@ -14,12 +14,7 @@ import { ShareDialog } from './share-dialog';
 import { ErrorState, panelClass } from './ui';
 
 export type AnalyticsTab =
-  | 'dashboard'
-  | 'realtime'
-  | 'insights'
-  | 'visitors'
-  | 'funnels'
-  | 'conversions';
+  'dashboard' | 'realtime' | 'insights' | 'visitors' | 'funnels' | 'conversions';
 
 const TAB_PATHS = {
   dashboard: '/t/$tenant/analytics',

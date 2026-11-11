@@ -98,7 +98,8 @@ function OptionalNumber({
         value={raw}
         onChange={(e) => {
           setRaw(e.target.value);
-          const next = e.target.value.trim() === '' ? null : Number(e.target.value.replace(',', '.'));
+          const next =
+            e.target.value.trim() === '' ? null : Number(e.target.value.replace(',', '.'));
           if (next === null || Number.isFinite(next)) onChange(next);
         }}
       />
@@ -151,7 +152,9 @@ export function SourceEditorDialog({
     return out;
   }, [attempted, schemaIssues, serverErrors, paramMessages, postbackMissing, connectionMissing, t]);
   const tabHasError = (name: Tab) =>
-    [...errors.keys()].some((path) => TAB_FIELDS[name].some((p) => path === p || path.startsWith(`${p}.`)));
+    [...errors.keys()].some((path) =>
+      TAB_FIELDS[name].some((p) => path === p || path.startsWith(`${p}.`)),
+    );
 
   const edit = (next: SourceDraft) => {
     setDraft(next);
@@ -184,9 +187,11 @@ export function SourceEditorDialog({
     setAttempted(true);
     if (schemaIssues.size > 0 || paramMessages.size > 0 || postbackMissing || connectionMissing) {
       const first = (['general', 'fields', 'conversion', 'advanced'] as const).find((name) =>
-        [...schemaIssues.keys(), ...paramMessages.keys(), ...(postbackMissing || connectionMissing ? ['conversion'] : [])].some(
-          (path) => TAB_FIELDS[name].some((p) => path === p || path.startsWith(`${p}.`)),
-        ),
+        [
+          ...schemaIssues.keys(),
+          ...paramMessages.keys(),
+          ...(postbackMissing || connectionMissing ? ['conversion'] : []),
+        ].some((path) => TAB_FIELDS[name].some((p) => path === p || path.startsWith(`${p}.`))),
       );
       if (first) setTab(first);
       return;
@@ -205,7 +210,9 @@ export function SourceEditorDialog({
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
-            {source ? t('analytics.sources.editTitle', { name: source.name }) : t('analytics.sources.newTitle')}
+            {source
+              ? t('analytics.sources.editTitle', { name: source.name })
+              : t('analytics.sources.newTitle')}
           </DialogTitle>
           <DialogDescription>{t('analytics.sources.editorHint')}</DialogDescription>
         </DialogHeader>
@@ -231,7 +238,10 @@ export function SourceEditorDialog({
               />
               <ErrorLine message={errors.get('name')} />
             </Field>
-            <Field label={t('analytics.sources.category')} hint={t('analytics.sources.categoryHint')}>
+            <Field
+              label={t('analytics.sources.category')}
+              hint={t('analytics.sources.categoryHint')}
+            >
               <Input
                 className="h-8"
                 value={draft.category ?? ''}
@@ -334,8 +344,12 @@ export function SourceEditorDialog({
                           {CONVERSION_EVENTS.map((event) => (
                             <option key={event} value={event}>
                               {event.startsWith('event:')
-                                ? t('analytics.sources.conversion.customEvent', { n: event.slice(6) })
-                                : t(`analytics.sources.conversion.event.${event as 'sale' | 'lead'}`)}
+                                ? t('analytics.sources.conversion.customEvent', {
+                                    n: event.slice(6),
+                                  })
+                                : t(
+                                    `analytics.sources.conversion.event.${event as 'sale' | 'lead'}`,
+                                  )}
                             </option>
                           ))}
                         </select>
@@ -442,13 +456,14 @@ export function SourceEditorDialog({
                 ))}
               </select>
             </Field>
-            <Field label={t('analytics.sources.defaultCost')} hint={t('analytics.sources.defaultCostHint')}>
+            <Field
+              label={t('analytics.sources.defaultCost')}
+              hint={t('analytics.sources.defaultCostHint')}
+            >
               <OptionalNumber
                 label={t('analytics.sources.defaultCost')}
                 value={
-                  draft.default_cost_minor === null
-                    ? null
-                    : draft.default_cost_minor / 10 ** digits
+                  draft.default_cost_minor === null ? null : draft.default_cost_minor / 10 ** digits
                 }
                 suffix={site.currency}
                 invalid={errors.has('default_cost_minor')}
@@ -461,7 +476,10 @@ export function SourceEditorDialog({
               />
               <ErrorLine message={errors.get('default_cost_minor')} />
             </Field>
-            <Field label={t('analytics.sources.costModifier')} hint={t('analytics.sources.costModifierHint')}>
+            <Field
+              label={t('analytics.sources.costModifier')}
+              hint={t('analytics.sources.costModifierHint')}
+            >
               <OptionalNumber
                 label={t('analytics.sources.costModifier')}
                 value={draft.cost_modifier_pct}
@@ -484,7 +502,10 @@ export function SourceEditorDialog({
               />
               <ErrorLine message={errors.get('revenue_modifier_pct')} />
             </Field>
-            <Field label={t('analytics.sources.throttle')} hint={t('analytics.sources.throttleHint')}>
+            <Field
+              label={t('analytics.sources.throttle')}
+              hint={t('analytics.sources.throttleHint')}
+            >
               <OptionalNumber
                 label={t('analytics.sources.throttle')}
                 value={draft.postback_throttle_pct}

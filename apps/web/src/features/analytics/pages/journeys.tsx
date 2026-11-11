@@ -26,7 +26,9 @@ function StepChips({ steps }: { steps: readonly string[] }) {
           <span
             className={cn(
               'max-w-56 truncate rounded-full px-2 py-0.5 text-[11.5px]',
-              step === '' ? 'bg-foreground/[0.05] italic text-muted-foreground' : 'bg-primary/10 text-foreground',
+              step === ''
+                ? 'bg-foreground/[0.05] italic text-muted-foreground'
+                : 'bg-primary/10 text-foreground',
             )}
             title={journeyStepLabel(step, none)}
           >
@@ -66,13 +68,18 @@ function JourneyTable({ report }: { report: JourneyReport }) {
         </thead>
         <tbody>
           {report.rows.map((row, index) => (
-            <tr key={`${row.steps.join('\u0000')}-${index}`} className="border-b border-foreground/[0.04]">
+            <tr
+              key={`${row.steps.join('\u0000')}-${index}`}
+              className="border-b border-foreground/[0.04]"
+            >
               <td className="px-3 py-2">
                 <StepChips steps={row.steps} />
               </td>
               <td className={cell}>{f.number(row.visitors)}</td>
               <td className={cell}>{f.number(row.conversions)}</td>
-              <td className={cn(cell, 'font-medium')}>{f.money(row.revenue_minor, report.currency)}</td>
+              <td className={cn(cell, 'font-medium')}>
+                {f.money(row.revenue_minor, report.currency)}
+              </td>
               <td className={cell}>
                 {row.avg_days_to_convert === null ? '—' : f.number(row.avg_days_to_convert, 1)}
               </td>

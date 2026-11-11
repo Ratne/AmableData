@@ -69,7 +69,11 @@ export function ValueSelect({
     return options
       .map((o) => ({
         o,
-        score: searchableFilter(o.value, query, [o.label, ...(o.hint ? [o.hint] : []), ...(o.keywords ?? [])]),
+        score: searchableFilter(o.value, query, [
+          o.label,
+          ...(o.hint ? [o.hint] : []),
+          ...(o.keywords ?? []),
+        ]),
       }))
       .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score)
@@ -79,7 +83,9 @@ export function ValueSelect({
   const typed = query.trim().slice(0, maxLength);
   const typedValid = typed !== '' && (!numeric || Number.isFinite(Number(typed)));
   const exact = options.some(
-    (o) => o.value.toLowerCase() === typed.toLowerCase() || o.label.toLowerCase() === typed.toLowerCase(),
+    (o) =>
+      o.value.toLowerCase() === typed.toLowerCase() ||
+      o.label.toLowerCase() === typed.toLowerCase(),
   );
   const offerCustom = custom && typedValid && !exact && !selected.has(typed);
 

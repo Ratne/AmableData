@@ -52,11 +52,16 @@ function ValuesEditor({
 }) {
   const { t, locale } = useI18n();
   const { tenant, siteId, sources } = useBuilderResources();
-  const suggest = useConditionValues(tenant, siteId, editor.kind === 'suggest' ? editor.attr : null);
+  const suggest = useConditionValues(
+    tenant,
+    siteId,
+    editor.kind === 'suggest' ? editor.attr : null,
+  );
   const ctx = {
     locale,
     sources,
-    deviceLabel: (d: (typeof DEVICE_TYPES)[number]) => t(`analytics.funnelBuilder.value.device.${d}`),
+    deviceLabel: (d: (typeof DEVICE_TYPES)[number]) =>
+      t(`analytics.funnelBuilder.value.device.${d}`),
     archivedLabel: t('analytics.funnelBuilder.value.archived'),
   };
   const label = t('analytics.funnelBuilder.panel.values');
@@ -75,7 +80,10 @@ function ValuesEditor({
         />
       );
     case 'suggest': {
-      const known = editor.attr === 'tag' ? [...new Set([...draftTags, ...(suggest.data ?? [])])] : suggest.data;
+      const known =
+        editor.attr === 'tag'
+          ? [...new Set([...draftTags, ...(suggest.data ?? [])])]
+          : suggest.data;
       return (
         <ValueSelect
           ariaLabel={label}
@@ -209,7 +217,9 @@ function RuleRow({
           ariaLabel={t('analytics.funnelBuilder.panel.fieldName')}
           placeholder={t('analytics.funnelBuilder.panel.fieldName')}
           value={[rule.attr.slice(FIELD_PREFIX.length)].filter(Boolean)}
-          onChange={([name = DEFAULT_FIELD_NAME]) => onChange({ ...rule, attr: `${FIELD_PREFIX}${name}` })}
+          onChange={([name = DEFAULT_FIELD_NAME]) =>
+            onChange({ ...rule, attr: `${FIELD_PREFIX}${name}` })
+          }
           options={fields.map((name) => ({
             value: name,
             label: name,

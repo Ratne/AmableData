@@ -110,7 +110,9 @@ function VisitorsTable({ tenant, linkSearch }: { tenant: string; linkSearch: Ana
       align: 'right',
       cell: (row) =>
         row.revenue_minor > 0 ? (
-          <span className="whitespace-nowrap font-medium">{f.money(row.revenue_minor, currency)}</span>
+          <span className="whitespace-nowrap font-medium">
+            {f.money(row.revenue_minor, currency)}
+          </span>
         ) : (
           '—'
         ),
@@ -128,7 +130,9 @@ function VisitorsTable({ tenant, linkSearch }: { tenant: string; linkSearch: Ana
       align: 'right',
       hideBelow: 'md',
       cell: (row) => (
-        <span className="whitespace-nowrap text-muted-foreground">{f.relative(row.last_seen, now)}</span>
+        <span className="whitespace-nowrap text-muted-foreground">
+          {f.relative(row.last_seen, now)}
+        </span>
       ),
     },
   ];

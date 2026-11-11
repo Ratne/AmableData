@@ -189,8 +189,7 @@ export function funnelsApi(tenant: string) {
         siteId: string,
         id: string,
         input: { pixel_id?: string | null; test_event_code?: string | null },
-      ) =>
-        request<AdConnection>(sited(siteId, `ads/connections/${enc(id)}`), send('PATCH', input)),
+      ) => request<AdConnection>(sited(siteId, `ads/connections/${enc(id)}`), send('PATCH', input)),
       backfill: (siteId: string, id: string, range: { from: string; to: string }) =>
         request<{ connection_id: string; from: string; to: string; rows: number }>(
           sited(siteId, `ads/connections/${enc(id)}/backfill`),
@@ -207,9 +206,7 @@ export function funnelsApi(tenant: string) {
     },
     /** Pages of the AmableCRM page builder (`/api/v2/t/{slug}/pages`). */
     pages: () =>
-      request<{ data: LandingPage[] }>(
-        withQuery(`/api/v2/t/${enc(tenant)}/pages`, { limit: 100 }),
-      ),
+      request<{ data: LandingPage[] }>(withQuery(`/api/v2/t/${enc(tenant)}/pages`, { limit: 100 })),
   };
 }
 
@@ -356,7 +353,11 @@ export function useTrafficSources(
 }
 
 /** Builder suggestions for a condition / tag value; `null` attr disables the query. */
-export function useConditionValues(tenant: string, siteId: string, attr: ConditionSuggestAttr | null) {
+export function useConditionValues(
+  tenant: string,
+  siteId: string,
+  attr: ConditionSuggestAttr | null,
+) {
   return useQuery({
     queryKey: [...funnelKeys.graphs(tenant, siteId), 'condition-values', attr],
     queryFn: () => funnelsApi(tenant).funnels.conditionValues(siteId, attr!),

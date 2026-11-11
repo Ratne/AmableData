@@ -12,7 +12,8 @@ export const shortlinksIt: Readonly<Record<ShortlinksMessageKey, string>> = {
   'shortlinks.emptyFiltered': 'Nessun link corrisponde ai filtri.',
   'shortlinks.copy': 'Copia link',
   'shortlinks.copied': 'Link copiato',
-  'shortlinks.dialog.description': "Le visite allo short URL vengono reindirizzate alla destinazione con i parametri UTM qui sotto.",
+  'shortlinks.dialog.description':
+    'Le visite allo short URL vengono reindirizzate alla destinazione con i parametri UTM qui sotto.',
 
   'shortlinks.col.link': 'Short link',
   'shortlinks.col.destination': 'Destinazione',
@@ -38,7 +39,8 @@ export const shortlinksIt: Readonly<Record<ShortlinksMessageKey, string>> = {
   'shortlinks.field.title': 'Titolo (interno)',
   'shortlinks.field.url': 'URL di destinazione',
   'shortlinks.field.passQuery': 'Inoltra i parametri query della visita',
-  'shortlinks.field.passQueryHint': 'Vengono aggiunti alla destinazione e sovrascrivono le UTM qui sopra.',
+  'shortlinks.field.passQueryHint':
+    'Vengono aggiunti alla destinazione e sovrascrivono le UTM qui sopra.',
   'shortlinks.field.expiresAt': 'Scade il',
   'shortlinks.field.expiredUrl': 'URL dopo la scadenza',
   'shortlinks.field.expiredUrlHint': 'Vuoto: le visite dopo la scadenza ricevono un 404.',
@@ -51,10 +53,12 @@ export const shortlinksIt: Readonly<Record<ShortlinksMessageKey, string>> = {
   'shortlinks.utm.preview': 'Destinazione',
   'shortlinks.expiry.title': 'Scadenza',
   'shortlinks.og.title': 'Anteprima social',
-  'shortlinks.og.hint': "Mostrata da social e app di messaggistica quando il link viene condiviso. Vuota: leggono la pagina di destinazione.",
+  'shortlinks.og.hint':
+    'Mostrata da social e app di messaggistica quando il link viene condiviso. Vuota: leggono la pagina di destinazione.',
 
   'shortlinks.noDomain.title': 'Collega un dominio per gli short link',
-  'shortlinks.noDomain.body': 'I link vivono su un hostname dedicato come go.example.com, collegato e verificato con tipo “Short link”.',
+  'shortlinks.noDomain.body':
+    'I link vivono su un hostname dedicato come go.example.com, collegato e verificato con tipo “Short link”.',
   'shortlinks.noDomain.link': 'Impostazioni > Domini',
 
   'shortlinks.qr.title': 'QR code',
@@ -76,17 +80,20 @@ export const shortlinksIt: Readonly<Record<ShortlinksMessageKey, string>> = {
   'shortlinks.stats.unknown': 'Sconosciuto',
   'shortlinks.stats.direct': 'Diretto / nessuno',
   'shortlinks.stats.noData': 'Nessun click nel periodo.',
-  'shortlinks.stats.humanOnly': 'I dettagli contano solo le persone; i giorni sono in UTC. I click totali includono i bot e tutti i giorni dalla creazione.',
+  'shortlinks.stats.humanOnly':
+    'I dettagli contano solo le persone; i giorni sono in UTC. I click totali includono i bot e tutti i giorni dalla creazione.',
 
   'shortlinks.folders.title': 'Cartelle',
-  'shortlinks.folders.description': 'Le cartelle raggruppano i link. Una cartella associata a dei domini limita (e preseleziona) i domini dei suoi link.',
+  'shortlinks.folders.description':
+    'Le cartelle raggruppano i link. Una cartella associata a dei domini limita (e preseleziona) i domini dei suoi link.',
   'shortlinks.folders.name': 'Nome cartella',
   'shortlinks.folders.newPlaceholder': 'Nuova cartella',
   'shortlinks.folders.create': 'Crea',
   'shortlinks.folders.created': 'Cartella creata',
   'shortlinks.folders.delete': 'Elimina cartella',
   'shortlinks.folders.deleted': 'Cartella eliminata',
-  'shortlinks.folders.confirmDelete': 'Eliminare la cartella “{name}”? I suoi link restano, senza cartella.',
+  'shortlinks.folders.confirmDelete':
+    'Eliminare la cartella “{name}”? I suoi link restano, senza cartella.',
   'shortlinks.folders.linkCount': '{count} link',
   'shortlinks.folders.empty': 'Ancora nessuna cartella.',
   'shortlinks.folders.noDomains': 'Nessun dominio short link collegato.',

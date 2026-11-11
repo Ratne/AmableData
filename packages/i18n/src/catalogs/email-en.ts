@@ -24,7 +24,8 @@ export const emailEn = {
   'email.templates.tabTemplates': 'Templates',
   'email.templates.tabSnippets': 'Dynamic Content',
   'email.templates.new': 'New template',
-  'email.templates.empty': 'No templates yet. Create one to reuse it in broadcasts and automations.',
+  'email.templates.empty':
+    'No templates yet. Create one to reuse it in broadcasts and automations.',
   'email.templates.compiled': 'Ready',
   'email.templates.notCompiled': 'Needs fixes',
   'email.templates.editorTitle': 'Edit template',
@@ -36,7 +37,8 @@ export const emailEn = {
   'email.snippets.keyHint': 'Insert it in an email as the field {field}.',
   'email.snippets.body': 'Content (Liquid)',
   'email.snippets.bodyHint': 'Text with Liquid fields and conditions, rendered for each recipient.',
-  'email.snippets.empty': 'No snippets yet. Snippets are reusable blocks of text with Liquid logic.',
+  'email.snippets.empty':
+    'No snippets yet. Snippets are reusable blocks of text with Liquid logic.',
   'email.snippets.group': 'Dynamic Content',
 
   'email.preview.as': 'Preview as',
@@ -47,7 +49,8 @@ export const emailEn = {
 
   'email.test.button': 'Send test',
   'email.test.title': 'Send a test email',
-  'email.test.body': 'Test emails go only to members of this workspace, with “[Test]” in the subject.',
+  'email.test.body':
+    'Test emails go only to members of this workspace, with “[Test]” in the subject.',
   'email.test.recipients': 'Recipients',
   'email.test.contact': 'Fill fields with',
   'email.test.send': 'Send test',
@@ -90,7 +93,8 @@ export const emailEn = {
   'email.settings.warmupDay': 'Day {day} · {sent} sent today of {cap}',
   'email.settings.warmupDone': 'Warm-up completed · {sent} sent today',
   'email.settings.warmupNotStarted': 'Starts with the first email',
-  'email.settings.health': 'Last {days} days: {sent} sent · bounces {bounce} · complaints {complaint}',
+  'email.settings.health':
+    'Last {days} days: {sent} sent · bounces {bounce} · complaints {complaint}',
   'email.settings.suspended': 'Sending suspended ({reason})',
   'email.settings.resume': 'Resume sending',
 
@@ -135,7 +139,8 @@ export const emailEn = {
     'Adds the open pixel. Link clicks stay tracked; contacts who turned tracking off never get the pixel.',
   'broadcasts.composer.eligible': '{count} will receive it',
   'broadcasts.composer.segmentSize': '{count} in the segment',
-  'broadcasts.composer.excluded': 'Excluded: {noEmail} without email · {suppressed} suppressed · {unmarketable} not marketable',
+  'broadcasts.composer.excluded':
+    'Excluded: {noEmail} without email · {suppressed} suppressed · {unmarketable} not marketable',
   'broadcasts.composer.blocked': 'Cannot send yet: {reason}',
   'broadcasts.composer.schedule': 'Schedule',
   'broadcasts.composer.now': 'Send now',
@@ -144,7 +149,8 @@ export const emailEn = {
   'broadcasts.composer.date': 'Date',
   'broadcasts.composer.time': 'Local time',
   'broadcasts.composer.confirmTitle': 'Send this broadcast?',
-  'broadcasts.composer.confirmBody': 'It will go to {count} contacts. You can pause or cancel it while it is sending.',
+  'broadcasts.composer.confirmBody':
+    'It will go to {count} contacts. You can pause or cancel it while it is sending.',
   'broadcasts.composer.scheduled': 'Broadcast scheduled',
   'broadcasts.composer.buckets': 'Send times',
 
@@ -160,12 +166,14 @@ export const emailEn = {
   'broadcasts.report.clicks': 'Clicks',
   'broadcasts.report.uniqueClicks': 'Unique clicks',
   'broadcasts.report.noLinks': 'No links tracked yet.',
-  'broadcasts.report.archived': 'Archived broadcast: its statistics are frozen and its older messages are in the workspace archive.',
+  'broadcasts.report.archived':
+    'Archived broadcast: its statistics are frozen and its older messages are in the workspace archive.',
   'broadcasts.report.archiveExport': 'Export archived messages (CSV)',
   'broadcasts.report.pause': 'Pause',
   'broadcasts.report.resume': 'Resume',
   'broadcasts.report.cancel': 'Cancel broadcast',
-  'broadcasts.report.cancelConfirm': 'Cancel this broadcast? Contacts not reached yet will not receive it.',
+  'broadcasts.report.cancelConfirm':
+    'Cancel this broadcast? Contacts not reached yet will not receive it.',
   'broadcasts.wizard.steps': 'Broadcast steps',
   'broadcasts.wizard.step.recipients': 'Recipients',
   'broadcasts.wizard.step.email': 'Email',
@@ -178,7 +186,8 @@ export const emailEn = {
   'broadcasts.wizard.include': 'Send to',
   'broadcasts.wizard.includeTags': 'Contacts with tags',
   'broadcasts.wizard.includeSearches': 'Contacts in saved searches (segments)',
-  'broadcasts.wizard.includeHint': 'Contacts matching the tags or any of the saved searches receive the email.',
+  'broadcasts.wizard.includeHint':
+    'Contacts matching the tags or any of the saved searches receive the email.',
   'broadcasts.wizard.exclude': 'Exclude',
   'broadcasts.wizard.excludeTags': 'Contacts with any of these tags',
   'broadcasts.wizard.excludeSearches': 'Contacts in these saved searches',
@@ -205,7 +214,8 @@ export const emailEn = {
   'broadcasts.wizard.error.content_empty': 'Write the email content',
   'broadcasts.wizard.error.invalid_links': 'Fix the invalid links',
   'broadcasts.wizard.check.domain.ok': 'Sending domain verified',
-  'broadcasts.wizard.check.domain.warn': 'Sending domain not verified (allowed in development only)',
+  'broadcasts.wizard.check.domain.warn':
+    'Sending domain not verified (allowed in development only)',
   'broadcasts.wizard.check.domain.fail': 'Sending domain not verified',
   'broadcasts.wizard.check.sender.ok': 'Sender: {detail}',
   'broadcasts.wizard.check.sender.warn': 'Sender: {detail}',
@@ -214,7 +224,8 @@ export const emailEn = {
   'broadcasts.wizard.check.address.warn': 'Physical address in the footer',
   'broadcasts.wizard.check.address.fail': 'Physical address missing in the email settings',
   'broadcasts.wizard.check.unsubscribe.ok': 'Unsubscribe link present',
-  'broadcasts.wizard.check.unsubscribe.warn': 'No unsubscribe block: a default footer link is added',
+  'broadcasts.wizard.check.unsubscribe.warn':
+    'No unsubscribe block: a default footer link is added',
   'broadcasts.wizard.check.unsubscribe.fail': 'Unsubscribe link missing',
   'broadcasts.wizard.check.subject.ok': 'Subject set',
   'broadcasts.wizard.check.subject.warn': 'Subject set',
@@ -232,7 +243,8 @@ export const emailEn = {
   'broadcasts.wizard.check.quota.warn': 'Sending credit not checked yet',
   'broadcasts.wizard.check.quota.fail': 'Not enough sending credit: {detail}',
   'broadcasts.wizard.check.warmup.ok': 'Within the warm-up limit',
-  'broadcasts.wizard.check.warmup.warn': 'Warm-up: only {detail} emails left today, the rest go out in the next days',
+  'broadcasts.wizard.check.warmup.warn':
+    'Warm-up: only {detail} emails left today, the rest go out in the next days',
   'broadcasts.wizard.check.warmup.fail': 'Warm-up limit reached',
   'broadcasts.wizard.check.spam.ok': 'No common spam words',
   'broadcasts.wizard.check.spam.warn': 'Words that may trigger spam filters: {detail}',
@@ -243,7 +255,8 @@ export const emailEn = {
   'email.snippets.emptyTitle': 'Write it once, personalize it for everyone',
   'email.liquid.title': 'Liquid helper',
   'email.liquid.open': 'Liquid helper',
-  'email.liquid.subtitleEmail': 'Pick fields, build conditions and preview them for a real contact. Inserting puts the code at the editor cursor.',
+  'email.liquid.subtitleEmail':
+    'Pick fields, build conditions and preview them for a real contact. Inserting puts the code at the editor cursor.',
   'email.liquid.howItWorks': 'How it works',
   'email.liquid.loading': 'Loading…',
   'email.liquid.copy': 'Copy',
@@ -285,7 +298,8 @@ export const emailEn = {
   'email.liquid.fields.search': 'Search fields…',
   'email.liquid.fields.fallback': 'Fallback for inserted fields',
   'email.liquid.fields.fallbackPlaceholder': 'Fallback if empty (optional)',
-  'email.liquid.fields.hint': 'Click a field to insert it at the cursor. Dates get a format, tags are joined with commas.',
+  'email.liquid.fields.hint':
+    'Click a field to insert it at the cursor. Dates get a format, tags are joined with commas.',
   'email.liquid.fields.insert': 'Insert at the cursor',
   'email.liquid.fields.masked': 'Sensitive: masked for your role',
   'email.liquid.fields.none': 'No field matches.',
@@ -310,7 +324,8 @@ export const emailEn = {
   'email.liquid.build.tzDefault': 'Workspace timezone (default)',
   'email.liquid.build.tzFixed': 'Fixed time zone',
   'email.liquid.build.zone': 'IANA zone',
-  'email.liquid.build.dateHint': 'Formats use strftime (%d day, %m month, %Y year, %H:%M time); month and day names are in English.',
+  'email.liquid.build.dateHint':
+    'Formats use strftime (%d day, %m month, %Y year, %H:%M time); month and day names are in English.',
   'email.liquid.build.if': 'If',
   'email.liquid.build.elsif': 'Else if',
   'email.liquid.build.else': 'Otherwise show',
@@ -325,7 +340,8 @@ export const emailEn = {
   'email.liquid.build.removeCondition': 'Remove condition',
   'email.liquid.build.addElsif': 'Add “else if”',
   'email.liquid.build.removeBranch': 'Remove',
-  'email.liquid.build.ifHint': 'Branch texts can contain fields, e.g. {{ contact.first_name }}. Liquid has no parentheses: one way of combining per branch.',
+  'email.liquid.build.ifHint':
+    'Branch texts can contain fields, e.g. {{ contact.first_name }}. Liquid has no parentheses: one way of combining per branch.',
   'email.liquid.build.negateTag': 'Show when the contact does NOT have the tag',
   'email.liquid.build.collection': 'List',
   'email.liquid.build.item': 'Item name',
@@ -364,7 +380,8 @@ export const emailEn = {
   'email.liquid.preview.unknown': 'Not in the render context (typo?):',
   'email.liquid.preview.missing': 'Empty for this contact (fallback used if set):',
   'email.liquid.guide.title': 'Dynamic Content and Liquid',
-  'email.liquid.guide.subtitle': 'How snippets work, the fields you can use and ready-made recipes.',
+  'email.liquid.guide.subtitle':
+    'How snippets work, the fields you can use and ready-made recipes.',
   'email.liquid.guide.search': 'Search the guide…',
   'email.liquid.guide.toc': 'Contents',
   'email.liquid.guide.noResults': 'Nothing found.',

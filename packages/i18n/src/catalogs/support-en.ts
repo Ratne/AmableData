@@ -1,7 +1,8 @@
 /** English strings of support tickets, ideas board and assisted access (spread into the main catalog). */
 export const supportEn = {
   'sup.unavailable.title': 'Support is part of the managed offering',
-  'sup.unavailable.body': 'This installation is not linked to amabledata. The community can help you instead.',
+  'sup.unavailable.body':
+    'This installation is not linked to amabledata. The community can help you instead.',
   'sup.unavailable.link': 'Open the community forum',
   'sup.tickets': 'Tickets',
   'sup.newTicket': 'New ticket',

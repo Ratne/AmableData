@@ -8,7 +8,14 @@ import { tenantRoute } from '../../../routes/tenant';
 import { useAnalyticsMutation } from '../api';
 import { funnelKeys, funnelsApi, useTrafficSources } from '../api-funnels';
 import { AnalyticsFrame } from '../components/analytics-layout';
-import { EmptyNote, ErrorState, ListSkeleton, Panel, Segmented, StatusPill } from '../components/ui';
+import {
+  EmptyNote,
+  ErrorState,
+  ListSkeleton,
+  Panel,
+  Segmented,
+  StatusPill,
+} from '../components/ui';
 import { useAnalyticsPermissions } from '../lib/permissions';
 import { SourceEditorDialog } from '../sources/source-editor';
 import { TemplateGalleryDialog } from '../sources/template-gallery';
@@ -34,7 +41,8 @@ function SourceRow({
   const active = source.status === 'active';
   const toggle = useAnalyticsMutation(
     tenant,
-    () => (active ? api.sources.archive(site.id, source.id) : api.sources.restore(site.id, source.id)),
+    () =>
+      active ? api.sources.archive(site.id, source.id) : api.sources.restore(site.id, source.id),
     {
       invalidate: [funnelKeys.sources(tenant, site.id)],
       success: active ? 'analytics.sources.archived' : 'analytics.sources.restored',
@@ -46,7 +54,10 @@ function SourceRow({
       ? t('analytics.sources.conversion.mode.postback')
       : t('analytics.sources.conversion.mode.none');
   return (
-    <li className="flex flex-wrap items-center gap-3 py-2.5" data-testid={`traffic-source-${source.id}`}>
+    <li
+      className="flex flex-wrap items-center gap-3 py-2.5"
+      data-testid={`traffic-source-${source.id}`}
+    >
       <Megaphone className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="flex flex-wrap items-center gap-1.5 text-sm">
@@ -120,7 +131,9 @@ function SourceList({ tenant, site }: { tenant: string; site: Site }) {
         <ListSkeleton rows={3} />
       ) : sources.data.length === 0 ? (
         <EmptyNote>
-          {status === 'active' ? t('analytics.sources.empty') : t('analytics.sources.emptyArchived')}
+          {status === 'active'
+            ? t('analytics.sources.empty')
+            : t('analytics.sources.emptyArchived')}
         </EmptyNote>
       ) : (
         <ul className="flex flex-col divide-y divide-foreground/[0.06]">

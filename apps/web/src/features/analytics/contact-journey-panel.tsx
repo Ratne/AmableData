@@ -105,7 +105,9 @@ function TimelineItem({ item }: { item: JourneyItem }) {
         </div>
         {item.detail || item.channel || item.amount_minor !== null ? (
           <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            {item.channel && !item.detail?.startsWith(item.channel) ? <span>{item.channel}</span> : null}
+            {item.channel && !item.detail?.startsWith(item.channel) ? (
+              <span>{item.channel}</span>
+            ) : null}
             {item.detail ? <span className="truncate">{item.detail}</span> : null}
             {item.amount_minor !== null && item.currency ? (
               <StatusPill tone="warning">{f.money(item.amount_minor, item.currency)}</StatusPill>
@@ -139,41 +141,41 @@ function IdentityExtras({ tenant, journey }: { tenant: string; journey: ContactJ
       {touches.length > 0 ? (
         <Section title={t('analytics.journeys.contact.touches')}>
           <ol className="flex flex-col gap-1 text-xs">
-            {[...touches].reverse().slice(0, 12).map((touch) => (
-              <li key={touch.id} className="flex items-baseline justify-between gap-2">
-                <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
-                  <StatusPill tone="neutral">
-                    {t(`analytics.journeys.contact.kind.${touch.kind}`)}
-                  </StatusPill>
-                  <span className="truncate font-medium">
-                    {touch.funnel_name ?? touch.node_id}
-                  </span>
-                  <span className="truncate text-muted-foreground">
-                    {[
-                      touch.traffic_source_name,
-                      touch.campaign_name ?? touch.campaign,
-                      touch.funnel_name ? touch.node_id : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                  {touch.external_click_id ? (
-                    <span
-                      className="font-mono text-[10.5px] text-muted-foreground"
-                      title={`${t('analytics.journeys.contact.clickId')}: ${touch.external_click_id}`}
-                    >
-                      {shortId(touch.external_click_id)}
+            {[...touches]
+              .reverse()
+              .slice(0, 12)
+              .map((touch) => (
+                <li key={touch.id} className="flex items-baseline justify-between gap-2">
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+                    <StatusPill tone="neutral">
+                      {t(`analytics.journeys.contact.kind.${touch.kind}`)}
+                    </StatusPill>
+                    <span className="truncate font-medium">
+                      {touch.funnel_name ?? touch.node_id}
                     </span>
-                  ) : null}
-                </span>
-                <time
-                  dateTime={touch.ts}
-                  className="shrink-0 text-[11px] text-muted-foreground"
-                >
-                  {f.dateTime(touch.ts)}
-                </time>
-              </li>
-            ))}
+                    <span className="truncate text-muted-foreground">
+                      {[
+                        touch.traffic_source_name,
+                        touch.campaign_name ?? touch.campaign,
+                        touch.funnel_name ? touch.node_id : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                    {touch.external_click_id ? (
+                      <span
+                        className="font-mono text-[10.5px] text-muted-foreground"
+                        title={`${t('analytics.journeys.contact.clickId')}: ${touch.external_click_id}`}
+                      >
+                        {shortId(touch.external_click_id)}
+                      </span>
+                    ) : null}
+                  </span>
+                  <time dateTime={touch.ts} className="shrink-0 text-[11px] text-muted-foreground">
+                    {f.dateTime(touch.ts)}
+                  </time>
+                </li>
+              ))}
           </ol>
         </Section>
       ) : null}
@@ -181,7 +183,10 @@ function IdentityExtras({ tenant, journey }: { tenant: string; journey: ContactJ
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {merged.length > 0 ? (
             <Section title={t('analytics.journeys.contact.mergedVisitors')}>
-              <div className="flex flex-wrap gap-1" title={t('analytics.journeys.contact.mergedHint')}>
+              <div
+                className="flex flex-wrap gap-1"
+                title={t('analytics.journeys.contact.mergedHint')}
+              >
                 {merged.map((visitorId) =>
                   siteId ? (
                     <Link

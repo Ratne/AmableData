@@ -409,6 +409,32 @@ describe('exclusions', () => {
   it('requires data-site', () => {
     expect(openPage({ attrs: { 'data-site': '' } }).handle.reason).toBe('no_site');
   });
+
+  it('survives a tag manager that drops data-site (GTM): queued site, endpoint from src', () => {
+    // GTM recreates the script element keeping only src. The snippet also
+    // queues amable('site', id), and the executing script still names our origin.
+    const page = openPage({
+      attrs: { 'data-site': undefined, src: 'https://t.example.com/c5dqsd1f/main.js' },
+      before: (win) => {
+        const el = win.document.querySelector('script');
+        Object.defineProperty(win.document, 'currentScript', { value: el, configurable: true });
+        (win as unknown as { amable: { q: unknown[][] } }).amable = {
+          q: [['site', 'st_from_queue']],
+        };
+      },
+    });
+    expect(page.handle.enabled).toBe(true);
+    expect(page.sent[0]).toMatchObject({ type: 'pageview', site: 'st_from_queue' });
+    // The events go to the script's own origin, never to the page's /e.
+    expect(page.endpoints[0]).toBe('https://t.example.com/c5dqsd1f/main');
+    // An explicit data-site always wins over the queued one.
+    const both = openPage({
+      before: (win) => {
+        (win as unknown as { amable: { q: unknown[][] } }).amable = { q: [['site', 'st_other']] };
+      },
+    });
+    expect(both.sent[0]).toMatchObject({ site: 'site_test' });
+  });
 });
 
 describe('bundles', () => {

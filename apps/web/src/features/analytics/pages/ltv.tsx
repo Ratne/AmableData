@@ -13,11 +13,23 @@ import { currencyExponent, minorToMajor } from '../../../lib/money';
 import { useFormatters } from '../lib/format';
 import type { AnalyticsState } from '../lib/query-state';
 import { groupLabel, rowLabel } from '../reports-ads/labels';
-import { LTV_GROUPS, LTV_MODELS, validateLtvSearch, type LtvGroup, type LtvSearch } from '../reports-ads/search';
+import {
+  LTV_GROUPS,
+  LTV_MODELS,
+  validateLtvSearch,
+  type LtvGroup,
+  type LtvSearch,
+} from '../reports-ads/search';
 import { useReportSearch } from '../reports-ads/use-report-search';
 
 const MAX_LINES = 5;
-const LINE_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
+const LINE_COLORS = [
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+];
 
 /** Customer acquisition cost of a row, null without customers. */
 const cacOf = (row: LtvReport['rows'][number]) =>
@@ -111,7 +123,9 @@ function LtvTable({ report, group }: { report: LtvReport; group: LtvGroup }) {
                 <td className={cell}>{f.number(row.customers)}</td>
                 <td className={cell}>{f.money(row.cost_minor, report.currency)}</td>
                 <td className={cell}>
-                  {cac === null || row.cost_minor === 0 ? '—' : f.money(Math.round(cac), report.currency)}
+                  {cac === null || row.cost_minor === 0
+                    ? '—'
+                    : f.money(Math.round(cac), report.currency)}
                 </td>
                 {report.windows.map((days) => {
                   const ltv = row.ltv_minor[String(days)] ?? 0;
@@ -119,7 +133,10 @@ function LtvTable({ report, group }: { report: LtvReport; group: LtvGroup }) {
                   return (
                     <td
                       key={days}
-                      className={cn(cell, paid && (ltv >= cac ? 'text-success' : 'text-destructive'))}
+                      className={cn(
+                        cell,
+                        paid && (ltv >= cac ? 'text-success' : 'text-destructive'),
+                      )}
                       title={f.money(row.revenue_minor[String(days)] ?? 0, report.currency)}
                     >
                       {f.money(Math.round(ltv), report.currency)}
@@ -135,13 +152,7 @@ function LtvTable({ report, group }: { report: LtvReport; group: LtvGroup }) {
   );
 }
 
-function LtvBody({
-  state,
-  search,
-}: {
-  state: AnalyticsState & { site: Site };
-  search: LtvSearch;
-}) {
+function LtvBody({ state, search }: { state: AnalyticsState & { site: Site }; search: LtvSearch }) {
   const { t } = useI18n();
   const group = search.group ?? 'source';
   const report = useLtvReport(state.tenant, state.site.id, {
@@ -206,7 +217,10 @@ export function AnalyticsLtvPage() {
           <DashboardFilterMenu
             label={t('analytics.ltv.model')}
             value={search.lm ?? 'first_click'}
-            options={LTV_MODELS.map((value) => ({ value, label: t(`analytics.ltv.model.${value}`) }))}
+            options={LTV_MODELS.map((value) => ({
+              value,
+              label: t(`analytics.ltv.model.${value}`),
+            }))}
             onValueChange={(value) =>
               update({ lm: value === 'first_click' ? undefined : (value as LtvSearch['lm']) })
             }

@@ -51,7 +51,8 @@ export const bookingEn = {
   'booking.list.empty': 'No bookings match these filters.',
   'booking.list.rescheduled': 'rescheduled',
   'booking.list.cancelled': 'Booking cancelled',
-  'booking.list.cancelHint': 'The invitee receives a cancellation email; the CRM appointment is cancelled.',
+  'booking.list.cancelHint':
+    'The invitee receives a cancellation email; the CRM appointment is cancelled.',
   'booking.calendars.new': 'New calendar',
   'booking.calendars.empty': 'No calendars yet. Create one per host to start taking bookings.',
   'booking.calendars.saved': 'Calendar saved',
@@ -76,7 +77,8 @@ export const bookingEn = {
   'booking.google.disconnected': 'Google Calendar disconnected',
   'booking.google.notConnected': 'Not connected',
   'booking.google.syncNow': 'Sync busy time now',
-  'booking.google.needsReconnect': 'Bookings are not written to Google Calendar: disconnect and connect Google again to allow it.',
+  'booking.google.needsReconnect':
+    'Bookings are not written to Google Calendar: disconnect and connect Google again to allow it.',
   'booking.google.writeError': 'Last booking not written to Google Calendar: {error}',
   'booking.google.sync.ok': 'Busy time updated',
   'booking.google.sync.stub': 'Development mode: Google was not contacted',
@@ -86,9 +88,11 @@ export const bookingEn = {
   'booking.eventTypes.new': 'New event type',
   'booking.eventTypes.create': 'Create',
   'booking.eventTypes.empty': 'No event types yet.',
-  'booking.eventTypes.needCalendar': 'Create a calendar first: every event type needs at least one host.',
+  'booking.eventTypes.needCalendar':
+    'Create a calendar first: every event type needs at least one host.',
   'booking.eventTypes.saved': 'Event type saved',
-  'booking.eventTypes.slugHint': 'Used in the booking page address. Lowercase letters, digits and dashes.',
+  'booking.eventTypes.slugHint':
+    'Used in the booking page address. Lowercase letters, digits and dashes.',
   'booking.editor.basics': 'Details',
   'booking.editor.scheduling': 'Scheduling limits',
   'booking.editor.form': 'Booking form',
@@ -108,8 +112,10 @@ export const bookingEn = {
   'booking.editor.defaultText': 'Default text',
   'booking.notify.before': 'Emails before the event',
   'booking.notify.after': 'Emails after the event',
-  'booking.notify.beforeHint': 'Reminders sent before the start, up to 3. Default text: a reminder with the time and the manage link.',
-  'booking.notify.afterHint': 'Follow-ups sent after the end, up to 3. Default text: a thank you note. Not sent when the booking is cancelled.',
+  'booking.notify.beforeHint':
+    'Reminders sent before the start, up to 3. Default text: a reminder with the time and the manage link.',
+  'booking.notify.afterHint':
+    'Follow-ups sent after the end, up to 3. Default text: a thank you note. Not sent when the booking is cancelled.',
   'booking.notify.add': 'Add email',
   'booking.notify.remove': 'Remove email',
   'booking.notify.amount': 'How long',
@@ -126,18 +132,22 @@ export const bookingEn = {
   'booking.permissions.reschedule': 'Invitees can reschedule from their manage link',
   'booking.permissions.cancel': 'Invitees can cancel from their manage link',
   'booking.permissions.hint': 'Your team can always move or cancel bookings from the CRM.',
-  'booking.editor.redirectHint': 'Optional: send the invitee to this page instead of showing the message.',
+  'booking.editor.redirectHint':
+    'Optional: send the invitee to this page instead of showing the message.',
   'booking.editor.turnstile': 'Anti-spam check (Turnstile) when enabled on this installation',
   'booking.locale.auto': 'Visitor language',
   'booking.locale.en': 'English',
   'booking.locale.it': 'Italian',
   'booking.assignment.round_robin': 'Round robin',
   'booking.assignment.collective': 'Collective',
-  'booking.assignment.round_robinHint': 'A time is offered when any host is free; the least busy free host gets the booking.',
-  'booking.assignment.collectiveHint': 'A time is offered only when every host is free; all of them attend.',
+  'booking.assignment.round_robinHint':
+    'A time is offered when any host is free; the least busy free host gets the booking.',
+  'booking.assignment.collectiveHint':
+    'A time is offered only when every host is free; all of them attend.',
   'booking.weights.custom': 'Custom distribution',
   'booking.weights.evenHint': 'Bookings are spread evenly among the hosts who are free.',
-  'booking.weights.customHint': 'Share of the bookings each host should receive. When the host with the biggest gap is busy, the next free one is assigned.',
+  'booking.weights.customHint':
+    'Share of the bookings each host should receive. When the host with the biggest gap is busy, the next free one is assigned.',
   'booking.weights.share': 'Share of {name} in percent',
   'booking.weights.total': 'Total {total}%',
   'booking.weights.totalInvalid': 'Total {total}%: the shares must add up to 100%',

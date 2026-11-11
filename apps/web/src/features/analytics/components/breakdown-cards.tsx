@@ -395,7 +395,12 @@ export function BotsCard() {
   );
 }
 
-const ATTRIBUTION_TABS: readonly AttributionDimension[] = ['channel', 'source', 'campaign', 'entry_page'];
+const ATTRIBUTION_TABS: readonly AttributionDimension[] = [
+  'channel',
+  'source',
+  'campaign',
+  'entry_page',
+];
 
 /** Revenue of the range credited per source value, every attribution model side by side. */
 export function AttributionCard() {

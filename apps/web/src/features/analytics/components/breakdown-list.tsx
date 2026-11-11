@@ -99,7 +99,11 @@ function useColumns(dimension: AnalyticsBreakdownDimension, totalVisitors: numbe
     ];
   if (dimension === 'page')
     return [
-      { id: 'visitors', header: t('analytics.kpi.visitors'), cell: (row) => f.compact(row.visitors) },
+      {
+        id: 'visitors',
+        header: t('analytics.kpi.visitors'),
+        cell: (row) => f.compact(row.visitors),
+      },
       {
         id: 'pageviews',
         header: t('analytics.breakdown.views'),

@@ -192,8 +192,12 @@ function pick(
 
 function currentScript(doc: Document): HTMLScriptElement | null {
   const cur = doc.currentScript;
-  if (cur !== null && cur.tagName === 'SCRIPT' && cur.hasAttribute('data-site')) {
-    return cur as HTMLScriptElement;
+  if (cur !== null && cur.tagName === 'SCRIPT') {
+    const el = cur as HTMLScriptElement;
+    // GTM recreates the tag and drops data-site, but the executing script
+    // still carries our src (the event endpoint comes from it). An inline
+    // copy without src defers to a tagged script elsewhere in the page.
+    if (el.hasAttribute('data-site') || el.src !== '') return el;
   }
   return doc.querySelector<HTMLScriptElement>('script[data-site]');
 }
@@ -231,7 +235,6 @@ export function createTracker(
   const loc = win.location;
   const attr = (name: string): string | null => script?.getAttribute(name) ?? null;
   const has = (name: string): boolean => script?.hasAttribute(name) === true;
-  const site = attr('data-site') ?? '';
   const now = (): number => Date.now();
 
   const disabled = (reason: string): TrackerHandle => {
@@ -244,6 +247,12 @@ export function createTracker(
   // Previously queued calls on the stub stay queued only when tracking is on.
   const stub = (win as unknown as { amable?: Queued }).amable;
   const queued = stub?.q === undefined ? [] : Array.from(stub.q, (args) => Array.from(args));
+
+  // Tag managers (GTM) recreate the script tag and drop data-site: the snippet
+  // also queues amable('site', id), so the id survives whatever injected the tag.
+  const queuedSite = queued.find((a) => a[0] === 'site' && typeof a[1] === 'string')?.[1];
+  const attrSite = attr('data-site') ?? '';
+  const site = attrSite !== '' ? attrSite : typeof queuedSite === 'string' ? queuedSite : '';
 
   if (site === '') return disabled('no_site');
   if (isOptedOut(win)) return disabled('opted_out');
@@ -694,6 +703,9 @@ export function createTracker(
       case 'optin':
         setOptOut(win, false);
         break;
+      case 'site':
+        // Read at boot (the GTM fallback): nothing to do once running.
+        break;
       default:
         break;
     }
@@ -764,7 +776,9 @@ function endpointOf(script: HTMLScriptElement | null): string {
   if (script === null || script.src === '') return '/e';
   const src = new URL(script.src);
   // Neutral directories always hold a digit (SCRIPT_PATH_RE): `/static/sa.js` stays classic.
-  const neutral = /^\/((?=[a-z]*\d)[a-z0-9]{6,16}\/[a-z0-9]{2,16})(?:-[lh])?\.js$/.exec(src.pathname);
+  const neutral = /^\/((?=[a-z]*\d)[a-z0-9]{6,16}\/[a-z0-9]{2,16})(?:-[lh])?\.js$/.exec(
+    src.pathname,
+  );
   return new URL(neutral === null ? '/e' : `/${neutral[1]}`, src).toString();
 }
 
@@ -794,7 +808,11 @@ export function boot(win: Window, options: BuildOptions, transport?: Transport):
     w.amable = handle.command;
     w.amb ??= handle.command;
   };
-  const site = script?.getAttribute('data-site');
+  // GTM drops data-site from the tag: the snippet also queues amable('site', id).
+  const queuedSite = Array.from(w.amable?.q ?? [], (args) => Array.from(args)).find(
+    (a) => a[0] === 'site' && typeof a[1] === 'string',
+  )?.[1] as string | undefined;
+  const site = script?.getAttribute('data-site') ?? queuedSite;
   if (
     options.cookieless ||
     !site ||

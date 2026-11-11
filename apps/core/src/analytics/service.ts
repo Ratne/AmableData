@@ -78,8 +78,10 @@ export function snippetFor(
     hash: `${base}-h.js`,
   };
   const src = site.cookieless ? scripts.cookieless : scripts.default;
+  // amable('site', …) repeats the site id in the queue: tag managers like GTM
+  // recreate the script tag and drop data-site, the queue survives them.
   const html = [
-    '<script>window.amable=window.amable||function(){(window.amable.q=window.amable.q||[]).push(arguments)};</script>',
+    `<script>window.amable=window.amable||function(){(window.amable.q=window.amable.q||[]).push(arguments)};amable('site','${site.id}');</script>`,
     `<script defer data-site="${site.id}" src="${src}"></script>`,
   ].join('\n');
   return {

@@ -48,7 +48,10 @@ function Breadcrumb({ options, update }: { options: PerformanceOptions; update: 
     <nav className="flex min-w-0 flex-wrap items-center gap-0.5 text-[13px]">
       <button
         type="button"
-        className={cn(crumb, drill.length === 0 ? 'font-medium text-foreground' : 'text-muted-foreground')}
+        className={cn(
+          crumb,
+          drill.length === 0 ? 'font-medium text-foreground' : 'text-muted-foreground',
+        )}
         onClick={() => update({ dd: undefined })}
       >
         {groupLabel(t, topGroup)}
@@ -173,9 +176,7 @@ function PerformanceReportPanel({
         </>
       }
     >
-      {options.compare ? (
-        <p className="mb-2 text-[11px] text-muted-foreground">{vsTitle}</p>
-      ) : null}
+      {options.compare ? <p className="mb-2 text-[11px] text-muted-foreground">{vsTitle}</p> : null}
       {report.error ? (
         <ErrorState error={report.error} />
       ) : !data ? (

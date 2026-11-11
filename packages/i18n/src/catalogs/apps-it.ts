@@ -4,7 +4,7 @@ import type { AppsMessageKey } from './apps-en';
 export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'nav.apps': 'App',
   'nav.group.apps': 'App',
-  'apps.frame.unavailable': 'Questa schermata dell\'app al momento non è disponibile.',
+  'apps.frame.unavailable': "Questa schermata dell'app al momento non è disponibile.",
   'apps.title': 'App',
   'apps.intro':
     'Le app create da Amable e da sviluppatori terzi aggiungono funzioni al tuo workspace. Ogni app riceve solo i permessi che approvi e puoi metterla in pausa o rimuoverla in qualsiasi momento.',
@@ -15,7 +15,8 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'apps.empty': 'Nessuna app corrisponde alla ricerca.',
   'apps.syncError': 'Non è stato possibile aggiornare il catalogo',
   'apps.disabled.title': 'Marketplace disattivato',
-  'apps.disabled.body': 'Questa installazione ha il catalogo pubblico disattivato. Puoi comunque installare app private da un URL di manifest.',
+  'apps.disabled.body':
+    'Questa installazione ha il catalogo pubblico disattivato. Puoi comunque installare app private da un URL di manifest.',
   'apps.notFound': 'Questa app non è disponibile ({code}).',
   'apps.by': 'Di {developer}',
   'apps.version': 'Versione {version}',
@@ -23,7 +24,8 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'apps.unverified': 'Non revisionata',
   'apps.adds': 'Cosa aggiunge',
   'apps.permissions': 'Permessi',
-  'apps.personalData': 'Questa app tratta dati personali dei tuoi contatti. Controlla la sua informativa privacy prima di installarla.',
+  'apps.personalData':
+    'Questa app tratta dati personali dei tuoi contatti. Controlla la sua informativa privacy prima di installarla.',
   'apps.scope.sensitive': 'Permesso sensibile',
   'apps.scope.line': '{area}: {level}',
 
@@ -34,7 +36,8 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'apps.status.uninstalled': 'Disinstallata',
   'apps.status.revoked': 'Revocata',
   'apps.reason.paused_by_admin': 'Messa in pausa da un amministratore.',
-  'apps.reason.webhook_endpoint_disabled': "Messa in pausa automaticamente: l'app non accetta più gli eventi.",
+  'apps.reason.webhook_endpoint_disabled':
+    "Messa in pausa automaticamente: l'app non accetta più gli eventi.",
 
   'apps.cat.data_quality': 'Qualità dei dati',
   'apps.cat.messaging': 'Messaggistica',
@@ -67,7 +70,8 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'apps.install.action': 'Installa',
   'apps.install.retry': 'Completa installazione',
   'apps.install.manage': 'Gestisci installazione',
-  'apps.install.consent': 'Autorizzo {name} ad accedere a questo workspace con i permessi indicati.',
+  'apps.install.consent':
+    'Autorizzo {name} ad accedere a questo workspace con i permessi indicati.',
   'apps.install.redirect': "Verrai reindirizzato all'app per completare la configurazione.",
   'apps.install.failed': 'Installazione non riuscita ({code}).',
 
@@ -79,12 +83,14 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'apps.private.continue': 'Continua',
   'apps.private.invalid': 'Impossibile caricare il manifest ({code}).',
   'apps.private.warningTitle': 'App privata',
-  'apps.private.warningBody': 'Questa app non è nel catalogo pubblico e non è stata revisionata. Manifest: {url}',
+  'apps.private.warningBody':
+    'Questa app non è nel catalogo pubblico e non è stata revisionata. Manifest: {url}',
 
   'apps.installed.title': 'App installate',
   'apps.installed.empty': 'Nessuna app installata.',
   'apps.installed.since': 'Installata {at}',
-  'apps.installed.pending': "L'app non ha ancora completato la configurazione. Apri la sua pagina per riprovare.",
+  'apps.installed.pending':
+    "L'app non ha ancora completato la configurazione. Apri la sua pagina per riprovare.",
   'apps.installed.pendingScopes': 'Un aggiornamento richiede nuovi permessi',
   'apps.installed.approve': 'Approva',
   'apps.installed.approved': 'Permessi approvati',
@@ -93,12 +99,15 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
   'apps.installed.resume': 'Riprendi',
   'apps.installed.resumedToast': 'App riattivata',
   'apps.installed.rotate': 'Ruota il secret',
-  'apps.installed.rotateConfirm': "L'app riceve un nuovo secret di firma; quello attuale smette di funzionare. Continuare?",
+  'apps.installed.rotateConfirm':
+    "L'app riceve un nuovo secret di firma; quello attuale smette di funzionare. Continuare?",
   'apps.installed.rotated': 'Secret ruotato',
   'apps.installed.uninstall': 'Disinstalla',
   'apps.installed.uninstalled': 'Disinstallazione avviata',
-  'apps.installed.cleanupKeep': "Disinstallazione in corso; i dati dell'app restano nel workspace. Rimozione definitiva {at}.",
-  'apps.installed.cleanupDelete': "Disinstallazione in corso; i dati dell'app saranno eliminati {at}.",
+  'apps.installed.cleanupKeep':
+    "Disinstallazione in corso; i dati dell'app restano nel workspace. Rimozione definitiva {at}.",
+  'apps.installed.cleanupDelete':
+    "Disinstallazione in corso; i dati dell'app saranno eliminati {at}.",
 
   'apps.uninstall.title': 'Disinstallare {name}?',
   'apps.uninstall.body':
@@ -125,42 +134,64 @@ export const appsIt: Readonly<Record<AppsMessageKey, string>> = {
 
   'apps.authorize.title': "Installa un'app",
   'apps.authorize.invalid': 'Il link di installazione è incompleto.',
-  'apps.authorize.noWorkspace': 'Non puoi installare app in nessun workspace. Chiedi a un amministratore.',
+  'apps.authorize.noWorkspace':
+    'Non puoi installare app in nessun workspace. Chiedi a un amministratore.',
   'apps.authorize.pick': 'Scegli il workspace in cui installare {app}.',
-  'apps.deploy.where': 'Questa app gira nel tuo account Cloudflare: installandola vengono creati lì il suo Worker e il suo database D1. I suoi dati non escono mai dal tuo account.',
+  'apps.deploy.where':
+    'Questa app gira nel tuo account Cloudflare: installandola vengono creati lì il suo Worker e il suo database D1. I suoi dati non escono mai dal tuo account.',
   'apps.deploy.deploying': "Creazione dell'app nel tuo Cloudflare…",
   'apps.deploy.waiting': "Avvio dell'app…",
-  'apps.deploy.unreachable': "L'app è stata creata nel tuo account Cloudflare ma non risponde ancora. Riprova tra un minuto.",
-  'apps.deploy.error.cloudflare_token_required': "Collega prima il tuo account Cloudflare: l'app viene creata lì.",
-  'apps.deploy.error.cloudflare_token_invalid': 'Il token Cloudflare non funziona più. Creane uno nuovo e collegalo di nuovo.',
-  'apps.deploy.error.cloudflare_token_inactive': 'Il token Cloudflare salvato nel portale AmableData non funziona più. Creane uno nuovo nel portale (Preparazione Cloudflare), poi riprova.',
-  'apps.deploy.error.cloudflare_permissions': "Al token manca un permesso: servono Workers Scripts (Edit) e D1 (Edit) sull'account scelto.",
-  'apps.deploy.error.bundle_mismatch': "Il pacchetto dell'app non corrisponde al Marketplace: non è stato installato nulla. Riprova più tardi.",
-  'apps.deploy.error.deployment_required': "L'app deve essere creata nel tuo account Cloudflare prima dell'installazione.",
-  'apps.deploy.error.deploy_failed': "Cloudflare non è riuscito a creare l'app. Riprova tra qualche minuto.",
-  'apps.deploy.error.managed_by_portal': 'Su AmableData Cloud il token Cloudflare si gestisce dal portale.',
+  'apps.deploy.unreachable':
+    "L'app è stata creata nel tuo account Cloudflare ma non risponde ancora. Riprova tra un minuto.",
+  'apps.deploy.error.cloudflare_token_required':
+    "Collega prima il tuo account Cloudflare: l'app viene creata lì.",
+  'apps.deploy.error.cloudflare_token_invalid':
+    'Il token Cloudflare non funziona più. Creane uno nuovo e collegalo di nuovo.',
+  'apps.deploy.error.cloudflare_token_inactive':
+    'Il token Cloudflare salvato nel portale AmableData non funziona più. Creane uno nuovo nel portale (Preparazione Cloudflare), poi riprova.',
+  'apps.deploy.error.cloudflare_permissions':
+    "Al token manca un permesso: servono Workers Scripts (Edit) e D1 (Edit) sull'account scelto.",
+  'apps.deploy.error.bundle_mismatch':
+    "Il pacchetto dell'app non corrisponde al Marketplace: non è stato installato nulla. Riprova più tardi.",
+  'apps.deploy.error.deployment_required':
+    "L'app deve essere creata nel tuo account Cloudflare prima dell'installazione.",
+  'apps.deploy.error.deploy_failed':
+    "Cloudflare non è riuscito a creare l'app. Riprova tra qualche minuto.",
+  'apps.deploy.error.managed_by_portal':
+    'Su AmableData Cloud il token Cloudflare si gestisce dal portale.',
   'apps.cloudflare.title': 'Account Cloudflare per le app',
-  'apps.cloudflare.managed': 'Le app del Marketplace vengono create nel tuo account Cloudflare con il token che hai salvato nel portale AmableData durante la preparazione. Conserva quel token: se lo elimini, il portale te ne chiede uno nuovo.',
-  'apps.cloudflare.selfHosted': 'Le app del Marketplace vengono create nel tuo account Cloudflare (un Worker e un database D1 per app). Collega un token API con i permessi Workers Scripts e D1.',
+  'apps.cloudflare.managed':
+    'Le app del Marketplace vengono create nel tuo account Cloudflare con il token che hai salvato nel portale AmableData durante la preparazione. Conserva quel token: se lo elimini, il portale te ne chiede uno nuovo.',
+  'apps.cloudflare.selfHosted':
+    'Le app del Marketplace vengono create nel tuo account Cloudflare (un Worker e un database D1 per app). Collega un token API con i permessi Workers Scripts e D1.',
   'apps.cloudflare.none': 'Nessun account Cloudflare collegato.',
-  'apps.cloudflare.ownerOnly': "Solo un proprietario può collegare o cambiare l'account Cloudflare.",
-  'apps.cloudflare.required': 'Collega il tuo account Cloudflare per installare questa app: viene creata lì, con i tuoi dati a casa tua.',
-  'apps.cloudflare.requiredAskOwner': 'Questa app viene creata nel tuo account Cloudflare: chiedi a un proprietario di collegarlo in Impostazioni → App → Installate.',
-  'apps.cloudflare.invalid': 'Il token Cloudflare non funziona più (revocato o scaduto). Creane uno nuovo e collegalo.',
-  'apps.cloudflare.invalidAskOwner': 'Il token Cloudflare non funziona più: chiedi a un proprietario di collegarne uno nuovo.',
+  'apps.cloudflare.ownerOnly':
+    "Solo un proprietario può collegare o cambiare l'account Cloudflare.",
+  'apps.cloudflare.required':
+    'Collega il tuo account Cloudflare per installare questa app: viene creata lì, con i tuoi dati a casa tua.',
+  'apps.cloudflare.requiredAskOwner':
+    'Questa app viene creata nel tuo account Cloudflare: chiedi a un proprietario di collegarlo in Impostazioni → App → Installate.',
+  'apps.cloudflare.invalid':
+    'Il token Cloudflare non funziona più (revocato o scaduto). Creane uno nuovo e collegalo.',
+  'apps.cloudflare.invalidAskOwner':
+    'Il token Cloudflare non funziona più: chiedi a un proprietario di collegarne uno nuovo.',
   'apps.cloudflare.step.open': 'Apri Cloudflare: il token è già precompilato con i permessi giusti',
-  'apps.cloudflare.step.permissions': "Lascia Workers Scripts (Edit) e D1 (Edit), scegli l'account in «Account Resources» e crea il token",
-  'apps.cloudflare.step.paste': 'Incollalo qui: viene conservato cifrato in questa installazione e usato anche per gli aggiornamenti delle app',
+  'apps.cloudflare.step.permissions':
+    "Lascia Workers Scripts (Edit) e D1 (Edit), scegli l'account in «Account Resources» e crea il token",
+  'apps.cloudflare.step.paste':
+    'Incollalo qui: viene conservato cifrato in questa installazione e usato anche per gli aggiornamenti delle app',
   'apps.cloudflare.token': 'Token API Cloudflare',
   'apps.cloudflare.check': 'Verifica token',
   'apps.cloudflare.checking': 'Verifica in corso…',
-  'apps.cloudflare.noAccounts': 'Il token non dà accesso a nessun account. Controlla «Account Resources» nel token.',
+  'apps.cloudflare.noAccounts':
+    'Il token non dà accesso a nessun account. Controlla «Account Resources» nel token.',
   'apps.cloudflare.pickAccount': 'Account in cui creare le app:',
   'apps.cloudflare.connect': 'Collega account',
   'apps.cloudflare.connected': 'Account Cloudflare collegato',
   'apps.cloudflare.connectedSince': 'Token {hint}, verificato il {at}.',
   'apps.cloudflare.change': 'Cambia token',
   'apps.cloudflare.disconnect': 'Scollega',
-  'apps.cloudflare.disconnectConfirm': "Scollegare l'account Cloudflare? Le app installate continuano a funzionare, ma non si possono aggiornare né installare finché non colleghi di nuovo un token.",
+  'apps.cloudflare.disconnectConfirm':
+    "Scollegare l'account Cloudflare? Le app installate continuano a funzionare, ma non si possono aggiornare né installare finché non colleghi di nuovo un token.",
   'apps.cloudflare.disconnected': 'Account Cloudflare scollegato',
 };

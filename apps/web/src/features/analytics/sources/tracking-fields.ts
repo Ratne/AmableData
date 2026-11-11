@@ -226,7 +226,10 @@ export function conversionMode(conversion: ConversionConfig): ConversionMode {
 }
 
 /** Switching mode clears the other one: a source never reports a conversion twice. */
-export function setConversionMode(conversion: ConversionConfig, mode: ConversionMode): ConversionConfig {
+export function setConversionMode(
+  conversion: ConversionConfig,
+  mode: ConversionMode,
+): ConversionConfig {
   switch (mode) {
     case 'integration':
       return { ...conversion, postback_url: null };

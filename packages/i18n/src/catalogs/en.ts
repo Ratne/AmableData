@@ -57,7 +57,8 @@ export const en = {
   'common.copyFailed': 'Could not copy to the clipboard.',
   'common.lock.connecting': 'Connecting to the editing session…',
   'common.lock.offline': 'Connection lost — reconnecting. Editing is paused.',
-  'common.lock.unavailable': 'Exclusive editing is not available right now: changes from other people may overwrite yours.',
+  'common.lock.unavailable':
+    'Exclusive editing is not available right now: changes from other people may overwrite yours.',
   'common.lock.heldBy': '{name} is editing this right now',
   'common.lock.heldBySomeone': 'Someone else is editing this right now',
   'common.lock.waiting': 'You can look around; editing unlocks when they leave.',
@@ -102,7 +103,8 @@ export const en = {
     'Two-factor authentication is required. Choose an authenticator app (recommended) or email codes.',
   'auth.enroll.totp': 'Authenticator app',
   'auth.enroll.email': 'Email codes',
-  'auth.enroll.scan': 'Scan this QR code with your authenticator app, then enter the code it shows.',
+  'auth.enroll.scan':
+    'Scan this QR code with your authenticator app, then enter the code it shows.',
   'auth.enroll.secret': 'Or enter this key manually:',
   'auth.enroll.recoveryTitle': 'Save your recovery codes',
   'auth.enroll.recoveryIntro':
@@ -119,7 +121,8 @@ export const en = {
   'auth.reset.invalid': 'This reset link is invalid or has expired.',
   'auth.email.title': 'Confirm your new email',
   'auth.email.done': 'Email updated. You were signed out everywhere: sign in with the new address.',
-  'auth.email.invalid': 'This confirmation link is invalid or has expired. Request the change again from your security settings.',
+  'auth.email.invalid':
+    'This confirmation link is invalid or has expired. Request the change again from your security settings.',
   'auth.email.taken': 'Another account already uses this email address.',
   'auth.password.tooShort': 'Use at least 12 characters.',
   'auth.password.tooLong': 'That password is too long.',
@@ -221,7 +224,8 @@ export const en = {
     'A separate workspace with its own contacts, data and members. You will be its owner.',
   'shell.newTenant.name': 'Name',
   'shell.newTenant.slug': 'Address',
-  'shell.newTenant.slugHint': 'Lowercase letters, numbers and dashes. The workspace opens at {path}.',
+  'shell.newTenant.slugHint':
+    'Lowercase letters, numbers and dashes. The workspace opens at {path}.',
   'shell.newTenant.create': 'Create workspace',
   'shell.newTenant.slugTaken': 'This address is already taken. Choose another one.',
   'shell.newTenant.forbidden': 'Only workspace owners can create new workspaces.',
@@ -231,7 +235,8 @@ export const en = {
   'shell.update.notes': 'Release notes and how to update',
   'shell.update.dismiss': 'Hide until the next version',
   'page.placeholder.title': '{module} is coming',
-  'page.placeholder.body': 'This module is planned. Its page will appear here when the phase that builds it ships.',
+  'page.placeholder.body':
+    'This module is planned. Its page will appear here when the phase that builds it ships.',
   'page.notFound': 'Page not found',
   'page.backHome': 'Back to the dashboard',
   'list.selectAll': 'Select all rows in view',

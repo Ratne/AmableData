@@ -88,7 +88,11 @@ function HeaderRow({
           key={column}
           scope="col"
           className="whitespace-nowrap px-3 py-2 text-right font-medium"
-          title={column === 'reported_vs_revenue_minor' ? t('analytics.performance.reportedHint') : undefined}
+          title={
+            column === 'reported_vs_revenue_minor'
+              ? t('analytics.performance.reportedHint')
+              : undefined
+          }
         >
           {columnLabel(t, column)}
         </th>
@@ -133,7 +137,9 @@ function DataRow({ row, groupBy, columns, currency, previous, depth = 0, lead, o
               {name}
             </button>
           ) : (
-            <span className={cn('min-w-0 truncate', row.key === null && 'italic text-muted-foreground')}>
+            <span
+              className={cn('min-w-0 truncate', row.key === null && 'italic text-muted-foreground')}
+            >
               {name}
             </span>
           )}
@@ -238,7 +244,10 @@ function ExpandButton({ open, onToggle }: { open: boolean; onToggle: () => void 
       aria-label={open ? t('analytics.performance.collapse') : t('analytics.performance.expand')}
       className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
     >
-      <ChevronRight className={cn('size-3.5 transition-transform', open && 'rotate-90')} aria-hidden />
+      <ChevronRight
+        className={cn('size-3.5 transition-transform', open && 'rotate-90')}
+        aria-hidden
+      />
     </button>
   );
 }

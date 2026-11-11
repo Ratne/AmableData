@@ -154,7 +154,12 @@ function AddDomainDialog({
             ) : null}
           </div>
           <div className="flex flex-col gap-2">
-            <KindChoice kind="zone" selected={kind === 'zone'} disabled={false} onSelect={() => setKind('zone')} />
+            <KindChoice
+              kind="zone"
+              selected={kind === 'zone'}
+              disabled={false}
+              onSelect={() => setKind('zone')}
+            />
             <KindChoice
               kind="cname"
               selected={kind === 'cname'}
@@ -372,7 +377,9 @@ export function DomainsTab({
         <EmptyNote>{t('analytics.domains.empty')}</EmptyNote>
       ) : (
         <ul className="flex flex-col divide-y divide-foreground/[0.06]">
-          {domains.data.options.default_host ? <DefaultDomainItem hostname={domains.data.options.default_host} /> : null}
+          {domains.data.options.default_host ? (
+            <DefaultDomainItem hostname={domains.data.options.default_host} />
+          ) : null}
           {domains.data.data.map((domain) => (
             <DomainItem
               key={domain.id}

@@ -3,7 +3,8 @@ import type { SupportMessageKey } from './support-en';
 /** Italian strings of support, ideas board and assisted access — must cover every key of support-en. */
 export const supportIt: Readonly<Record<SupportMessageKey, string>> = {
   'sup.unavailable.title': "Il supporto fa parte dell'offerta gestita",
-  'sup.unavailable.body': 'Questa installazione non è collegata ad amabledata. Puoi chiedere aiuto alla community.',
+  'sup.unavailable.body':
+    'Questa installazione non è collegata ad amabledata. Puoi chiedere aiuto alla community.',
   'sup.unavailable.link': 'Apri il forum della community',
   'sup.tickets': 'Ticket',
   'sup.newTicket': 'Nuovo ticket',

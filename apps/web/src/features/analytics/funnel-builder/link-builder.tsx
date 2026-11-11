@@ -66,13 +66,12 @@ export function LinkBuilderDialog({
   const { t } = useI18n();
   const sources = useTrafficSources(tenant, site.id, 'active');
   const domains = useTrackingDomains(tenant, site.id);
-  const nodes = useMemo(
-    () => liveNodes(graph).filter((n) => n.kind !== 'external_url'),
-    [graph],
-  );
+  const nodes = useMemo(() => liveNodes(graph).filter((n) => n.kind !== 'external_url'), [graph]);
   const traffic = nodes.find((n) => n.kind === 'traffic');
   const [nodeId, setNodeId] = useState(
-    nodes.some((n) => n.id === initialNodeId) ? initialNodeId! : (traffic?.id ?? nodes[0]?.id ?? ''),
+    nodes.some((n) => n.id === initialNodeId)
+      ? initialNodeId!
+      : (traffic?.id ?? nodes[0]?.id ?? ''),
   );
   const [pageId, setPageId] = useState('');
   const [sourceId, setSourceId] = useState('');
@@ -184,7 +183,9 @@ export function LinkBuilderDialog({
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
             >
-              <option value={DEFAULT_DOMAIN}>{t('analytics.funnelBuilder.links.domainDefault')}</option>
+              <option value={DEFAULT_DOMAIN}>
+                {t('analytics.funnelBuilder.links.domainDefault')}
+              </option>
               {activeDomains.map((d) => (
                 <option key={d.id} value={d.hostname}>
                   {d.hostname}

@@ -48,7 +48,11 @@ export function AdAccountPicker({
   }, [query, selection.accounts]);
   const connect = useAnalyticsMutation(
     tenant,
-    () => api.ads.pickAccounts(siteId, platform, { grant_id: selection.grant_id, account_ids: [...picked] }),
+    () =>
+      api.ads.pickAccounts(siteId, platform, {
+        grant_id: selection.grant_id,
+        account_ids: [...picked],
+      }),
     {
       invalidate: [funnelKeys.ads(tenant, siteId)],
       success: 'analytics.ads.connections.connected',
@@ -85,7 +89,9 @@ export function AdAccountPicker({
       />
       <ul className="flex max-h-[50dvh] flex-col divide-y divide-foreground/[0.06] overflow-y-auto rounded-md border border-foreground/[0.08]">
         {visible.length === 0 ? (
-          <li className="px-3 py-4 text-center text-xs text-muted-foreground">{t('analytics.ads.pick.none')}</li>
+          <li className="px-3 py-4 text-center text-xs text-muted-foreground">
+            {t('analytics.ads.pick.none')}
+          </li>
         ) : (
           visible.map((account) => {
             const checked = picked.has(account.account_id);
@@ -99,7 +105,9 @@ export function AdAccountPicker({
                   onCheckedChange={(on) => toggle(account.account_id, on === true)}
                 />
                 <label htmlFor={id} className="flex min-w-0 flex-1 cursor-pointer flex-col">
-                  <span className="truncate text-sm font-medium">{account.name || account.account_id}</span>
+                  <span className="truncate text-sm font-medium">
+                    {account.name || account.account_id}
+                  </span>
                   <span className="text-[11px] text-muted-foreground">
                     {account.account_id} · {account.currency}
                     {account.connected ? ` · ${t('analytics.ads.pick.connected')}` : ''}

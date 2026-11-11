@@ -24,19 +24,17 @@ export const FIELD_PREFIX = 'field:';
 export const DEFAULT_FIELD_NAME = 'utm_source';
 
 export type StaticOptionSet =
-  | 'device'
-  | 'os'
-  | 'browser'
-  | 'country'
-  | 'language'
-  | 'weekday'
-  | 'hour'
-  | 'traffic_source';
+  'device' | 'os' | 'browser' | 'country' | 'language' | 'weekday' | 'hour' | 'traffic_source';
 
 export type ValueEditor =
   | { readonly kind: 'none' }
   /** Pick from a known list; `custom` also accepts typed values. */
-  | { readonly kind: 'options'; readonly set: StaticOptionSet; readonly custom: boolean; readonly single: boolean }
+  | {
+      readonly kind: 'options';
+      readonly set: StaticOptionSet;
+      readonly custom: boolean;
+      readonly single: boolean;
+    }
   /** Values seen on the site (backend suggestions) plus typed ones. */
   | { readonly kind: 'suggest'; readonly attr: ConditionSuggestAttr }
   /** Typed values (chips). */
@@ -105,7 +103,9 @@ export function valueEditorFor(attr: string, op: ConditionOperator): ValueEditor
   const clock = attr === 'hour' || attr === 'weekday' ? attr : null;
   if (op === 'between') return { kind: 'range', set: clock };
   if (op === 'gt' || op === 'lt') {
-    return clock ? { kind: 'options', set: clock, custom: false, single: true } : { kind: 'number' };
+    return clock
+      ? { kind: 'options', set: clock, custom: false, single: true }
+      : { kind: 'number' };
   }
   if (op === 'contains' || op === 'not_contains' || op === 'starts_with') {
     return isSuggestAttr(attr) ? { kind: 'suggest', attr } : { kind: 'free' };

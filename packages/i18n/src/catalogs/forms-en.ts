@@ -131,8 +131,10 @@ export const formsEn = {
   'forms.crm.appValidation': 'Email/phone check by apps',
   'forms.crm.appValidation.advisory': 'Advisory',
   'forms.crm.appValidation.blocking': 'Blocking',
-  'forms.crm.appValidation.advisory.hint': '{apps} tag or annotate contacts; submissions are always accepted.',
-  'forms.crm.appValidation.blocking.hint': 'Submissions that {apps} mark invalid are rejected. If an app does not answer in time the submission is accepted.',
+  'forms.crm.appValidation.advisory.hint':
+    '{apps} tag or annotate contacts; submissions are always accepted.',
+  'forms.crm.appValidation.blocking.hint':
+    'Submissions that {apps} mark invalid are rejected. If an app does not answer in time the submission is accepted.',
   'forms.crm.policy.fill_empty': 'Fill empty fields only',
   'forms.crm.policy.overwrite': 'Overwrite with the submission',
   'forms.crm.policy.fill_empty.hint': 'Values already on the contact are kept.',
@@ -159,7 +161,8 @@ export const formsEn = {
   'forms.settings.locale.en': 'English',
   'forms.settings.locale.it': 'Italian',
   'forms.settings.allowedDomains': 'Allowed websites',
-  'forms.settings.allowedDomainsHint': 'Domains where the form may be embedded, comma separated. Empty: any.',
+  'forms.settings.allowedDomainsHint':
+    'Domains where the form may be embedded, comma separated. Empty: any.',
   'forms.settings.turnstile': 'Require the anti-bot check (Turnstile)',
   'forms.settings.hosted': 'Public hosted page',
 
@@ -175,7 +178,8 @@ export const formsEn = {
   'forms.style.max_width': 'Max width',
   'forms.style.font_family': 'Font family',
   'forms.style.custom_css': 'Custom CSS',
-  'forms.style.customCssHint': 'Scoped to the form. Classes: .af-root, .af-field, .af-input, .af-button…',
+  'forms.style.customCssHint':
+    'Scoped to the form. Classes: .af-root, .af-field, .af-input, .af-button…',
 
   'forms.embed.snippet': 'Embed code',
   'forms.embed.snippetHint': 'Paste it where the form should appear on your website.',
@@ -197,7 +201,8 @@ export const formsEn = {
   'forms.submissions.empty': 'No submissions yet.',
   'forms.submissions.period': 'Period',
   'forms.submissions.periodLive': 'Recent',
-  'forms.submissions.archivedNotice': 'Archived submissions: you can read them but not reprocess or delete them.',
+  'forms.submissions.archivedNotice':
+    'Archived submissions: you can read them but not reprocess or delete them.',
   'forms.submissions.detail': 'Submission of {date}',
   'forms.submissions.values': 'Answers',
   'forms.submissions.source': 'Source',
@@ -219,8 +224,10 @@ export const formsEn = {
   'forms.connector.google_sheets': 'Google Sheets',
   'forms.connector.email_notification': 'Email notification',
   'forms.connector.docuseal': 'DocuSeal',
-  'forms.connector.webhook.hint': 'Sends every submission to your URL, signed with a secret (Amable-Signature header).',
-  'forms.connector.google_sheets.hint': 'Appends a row to a Google spreadsheet, written by a service account you share the sheet with.',
+  'forms.connector.webhook.hint':
+    'Sends every submission to your URL, signed with a secret (Amable-Signature header).',
+  'forms.connector.google_sheets.hint':
+    'Appends a row to a Google spreadsheet, written by a service account you share the sheet with.',
   'forms.connector.email_notification.hint': 'Emails the answers to your team.',
   'forms.connector.docuseal.hint': 'Sends a document to sign, prefilled with the answers.',
   'forms.connector.app': 'App',
@@ -251,28 +258,37 @@ export const formsEn = {
   'forms.connections.fieldMapHint': 'Empty: the full submission JSON is sent.',
   'forms.connections.bodyTemplate': 'Body template (JSON)',
   'forms.connections.bodyTemplatePlaceholder': '{ "email": "{{email}}" }',
-  'forms.connections.bodyTemplateHint': 'String values can use {{field_key}} and {{submitted_at}}, {{form_id}}, {{form_name}}, {{page_url}}, {{utm_source}}… When set, it replaces the field map below.',
+  'forms.connections.bodyTemplateHint':
+    'String values can use {{field_key}} and {{submitted_at}}, {{form_id}}, {{form_name}}, {{page_url}}, {{utm_source}}… When set, it replaces the field map below.',
   'forms.connections.bodyTemplateInvalid': 'The template must be a JSON object.',
   'forms.connections.mapAll': 'Map all fields',
   'forms.connections.mapAllTitle': 'Map all fields',
-  'forms.connections.mapAllBody': 'The body already has content. Merge adds the missing fields and keeps yours; Replace overwrites it.',
+  'forms.connections.mapAllBody':
+    'The body already has content. Merge adds the missing fields and keeps yours; Replace overwrites it.',
   'forms.connections.mapAllMerge': 'Merge',
   'forms.connections.mapAllReplace': 'Replace',
   'forms.connections.parameter': 'Parameter',
   'forms.connections.addRow': 'Add row',
   'forms.connections.removeRow': 'Remove row',
   'forms.connections.spreadsheet': 'Spreadsheet',
-  'forms.connections.spreadsheetHint': 'Link of the spreadsheet or its id (the part after /d/ in the link).',
+  'forms.connections.spreadsheetHint':
+    'Link of the spreadsheet or its id (the part after /d/ in the link).',
   'forms.connections.sheetsSetup': 'How to set it up',
-  'forms.connections.sheetsSetup.1': 'In Google Cloud Console create a project (or pick one) and enable the Google Sheets API.',
-  'forms.connections.sheetsSetup.2': 'In IAM & Admin → Service accounts create a service account (no roles needed).',
-  'forms.connections.sheetsSetup.3': 'Open it, go to Keys → Add key → Create new key → JSON and download the file.',
+  'forms.connections.sheetsSetup.1':
+    'In Google Cloud Console create a project (or pick one) and enable the Google Sheets API.',
+  'forms.connections.sheetsSetup.2':
+    'In IAM & Admin → Service accounts create a service account (no roles needed).',
+  'forms.connections.sheetsSetup.3':
+    'Open it, go to Keys → Add key → Create new key → JSON and download the file.',
   'forms.connections.sheetsSetup.4': 'Upload the JSON file here.',
-  'forms.connections.sheetsSetup.5': 'Open the spreadsheet in Google Sheets, click Share and add the service account email as Editor.',
+  'forms.connections.sheetsSetup.5':
+    'Open the spreadsheet in Google Sheets, click Share and add the service account email as Editor.',
   'forms.connections.serviceKey': 'Service account key (JSON)',
-  'forms.connections.serviceKeyHint': 'The JSON file downloaded from Google Cloud. It is stored encrypted.',
+  'forms.connections.serviceKeyHint':
+    'The JSON file downloaded from Google Cloud. It is stored encrypted.',
   'forms.connections.serviceKeyKeep': 'Upload a new file only to replace the current key.',
-  'forms.connections.serviceKeyInvalid': 'This is not a service account key: download the JSON key from Google Cloud.',
+  'forms.connections.serviceKeyInvalid':
+    'This is not a service account key: download the JSON key from Google Cloud.',
   'forms.connections.shareWith': 'Share the spreadsheet with this email as Editor:',
   'forms.connections.sheet': 'Sheet name',
   'forms.connections.columns': 'Columns',

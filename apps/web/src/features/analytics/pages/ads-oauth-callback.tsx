@@ -30,7 +30,9 @@ export function AdsOAuthCallbackPage() {
   const queryClient = useQueryClient();
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const [slug, setSlug] = useState<string | null>(search.state ? slugFromAdsState(search.state) : null);
+  const [slug, setSlug] = useState<string | null>(
+    search.state ? slugFromAdsState(search.state) : null,
+  );
   const [choice, setChoice] = useState<{
     workspace: string;
     pending: PendingAdsOAuth;
@@ -73,7 +75,9 @@ export function AdsOAuthCallbackPage() {
           return;
         }
         toast.success(t('analytics.ads.connections.connected'));
-        await queryClient.invalidateQueries({ queryKey: funnelKeys.ads(workspace, pending.site_id) });
+        await queryClient.invalidateQueries({
+          queryKey: funnelKeys.ads(workspace, pending.site_id),
+        });
         await backToSettings(workspace, pending.site_id);
       })
       .catch((reason: unknown) => setError(analyticsErrorMessage(t, reason)));

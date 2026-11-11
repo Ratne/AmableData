@@ -44,7 +44,8 @@ export const backupsEn = {
   'backups.archive.family.esign': 'E-signature audit trail (ended requests)',
   'backups.archive.months': 'Keep {count} months',
   'backups.archive.forever': 'Keep forever (never archive)',
-  'backups.archive.help': 'A shorter window keeps the database small; nothing is deleted before it is safely in the archive.',
+  'backups.archive.help':
+    'A shorter window keeps the database small; nothing is deleted before it is safely in the archive.',
   'backups.archive.save': 'Save',
   'backups.archive.saved': 'Archiving settings saved',
   'backups.archive.col.stream': 'Archived data',

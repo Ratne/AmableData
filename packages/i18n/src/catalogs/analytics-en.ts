@@ -405,6 +405,10 @@ export const analyticsEn = {
   'analytics.sites.createdTitle': '{name} is ready',
   'analytics.sites.createdHint':
     'Save the site secret for server-side events, then add the snippet to every page.',
+  'analytics.sites.createdSecret': 'Site secret (server-side events)',
+  'analytics.sites.createdGtm':
+    'Google Tag Manager works too: paste both lines into a Custom HTML tag that fires on all pages.',
+  'analytics.sites.createdDone': 'I copied everything',
   'analytics.sites.updated': 'Site saved',
   'analytics.sites.deleted': 'Site deleted',
   'analytics.sites.deleteTitle': 'Delete the site “{name}”?',
@@ -1278,7 +1282,8 @@ export const analyticsEn = {
   'analytics.conversions.new': 'New conversion',
   'analytics.conversions.newTitle': 'New conversion',
   'analytics.conversions.editTitle': 'Edit conversion',
-  'analytics.conversions.editorHint': 'A visit to the page or a completed goal counts as a conversion, wherever the visitor entered and however many visits it took. It is credited to the landing page, channel, campaign and ad of the sessions before it.',
+  'analytics.conversions.editorHint':
+    'A visit to the page or a completed goal counts as a conversion, wherever the visitor entered and however many visits it took. It is credited to the landing page, channel, campaign and ad of the sessions before it.',
   'analytics.conversions.namePlaceholder': 'e.g. Purchase completed',
   'analytics.conversions.when': 'Counts when the visitor',
   'analytics.conversions.trigger': 'Trigger',
@@ -1288,7 +1293,8 @@ export const analyticsEn = {
   'analytics.conversions.match.starts_with': 'starts with',
   'analytics.conversions.match.contains': 'contains',
   'analytics.conversions.value': 'Page or goal',
-  'analytics.conversions.pageHint': 'Path like /thank-you (a full URL works too); the query string is ignored.',
+  'analytics.conversions.pageHint':
+    'Path like /thank-you (a full URL works too); the query string is ignored.',
   'analytics.conversions.goalHint': 'Goal name sent by the tracker or the CRM (e.g. signup).',
   'analytics.conversions.hostname': 'Only on the domain (optional)',
   'analytics.conversions.hostnamePlaceholder': 'shop.example.com',
@@ -1298,7 +1304,8 @@ export const analyticsEn = {
   'analytics.conversions.amount': 'Value per conversion ({currency}, optional)',
   'analytics.conversions.amountPlaceholder': 'e.g. 25',
   'analytics.conversions.backfill': 'Also convert the data already collected',
-  'analytics.conversions.backfillHint': 'Past visits within the raw data retention window are counted right away.',
+  'analytics.conversions.backfillHint':
+    'Past visits within the raw data retention window are counted right away.',
   'analytics.conversions.summary.exact': 'Page {value}',
   'analytics.conversions.summary.starts_with': 'Pages starting with {value}',
   'analytics.conversions.summary.contains': 'Pages containing {value}',
@@ -1307,9 +1314,11 @@ export const analyticsEn = {
   'analytics.conversions.updated': 'Conversion updated',
   'analytics.conversions.deleted': 'Conversion deleted',
   'analytics.conversions.deleteTitle': 'Delete "{name}"?',
-  'analytics.conversions.deleteBody': 'The conversions it recorded are deleted too. The goals already recorded stay.',
+  'analytics.conversions.deleteBody':
+    'The conversions it recorded are deleted too. The goals already recorded stay.',
   'analytics.conversions.empty': 'No conversions yet.',
-  'analytics.conversions.intro': 'Create a conversion (e.g. "reached /thank-you") to see how many visitors get there and from which page, campaign and ad they came.',
+  'analytics.conversions.intro':
+    'Create a conversion (e.g. "reached /thank-you") to see how many visitors get there and from which page, campaign and ad they came.',
   'analytics.conversions.all': 'All conversions',
   'analytics.conversions.kpi.conversions': 'Conversions',
   'analytics.conversions.kpi.persons': 'People',

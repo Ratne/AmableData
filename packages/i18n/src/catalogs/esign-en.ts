@@ -24,7 +24,8 @@ export const esignEn = {
   'esign.signingOrder.parallel': 'All parties at once',
   'esign.signingOrder.sequential': 'One party after the other',
   'esign.signingOrder.parallelHint': 'Every signer receives the invitation immediately.',
-  'esign.signingOrder.sequentialHint': 'Each party is invited when the previous one has signed, in the order of the list.',
+  'esign.signingOrder.sequentialHint':
+    'Each party is invited when the previous one has signed, in the order of the list.',
   'esign.locale.auto': "Signer's browser language",
   'esign.locale.en': 'English',
   'esign.locale.it': 'Italian',
@@ -118,7 +119,8 @@ export const esignEn = {
   'esign.requests.signedCount': '{signed} of {total} signed',
 
   'esign.send.title': 'Send for signature',
-  'esign.send.description': 'Choose who signs for each party. They receive an email with a personal link.',
+  'esign.send.description':
+    'Choose who signs for each party. They receive an email with a personal link.',
   'esign.send.pickTemplate': 'Choose a template',
   'esign.send.noTemplates': 'No active template is ready to send.',
   'esign.send.mode.contact': 'CRM contact',
@@ -142,15 +144,18 @@ export const esignEn = {
   'esign.detail.linkCopied': 'Signing link copied. It is personal: share it only with the signer.',
   'esign.detail.void': 'Void',
   'esign.detail.voidTitle': 'Void this request?',
-  'esign.detail.voidDescription': 'Nobody can sign it anymore. Signers can still open their link to view the document, read-only; signatures already given stay in the audit trail.',
+  'esign.detail.voidDescription':
+    'Nobody can sign it anymore. Signers can still open their link to view the document, read-only; signatures already given stay in the audit trail.',
   'esign.detail.voided': 'Request voided',
   'esign.detail.retryFinalize': 'Retry sealing',
   'esign.detail.finalizeQueued': 'Sealing queued',
   'esign.detail.summary': 'Summary',
   'esign.detail.never': 'Never',
-  'esign.detail.sealing': 'Everyone signed: the signed PDF with the audit certificate is being prepared.',
+  'esign.detail.sealing':
+    'Everyone signed: the signed PDF with the audit certificate is being prepared.',
   'esign.detail.finalizeFailed': 'The signed PDF could not be prepared: {error}',
-  'esign.detail.finalizeRetrying': 'Preparing the signed PDF failed ({error}); it is retried automatically.',
+  'esign.detail.finalizeRetrying':
+    'Preparing the signed PDF failed ({error}); it is retried automatically.',
   'esign.detail.audit': 'Audit trail',
   'esign.detail.auditHint':
     'Every action with IP address, country, browser and device facts. The same trail is appended as a certificate to the signed PDF. This is a simple electronic signature: the PDF carries no qualified or cryptographic seal, the evidence is this trail with the SHA-256 hashes.',
@@ -171,21 +176,25 @@ export const esignEn = {
   'esign.editor.replace': 'Replace PDF',
   'esign.editor.activate': 'Activate',
   'esign.editor.deactivate': 'Back to draft',
-  'esign.editor.notReady': 'Upload the document and place at least one field for every party first.',
+  'esign.editor.notReady':
+    'Upload the document and place at least one field for every party first.',
   'esign.editor.save': 'Save',
   'esign.editor.saved': 'Template saved',
   'esign.editor.status.draft': 'Template moved back to draft',
   'esign.editor.status.active': 'Template active: it can be sent',
   'esign.editor.status.archived': 'Template archived',
   'esign.editor.palette': 'Fields',
-  'esign.editor.paletteHint': 'Drag a field onto a page, or click it and then click on the page. It goes to the selected party.',
+  'esign.editor.paletteHint':
+    'Drag a field onto a page, or click it and then click on the page. It goes to the selected party.',
   'esign.editor.pages': 'Document pages',
   'esign.editor.pageAlt': 'Page {page}',
   'esign.editor.pageOf': 'Page {page} of {count}',
   'esign.editor.noImage': 'Page preview missing',
-  'esign.editor.missingImages': 'Some page previews are missing: signers cannot see the document until they are generated.',
+  'esign.editor.missingImages':
+    'Some page previews are missing: signers cannot see the document until they are generated.',
   'esign.editor.generateImages': 'Generate previews',
-  'esign.editor.dropHint': 'Drop the PDF to sign here, or click to choose it (up to 20 MB, 50 pages).',
+  'esign.editor.dropHint':
+    'Drop the PDF to sign here, or click to choose it (up to 20 MB, 50 pages).',
   'esign.editor.leaveConfirm': 'You have unsaved changes. Leave the editor and lose them?',
   'esign.editor.dropNotPdf': 'Only PDF files can be used.',
   'esign.editor.renderFailed': 'The PDF could not be processed in the browser.',
@@ -213,7 +222,8 @@ export const esignEn = {
   'esign.editor.reminders': 'Reminders',
   'esign.editor.email': 'Invitation email',
   'esign.editor.subjectHint': 'Empty: the built-in subject.',
-  'esign.editor.messageHint': 'A paragraph added to the built-in invitation text; {{ esign.document }} and the other esign variables work here too. Empty: no extra paragraph.',
+  'esign.editor.messageHint':
+    'A paragraph added to the built-in invitation text; {{ esign.document }} and the other esign variables work here too. Empty: no extra paragraph.',
 
   'esign.error.forbiddenTitle': 'Not allowed',
   'esign.error.forbidden': 'Your role does not allow this action.',

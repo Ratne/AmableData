@@ -90,7 +90,11 @@ export function TrackingFieldsTable({
               const field = draft.reserved_fields[key];
               const path = `reserved_fields.${key}`;
               return (
-                <tr key={key} className="bg-foreground/[0.02]" data-testid={`tracking-field-${key}`}>
+                <tr
+                  key={key}
+                  className="bg-foreground/[0.02]"
+                  data-testid={`tracking-field-${key}`}
+                >
                   <td className={cell}>
                     <span
                       className="flex h-7 items-center gap-1 text-muted-foreground"
@@ -136,7 +140,9 @@ export function TrackingFieldsTable({
                       <Switch
                         aria-label={t('analytics.sources.fields.append')}
                         checked={field.append}
-                        onCheckedChange={(append) => onChange(updateReserved(draft, key, { append }))}
+                        onCheckedChange={(append) =>
+                          onChange(updateReserved(draft, key, { append }))
+                        }
                       />
                     </span>
                   </td>

@@ -368,7 +368,10 @@ export function draftIssues(
 
 function sameIssue(a: BuilderIssue, b: BuilderIssue): boolean {
   return (
-    a.code === b.code && a.node_id === b.node_id && a.edge_id === b.edge_id && a.message === b.message
+    a.code === b.code &&
+    a.node_id === b.node_id &&
+    a.edge_id === b.edge_id &&
+    a.message === b.message
   );
 }
 
@@ -433,7 +436,8 @@ export function parseSaveFailure(
   if (json['error'] === 'invalid_graph' && Array.isArray(json['errors'])) {
     const errors = (json['errors'] as unknown[]).flatMap((raw) => {
       const e = record(raw);
-      if (e === null || typeof e['code'] !== 'string' || typeof e['message'] !== 'string') return [];
+      if (e === null || typeof e['code'] !== 'string' || typeof e['message'] !== 'string')
+        return [];
       return [
         {
           code: e['code'] as FunnelGraphErrorCode,
@@ -456,7 +460,8 @@ export function parseSaveFailure(
   const message = typeof json['message'] === 'string' ? json['message'] : 'invalid funnel';
   return {
     kind: 'invalid',
-    issues: details.length > 0 ? detailIssues(graph, details) : [{ code: 'invalid_config', message }],
+    issues:
+      details.length > 0 ? detailIssues(graph, details) : [{ code: 'invalid_config', message }],
   };
 }
 

@@ -69,7 +69,11 @@ function ModelExplainer({ model }: { model: AttributionModelV2 }) {
   return (
     <DashboardPopover>
       <DashboardPopoverTrigger asChild>
-        <DashboardButton variant="ghost" size="sm" aria-label={t('analytics.performance.modelLearn')}>
+        <DashboardButton
+          variant="ghost"
+          size="sm"
+          aria-label={t('analytics.performance.modelLearn')}
+        >
           <Info aria-hidden />
         </DashboardButton>
       </DashboardPopoverTrigger>

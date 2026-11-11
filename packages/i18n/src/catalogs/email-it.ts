@@ -14,7 +14,7 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.common.fromName': 'Nome mittente',
   'email.common.replyTo': 'Rispondi a',
   'email.settings.replyToHint':
-    "Dove arrivano le risposte a tutte le email del CRM (broadcast, automazioni, email singole). Utile quando invii da un sottodominio che non riceve posta: invii da hi@s.tuodominio.com e le risposte arrivano a hi@tuodominio.com. Broadcast, template e automazioni possono indicarne uno diverso.",
+    'Dove arrivano le risposte a tutte le email del CRM (broadcast, automazioni, email singole). Utile quando invii da un sottodominio che non riceve posta: invii da hi@s.tuodominio.com e le risposte arrivano a hi@tuodominio.com. Broadcast, template e automazioni possono indicarne uno diverso.',
   'email.common.updated': 'Aggiornato',
   'email.common.created': 'Creato',
   'email.common.status': 'Stato',
@@ -38,7 +38,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.snippets.keyHint': 'Inseriscilo in un’email come campo {field}.',
   'email.snippets.body': 'Contenuto (Liquid)',
   'email.snippets.bodyHint': 'Testo con campi e condizioni Liquid, generato per ogni destinatario.',
-  'email.snippets.empty': 'Nessuno snippet. Gli snippet sono blocchi di testo riutilizzabili con logica Liquid.',
+  'email.snippets.empty':
+    'Nessuno snippet. Gli snippet sono blocchi di testo riutilizzabili con logica Liquid.',
   'email.snippets.group': 'Contenuti dinamici',
 
   'email.preview.as': 'Anteprima come',
@@ -49,7 +50,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
 
   'email.test.button': 'Invia prova',
   'email.test.title': 'Invia un’email di prova',
-  'email.test.body': 'Le email di prova arrivano solo ai membri di questo spazio di lavoro, con “[Test]” nell’oggetto.',
+  'email.test.body':
+    'Le email di prova arrivano solo ai membri di questo spazio di lavoro, con “[Test]” nell’oggetto.',
   'email.test.recipients': 'Destinatari',
   'email.test.contact': 'Compila i campi con',
   'email.test.send': 'Invia prova',
@@ -92,7 +94,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.settings.warmupDay': 'Giorno {day} · {sent} inviate oggi su {cap}',
   'email.settings.warmupDone': 'Riscaldamento completato · {sent} inviate oggi',
   'email.settings.warmupNotStarted': 'Parte con la prima email',
-  'email.settings.health': 'Ultimi {days} giorni: {sent} inviate · rimbalzi {bounce} · segnalazioni {complaint}',
+  'email.settings.health':
+    'Ultimi {days} giorni: {sent} inviate · rimbalzi {bounce} · segnalazioni {complaint}',
   'email.settings.suspended': 'Invio sospeso ({reason})',
   'email.settings.resume': 'Riprendi l’invio',
 
@@ -137,7 +140,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
     'Inserisce il pixel delle aperture. I click sui link restano tracciati; i contatti che hanno disattivato il tracciamento non ricevono mai il pixel.',
   'broadcasts.composer.eligible': '{count} la riceveranno',
   'broadcasts.composer.segmentSize': '{count} nel segmento',
-  'broadcasts.composer.excluded': 'Esclusi: {noEmail} senza email · {suppressed} soppressi · {unmarketable} non contattabili',
+  'broadcasts.composer.excluded':
+    'Esclusi: {noEmail} senza email · {suppressed} soppressi · {unmarketable} non contattabili',
   'broadcasts.composer.blocked': 'Non si può ancora inviare: {reason}',
   'broadcasts.composer.schedule': 'Programmazione',
   'broadcasts.composer.now': 'Invia subito',
@@ -146,7 +150,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.composer.date': 'Data',
   'broadcasts.composer.time': 'Ora locale',
   'broadcasts.composer.confirmTitle': 'Inviare questo broadcast?',
-  'broadcasts.composer.confirmBody': 'Arriverà a {count} contatti. Puoi metterlo in pausa o annullarlo durante l’invio.',
+  'broadcasts.composer.confirmBody':
+    'Arriverà a {count} contatti. Puoi metterlo in pausa o annullarlo durante l’invio.',
   'broadcasts.composer.scheduled': 'Broadcast programmato',
   'broadcasts.composer.buckets': 'Orari di invio',
 
@@ -162,12 +167,14 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.report.clicks': 'Clic',
   'broadcasts.report.uniqueClicks': 'Clic unici',
   'broadcasts.report.noLinks': 'Nessun link tracciato finora.',
-  'broadcasts.report.archived': 'Invio archiviato: le statistiche sono congelate e i messaggi più vecchi sono nell\'archivio del workspace.',
+  'broadcasts.report.archived':
+    "Invio archiviato: le statistiche sono congelate e i messaggi più vecchi sono nell'archivio del workspace.",
   'broadcasts.report.archiveExport': 'Esporta messaggi archiviati (CSV)',
   'broadcasts.report.pause': 'Pausa',
   'broadcasts.report.resume': 'Riprendi',
   'broadcasts.report.cancel': 'Annulla broadcast',
-  'broadcasts.report.cancelConfirm': 'Annullare questo broadcast? I contatti non ancora raggiunti non lo riceveranno.',
+  'broadcasts.report.cancelConfirm':
+    'Annullare questo broadcast? I contatti non ancora raggiunti non lo riceveranno.',
   'broadcasts.wizard.steps': 'Passi del broadcast',
   'broadcasts.wizard.step.recipients': 'Destinatari',
   'broadcasts.wizard.step.email': 'Email',
@@ -180,7 +187,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.wizard.include': 'Invia a',
   'broadcasts.wizard.includeTags': 'Contatti con i tag',
   'broadcasts.wizard.includeSearches': 'Contatti nelle ricerche salvate (segmenti)',
-  'broadcasts.wizard.includeHint': 'Ricevono l’email i contatti che corrispondono ai tag o a una qualsiasi delle ricerche salvate.',
+  'broadcasts.wizard.includeHint':
+    'Ricevono l’email i contatti che corrispondono ai tag o a una qualsiasi delle ricerche salvate.',
   'broadcasts.wizard.exclude': 'Escludi',
   'broadcasts.wizard.excludeTags': 'Contatti con uno di questi tag',
   'broadcasts.wizard.excludeSearches': 'Contatti in queste ricerche salvate',
@@ -201,13 +209,16 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.wizard.schedule': 'Programma',
   'broadcasts.wizard.error.name_required': 'Dai un nome al broadcast',
   'broadcasts.wizard.error.no_audience': 'Scegli almeno un tag o una ricerca salvata',
-  'broadcasts.wizard.error.empty_audience': 'Nessun contatto di questo pubblico può ricevere l’email',
+  'broadcasts.wizard.error.empty_audience':
+    'Nessun contatto di questo pubblico può ricevere l’email',
   'broadcasts.wizard.error.subject_required': 'Scrivi un oggetto',
-  'broadcasts.wizard.error.sender_missing': 'Imposta un indirizzo mittente nelle impostazioni email',
+  'broadcasts.wizard.error.sender_missing':
+    'Imposta un indirizzo mittente nelle impostazioni email',
   'broadcasts.wizard.error.content_empty': 'Scrivi il contenuto dell’email',
   'broadcasts.wizard.error.invalid_links': 'Correggi i link non validi',
   'broadcasts.wizard.check.domain.ok': 'Dominio di invio verificato',
-  'broadcasts.wizard.check.domain.warn': 'Dominio di invio non verificato (consentito solo in sviluppo)',
+  'broadcasts.wizard.check.domain.warn':
+    'Dominio di invio non verificato (consentito solo in sviluppo)',
   'broadcasts.wizard.check.domain.fail': 'Dominio di invio non verificato',
   'broadcasts.wizard.check.sender.ok': 'Mittente: {detail}',
   'broadcasts.wizard.check.sender.warn': 'Mittente: {detail}',
@@ -216,13 +227,15 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.wizard.check.address.warn': 'Indirizzo fisico nel footer',
   'broadcasts.wizard.check.address.fail': 'Indirizzo fisico mancante nelle impostazioni email',
   'broadcasts.wizard.check.unsubscribe.ok': 'Link di disiscrizione presente',
-  'broadcasts.wizard.check.unsubscribe.warn': 'Nessun blocco di disiscrizione: viene aggiunto il link nel footer predefinito',
+  'broadcasts.wizard.check.unsubscribe.warn':
+    'Nessun blocco di disiscrizione: viene aggiunto il link nel footer predefinito',
   'broadcasts.wizard.check.unsubscribe.fail': 'Link di disiscrizione mancante',
   'broadcasts.wizard.check.subject.ok': 'Oggetto impostato',
   'broadcasts.wizard.check.subject.warn': 'Oggetto impostato',
   'broadcasts.wizard.check.subject.fail': 'Oggetto mancante',
   'broadcasts.wizard.check.preheader.ok': 'Preheader impostato',
-  'broadcasts.wizard.check.preheader.warn': 'Nessun preheader: la casella mostra la prima riga di testo',
+  'broadcasts.wizard.check.preheader.warn':
+    'Nessun preheader: la casella mostra la prima riga di testo',
   'broadcasts.wizard.check.preheader.fail': 'Preheader mancante',
   'broadcasts.wizard.check.links.ok': 'I link sembrano validi',
   'broadcasts.wizard.check.links.warn': 'Controlla i link: {detail}',
@@ -234,7 +247,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'broadcasts.wizard.check.quota.warn': 'Credito di invio non ancora verificato',
   'broadcasts.wizard.check.quota.fail': 'Credito di invio insufficiente: {detail}',
   'broadcasts.wizard.check.warmup.ok': 'Entro il limite di warm-up',
-  'broadcasts.wizard.check.warmup.warn': 'Warm-up: oggi restano solo {detail} email, le altre partono nei giorni successivi',
+  'broadcasts.wizard.check.warmup.warn':
+    'Warm-up: oggi restano solo {detail} email, le altre partono nei giorni successivi',
   'broadcasts.wizard.check.warmup.fail': 'Limite di warm-up raggiunto',
   'broadcasts.wizard.check.spam.ok': 'Nessuna parola tipica dello spam',
   'broadcasts.wizard.check.spam.warn': 'Parole che possono attivare i filtri antispam: {detail}',
@@ -245,7 +259,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.snippets.emptyTitle': 'Scrivilo una volta, personalizzalo per tutti',
   'email.liquid.title': 'Assistente Liquid',
   'email.liquid.open': 'Assistente Liquid',
-  'email.liquid.subtitleEmail': 'Scegli i campi, costruisci condizioni e vedile in anteprima per un contatto reale. Inserisci mette il codice nel punto del cursore.',
+  'email.liquid.subtitleEmail':
+    'Scegli i campi, costruisci condizioni e vedile in anteprima per un contatto reale. Inserisci mette il codice nel punto del cursore.',
   'email.liquid.howItWorks': 'Come funziona',
   'email.liquid.loading': 'Caricamento…',
   'email.liquid.copy': 'Copia',
@@ -287,7 +302,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.liquid.fields.search': 'Cerca campi…',
   'email.liquid.fields.fallback': 'Valore di riserva dei campi inseriti',
   'email.liquid.fields.fallbackPlaceholder': 'Valore se vuoto (facoltativo)',
-  'email.liquid.fields.hint': 'Clicca un campo per inserirlo nel punto del cursore. Le date ricevono un formato, i tag vengono uniti con virgole.',
+  'email.liquid.fields.hint':
+    'Clicca un campo per inserirlo nel punto del cursore. Le date ricevono un formato, i tag vengono uniti con virgole.',
   'email.liquid.fields.insert': 'Inserisci nel punto del cursore',
   'email.liquid.fields.masked': 'Sensibile: mascherato per il tuo ruolo',
   'email.liquid.fields.none': 'Nessun campo corrisponde.',
@@ -312,7 +328,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.liquid.build.tzDefault': 'Fuso dello spazio (predefinito)',
   'email.liquid.build.tzFixed': 'Fuso fisso',
   'email.liquid.build.zone': 'Fuso IANA',
-  'email.liquid.build.dateHint': 'I formati usano strftime (%d giorno, %m mese, %Y anno, %H:%M ora); i nomi di mesi e giorni sono in inglese.',
+  'email.liquid.build.dateHint':
+    'I formati usano strftime (%d giorno, %m mese, %Y anno, %H:%M ora); i nomi di mesi e giorni sono in inglese.',
   'email.liquid.build.if': 'Se',
   'email.liquid.build.elsif': 'Altrimenti se',
   'email.liquid.build.else': 'Altrimenti mostra',
@@ -327,7 +344,8 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.liquid.build.removeCondition': 'Rimuovi condizione',
   'email.liquid.build.addElsif': 'Aggiungi “altrimenti se”',
   'email.liquid.build.removeBranch': 'Rimuovi',
-  'email.liquid.build.ifHint': 'I testi dei rami possono contenere campi, es. {{ contact.first_name }}. Liquid non ha parentesi: un solo modo di combinare per ramo.',
+  'email.liquid.build.ifHint':
+    'I testi dei rami possono contenere campi, es. {{ contact.first_name }}. Liquid non ha parentesi: un solo modo di combinare per ramo.',
   'email.liquid.build.negateTag': 'Mostra quando il contatto NON ha il tag',
   'email.liquid.build.collection': 'Lista',
   'email.liquid.build.item': 'Nome elemento',
@@ -364,9 +382,11 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.liquid.preview.errorAt': 'Riga {line}, colonna {column}:',
   'email.liquid.preview.error': 'Errore:',
   'email.liquid.preview.unknown': 'Non presenti nel contesto (errore di battitura?):',
-  'email.liquid.preview.missing': 'Vuoti per questo contatto (si usa il valore di riserva, se c’è):',
+  'email.liquid.preview.missing':
+    'Vuoti per questo contatto (si usa il valore di riserva, se c’è):',
   'email.liquid.guide.title': 'Contenuti dinamici e Liquid',
-  'email.liquid.guide.subtitle': 'Come funzionano gli snippet, i campi che puoi usare e ricette pronte.',
+  'email.liquid.guide.subtitle':
+    'Come funzionano gli snippet, i campi che puoi usare e ricette pronte.',
   'email.liquid.guide.search': 'Cerca nella guida…',
   'email.liquid.guide.toc': 'Indice',
   'email.liquid.guide.noResults': 'Nessun risultato.',
@@ -374,6 +394,7 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.liquid.guide.colLiquid': 'Liquid',
   'email.liquid.guide.colType': 'Tipo',
   'email.liquid.guide.limitSize': 'Template e snippet fino a {kb} kB.',
-  'email.liquid.guide.limitTime': 'Tempo di rendering: {ms} ms per email, {snippetMs} ms per snippet.',
+  'email.liquid.guide.limitTime':
+    'Tempo di rendering: {ms} ms per email, {snippetMs} ms per snippet.',
   'email.liquid.guide.limitMemory': 'Memoria: circa {mb} MB per rendering.',
 };

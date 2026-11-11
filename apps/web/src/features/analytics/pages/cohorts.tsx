@@ -18,7 +18,11 @@ import {
 } from '../reports-ads/search';
 import { useReportSearch } from '../reports-ads/use-report-search';
 
-const HEAT_COLOR = { positive: 'var(--success)', negative: 'var(--destructive)', neutral: 'transparent' };
+const HEAT_COLOR = {
+  positive: 'var(--success)',
+  negative: 'var(--destructive)',
+  neutral: 'transparent',
+};
 
 function cohortName(
   f: ReturnType<typeof useFormatters>,
@@ -28,9 +32,11 @@ function cohortName(
   const date = new Date(`${cohort}T12:00:00Z`);
   if (Number.isNaN(date.getTime())) return cohort;
   if (granularity === 'week') return f.date(date.toISOString(), 'UTC');
-  return new Intl.DateTimeFormat(f.locale, { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(
-    date,
-  );
+  return new Intl.DateTimeFormat(f.locale, {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
 }
 
 function CohortHeatmap({ report }: { report: CohortReport }) {
@@ -165,7 +171,9 @@ export function AnalyticsCohortsPage() {
               ...AD_PLATFORMS.map((value) => ({ value, label: platformLabel(t, value) })),
             ]}
             onValueChange={(value) =>
-              update({ platform: value === 'all' ? undefined : (value as CohortSearch['platform']) })
+              update({
+                platform: value === 'all' ? undefined : (value as CohortSearch['platform']),
+              })
             }
           />
         </>

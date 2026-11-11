@@ -26,7 +26,8 @@ export const esignIt: Readonly<Record<EsignMessageKey, string>> = {
   'esign.signingOrder.parallel': 'Tutte le parti insieme',
   'esign.signingOrder.sequential': 'Una parte dopo l’altra',
   'esign.signingOrder.parallelHint': 'Ogni firmatario riceve subito l’invito.',
-  'esign.signingOrder.sequentialHint': 'Ogni parte viene invitata quando la precedente ha firmato, nell’ordine della lista.',
+  'esign.signingOrder.sequentialHint':
+    'Ogni parte viene invitata quando la precedente ha firmato, nell’ordine della lista.',
   'esign.locale.auto': 'Lingua del browser del firmatario',
   'esign.locale.en': 'Inglese',
   'esign.locale.it': 'Italiano',
@@ -120,7 +121,8 @@ export const esignIt: Readonly<Record<EsignMessageKey, string>> = {
   'esign.requests.signedCount': '{signed} di {total} firmati',
 
   'esign.send.title': 'Invia per la firma',
-  'esign.send.description': 'Scegli chi firma per ogni parte. Riceverà un’email con un link personale.',
+  'esign.send.description':
+    'Scegli chi firma per ogni parte. Riceverà un’email con un link personale.',
   'esign.send.pickTemplate': 'Scegli un modello',
   'esign.send.noTemplates': 'Nessun modello attivo pronto per l’invio.',
   'esign.send.mode.contact': 'Contatto del CRM',
@@ -141,18 +143,22 @@ export const esignIt: Readonly<Record<EsignMessageKey, string>> = {
   'esign.detail.remind': 'Invia promemoria',
   'esign.detail.reminded': 'Promemoria in invio',
   'esign.detail.copyLink': 'Copia link di firma',
-  'esign.detail.linkCopied': 'Link di firma copiato. È personale: condividilo solo con il firmatario.',
+  'esign.detail.linkCopied':
+    'Link di firma copiato. È personale: condividilo solo con il firmatario.',
   'esign.detail.void': 'Annulla',
   'esign.detail.voidTitle': 'Annullare questa richiesta?',
-  'esign.detail.voidDescription': 'Nessuno potrà più firmarlo. I firmatari possono ancora aprire il loro link e vedere il documento in sola lettura; le firme già date restano nel registro di audit.',
+  'esign.detail.voidDescription':
+    'Nessuno potrà più firmarlo. I firmatari possono ancora aprire il loro link e vedere il documento in sola lettura; le firme già date restano nel registro di audit.',
   'esign.detail.voided': 'Richiesta annullata',
   'esign.detail.retryFinalize': 'Riprova la sigillatura',
   'esign.detail.finalizeQueued': 'Sigillatura in coda',
   'esign.detail.summary': 'Riepilogo',
   'esign.detail.never': 'Mai',
-  'esign.detail.sealing': 'Tutti hanno firmato: è in preparazione il PDF firmato con il certificato di audit.',
+  'esign.detail.sealing':
+    'Tutti hanno firmato: è in preparazione il PDF firmato con il certificato di audit.',
   'esign.detail.finalizeFailed': 'Non è stato possibile preparare il PDF firmato: {error}',
-  'esign.detail.finalizeRetrying': 'La preparazione del PDF firmato non è riuscita ({error}); viene ritentata in automatico.',
+  'esign.detail.finalizeRetrying':
+    'La preparazione del PDF firmato non è riuscita ({error}); viene ritentata in automatico.',
   'esign.detail.audit': 'Registro di audit',
   'esign.detail.auditHint':
     'Ogni azione con indirizzo IP, paese, dati del browser e del dispositivo. Lo stesso registro è allegato come certificato al PDF firmato. È una firma elettronica semplice: il PDF non ha un sigillo qualificato né crittografico, la prova è questo registro con gli hash SHA-256.',
@@ -180,14 +186,17 @@ export const esignIt: Readonly<Record<EsignMessageKey, string>> = {
   'esign.editor.status.active': 'Modello attivo: può essere inviato',
   'esign.editor.status.archived': 'Modello archiviato',
   'esign.editor.palette': 'Campi',
-  'esign.editor.paletteHint': 'Trascina un campo su una pagina, oppure cliccalo e poi clicca sulla pagina. Va alla parte selezionata.',
+  'esign.editor.paletteHint':
+    'Trascina un campo su una pagina, oppure cliccalo e poi clicca sulla pagina. Va alla parte selezionata.',
   'esign.editor.pages': 'Pagine del documento',
   'esign.editor.pageAlt': 'Pagina {page}',
   'esign.editor.pageOf': 'Pagina {page} di {count}',
   'esign.editor.noImage': 'Anteprima della pagina mancante',
-  'esign.editor.missingImages': 'Mancano alcune anteprime: i firmatari non vedono il documento finché non vengono generate.',
+  'esign.editor.missingImages':
+    'Mancano alcune anteprime: i firmatari non vedono il documento finché non vengono generate.',
   'esign.editor.generateImages': 'Genera anteprime',
-  'esign.editor.dropHint': 'Trascina qui il PDF da firmare, oppure fai clic per sceglierlo (fino a 20 MB, 50 pagine).',
+  'esign.editor.dropHint':
+    'Trascina qui il PDF da firmare, oppure fai clic per sceglierlo (fino a 20 MB, 50 pagine).',
   'esign.editor.leaveConfirm': 'Ci sono modifiche non salvate. Uscire dall’editor e perderle?',
   'esign.editor.dropNotPdf': 'Si possono usare solo file PDF.',
   'esign.editor.renderFailed': 'Il browser non è riuscito a elaborare il PDF.',
@@ -210,12 +219,14 @@ export const esignIt: Readonly<Record<EsignMessageKey, string>> = {
   'esign.editor.removeField': 'Rimuovi',
   'esign.editor.general': 'Modello',
   'esign.editor.security': 'Sicurezza e scadenza',
-  'esign.editor.otpHint': 'I firmatari confermano un codice di 6 cifre ricevuto via email prima di firmare.',
+  'esign.editor.otpHint':
+    'I firmatari confermano un codice di 6 cifre ricevuto via email prima di firmare.',
   'esign.editor.expireHint': 'Vuoto: la richiesta non scade mai.',
   'esign.editor.reminders': 'Promemoria',
   'esign.editor.email': 'Email di invito',
   'esign.editor.subjectHint': 'Vuoto: l’oggetto predefinito.',
-  'esign.editor.messageHint': 'Un paragrafo aggiunto al testo predefinito dell’invito; anche qui funzionano {{ esign.document }} e le altre variabili esign. Vuoto: nessun paragrafo in più.',
+  'esign.editor.messageHint':
+    'Un paragrafo aggiunto al testo predefinito dell’invito; anche qui funzionano {{ esign.document }} e le altre variabili esign. Vuoto: nessun paragrafo in più.',
 
   'esign.error.forbiddenTitle': 'Non consentito',
   'esign.error.forbidden': 'Il tuo ruolo non consente questa azione.',

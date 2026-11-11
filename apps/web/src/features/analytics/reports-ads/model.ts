@@ -181,7 +181,9 @@ export function parsePerformanceSearch(raw: Record<string, unknown>): Performanc
   if (win !== undefined) out.win = win;
   if (includes(REPORT_BASIS, raw['basis'])) out.basis = raw['basis'];
   if (isGroupBy(raw['group'])) out.group = raw['group'];
-  const dd = (Array.isArray(raw['dd']) ? raw['dd'] : typeof raw['dd'] === 'string' ? [raw['dd']] : [])
+  const dd = (
+    Array.isArray(raw['dd']) ? raw['dd'] : typeof raw['dd'] === 'string' ? [raw['dd']] : []
+  )
     .filter((x): x is string => typeof x === 'string' && decodeDrill(x) !== null)
     .slice(0, 10);
   if (dd.length > 0) out.dd = dd;
@@ -235,7 +237,8 @@ export function resolvePerformance(search: PerformanceSearchParams): Performance
     columns,
     view: search.view ?? 'table',
     compare: search.cmp === '1',
-    chartMetric: search.metric ?? (columns.includes('revenue_minor') ? 'revenue_minor' : columns[0]!),
+    chartMetric:
+      search.metric ?? (columns.includes('revenue_minor') ? 'revenue_minor' : columns[0]!),
     conversionId: search.conv ?? null,
   };
 }
@@ -368,8 +371,12 @@ export function rowsByKey(rows: readonly PerformanceRow[]): Map<string | null, P
 }
 
 /** Relative change, null without a comparable baseline. */
-export function metricChange(current: number | null, previous: number | null | undefined): number | null {
-  if (current === null || previous === null || previous === undefined || previous === 0) return null;
+export function metricChange(
+  current: number | null,
+  previous: number | null | undefined,
+): number | null {
+  if (current === null || previous === null || previous === undefined || previous === 0)
+    return null;
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
   return (current - previous) / Math.abs(previous);
 }
@@ -388,7 +395,11 @@ export function toCsv(rows: readonly (readonly (string | number | null)[])[]): s
 }
 
 /** Raw CSV value of a metric: money in major units with the currency's digits. */
-export function csvValue(column: PerformanceColumn, value: number | null, currency: string): number | null {
+export function csvValue(
+  column: PerformanceColumn,
+  value: number | null,
+  currency: string,
+): number | null {
   if (value === null || !Number.isFinite(value)) return null;
   if (PERFORMANCE_COLUMNS[column] === 'money') {
     const digits = currencyExponent(currency);

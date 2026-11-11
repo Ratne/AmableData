@@ -125,7 +125,10 @@ function FunnelRow({
         : api.funnels.restore(site.id, funnel.id),
     {
       invalidate,
-      success: funnel.status === 'active' ? 'analytics.funnelsV2.archived' : 'analytics.funnelsV2.restored',
+      success:
+        funnel.status === 'active'
+          ? 'analytics.funnelsV2.archived'
+          : 'analytics.funnelsV2.restored',
     },
   );
   return (
@@ -222,7 +225,9 @@ function FunnelList({ tenant, site }: { tenant: string; site: Site }) {
         <ListSkeleton rows={3} />
       ) : list.data.data.length === 0 ? (
         <EmptyNote>
-          {status === 'active' ? t('analytics.funnelsV2.empty') : t('analytics.funnelsV2.emptyArchived')}
+          {status === 'active'
+            ? t('analytics.funnelsV2.empty')
+            : t('analytics.funnelsV2.emptyArchived')}
         </EmptyNote>
       ) : (
         <ul className="flex flex-col divide-y divide-foreground/[0.06]">

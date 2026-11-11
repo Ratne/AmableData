@@ -10,7 +10,8 @@ export const shortlinksEn = {
   'shortlinks.emptyFiltered': 'No link matches the filters.',
   'shortlinks.copy': 'Copy link',
   'shortlinks.copied': 'Link copied',
-  'shortlinks.dialog.description': 'Visits to the short URL are redirected to the destination with the UTM parameters below.',
+  'shortlinks.dialog.description':
+    'Visits to the short URL are redirected to the destination with the UTM parameters below.',
 
   'shortlinks.col.link': 'Short link',
   'shortlinks.col.destination': 'Destination',
@@ -36,7 +37,8 @@ export const shortlinksEn = {
   'shortlinks.field.title': 'Title (internal)',
   'shortlinks.field.url': 'Destination URL',
   'shortlinks.field.passQuery': 'Pass the query parameters of the visit',
-  'shortlinks.field.passQueryHint': 'They are appended to the destination and override the UTM above.',
+  'shortlinks.field.passQueryHint':
+    'They are appended to the destination and override the UTM above.',
   'shortlinks.field.expiresAt': 'Expires on',
   'shortlinks.field.expiredUrl': 'URL after expiry',
   'shortlinks.field.expiredUrlHint': 'Empty: expired visits get a 404.',
@@ -49,10 +51,12 @@ export const shortlinksEn = {
   'shortlinks.utm.preview': 'Destination',
   'shortlinks.expiry.title': 'Expiry',
   'shortlinks.og.title': 'Social preview',
-  'shortlinks.og.hint': 'Shown by social networks and messaging apps when the link is shared. Empty: they read the destination page.',
+  'shortlinks.og.hint':
+    'Shown by social networks and messaging apps when the link is shared. Empty: they read the destination page.',
 
   'shortlinks.noDomain.title': 'Connect a short link domain',
-  'shortlinks.noDomain.body': 'Links live on a dedicated hostname such as go.example.com, connected and verified with kind “Short links”.',
+  'shortlinks.noDomain.body':
+    'Links live on a dedicated hostname such as go.example.com, connected and verified with kind “Short links”.',
   'shortlinks.noDomain.link': 'Settings > Domains',
 
   'shortlinks.qr.title': 'QR code',
@@ -74,10 +78,12 @@ export const shortlinksEn = {
   'shortlinks.stats.unknown': 'Unknown',
   'shortlinks.stats.direct': 'Direct / none',
   'shortlinks.stats.noData': 'No clicks in the period.',
-  'shortlinks.stats.humanOnly': 'Breakdowns count people only; days are UTC. Total clicks include bots and every day since creation.',
+  'shortlinks.stats.humanOnly':
+    'Breakdowns count people only; days are UTC. Total clicks include bots and every day since creation.',
 
   'shortlinks.folders.title': 'Folders',
-  'shortlinks.folders.description': 'Folders group links. A folder bound to domains limits (and preselects) the domains of its links.',
+  'shortlinks.folders.description':
+    'Folders group links. A folder bound to domains limits (and preselects) the domains of its links.',
   'shortlinks.folders.name': 'Folder name',
   'shortlinks.folders.newPlaceholder': 'New folder',
   'shortlinks.folders.create': 'Create',

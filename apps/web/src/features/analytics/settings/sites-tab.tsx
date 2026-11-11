@@ -4,6 +4,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@amable/ui/ui/dialog';
@@ -181,11 +182,24 @@ export function SitesTab({
               </DialogTitle>
               <DialogDescription>{t('analytics.sites.createdHint')}</DialogDescription>
             </DialogHeader>
-            <SecretReveal secret={created.secret} />
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium">{t('analytics.tracking.snippet')}</span>
-              <CodeBlock code={created.snippet.html} />
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">1. {t('analytics.sites.createdSecret')}</span>
+                <SecretReveal secret={created.secret} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">2. {t('analytics.tracking.snippet')}</span>
+                <CodeBlock code={created.snippet.html} />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t('analytics.sites.createdGtm')}
+                </p>
+              </div>
             </div>
+            <DialogFooter>
+              <DashboardButton onClick={() => setCreated(null)}>
+                {t('analytics.sites.createdDone')}
+              </DashboardButton>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       ) : null}

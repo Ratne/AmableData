@@ -71,8 +71,10 @@ function ymd(ms: number): string {
 
 function adsErrorToast(t: (key: MessageKey) => string, error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;
-  if (error.code === 'integration_unavailable') toast.error(t('analytics.ads.connections.error.unavailable'));
-  else if (error.code === 'ads_auth_expired') toast.error(t('analytics.ads.connections.error.authExpired'));
+  if (error.code === 'integration_unavailable')
+    toast.error(t('analytics.ads.connections.error.unavailable'));
+  else if (error.code === 'ads_auth_expired')
+    toast.error(t('analytics.ads.connections.error.authExpired'));
   else if (error.code === 'ads_provider_unavailable' || error.code === 'ads_provider_error')
     toast.error(t('analytics.ads.connections.error.provider'));
   else return false;
@@ -89,7 +91,10 @@ function useFakeCallback(
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const handled = useRef<string | null>(null);
-  const [choice, setChoice] = useState<{ platform: AdPlatform; selection: AdAccountSelection } | null>(null);
+  const [choice, setChoice] = useState<{
+    platform: AdPlatform;
+    selection: AdAccountSelection;
+  } | null>(null);
   useEffect(() => {
     const { platform, state, code } = search;
     if (!platform || !state || !code || handled.current === state) return;
@@ -212,7 +217,11 @@ function BackfillDialog({
             <DashboardButton variant="secondary" onClick={onClose}>
               {t('common.cancel')}
             </DashboardButton>
-            <DashboardButton type="submit" variant="primary" disabled={!valid || backfill.isPending}>
+            <DashboardButton
+              type="submit"
+              variant="primary"
+              disabled={!valid || backfill.isPending}
+            >
               {t('analytics.ads.connections.backfill')}
             </DashboardButton>
           </DialogFooter>
@@ -244,7 +253,8 @@ function PixelDialog({
   const pixelValue = pixel.trim();
   const testValue = testCode.trim();
   const valid =
-    (pixelValue === '' || PIXEL_ID.test(pixelValue)) && (testValue === '' || TEST_CODE.test(testValue));
+    (pixelValue === '' || PIXEL_ID.test(pixelValue)) &&
+    (testValue === '' || TEST_CODE.test(testValue));
   const platform = connection.platform === 'tiktok' ? 'tiktok' : 'meta';
   const save = useAnalyticsMutation(
     tenant,
@@ -338,15 +348,11 @@ function ConnectionsPanel({
       onError: (error) => adsErrorToast(t, error),
     },
   );
-  const disconnect = useAnalyticsMutation(
-    tenant,
-    (id: string) => api.ads.disconnect(site.id, id),
-    {
-      invalidate: [funnelKeys.ads(tenant, site.id)],
-      success: 'analytics.ads.connections.disconnected',
-      onError: (error) => adsErrorToast(t, error),
-    },
-  );
+  const disconnect = useAnalyticsMutation(tenant, (id: string) => api.ads.disconnect(site.id, id), {
+    invalidate: [funnelKeys.ads(tenant, site.id)],
+    success: 'analytics.ads.connections.disconnected',
+    onError: (error) => adsErrorToast(t, error),
+  });
 
   const data = connections.data;
   return (
@@ -422,8 +428,10 @@ function ConnectionsPanel({
                         {PIXEL_PLATFORMS.includes(c.platform) && c.status !== 'disconnected' ? (
                           c.pixel_id ? (
                             <span className="text-[11px] text-muted-foreground">
-                              {t(`analytics.ads.pixel.id.${c.platform === 'tiktok' ? 'tiktok' : 'meta'}`)}:{' '}
-                              <span className="font-mono">{c.pixel_id}</span>
+                              {t(
+                                `analytics.ads.pixel.id.${c.platform === 'tiktok' ? 'tiktok' : 'meta'}`,
+                              )}
+                              : <span className="font-mono">{c.pixel_id}</span>
                               {c.test_event_code ? ` · ${t('analytics.ads.pixel.testMode')}` : ''}
                             </span>
                           ) : (
@@ -440,7 +448,11 @@ function ConnectionsPanel({
                         {canConfigure && c.status !== 'disconnected' ? (
                           <span className="flex flex-wrap gap-1">
                             {PIXEL_PLATFORMS.includes(c.platform) ? (
-                              <DashboardButton variant="ghost" size="sm" onClick={() => setPixelOf(c)}>
+                              <DashboardButton
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setPixelOf(c)}
+                              >
                                 <Crosshair aria-hidden />
                                 {t('analytics.ads.pixel.button')}
                               </DashboardButton>
@@ -563,7 +575,9 @@ function OutboundPanel({
       return next;
     });
   const value = (job: OutboundConversionJob) =>
-    job.payload.value_minor !== null && job.payload.value_minor !== undefined && job.payload.currency
+    job.payload.value_minor !== null &&
+    job.payload.value_minor !== undefined &&
+    job.payload.currency
       ? f.money(job.payload.value_minor, job.payload.currency)
       : '—';
 
@@ -669,7 +683,9 @@ function OutboundPanel({
                 <th className="py-1 font-medium">{t('analytics.ads.outbound.event')}</th>
                 <th className="py-1 text-right font-medium">{t('analytics.ads.outbound.value')}</th>
                 <th className="py-1 pl-4 font-medium">{t('analytics.ads.outbound.status')}</th>
-                <th className="py-1 text-right font-medium">{t('analytics.ads.outbound.attempts')}</th>
+                <th className="py-1 text-right font-medium">
+                  {t('analytics.ads.outbound.attempts')}
+                </th>
                 <th className="py-1" />
               </tr>
             </thead>
@@ -688,11 +704,16 @@ function OutboundPanel({
                   <td className="py-1.5 whitespace-nowrap">
                     {f.relative(new Date(job.created_at).toISOString(), now)}
                   </td>
-                  <td className="py-1.5">{t(`analytics.ads.connections.platform.${job.platform}`)}</td>
+                  <td className="py-1.5">
+                    {t(`analytics.ads.connections.platform.${job.platform}`)}
+                  </td>
                   <td className="py-1.5">
                     <span className="font-mono">{job.payload.event_name}</span>
                     {job.last_error ? (
-                      <span className="mt-0.5 block max-w-[22rem] truncate text-[11px] text-destructive" title={job.last_error}>
+                      <span
+                        className="mt-0.5 block max-w-[22rem] truncate text-[11px] text-destructive"
+                        title={job.last_error}
+                      >
                         {job.last_error}
                       </span>
                     ) : null}
