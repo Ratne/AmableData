@@ -27,16 +27,16 @@
     "@phi-ag/argon2": "^0.6.2",
     "drizzle-orm": "^0.45.4",
     "fflate": "^0.8.3",
-    "hono": "^4.13.16",
+    "hono": "^4.13.17",
     "pdf-lib": "^1.17.1",
     "ulid": "^3.0.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@amable/app-sdk": "workspace:*",
-    "@cloudflare/workers-types": "^5.20261102.1",
+    "@cloudflare/workers-types": "^5.20261109.1",
     "@types/node": "^26.6.5",
     "typescript": "~7.0.2",
-    "wrangler": "^4.156.2"
+    "wrangler": "^4.159.0"
   }
 }
