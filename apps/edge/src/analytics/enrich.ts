@@ -1,6 +1,7 @@
 import { isUnfilledMacro, type ServerEvent, type TrackerEvent } from '@amable/api-types';
 import { classifyChannel } from './channels';
 import { cookielessVisitorId, ipUaHash } from './cookieless';
+import { deviceSighting } from './device-signals';
 import { landingEmailHash } from './store/identity';
 import { parseUserAgent } from './ua';
 import type { AdIds, EnrichedEvent, ExtraValue, Geo, IdentityData, PaymentData } from './types';
@@ -11,6 +12,8 @@ export interface EdgeSiteConfig {
   tenantId: string;
   hostnames: readonly string[];
   cookieless: boolean;
+  /** Device signals module on (never on a cookieless site); events of the module are dropped otherwise. */
+  deviceSignals?: boolean;
   allowLocalhost: boolean;
   currency: string;
   /** Hot window of raw rows in the site DO: older events stop at the age barrier. */
@@ -33,6 +36,11 @@ export interface RequestContext {
   geo: Geo;
   /** How the event reached the edge (browser ingest only). */
   collector?: Collector;
+  /**
+   * The event is not known to come straight from the browser (rewrite recipes,
+   * a proxy without the key or a usable address): `ip` may be a server's.
+   */
+  relayed?: boolean;
 }
 
 export type Collector = 'first_party' | 'third_party' | 'proxy';
@@ -269,6 +277,7 @@ export async function enrichTrackerEvent(
     clk: payload.clk,
   });
   const cookieless = site.cookieless || payload.cl === 1 || payload.vid === undefined;
+  if (payload.type === 'device' && (cookieless || site.deviceSignals !== true)) return null;
   const vid = cookieless
     ? await cookielessVisitorId(site.salt.value, site.siteId, ctx.ip, ctx.userAgent)
     : (payload.vid ?? '');
@@ -303,6 +312,18 @@ export async function enrichTrackerEvent(
     case 'identify':
       event.identity = identityFromData(payload.data);
       if (event.identity === null) return null;
+      break;
+    case 'device':
+      event.deviceSighting = await deviceSighting(payload.data, {
+        siteId: site.siteId,
+        key: site.secretHash ?? site.siteId,
+        // A server's address is everybody's network: the signals are kept, the rule sits out.
+        ip: ctx.relayed === true ? '' : ctx.ip,
+        ...(payload.sw === undefined ? {} : { sw: payload.sw }),
+        ...(payload.sh === undefined ? {} : { sh: payload.sh }),
+        ...(payload.tz === undefined ? {} : { tz: payload.tz }),
+      });
+      if (event.deviceSighting === null) return null;
       break;
     case 'external_link': {
       const target = parseUrl(

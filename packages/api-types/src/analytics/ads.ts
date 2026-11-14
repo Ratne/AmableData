@@ -149,18 +149,72 @@ export const identityKeySchema = z.object({
 });
 export type IdentityKey = z.infer<typeof identityKeySchema>;
 
-export const MERGE_MECHANISMS = ['email', 'phone', 'session', 'ip_ua', 'manual'] as const;
+export const MERGE_MECHANISMS = [
+  'email',
+  'phone',
+  'session',
+  'ip_ua',
+  'device_ip',
+  'manual',
+] as const;
 export type MergeMechanism = (typeof MERGE_MECHANISMS)[number];
 
-/** Automatic merge mechanisms of a site; `ip_ua` (same-day IP + user agent) is off by default. */
+/**
+ * Automatic merge mechanisms of a site; `ip_ua` (same-day IP + user agent) and
+ * `device_ip` (device signals + network within 7 days) are off by default.
+ */
 export const identityMergeSettingsSchema = z.object({
   email: z.boolean(),
   phone: z.boolean(),
   session: z.boolean(),
   ip_ua: z.boolean(),
+  device_ip: z.boolean(),
 });
 export type IdentityMergeSettingsBody = z.infer<typeof identityMergeSettingsSchema>;
 export const identityMergeSettingsPatchSchema = identityMergeSettingsSchema.partial().strict();
+
+/** Measurements of the device signals module and the merges of the `device_ip` rule. */
+export const deviceSignalsReportSchema = z.object({
+  /** Visitors with device signals. */
+  collected: z.number().int(),
+  /** Distinct device keys. */
+  devices: z.number().int(),
+  /** Per system and browser: share of visitors with a key nobody else has, share of returning ones whose key never changed. */
+  groups: z.array(
+    z.object({
+      os: z.string().nullable(),
+      browser: z.string().nullable(),
+      visitors: z.number().int(),
+      unique_share: z.number(),
+      returning: z.number().int(),
+      stable_share: z.number().nullable(),
+    }),
+  ),
+  /** New visitors the rule matched (merged when it is on). */
+  would_merge: z.number().int(),
+  /** Matches where both visitors have an email: `correct` when they share one. */
+  precision: z.object({ checked: z.number().int(), correct: z.number().int() }),
+  /** Active `device_ip` merges (newest first, at most 200). */
+  merges: z.array(
+    z.object({
+      child_visitor_id: z.string(),
+      origin_visitor_id: z.string(),
+      created_at: z.number().int(),
+    }),
+  ),
+  merged: z.number().int(),
+});
+export type DeviceSignalsReport = z.infer<typeof deviceSignalsReportSchema>;
+
+export const deviceUnmergeSchema = z
+  .strictObject({
+    child_visitor_ids: z.array(z.string().min(1).max(128)).min(1).max(500).optional(),
+    all: z.literal(true).optional(),
+  })
+  .refine((b) => b.all === true || b.child_visitor_ids !== undefined, {
+    message: 'child_visitor_ids or all',
+  });
+export type DeviceUnmergeInput = z.infer<typeof deviceUnmergeSchema>;
 
 export const visitorMergeSchema = z.object({
   child_visitor_id: z.string(),

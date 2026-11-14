@@ -31,13 +31,13 @@ export function sanitizeName(name: unknown): string {
     .slice(0, MAX_NAME_LENGTH);
 }
 
-/** Sanitizes a params object: at most 10 non-empty keys, string values. */
-export function sanitizeParams(input: unknown): Params | undefined {
+/** Sanitizes a params object: at most `max` (10) non-empty keys, string values. */
+export function sanitizeParams(input: unknown, max = MAX_GOAL_PARAMS): Params | undefined {
   if (input === null || typeof input !== 'object') return undefined;
   const out: Params = {};
   let count = 0;
   for (const [rawKey, rawValue] of Object.entries(input as Record<string, unknown>)) {
-    if (count >= MAX_GOAL_PARAMS) break;
+    if (count >= max) break;
     if (rawValue === undefined || rawValue === null || typeof rawValue === 'object') continue;
     const key = sanitizeName(rawKey);
     if (key === '' || key in out) continue;

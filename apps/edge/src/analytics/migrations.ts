@@ -664,4 +664,37 @@ export const analyticsMigrations: readonly Migration[] = [
       `CREATE INDEX conversion_log_event ON conversion_log (event, ts)`,
     ],
   },
+  {
+    id: 12,
+    name: 'analytics_device_signals',
+    statements: [
+      `ALTER TABLE site_config ADD COLUMN device_signals INTEGER NOT NULL DEFAULT 0`,
+      // Latest device signals of a visitor: the key (signals shared by the browsers
+      // of one device) and the full set, for the measurements.
+      `CREATE TABLE device_signals (
+        visitor_id TEXT PRIMARY KEY,
+        device_key TEXT NOT NULL,
+        signals TEXT NOT NULL,
+        browser TEXT,
+        os TEXT,
+        first_seen INTEGER NOT NULL,
+        last_seen INTEGER NOT NULL,
+        changes INTEGER NOT NULL DEFAULT 0,
+        candidate TEXT
+      )`,
+      `CREATE INDEX device_signals_key ON device_signals (device_key)`,
+      // Matches are cleared when the visitor they point at is erased or forgotten.
+      `CREATE INDEX device_signals_candidate ON device_signals (candidate) WHERE candidate IS NOT NULL`,
+      // Device key + network (keyed hash of the IP or IPv6 /64) per visitor, for the device_ip merge.
+      `CREATE TABLE device_ip_seen (
+        device_key TEXT NOT NULL,
+        net TEXT NOT NULL,
+        visitor_id TEXT NOT NULL,
+        last_seen INTEGER NOT NULL,
+        PRIMARY KEY (device_key, net, visitor_id)
+      )`,
+      `CREATE INDEX device_ip_seen_time ON device_ip_seen (last_seen)`,
+      `CREATE INDEX device_ip_seen_visitor ON device_ip_seen (visitor_id)`,
+    ],
+  },
 ];

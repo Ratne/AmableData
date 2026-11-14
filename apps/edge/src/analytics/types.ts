@@ -1,4 +1,5 @@
 import type { AnalyticsEventType } from '@amable/api-types';
+import type { DeviceSighting } from './device-signals';
 import type { Channel } from './channels';
 import type { BotCategory } from './crawlers';
 import type { DeviceType } from './ua';
@@ -68,6 +69,8 @@ export interface EnrichedEvent {
   collector?: 'first_party' | 'third_party' | 'proxy' | null;
   /** Salted same-day hash of IP + user agent (cookie pageviews), for the `ip_ua` merge. */
   ipUa?: string | null;
+  /** Device signals event: device key, network hash and the signals (never archived). */
+  deviceSighting?: DeviceSighting | null;
   geo: Geo;
   device: DeviceType | null;
   browser: string | null;

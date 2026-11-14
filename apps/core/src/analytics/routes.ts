@@ -9,6 +9,8 @@ import {
   analyticsTimeseriesParamsSchema,
   analyticsTimeseriesSchema,
   createSiteSchema,
+  deviceSignalsReportSchema,
+  deviceUnmergeSchema,
   identityMergeSettingsPatchSchema,
   identityMergeSettingsSchema,
   siteSchema,
@@ -157,6 +159,45 @@ analyticsApi.openapi(
     const settings = unwrap(await siteStub(namespace(c), siteId).updateIdentitySettings(patch));
     await audit(c, 'analytics.identity_settings_updated', { target: siteId, details: patch });
     return c.json(settings, 200);
+  },
+);
+
+analyticsApi.openapi(
+  crmRoute('analytics:read', {
+    method: 'get',
+    path: '/sites/{siteId}/device-signals',
+    tags,
+    summary: 'Measurements of the device signals module and the `device_ip` merges',
+    request: { params: siteIdPath },
+    responses: { 200: json(deviceSignalsReportSchema, 'Device signals report') },
+  }),
+  async (c) => {
+    const { siteId } = c.req.valid('param');
+    await siteRecord(c, siteId);
+    return c.json(await siteStub(namespace(c), siteId).deviceSignalsReport(), 200);
+  },
+);
+
+analyticsApi.openapi(
+  crmRoute('analytics:configure', {
+    method: 'post',
+    path: '/sites/{siteId}/device-signals/unmerge',
+    tags,
+    summary: 'Disconnect `device_ip` merges (some visitors or all)',
+    request: { params: siteIdPath, body: jsonBody(deviceUnmergeSchema) },
+    responses: { 200: json(z.object({ unmerged: z.number().int() }), 'Disconnected merges') },
+  }),
+  async (c) => {
+    const { siteId } = c.req.valid('param');
+    await siteRecord(c, siteId);
+    const body = c.req.valid('json');
+    const ids = body.all === true ? null : (body.child_visitor_ids ?? []);
+    const unmerged = await siteStub(namespace(c), siteId).unmergeDeviceMerges(ids);
+    await audit(c, 'analytics.device_merges_unmerged', {
+      target: siteId,
+      details: { all: ids === null, unmerged },
+    });
+    return c.json({ unmerged }, 200);
   },
 );
 

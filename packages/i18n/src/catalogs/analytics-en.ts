@@ -466,7 +466,35 @@ export const analyticsEn = {
   'analytics.matching.title': 'Visitor matching',
   'analytics.matching.ipUa': 'Match by IP and browser (same day)',
   'analytics.matching.ipUaHint':
-    'Links a new visitor to the only person seen the same day with the same IP and user agent (typically cookies wiped). Shared networks (offices, mobile carriers) are skipped. It is a guess: two people on the same home network with the same phone can be merged, and one’s browsing lands on the other’s contact. Opt-outs and erasures do not extend to visitors merged this way. Turning it off does not undo past matches. Off by default.',
+    'Links a new visitor to the only person seen the same day with the same IP and user agent (typically cookies wiped). Shared networks (offices, mobile carriers) are skipped. It is a guess: two people on the same home network with the same phone can be merged, and one’s browsing lands on the other’s contact. Opt-outs and erasures do not extend to visitors merged this way until both give the same email or phone; an opt-out unlinks them. Turning it off does not undo past matches. Off by default.',
+  'analytics.device.title': 'Device recognition',
+  'analytics.device.collect': 'Collect device signals',
+  'analytics.device.collectHint':
+    'Loads a small extra script that reads screen, hardware, graphics card, fonts and similar signals once per session, only on visits with cookies and never with Global Privacy Control. It is a fingerprint: cover it in your cookie banner. Turning it off deletes the signals collected. Off by default.',
+  'analytics.device.cookieless':
+    'The site is cookieless: device signals are never collected.',
+  'analytics.device.rule': 'Match by device and network (7 days)',
+  'analytics.device.ruleHint':
+    'Links a new visitor to the only person seen in the last 7 days with the same device signals on the same network (for example the Instagram browser and Safari on one phone). Networks with more than three visitors on the same device are skipped, and so are visits relayed by your own server without the proxy key (Next.js or Vercel rewrites): they all carry the server address. It is a guess: opt-outs and erasures do not extend to visitors merged this way until both give the same email or phone; an opt-out unlinks them, and every merge can be unlinked below. Off by default.',
+  'analytics.device.empty':
+    'No device signals yet. They arrive with the next visits once collection is on.',
+  'analytics.device.collected': 'Visitors with signals',
+  'analytics.device.devices': 'Distinct devices',
+  'analytics.device.wouldMerge': 'Visits the rule matches',
+  'analytics.device.precision': 'Estimated precision',
+  'analytics.device.precisionValue': '{share} of {n}',
+  'analytics.device.visitors': 'Visitors',
+  'analytics.device.unique': 'Unique',
+  'analytics.device.stable': 'Stable',
+  'analytics.device.hint':
+    'Unique: visitors whose device key no other visitor has. Stable: returning visitors whose key never changed. Precision: matches where both visitors left an email, counted correct when it is the same one. The rule counts matches even while it is off.',
+  'analytics.device.merges': 'Merges by device and network ({n})',
+  'analytics.device.unlink': 'Unlink',
+  'analytics.device.unlinkAll': 'Unlink all',
+  'analytics.device.unlinkAllTitle': 'Unlink every device merge?',
+  'analytics.device.unlinkAllBody':
+    'Each visitor merged by device and network becomes a separate profile again. Automatic merges will not reconnect them.',
+  'analytics.device.unlinked': 'Merges unlinked',
   'analytics.coverage.title': 'Tracking coverage (30 days)',
   'analytics.coverage.empty': 'No sessions in the last 30 days.',
   'analytics.coverage.hint':

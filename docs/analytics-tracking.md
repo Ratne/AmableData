@@ -179,15 +179,62 @@ visitor of each domain, other devices. The store keeps them apart and links them
   identifies too), payments, `he=` landing links and CRM contacts. The clear values never reach
   the store: see [Event pipeline and contact data](#event-pipeline-and-contact-data).
 - `visitor_merges` links a child to an origin with a mechanism (`email`, `phone`, `session`,
-  `manual`). Automatic mechanisms can be switched off per site; the visitor first seen stays the
-  origin. Merges are reversible (`unmergeVisitors`) and an explicit disconnection is respected by
-  later automatic merges. Visitor rows are never rewritten.
+  `ip_ua`, `device_ip`, `manual`). Automatic mechanisms can be switched off per site; the visitor
+  first seen stays the origin. Merges are reversible (`unmergeVisitors`) and an explicit
+  disconnection is respected by later automatic merges. Visitor rows are never rewritten.
 - Queries group by the origin through the recursive `VISITOR_ORIGIN_CTE`, so a merge changes
   journeys and attribution retroactively, including conversions recorded before it.
 - Touches of anonymous visitors expire after 90 days; once the group of a visitor is identified
   (email/phone key or CRM contact) its touches are kept.
 - GDPR: the keys of a deleted visitor go to `identity_blacklist`; future events carrying them are
   dropped and no conversion carrying them is forwarded.
+- `ip_ua` and `device_ip` are guesses, off by default. An opt-out or an erasure does not extend
+  to the other visitor, and an opt-out cuts the link (the other visitor goes on as its own
+  person). Two visitors of one group that gave the same email or phone are one person all the
+  same, where the site merges by that key: they are suppressed together. The identity reprocess
+  never rebuilds a guess.
+
+### Device signals and `device_ip`
+
+- Site setting `device_signals` (off by default, never on a cookieless site). When on, the
+  `GET /e` handshake answers `device: true` and the cookie builds load the module `…-d.js` next
+  to the tracker (`/s-d.js`, or `/<dir>/<name>-d.js` on a neutral path), never with Global Privacy
+  Control, after an opt-out, for bots or where the tracker itself is off. It sends one `device`
+  event per browser session: screen and pixel density, cores, memory, touch points, platform,
+  GPU, languages, system preferences, fonts, canvas and audio hashes, UA client hints. It is a
+  fingerprint: the site owner turns it on and covers it in the cookie banner. A self-hosted copy
+  of the tracker looks for the module next to itself (`<name>-d.js`); one served under a name
+  without `.js` loads none.
+- The edge drops `device` events while the setting is off or on cookieless visits, and so does
+  the site DO when the setting was turned off while an event was on its way (edge cache, queue,
+  replay). The DO keeps the latest signals per visitor (`device_signals`) and the sightings of
+  device key + network (`device_ip_seen`, 14 days). The device key hashes only signals the
+  browsers of one device share (screen, density, colour depth, cores, touch points, platform,
+  GPU, time zone), so an in-app browser and Safari on one phone match; canvas, audio, fonts and
+  the client hints only feed the measurements. The network is a keyed hash of the IPv4 address or
+  the IPv6 /64. The address counts only when the visitor's own is known: the browser says it
+  sent the event straight to this host (`Sec-Fetch-Site`: `cross-site` to the shared host,
+  `same-site` to a tracking domain of the page's site, `same-origin` to the page's own host), or
+  a proxy recipe with the key forwards it. An event relayed by the page's server (rewrite recipes:
+  sent to the page's site, it reaches another host), one without the header (browsers before it,
+  Safari until 16.3; plain-http relays) and a proxy with the key and no usable address carry what
+  may be a server's address, the same for every visitor: the signals are kept, no network is
+  taken and the rule never acts. A proxy that forwards a balancer's address instead of the
+  visitor's (nginx behind a CDN without `real_ip`) cannot be told apart.
+- Rule `device_ip`: a new visitor (first seen within a day) joins the only person seen with the
+  same device key on the same network in the last 7 days; more than three visitors on the pair
+  means a shared network, no merge, and a visitor that opted out is never a match (nobody merges
+  into a tombstone). The match is recorded even while the rule is off, for the
+  measurements (`GET /sites/{id}/device-signals`: visitors with signals, distinct devices,
+  uniqueness and stability per system and browser, matches and precision on visitors known by
+  email). `POST /sites/{id}/device-signals/unmerge` disconnects some or all of its merges.
+- Turning the setting off, or deleting the site, deletes both tables, and the DO keeps nothing
+  that still arrives. An erasure deletes the visitor's rows and the matches pointing at it;
+  visitors forgotten after 13 idle months lose theirs too, and the daily retention drops the
+  sightings past 14 days. The R2 archive (`events/`, `corrections/`, `poison/`) never holds the
+  signals: the `device` event is archived without them. Segments parked because the DO could not
+  apply them carry the full event, like every other event: `wal-pending/` until the replay,
+  `wal-stale/` until someone reconciles it.
 
 ## Attribution models
 
@@ -335,7 +382,7 @@ tracker / server API ──▶ edge ingest ──┬─▶ queue analytics ─�
   contacts that already existed in `crm_identity_hashes` through
   `analytics.backfillIdentityHashes`, called by the sync until it reports `done`.
 - Per-site neutral paths (`/<dir>/<name>` for events and the cookie mode, `/<dir>/<name>.js` for
-  the script) look like landing page paths. The edge takes them only when the directory contains a
+  the script, `-l`, `-h` and `-d` variants included) look like landing page paths. The edge takes them only when the directory contains a
   digit (`SCRIPT_PATH_RE`) and, for the mode `GET`, only with `?site=`; anything else goes on to the
   landing pages, forms and the page catch-all.
 - A customer proxy forwards the visitor IP, host and geo in `x-amb-*` headers, trusted only with the

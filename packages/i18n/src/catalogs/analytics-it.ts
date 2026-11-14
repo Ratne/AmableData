@@ -464,7 +464,35 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.matching.title': 'Abbinamento visitatori',
   'analytics.matching.ipUa': 'Abbina per IP e browser (stesso giorno)',
   'analytics.matching.ipUaHint':
-    'Collega un nuovo visitatore all’unica persona vista nello stesso giorno con stesso IP e user agent (tipicamente cookie cancellati). Le reti condivise (uffici, operatori mobili) vengono escluse. È una stima: due persone sulla stessa rete di casa con lo stesso telefono possono essere unite e la navigazione dell’una finisce sul contatto dell’altra. Opt-out e cancellazioni non si estendono ai visitatori uniti così. Spegnerlo non annulla gli abbinamenti già fatti. Disattivato di default.',
+    'Collega un nuovo visitatore all’unica persona vista nello stesso giorno con stesso IP e user agent (tipicamente cookie cancellati). Le reti condivise (uffici, operatori mobili) vengono escluse. È una stima: due persone sulla stessa rete di casa con lo stesso telefono possono essere unite e la navigazione dell’una finisce sul contatto dell’altra. Opt-out e cancellazioni non si estendono ai visitatori uniti così finché entrambi non lasciano la stessa email o lo stesso telefono; un opt-out li scollega. Spegnerlo non annulla gli abbinamenti già fatti. Disattivato di default.',
+  'analytics.device.title': 'Riconoscimento dispositivi',
+  'analytics.device.collect': 'Raccogli i segnali del dispositivo',
+  'analytics.device.collectHint':
+    'Carica un piccolo script in più che legge schermo, hardware, scheda grafica, font e segnali simili una volta per sessione, solo nelle visite con cookie e mai con Global Privacy Control. È un fingerprint: va coperto dal banner dei cookie. Spegnendolo si cancellano i segnali raccolti. Spento di default.',
+  'analytics.device.cookieless':
+    'Il sito è senza cookie: i segnali del dispositivo non vengono mai raccolti.',
+  'analytics.device.rule': 'Abbina per dispositivo e rete (7 giorni)',
+  'analytics.device.ruleHint':
+    'Collega un visitatore nuovo all’unica persona vista negli ultimi 7 giorni con gli stessi segnali del dispositivo sulla stessa rete (per esempio il browser di Instagram e Safari sullo stesso telefono). Le reti con più di tre visitatori sullo stesso dispositivo vengono saltate, come le visite inoltrate dal tuo server senza la chiave del proxy (rewrite di Next.js o Vercel): portano tutte l’indirizzo del server. È una stima: opt-out e cancellazioni non si estendono ai visitatori uniti così finché entrambi non lasciano la stessa email o lo stesso telefono; un opt-out li scollega, e ogni unione si può scollegare qui sotto. Spento di default.',
+  'analytics.device.empty':
+    'Ancora nessun segnale. Arrivano con le prossime visite, una volta accesa la raccolta.',
+  'analytics.device.collected': 'Visitatori con segnali',
+  'analytics.device.devices': 'Dispositivi distinti',
+  'analytics.device.wouldMerge': 'Visite abbinate dalla regola',
+  'analytics.device.precision': 'Precisione stimata',
+  'analytics.device.precisionValue': '{share} su {n}',
+  'analytics.device.visitors': 'Visitatori',
+  'analytics.device.unique': 'Unici',
+  'analytics.device.stable': 'Stabili',
+  'analytics.device.hint':
+    'Unici: visitatori con una chiave del dispositivo che nessun altro ha. Stabili: visitatori di ritorno la cui chiave non è mai cambiata. Precisione: abbinamenti in cui entrambi i visitatori hanno lasciato un’email, giusti quando è la stessa. La regola conta gli abbinamenti anche da spenta.',
+  'analytics.device.merges': 'Unioni per dispositivo e rete ({n})',
+  'analytics.device.unlink': 'Scollega',
+  'analytics.device.unlinkAll': 'Scollega tutte',
+  'analytics.device.unlinkAllTitle': 'Scollegare tutte le unioni per dispositivo?',
+  'analytics.device.unlinkAllBody':
+    'Ogni visitatore unito per dispositivo e rete torna un profilo separato. Le unioni automatiche non li ricollegheranno.',
+  'analytics.device.unlinked': 'Unioni scollegate',
   'analytics.coverage.title': 'Copertura del tracking (30 giorni)',
   'analytics.coverage.empty': 'Nessuna sessione negli ultimi 30 giorni.',
   'analytics.coverage.hint':

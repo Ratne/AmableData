@@ -10,6 +10,7 @@ import {
   landingEmailHash,
   phoneKeyHash,
   recordIdentity,
+  recordDevice,
   recordIpUa,
   signalsFromEvent,
   visitorForKeys,
@@ -36,6 +37,8 @@ export interface IngestOptions {
   currency: string;
   /** Apply time (dedupe keys expire by it, not by the event time). */
   now?: number;
+  /** Device signals module on for the site: `device` events are skipped otherwise. */
+  deviceSignals?: boolean;
 }
 
 export interface IngestResult {
@@ -536,7 +539,7 @@ function labelOf(db: SqlDb, visitorId: string): string | null {
 function liveEvent(db: SqlDb, e: EnrichedEvent, session: SessionRow | null): RealtimeEvent {
   const host = typeof e.data?.['host'] === 'string' ? e.data['host'] : null;
   return {
-    type: e.type,
+    type: e.type as RealtimeEvent['type'],
     ts: new Date(e.ts).toISOString(),
     visitor_id: e.vid,
     path: e.path,
@@ -560,6 +563,20 @@ function ingestOne(
   out: BatchState,
 ): 'ok' | 'duplicate' | 'skipped' {
   if (!claimEvent(db, e.eid, opts.now ?? Date.now())) return 'duplicate';
+  if (e.type === 'device') {
+    // Off (or turned off while the event was on its way: edge cache, queue, replay): nothing is kept.
+    if (opts.deviceSignals !== true) return 'skipped';
+    if (e.deviceSighting == null || e.vid === '') return 'skipped';
+    const known = first<{ n: number }>(db, `SELECT 1 AS n FROM visitors WHERE id = ?`, e.vid);
+    if (known === undefined) return 'skipped';
+    recordDevice(
+      db,
+      e.vid,
+      { ...e.deviceSighting, browser: e.browser, os: e.os },
+      opts.now ?? Date.now(),
+    );
+    return 'ok';
+  }
   const signals = signalsFromEvent(e);
   const keys = signals === null ? [] : identityKeyRefs(signals);
   // GDPR: events carrying a blacklisted email/phone are dropped.

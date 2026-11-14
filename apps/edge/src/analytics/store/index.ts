@@ -6,10 +6,12 @@ import {
   type ConversionReportQuery,
   type ConversionRule,
   type CreateConversionRuleInput,
+  type DeviceSignalsReport,
   type UpdateConversionRuleInput,
 } from '@amable/api-types';
 import { runPurgeJob } from '../purge';
 import * as conversionRules from './conversion-rules';
+import * as device from './device';
 import { conversionReport } from './reports-conversions';
 import {
   dropSuppressed,
@@ -364,7 +366,11 @@ export class AnalyticsStore {
     const kept = dropSuppressed(this.db, events, this.now());
     const fresh = kept.filter((e) => e.ts >= floor);
     const late = events.filter((e) => e.ts < floor).map((e) => e.eid);
-    const opts = { currency: site.site.currency, now: this.now() };
+    const opts = {
+      currency: site.site.currency,
+      now: this.now(),
+      deviceSignals: !site.deleted && site.site.device_signals && !site.site.cookieless,
+    };
     let result: IngestResult;
     try {
       result = ingestBatch(this.db, fresh, bots, opts);
@@ -1296,6 +1302,15 @@ export class AnalyticsStore {
     if (!body.ok) return body;
     return { ok: true, value: identity.setMergeSettings(this.db, body.value) };
   }
+  deviceSignalsReport(): DeviceSignalsReport {
+    return device.deviceSignalsReport(this.db);
+  }
+  /** Disconnects `device_ip` merges: the given children, or all with `null`. */
+  unmergeDeviceMerges(childVisitorIds: readonly string[] | null): number {
+    return this.db.transaction(() =>
+      device.unmergeDeviceMerges(this.db, childVisitorIds, this.now()),
+    );
+  }
   /** GDPR: future events carrying the email/phone keys of the visitor's group are dropped. */
   blacklistVisitorKeys(visitorId: string): number {
     return this.db.transaction(() => identity.blacklistVisitorKeys(this.db, visitorId, this.now()));
@@ -1460,6 +1475,7 @@ export class AnalyticsStore {
       );
     }
     identity.flagMergedTouchesIdentified(this.db);
+    identity.pruneDeviceSightings(this.db, this.now());
     return { ...result, ...(await touches.purgeTouches(this.db, sink, site.site.id, this.now())) };
   }
 

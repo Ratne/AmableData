@@ -23,6 +23,8 @@ export const ANALYTICS_EVENT_TYPES = [
   'identify',
   'payment',
   'external_link',
+  /** Device signals (screen, hardware, GPU, fonts, canvas…) of the optional module. */
+  'device',
 ] as const;
 export type AnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number];
 
@@ -245,6 +247,8 @@ export const siteSchema = z.object({
   attribution_model: z.enum(ATTRIBUTION_MODELS),
   /** Neutral tracker path `<dir>/<name>` (script `/<dir>/<name>.js`, events `/<dir>/<name>`). */
   script_path: z.string(),
+  /** Device signals module of the pixel (off by default; never on cookieless visits). */
+  device_signals: z.boolean().default(false),
   has_secret: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -276,6 +280,7 @@ export const updateSiteSchema = z.strictObject({
     .string()
     .regex(/^[a-z0-9]{6,16}\/[a-z0-9]{2,16}$/)
     .optional(),
+  device_signals: z.boolean().optional(),
 });
 export type UpdateSiteInput = z.infer<typeof updateSiteSchema>;
 

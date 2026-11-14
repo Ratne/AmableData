@@ -10,7 +10,12 @@ import { ErrorState, Fact, Panel, PulseDot, Segmented, StatusPill } from '../com
 import { useFormatters, useNow } from '../lib/format';
 import { CopyButton } from '../../../components/feature-kit';
 import { LinkBuilderPanel } from './link-builder';
-import { IdentityMatchingPanel, ScriptPathPanel, TrackingCoveragePanel } from './tracking-advanced';
+import {
+  DeviceRecognitionPanel,
+  IdentityMatchingPanel,
+  ScriptPathPanel,
+  TrackingCoveragePanel,
+} from './tracking-advanced';
 
 type Variant = 'recommended' | 'default' | 'cookieless' | 'hash';
 type Runtime = 'worker' | 'node' | 'php';
@@ -137,6 +142,7 @@ export function TrackingTab({
       <ScriptPathPanel tenant={tenant} site={site} snippet={snippet.data} />
       <LinkBuilderPanel site={site} />
       <IdentityMatchingPanel tenant={tenant} site={site} />
+      <DeviceRecognitionPanel tenant={tenant} site={site} />
       <TrackingCoveragePanel tenant={tenant} site={site} onSetupDomain={onSetupDomain} />
       <Panel
         title={t('analytics.tracking.crawlers')}

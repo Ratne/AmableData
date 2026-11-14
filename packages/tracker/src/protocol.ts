@@ -1,5 +1,5 @@
 /** Event types of the tracker protocol (v1). */
-export type EventType = 'pageview' | 'goal' | 'identify' | 'payment' | 'external_link';
+export type EventType = 'pageview' | 'goal' | 'identify' | 'payment' | 'external_link' | 'device';
 
 /** Ad-platform click ids captured from the landing URL. */
 export const CLICK_ID_PARAMS = [

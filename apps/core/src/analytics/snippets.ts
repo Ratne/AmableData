@@ -151,9 +151,9 @@ location /${dir}/ {
   proxy_set_header Host ${edgeHost};
   proxy_ssl_server_name on;
   proxy_set_header Cookie $amb_cookie;
-  proxy_set_header X-SA-Proxy-Key "${key}";
-  proxy_set_header X-SA-Forwarded-For $remote_addr;
-  proxy_set_header X-SA-Forwarded-Host $host;
+  proxy_set_header X-Amb-Proxy-Key "${key}";
+  proxy_set_header X-Amb-Forwarded-For $remote_addr;
+  proxy_set_header X-Amb-Forwarded-Host $host;
 }
 
 # Page tag: <script defer data-site="…" src="${script}"></script>

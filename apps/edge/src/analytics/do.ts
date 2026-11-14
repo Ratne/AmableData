@@ -132,7 +132,7 @@ import type {
   FunnelStepInput,
   FunnelStepResult,
 } from './store/funnel-sessions';
-import type { VisitorMerge } from '@amable/api-types';
+import type { DeviceSignalsReport, VisitorMerge } from '@amable/api-types';
 import type { FunnelVisitorLink } from './store/identity';
 import { DAY_MS } from './time';
 import type { BotHit, EnrichedEvent } from './types';
@@ -730,6 +730,12 @@ export class AnalyticsDO extends DurableObject<Env> {
     patch: Partial<IdentityMergeSettings>,
   ): AnalyticsResult<IdentityMergeSettings> {
     return this.store.updateIdentitySettings(patch);
+  }
+  deviceSignalsReport(): DeviceSignalsReport {
+    return this.store.deviceSignalsReport();
+  }
+  unmergeDeviceMerges(childVisitorIds: string[] | null): number {
+    return this.store.unmergeDeviceMerges(childVisitorIds);
   }
   blacklistVisitorKeys(visitorId: string): number {
     return this.store.blacklistVisitorKeys(visitorId);

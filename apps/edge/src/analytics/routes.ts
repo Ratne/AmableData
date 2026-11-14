@@ -119,6 +119,29 @@ async function trustedProxy(c: AppContext, siteId: string): Promise<TrustedProxy
   };
 }
 
+/**
+ * True when the browser itself sent the request to this host, by what it says
+ * of the target (`Sec-Fetch-Site`): another site (shared host), a host of the
+ * page's site (tracking domain) or the page's own host. Anything else came
+ * through a server on the way (rewrite recipes without the proxy key: the
+ * browser sent it to the page's site, yet it reaches another host) or says
+ * nothing (browsers before the header, plain-http relays): the connecting
+ * address may then be a server's, the same for every visitor.
+ */
+function deliveredByBrowser(c: AppContext, originHost: string): boolean {
+  const host = new URL(c.req.url).hostname.toLowerCase();
+  switch (c.req.header('sec-fetch-site')) {
+    case 'cross-site':
+      return true;
+    case 'same-site':
+      return originHost === host || sharedCookieDomain(originHost, host) !== null;
+    case 'same-origin':
+      return originHost === host;
+    default:
+      return false;
+  }
+}
+
 /** Applies a trusted proxy to the request context (visitor IP and location). */
 function applyProxy(ctx: RequestContext, proxy: TrustedProxy): void {
   if (proxy.ip !== null) ctx.ip = proxy.ip;
@@ -143,10 +166,11 @@ function proxyCookieDomain(host: string): string | null {
 
 /**
  * Neutral per-site paths (`SCRIPT_PATH_RE` of api-types): `/<dir>/<name>` takes
- * the events and site mode, `/<dir>/<name>.js` (`-l` cookieless, `-h` hash) the script.
+ * the events and site mode, `/<dir>/<name>.js` (`-l` cookieless, `-h` hash,
+ * `-d` device signals module) the script.
  */
 export const NEUTRAL_EVENT_PATH = '/:dir{[a-z0-9]{6,16}}/:name{[a-z0-9]{2,16}}';
-const NEUTRAL_SCRIPT_PATH = '/:dir{[a-z0-9]{6,16}}/:file{[a-z0-9]{2,16}(?:-[lh])?\\.js}';
+const NEUTRAL_SCRIPT_PATH = '/:dir{[a-z0-9]{6,16}}/:file{[a-z0-9]{2,16}(?:-[lhd])?\\.js}';
 
 /**
  * The neutral patterns also match landing page paths served by the catch-all
@@ -156,7 +180,7 @@ const NEUTRAL_SCRIPT_PATH = '/:dir{[a-z0-9]{6,16}}/:file{[a-z0-9]{2,16}(?:-[lh])
 const neutralOnly =
   (handler: (c: AppContext) => Response | Promise<Response>, needsSite = false) =>
   (c: AppContext, next: Next) => {
-    const name = (c.req.param('name') ?? c.req.param('file') ?? '').replace(/(?:-[lh])?\.js$/, '');
+    const name = (c.req.param('name') ?? c.req.param('file') ?? '').replace(/(?:-[lhd])?\.js$/, '');
     if (!SCRIPT_PATH_RE.test(`${c.req.param('dir') ?? ''}/${name}`)) return next();
     if (needsSite && c.req.query('site') === undefined) return next();
     return handler(c);
@@ -209,21 +233,33 @@ const siteMode = async (c: AppContext) => {
           : sharedCookieDomain(originHost, proxy.host)
         : sharedCookieDomain(originHost, new URL(c.req.url).hostname);
   if (domain === null || origin === undefined) {
-    return c.json({ cookieless: site.cookieless }, 200, {
-      ...headers,
-      'cache-control': 'public, max-age=300',
-    });
+    return c.json(
+      { cookieless: site.cookieless, ...(site.deviceSignals === true ? { device: true } : {}) },
+      200,
+      {
+        ...headers,
+        'cache-control': 'public, max-age=300',
+      },
+    );
   }
   // Tracking domain of the site: the visitor id also lives in a cookie set by
   // this response (kept longer than script cookies by some browsers).
   const stored = visitorIdOf(cookieOf(c.req.header('cookie'), VISITOR_COOKIE));
   const vid = visitorIdOf(c.req.query('vid')) ?? stored;
-  const res = c.json({ cookieless: false, ...(stored === null ? {} : { vid: stored }) }, 200, {
-    'access-control-allow-origin': origin,
-    'access-control-allow-credentials': 'true',
-    vary: 'Origin, Cookie',
-    'cache-control': 'private, no-store',
-  });
+  const res = c.json(
+    {
+      cookieless: false,
+      ...(stored === null ? {} : { vid: stored }),
+      ...(site.deviceSignals === true ? { device: true } : {}),
+    },
+    200,
+    {
+      'access-control-allow-origin': origin,
+      'access-control-allow-credentials': 'true',
+      vary: 'Origin, Cookie',
+      'cache-control': 'private, no-store',
+    },
+  );
   if (vid !== null) {
     res.headers.append(
       'set-cookie',
@@ -295,6 +331,7 @@ const browserIngest = async (c: AppContext) => {
 
   const proxy = await trustedProxy(c, site.siteId);
   if (proxy !== null) applyProxy(ctx, proxy);
+  ctx.relayed = proxy === null ? !deliveredByBrowser(c, originHost) : proxy.ip === null;
   const bot = detectBot(ctx.userAgent);
   if (bot !== null) {
     const hit: BotHit = {
@@ -407,6 +444,7 @@ const SCRIPT_ROUTES: ReadonlyArray<[path: string, variant: TrackerVariant]> = [
   ['/s.js', 'default'],
   ['/s.cookieless.js', 'cookieless'],
   ['/s.hash.js', 'hash'],
+  ['/s-d.js', 'device'],
 ];
 
 function serveScript(c: AppContext, variant: TrackerVariant): Response {
@@ -434,7 +472,13 @@ analyticsRoutes.get(
     const file = c.req.param('file') ?? '';
     return serveScript(
       c,
-      file.endsWith('-l.js') ? 'cookieless' : file.endsWith('-h.js') ? 'hash' : 'default',
+      file.endsWith('-l.js')
+        ? 'cookieless'
+        : file.endsWith('-h.js')
+          ? 'hash'
+          : file.endsWith('-d.js')
+            ? 'device'
+            : 'default',
     );
   }),
 );

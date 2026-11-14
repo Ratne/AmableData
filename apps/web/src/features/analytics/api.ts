@@ -14,6 +14,8 @@ import type {
   AttributionModel,
   AttributionReport,
   BotsReport,
+  DeviceSignalsReport,
+  DeviceUnmergeInput,
   IdentityMergeSettingsBody,
   TrackingCoverageReport,
   ContactJourney,
@@ -507,6 +509,8 @@ export const useInstallCheck = (tenant: string, siteId: string | null) =>
   useSiteSub<InstallCheck>(tenant, siteId, 'install-check');
 export const useIdentitySettings = (tenant: string, siteId: string | null) =>
   useSiteSub<IdentityMergeSettingsBody>(tenant, siteId, 'identity-settings');
+export const useDeviceSignals = (tenant: string, siteId: string | null) =>
+  useSiteSub<DeviceSignalsReport>(tenant, siteId, 'device-signals');
 export const useCrawlerSnippets = (tenant: string, siteId: string | null) =>
   useSiteSub<CrawlerSnippets>(tenant, siteId, 'crawler-snippets');
 export const useSiteKeys = (tenant: string, siteId: string | null) =>
@@ -539,6 +543,11 @@ export function analyticsApi(tenant: string) {
         request<IdentityMergeSettingsBody>(
           `${base}/sites/${enc(id)}/identity-settings`,
           patch(input),
+        ),
+      unmergeDevices: (id: string, input: DeviceUnmergeInput) =>
+        request<{ unmerged: number }>(
+          `${base}/sites/${enc(id)}/device-signals/unmerge`,
+          post(input),
         ),
       rollSecret: (id: string) =>
         request<{ secret: string }>(`${base}/sites/${enc(id)}/secret`, post()),

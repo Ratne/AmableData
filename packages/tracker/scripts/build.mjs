@@ -1,4 +1,4 @@
-// Builds the three tracker variants (IIFE, minified) and writes them as string
+// Builds the three tracker variants and the device module (IIFE, minified) and writes them as string
 // constants to generated/bundles.ts, which apps/edge serves from memory.
 import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -8,7 +8,8 @@ import { build } from 'esbuild';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-export const VARIANTS = ['default', 'cookieless', 'hash'];
+/** `device`: the device signals module loaded by the cookie builds on request. */
+export const VARIANTS = ['default', 'cookieless', 'hash', 'device'];
 
 /** @returns {Promise<Record<string, string>>} */
 export async function buildBundles() {

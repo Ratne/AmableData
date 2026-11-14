@@ -68,7 +68,10 @@ describe('analytics sites', () => {
     expect(snippet['html']).toMatch(/src="https:\/\/t\.acme\.test\/[a-z0-9]{8}\/[a-z]+\.js"/);
     const proxy = res.body['snippet'] as unknown as { proxy: Record<string, string> };
     expect(proxy.proxy['path']).toMatch(/^\/[a-z0-9]{8}\/$/);
-    expect(proxy.proxy['nginx']).toContain('X-SA-Forwarded-For');
+    // Both recipes send the headers the edge reads.
+    for (const recipe of ['cloudflare', 'nginx'])
+      for (const header of ['x-amb-proxy-key', 'x-amb-forwarded-for', 'x-amb-forwarded-host'])
+        expect(proxy.proxy[recipe]?.toLowerCase()).toContain(header);
     expect(snippet['html']).toContain('window.amable');
     expect(snippet['server_endpoint']).toBe('https://t.acme.test/e/server');
   });
@@ -91,7 +94,13 @@ describe('analytics sites', () => {
 
   it('reads and toggles the identity merge mechanisms, ip_ua off by default', async () => {
     const read = await viewer.get(`${BASE}/sites/${siteId}/identity-settings`);
-    expect(read.body).toEqual({ email: true, phone: true, session: true, ip_ua: false });
+    expect(read.body).toEqual({
+      email: true,
+      phone: true,
+      session: true,
+      ip_ua: false,
+      device_ip: false,
+    });
     expect(
       (await viewer.patch(`${BASE}/sites/${siteId}/identity-settings`, { ip_ua: true })).status,
     ).toBe(403);
@@ -105,6 +114,17 @@ describe('analytics sites', () => {
     expect((await owner.patch(`${BASE}/sites/${siteId}`, { script_path: '../x' })).status).toBe(
       422,
     );
+  });
+
+  it('turns the device signals module on and reads its report; only configure can unmerge', async () => {
+    const site = await owner.patch(`${BASE}/sites/${siteId}`, { device_signals: true });
+    expect(site.body['device_signals']).toBe(true);
+    const report = await viewer.get(`${BASE}/sites/${siteId}/device-signals`);
+    expect(report.body).toMatchObject({ collected: 0, would_merge: 0, merges: [], merged: 0 });
+    const unmerge = `${BASE}/sites/${siteId}/device-signals/unmerge`;
+    expect((await viewer.post(unmerge, { all: true })).status).toBe(403);
+    expect((await owner.post(unmerge, {})).status).toBe(422);
+    expect((await owner.post(unmerge, { all: true })).body).toEqual({ unmerged: 0 });
   });
 
   it('lists, reads, updates, rolls the secret and serves the snippet', async () => {

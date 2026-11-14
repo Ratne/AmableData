@@ -443,6 +443,8 @@ describe('bundles', () => {
     const bundles = await buildBundles();
     const onDisk = readFileSync(join(import.meta.dirname, '../generated/bundles.ts'), 'utf8');
     expect(onDisk, 'run `pnpm --filter @amable/tracker build`').toBe(renderModule(bundles));
+    // The device signals module loads on its own, only where the site turned it on.
+    expect(gzipSync(bundles.device ?? '').length).toBeLessThan(2048);
     for (const code of Object.values(bundles)) {
       // 6 KB, plus the acked transport with its offline buffer, plus the extended form
       // capture (twelve kinds in six languages, form_submit, payload, hidden fields) 2 KB,

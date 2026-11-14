@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import type { EventPayload } from '../src/protocol';
-import { boot } from '../src/tracker';
+import { boot, deviceScriptUrl } from '../src/tracker';
 import { cookieMap } from './helpers';
 
 function page(
@@ -125,5 +125,79 @@ describe('neutral script path', () => {
     const p = page(json({ cookieless: false }), [], 'https://www.example.com/static/sa.js');
     await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
     expect(p.lookups[0]).toMatch(/^https:\/\/www\.example\.com\/e\?/);
+  });
+});
+
+describe('device signals module', () => {
+  const scripts = (win: Window) =>
+    [...win.document.querySelectorAll('script')].map((s) => s.src).slice(1);
+
+  it('loads next to the tracker only when the edge says the site turned it on', async () => {
+    const on = page(
+      json({ cookieless: false, device: true }),
+      [],
+      'https://t.example.com/k3x9ab2q/app-h.js',
+    );
+    await boot(on.win, { cookieless: false, hashRouting: true }, on.transport);
+    expect(scripts(on.win)).toEqual(['https://t.example.com/k3x9ab2q/app-d.js']);
+
+    for (const answer of [json({ cookieless: false }), json({ cookieless: true, device: true })]) {
+      const off = page(answer);
+      await boot(off.win, { cookieless: false, hashRouting: false }, off.transport);
+      expect(scripts(off.win)).toEqual([]);
+    }
+  });
+
+  it('never loads with Global Privacy Control', async () => {
+    const p = page(json({ cookieless: false, device: true }));
+    Object.defineProperty(p.win.navigator, 'globalPrivacyControl', { value: true });
+    await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+    expect(scripts(p.win)).toEqual([]);
+  });
+
+  it('loads nothing when the tracker has no .js name to derive the module from', async () => {
+    for (const src of [
+      'https://www.example.com/assets/tracker',
+      'https://www.example.com/assets/tracker.mjs',
+      'https://www.example.com/wp-json/acme/t.php',
+      // `.js` in the query or the fragment names no file.
+      'https://www.example.com/index.php?route=tracker.js',
+      'https://www.example.com/assets/tracker#v.js',
+    ]) {
+      expect(deviceScriptUrl(src)).toBeNull();
+      const p = page(json({ cookieless: false, device: true }), [], src);
+      await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+      // Loading the same URL again would run the tracker twice and silence it.
+      expect(scripts(p.win)).toEqual([]);
+      (p.win as unknown as { amable: (...a: unknown[]) => void }).amable('goal', 'signup');
+      expect(p.sent.map((e) => e.type)).toEqual(['pageview', 'goal']);
+    }
+  });
+
+  it('loads nothing where the tracker itself is off (localhost)', async () => {
+    const dom = new JSDOM(
+      `<!doctype html><html><head><script data-site="site_test" src="http://localhost:8788/s.js"></script></head><body></body></html>`,
+      { url: 'http://localhost:3000/pricing', pretendToBeVisual: true },
+    );
+    const win = dom.window as unknown as Window;
+    Object.assign(win, { fetch: json({ cookieless: false, device: true }) });
+    await boot(win, { cookieless: false, hashRouting: false }, () => undefined);
+    expect(scripts(win)).toEqual([]);
+  });
+
+  it('maps every script name to the module and sends at most 20 signals', async () => {
+    expect(deviceScriptUrl('https://t.example.com/s.js')).toBe('https://t.example.com/s-d.js');
+    expect(deviceScriptUrl('https://t.example.com/s.hash.js?v=2')).toBe(
+      'https://t.example.com/s-d.js?v=2',
+    );
+    expect(deviceScriptUrl('https://t.example.com/k3x9ab2q/app.js')).toBe(
+      'https://t.example.com/k3x9ab2q/app-d.js',
+    );
+    const p = page(json({ cookieless: false, device: true }));
+    await boot(p.win, { cookieless: false, hashRouting: false }, p.transport);
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`k${i}`, i]));
+    (p.win as unknown as { amable: (...a: unknown[]) => void }).amable('device', many);
+    const device = p.sent.find((e) => e.type === 'device');
+    expect(Object.keys(device?.data ?? {})).toHaveLength(20);
   });
 });

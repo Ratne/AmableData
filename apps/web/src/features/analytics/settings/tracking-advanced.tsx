@@ -8,6 +8,7 @@ import {
   analyticsApi,
   analyticsKeys,
   useAnalyticsMutation,
+  useDeviceSignals,
   useIdentitySettings,
   useTrackingCoverage,
 } from '../api';
@@ -124,6 +125,183 @@ export function IdentityMatchingPanel({ tenant, site }: { tenant: string; site: 
 }
 
 const pct = (part: number, whole: number) => (whole === 0 ? 0 : part / whole);
+
+/**
+ * Device signals module and the `device_ip` rule (both off by default): what the
+ * signals collected so far say, and the merges of the rule with "Unlink".
+ */
+export function DeviceRecognitionPanel({ tenant, site }: { tenant: string; site: Site }) {
+  const { t } = useI18n();
+  const f = useFormatters();
+  const [confirmAll, setConfirmAll] = useState(false);
+  const settings = useIdentitySettings(tenant, site.id);
+  const report = useDeviceSignals(tenant, site.id);
+  const reportKey = analyticsKeys.site(tenant, site.id, 'device-signals');
+  const collect = useAnalyticsMutation(tenant, (on: boolean) =>
+    analyticsApi(tenant).sites.update(site.id, { device_signals: on }),
+  );
+  const rule = useAnalyticsMutation(
+    tenant,
+    (on: boolean) => analyticsApi(tenant).sites.updateIdentitySettings(site.id, { device_ip: on }),
+    { invalidate: [analyticsKeys.site(tenant, site.id, 'identity-settings')] },
+  );
+  const unmerge = useAnalyticsMutation(
+    tenant,
+    (ids: string[] | null) =>
+      analyticsApi(tenant).sites.unmergeDevices(
+        site.id,
+        ids === null ? { all: true } : { child_visitor_ids: ids },
+      ),
+    { invalidate: [reportKey], success: 'analytics.device.unlinked' },
+  );
+  const data = report.data;
+  const short = (id: string) => (id.length > 13 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id);
+  return (
+    <Panel title={t('analytics.device.title')}>
+      <div className="flex flex-col gap-3">
+        {site.cookieless ? (
+          <p className="text-xs text-muted-foreground">{t('analytics.device.cookieless')}</p>
+        ) : (
+          <SwitchRow
+            label={t('analytics.device.collect')}
+            hint={t('analytics.device.collectHint')}
+            checked={site.device_signals}
+            onChange={(checked) => collect.mutate(checked)}
+          />
+        )}
+        {settings.data ? (
+          <SwitchRow
+            label={t('analytics.device.rule')}
+            hint={t('analytics.device.ruleHint')}
+            checked={settings.data.device_ip}
+            onChange={(checked) => rule.mutate(checked)}
+          />
+        ) : null}
+        {report.error ? (
+          <ErrorState error={report.error} />
+        ) : !data ? (
+          <Skeleton className="h-20 w-full" />
+        ) : data.collected === 0 ? (
+          <EmptyNote>{t('analytics.device.empty')}</EmptyNote>
+        ) : (
+          <>
+            <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+              {(
+                [
+                  ['collected', f.number(data.collected)],
+                  ['devices', f.number(data.devices)],
+                  ['wouldMerge', f.number(data.would_merge)],
+                  [
+                    'precision',
+                    data.precision.checked === 0
+                      ? '—'
+                      : t('analytics.device.precisionValue', {
+                          share: f.percent(pct(data.precision.correct, data.precision.checked)),
+                          n: f.number(data.precision.checked),
+                        }),
+                  ],
+                ] as const
+              ).map(([key, value]) => (
+                <div key={key} className="rounded-md border border-border/60 px-2 py-1.5">
+                  <dt className="text-muted-foreground">{t(`analytics.device.${key}`)}</dt>
+                  <dd className="font-medium tabular-nums">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-left text-muted-foreground">
+                  <tr>
+                    <th className="py-1 pr-3 font-medium">{t('analytics.dim.os')}</th>
+                    <th className="py-1 pr-3 font-medium">{t('analytics.dim.browser')}</th>
+                    <th className="py-1 pr-3 text-right font-medium">
+                      {t('analytics.device.visitors')}
+                    </th>
+                    <th className="py-1 pr-3 text-right font-medium">
+                      {t('analytics.device.unique')}
+                    </th>
+                    <th className="py-1 text-right font-medium">{t('analytics.device.stable')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.groups.map((g) => (
+                    <tr key={`${g.os}:${g.browser}`} className="border-t border-border/60">
+                      <td className="py-1 pr-3">{g.os ?? '—'}</td>
+                      <td className="py-1 pr-3">{g.browser ?? '—'}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums">{f.number(g.visitors)}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums">
+                        {f.percent(g.unique_share)}
+                      </td>
+                      <td className="py-1 text-right tabular-nums">
+                        {g.stable_share === null ? '—' : f.percent(g.stable_share)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">{t('analytics.device.hint')}</p>
+          </>
+        )}
+        {data && data.merged > 0 ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-medium">
+                {t('analytics.device.merges', { n: f.number(data.merged) })}
+              </span>
+              <DashboardButton
+                variant="secondary"
+                onClick={() => setConfirmAll(true)}
+                disabled={unmerge.isPending}
+              >
+                {t('analytics.device.unlinkAll')}
+              </DashboardButton>
+            </div>
+            <ul className="flex flex-col divide-y divide-border/60 text-xs">
+              {data.merges.map((m) => (
+                <li
+                  key={m.child_visitor_id}
+                  className="flex flex-wrap items-center justify-between gap-2 py-1"
+                >
+                  <span
+                    className="font-mono"
+                    title={`${m.child_visitor_id} → ${m.origin_visitor_id}`}
+                  >
+                    {short(m.child_visitor_id)} → {short(m.origin_visitor_id)}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-muted-foreground">
+                      {f.dateTime(new Date(m.created_at).toISOString())}
+                    </span>
+                    <DashboardButton
+                      variant="ghost"
+                      onClick={() => unmerge.mutate([m.child_visitor_id])}
+                      disabled={unmerge.isPending}
+                    >
+                      {t('analytics.device.unlink')}
+                    </DashboardButton>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+      <DashboardConfirmDialog
+        open={confirmAll}
+        onOpenChange={setConfirmAll}
+        title={t('analytics.device.unlinkAllTitle')}
+        description={t('analytics.device.unlinkAllBody')}
+        confirmLabel={t('analytics.device.unlinkAll')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => {
+          unmerge.mutate(null);
+          setConfirmAll(false);
+        }}
+      />
+    </Panel>
+  );
+}
 
 /** Above this share of shared-host sessions the panel suggests a tracking domain. */
 const SHARED_HOST_ALERT = 0.2;

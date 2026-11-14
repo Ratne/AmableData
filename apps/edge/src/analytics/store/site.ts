@@ -23,6 +23,7 @@ interface SiteRow {
   retention_days: number;
   attribution_model: string;
   script_path: string | null;
+  device_signals: number;
   secret_hash: string | null;
   last_event_at: number | null;
   last_event_url: string | null;
@@ -68,6 +69,7 @@ function toRecord(row: SiteRow): SiteRecord {
       retention_days: row.retention_days,
       attribution_model: toModel(row.attribution_model),
       script_path: row.script_path ?? defaultScriptPath(row.site_id),
+      device_signals: row.device_signals === 1,
       has_secret: row.secret_hash !== null,
       created_at: new Date(row.created_at).toISOString(),
       updated_at: new Date(row.updated_at).toISOString(),
@@ -127,7 +129,8 @@ export function updateSite(db: SqlDb, patch: UpdateSiteInput, now: number): Site
   const s = current.site;
   db.run(
     `UPDATE site_config SET name = ?, hostnames = ?, cookieless = ?, allow_localhost = ?, timezone = ?,
-       currency = ?, retention_days = ?, attribution_model = ?, script_path = ?, updated_at = ? WHERE id = 1`,
+       currency = ?, retention_days = ?, attribution_model = ?, script_path = ?, device_signals = ?,
+       updated_at = ? WHERE id = 1`,
     patch.name ?? s.name,
     JSON.stringify(patch.hostnames ?? s.hostnames),
     (patch.cookieless ?? s.cookieless) ? 1 : 0,
@@ -137,8 +140,14 @@ export function updateSite(db: SqlDb, patch: UpdateSiteInput, now: number): Site
     patch.retention_days ?? s.retention_days,
     patch.attribution_model ?? s.attribution_model,
     patch.script_path ?? s.script_path,
+    (patch.device_signals ?? s.device_signals) ? 1 : 0,
     now,
   );
+  if (patch.device_signals === false || patch.cookieless === true) {
+    // Module off (or cookieless): the device signals and sightings go with it.
+    db.run(`DELETE FROM device_signals`);
+    db.run(`DELETE FROM device_ip_seen`);
+  }
   if (patch.timezone !== undefined && patch.timezone !== s.timezone) {
     // Daily rollups are keyed by local day: rebuild the days still covered by raw data.
     db.run(
@@ -161,6 +170,9 @@ export function deleteSite(db: SqlDb, now: number): boolean {
   const current = getSiteRecord(db);
   if (current === null || current.deleted) return false;
   db.run(`UPDATE site_config SET deleted_at = ?, updated_at = ? WHERE id = 1`, now, now);
+  // Nothing is collected any more: the device signals go at once, like with the module turned off.
+  db.run(`DELETE FROM device_signals`);
+  db.run(`DELETE FROM device_ip_seen`);
   return true;
 }
 
@@ -184,6 +196,7 @@ export function edgeConfig(db: SqlDb, now: number): EdgeSiteConfig | null {
     tenantId: record.tenantId,
     hostnames: record.site.hostnames,
     cookieless: record.site.cookieless,
+    deviceSignals: record.site.device_signals && !record.site.cookieless,
     allowLocalhost: record.site.allow_localhost,
     currency: record.site.currency,
     retentionDays: record.site.retention_days,

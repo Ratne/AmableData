@@ -389,16 +389,19 @@ export function signalsFromEvent(e: EnrichedEvent): IdentitySignals | null {
 
 // ------------------------------------------------------------ merge settings
 
-const IDENTITY_MERGE_MECHANISMS = ['email', 'phone', 'session', 'ip_ua'] as const;
+const IDENTITY_MERGE_MECHANISMS = ['email', 'phone', 'session', 'ip_ua', 'device_ip'] as const;
+/** Probabilistic matches: never propagated (erasure, opt-out) nor rebuilt by the reprocess. */
+const GUESS_MECHANISMS = ['ip_ua', 'device_ip'] as const;
 type AutoMergeMechanism = (typeof IDENTITY_MERGE_MECHANISMS)[number];
 export type IdentityMergeSettings = Record<AutoMergeMechanism, boolean>;
 
-/** `ip_ua` is a probabilistic match: off until the workspace opts in. */
+/** `ip_ua` and `device_ip` are probabilistic matches: off until the workspace opts in. */
 const DEFAULT_MERGE_SETTINGS: IdentityMergeSettings = {
   email: true,
   phone: true,
   session: true,
   ip_ua: false,
+  device_ip: false,
 };
 
 export { identityMergeSettingsPatchSchema };
@@ -717,6 +720,112 @@ export function recordIpUa(
   return merge;
 }
 
+const DEVICE_IP_WINDOW_MS = 7 * 86_400_000;
+/** More visitors than this seen with the same device key + network: shared network, no merge. */
+const DEVICE_IP_SHARED_THRESHOLD = 3;
+/** A visitor first seen longer ago than this is not new (the module turned on later). */
+const DEVICE_NEW_VISITOR_MS = 86_400_000;
+
+/** Sightings past twice the window: dropped by every device event and by the daily retention. */
+export function pruneDeviceSightings(db: SqlDb, now: number): void {
+  db.run(`DELETE FROM device_ip_seen WHERE last_seen < ?`, now - 2 * DEVICE_IP_WINDOW_MS);
+}
+
+function anySuppressed(db: SqlDb, visitorIds: readonly string[]): boolean {
+  return (
+    first<{ n: number }>(
+      db,
+      `SELECT 1 AS n FROM suppressed_visitors WHERE vid IN (SELECT value FROM json_each(?)) LIMIT 1`,
+      JSON.stringify(visitorIds),
+    ) !== undefined
+  );
+}
+
+/**
+ * Device signals of a cookie visitor (module on): keeps the latest set and the
+ * device key + network sighting, and records the person the `device_ip` rule
+ * matches for a new visitor — the only person seen with that pair in the last
+ * 7 days, with at most three visitors on it — so the rule can be measured
+ * before it is turned on. With `device_ip` on, the visitor is merged into it.
+ */
+export function recordDevice(
+  db: SqlDb,
+  visitorId: string,
+  device: {
+    key: string;
+    net: string | null;
+    signals: string;
+    browser: string | null;
+    os: string | null;
+  },
+  now: number,
+): VisitorMerge | null {
+  const visitor = first<{ first_seen: number }>(
+    db,
+    `SELECT first_seen FROM visitors WHERE id = ?`,
+    visitorId,
+  );
+  if (visitor === undefined) return null;
+  const known =
+    first<{ n: number }>(
+      db,
+      `SELECT 1 AS n FROM device_signals WHERE visitor_id = ?`,
+      visitorId,
+    ) !== undefined;
+  pruneDeviceSightings(db, now);
+  let candidate: string | null = null;
+  if (!known && device.net !== null && visitor.first_seen >= now - DEVICE_NEW_VISITOR_MS) {
+    const others = db.all<{ visitor_id: string }>(
+      `SELECT DISTINCT visitor_id FROM device_ip_seen
+       WHERE device_key = ? AND net = ? AND visitor_id != ? AND last_seen >= ? LIMIT 20`,
+      device.key,
+      device.net,
+      visitorId,
+      now - DEVICE_IP_WINDOW_MS,
+    );
+    const people = new Set(others.map((o) => groupOrigin(db, o.visitor_id)));
+    const only = [...people][0];
+    if (
+      others.length + 1 <= DEVICE_IP_SHARED_THRESHOLD &&
+      people.size === 1 &&
+      only !== undefined &&
+      only !== groupOrigin(db, visitorId) &&
+      // Nobody merges into a tombstone: neither a visitor that opted out nor one
+      // hanging on it (a link made after the opt-out, or older than its cut).
+      !anySuppressed(db, [only, ...others.map((o) => o.visitor_id)])
+    )
+      candidate = only;
+  }
+  db.run(
+    `INSERT INTO device_signals (visitor_id, device_key, signals, browser, os, first_seen, last_seen, candidate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (visitor_id) DO UPDATE SET
+       changes = changes + (device_key != excluded.device_key),
+       device_key = excluded.device_key, signals = excluded.signals, browser = excluded.browser,
+       os = excluded.os, last_seen = excluded.last_seen`,
+    visitorId,
+    device.key,
+    device.signals,
+    device.browser,
+    device.os,
+    now,
+    now,
+    candidate,
+  );
+  if (device.net !== null) {
+    db.run(
+      `INSERT INTO device_ip_seen (device_key, net, visitor_id, last_seen) VALUES (?, ?, ?, ?)
+       ON CONFLICT (device_key, net, visitor_id) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen)`,
+      device.key,
+      device.net,
+      visitorId,
+      now,
+    );
+  }
+  if (candidate === null || !getMergeSettings(db).device_ip) return null;
+  return linkGroups(db, visitorId, candidate, 'device_ip', now);
+}
+
 export const funnelVisitorLinkSchema = z.object({
   visitor_id: z.string().min(1).max(128),
   funnel_visitor_id: z.string().min(1).max(128),
@@ -848,8 +957,13 @@ export function reprocessIdentities(
   now: number,
 ): { keys: number; merges: number; visitors: number } {
   const settings = getMergeSettings(db);
-  const types = IDENTITY_MERGE_MECHANISMS.filter((m) => settings[m] && m !== 'ip_ua');
-  const keys = db.all<{ key_type: Exclude<AutoMergeMechanism, 'ip_ua'>; key_value: string }>(
+  const types = IDENTITY_MERGE_MECHANISMS.filter(
+    (m) => settings[m] && !(GUESS_MECHANISMS as readonly string[]).includes(m),
+  );
+  const keys = db.all<{
+    key_type: Exclude<AutoMergeMechanism, (typeof GUESS_MECHANISMS)[number]>;
+    key_value: string;
+  }>(
     `SELECT DISTINCT key_type, key_value FROM identity_keys
      WHERE first_seen >= ? AND first_seen < ? AND key_type IN (SELECT value FROM json_each(?))
      ORDER BY key_type, key_value`,

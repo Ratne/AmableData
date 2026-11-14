@@ -681,8 +681,9 @@ export function createTracker(
         goal(args[0], args[1]);
         break;
       case 'identify':
-      case 'payment': {
-        const data = sanitizeParams(args[0]);
+      case 'payment':
+      case 'device': {
+        const data = sanitizeParams(args[0], name === 'device' ? 20 : undefined);
         if (data !== undefined) send(name, { data });
         break;
       }
@@ -803,10 +804,11 @@ type Command = TrackerHandle['command'];
 export function boot(win: Window, options: BuildOptions, transport?: Transport): Promise<void> {
   const script = currentScript(win.document);
   const w = win as unknown as { amable?: Command & Queued; amb?: Command };
-  const install = (cookieless: boolean): void => {
+  const install = (cookieless: boolean): boolean => {
     const handle = createTracker(win, { ...options, cookieless }, transport, script);
     w.amable = handle.command;
     w.amb ??= handle.command;
+    return handle.enabled;
   };
   // GTM drops data-site from the tag: the snippet also queues amable('site', id).
   const queuedSite = Array.from(w.amable?.q ?? [], (args) => Array.from(args)).find(
@@ -842,7 +844,12 @@ export function boot(win: Window, options: BuildOptions, transport?: Transport):
     win
       .fetch(url.href, { credentials: sameSite ? 'include' : 'omit' })
       .then(
-        (r) => (r.ok ? r.json() : null) as Promise<{ cookieless?: unknown; vid?: unknown } | null>,
+        (r) =>
+          (r.ok ? r.json() : null) as Promise<{
+            cookieless?: unknown;
+            vid?: unknown;
+            device?: unknown;
+          } | null>,
       )
       .then(
         (body) => {
@@ -853,15 +860,40 @@ export function boot(win: Window, options: BuildOptions, transport?: Transport):
             /^[a-zA-Z0-9-]{8,64}$/.test(body.vid)
           )
             jar.set(COOKIE_VISITOR, body.vid, VISITOR_MAX_AGE_S);
-          return body?.cookieless === true;
+          return body;
         },
-        () => false,
+        () => null,
       ),
-    new Promise<boolean>((resolve) => setTimeout(resolve, 3000, false)),
-  ]).then((cookieless) => {
+    new Promise<null>((resolve) => setTimeout(resolve, 3000, null)),
+  ]).then((body) => {
+    const cookieless = body?.cookieless === true;
     if (cookieless) clearIds(jar, storageOf(win));
-    install(cookieless);
+    const enabled = install(cookieless);
+    // Device signals module: only where the site turned it on and the tracker runs,
+    // never against Global Privacy Control.
+    const src = deviceScriptUrl(script?.src ?? '');
+    if (
+      enabled &&
+      body?.device === true &&
+      !cookieless &&
+      src !== null &&
+      (win.navigator as { globalPrivacyControl?: boolean }).globalPrivacyControl !== true
+    ) {
+      const el = win.document.createElement('script');
+      el.async = true;
+      el.src = src;
+      win.document.head.appendChild(el);
+    }
   });
+}
+
+/**
+ * `…/s.js`, `…/s.hash.js`, `…/<dir>/<name>[-h].js` → the device module next to it (`…-d.js`).
+ * Null when the tracker is not served under a `.js` name: the same URL again would run it twice.
+ */
+export function deviceScriptUrl(src: string): string | null {
+  const m = /^([^?#]*?)(\.hash)?(-[lh])?\.js([?#].*)?$/.exec(src);
+  return m === null ? null : `${m[1]}-d.js${m[4] ?? ''}`;
 }
 
 function storageOf(win: Window): Storage | undefined {

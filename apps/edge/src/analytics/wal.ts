@@ -100,7 +100,14 @@ export async function redactForArchive(message: AnalyticsMessage): Promise<Analy
     e.payment === null
       ? null
       : { ...e.payment, email: e.payment.email === null ? null : await hashPii(e.payment.email) };
-  const event = { ...e, identity, payment, data: withoutPiiKeys(e.data), ipUa: null };
+  const event = {
+    ...e,
+    identity,
+    payment,
+    data: e.type === 'device' ? null : withoutPiiKeys(e.data),
+    ipUa: null,
+    deviceSighting: null,
+  };
   return JSON.parse(
     JSON.stringify({ kind: 'event', event }).replace(EMAIL_IN_TEXT, '[email]'),
   ) as AnalyticsMessage;

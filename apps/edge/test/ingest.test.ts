@@ -511,6 +511,7 @@ describe('neutral path, proxy recipes and ip_ua matching', () => {
       ['GET', '/offerta/estate'],
       ['GET', '/webinar2026/iscriviti'],
       ['GET', '/offerta/estate.js'],
+      ['GET', '/offerta/estate-d.js'],
       ['POST', '/contatti/invia'],
       ['OPTIONS', '/offerta/estate'],
     ] as const) {

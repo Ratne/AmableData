@@ -1,6 +1,7 @@
 import { first, type SqlDb } from '../db/sql';
 import type { EnrichedEvent } from '../types';
 import { utcDay } from '../wal';
+import { getMergeSettings, resolveVisitorGroup } from './identity';
 
 /**
  * Suppression of visitors (opt-out, erasure requests). A suppressed visitor id
@@ -45,6 +46,8 @@ const IDENTITY_TABLES = [
   'visitor_tags',
   'conversion_log',
   'ip_ua_seen',
+  'device_signals',
+  'device_ip_seen',
 ] as const;
 /** Traffic rows: moved to an anonymous id so aggregates stay consistent. */
 const TRAFFIC_TABLES = [
@@ -64,31 +67,90 @@ const json = (ids: readonly string[]) => JSON.stringify(ids);
 
 /**
  * The given visitors plus every visitor merged with them, transitively. The
- * `ip_ua` merges are a guess (same network and browser), so they never carry an
- * opt-out or an erasure to somebody else.
+ * `ip_ua` and `device_ip` merges are a guess (same network and browser or device), so they never carry an
+ * opt-out or an erasure to somebody else. Two visitors of one group that gave
+ * the same email or phone are one person all the same: their own merge would
+ * say so, had the guess not put them in one group first.
  */
 function withMerged(db: SqlDb, ids: readonly string[]): string[] {
   const out = new Set(ids);
+  const sameKey = sameKeyInGroup(db, out);
   let frontier = [...out];
   while (frontier.length > 0) {
     const next: string[] = [];
+    const add = (v: string): void => {
+      if (out.has(v)) return;
+      out.add(v);
+      next.push(v);
+    };
     for (const r of db.all<{ a: string; b: string }>(
       `SELECT child_visitor_id AS a, origin_visitor_id AS b FROM visitor_merges
-       WHERE active = 1 AND mechanism != 'ip_ua'
+       WHERE active = 1 AND mechanism NOT IN ('ip_ua', 'device_ip')
          AND (child_visitor_id IN (SELECT value FROM json_each(?)) OR origin_visitor_id IN (SELECT value FROM json_each(?)))`,
       json(frontier),
       json(frontier),
     )) {
-      for (const v of [r.a, r.b]) {
-        if (!out.has(v)) {
-          out.add(v);
-          next.push(v);
-        }
-      }
+      add(r.a);
+      add(r.b);
     }
+    for (const v of sameKey(frontier)) add(v);
     frontier = next;
   }
   return [...out];
+}
+
+/**
+ * Finds the visitors not yet in `out` that share a group and an email or phone
+ * with one of the given ones. Only on a site where a guess merged visitors
+ * (elsewhere their own merge links them already) and for the keys the site
+ * merges by. One query per group, one row per visitor found, so a key held by
+ * thousands of visitors costs no more than their group.
+ */
+function sameKeyInGroup(
+  db: SqlDb,
+  out: ReadonlySet<string>,
+): (ids: readonly string[]) => string[] {
+  const settings = getMergeSettings(db);
+  const keyTypes = (['email', 'phone'] as const).filter((type) => settings[type]);
+  const guesses =
+    keyTypes.length > 0 &&
+    first(
+      db,
+      `SELECT 1 AS x FROM visitor_merges WHERE active = 1 AND mechanism IN ('ip_ua', 'device_ip') LIMIT 1`,
+    ) !== undefined;
+  const groupOf = new Map<string, readonly string[]>();
+  return (ids) => {
+    if (!guesses) return [];
+    const byGroup = new Map<readonly string[], string[]>();
+    for (const id of ids) {
+      let group = groupOf.get(id);
+      if (group === undefined) {
+        group = resolveVisitorGroup(db, id);
+        for (const member of group) groupOf.set(member, group);
+      }
+      const members = byGroup.get(group);
+      if (members === undefined) byGroup.set(group, [id]);
+      else members.push(id);
+    }
+    const found: string[] = [];
+    for (const [group, members] of byGroup) {
+      const others = group.filter((v) => !out.has(v));
+      if (others.length === 0) continue;
+      for (const r of db.all<{ v: string }>(
+        `SELECT DISTINCT o.visitor_id AS v FROM identity_keys o
+         WHERE o.visitor_id IN (SELECT value FROM json_each(?))
+           AND o.key_type IN (SELECT value FROM json_each(?))
+           AND EXISTS (SELECT 1 FROM identity_keys k
+             WHERE k.key_type = o.key_type AND k.key_value = o.key_value
+               AND k.visitor_id IN (SELECT value FROM json_each(?)))`,
+        json(others),
+        json(keyTypes),
+        json(members),
+      ))
+        found.push(r.v);
+    }
+    return found;
+  };
 }
 
 function carriersOf(db: SqlDb, keys: SuppressInput['keys']): string[] {
@@ -111,6 +173,8 @@ export function purgeVisitorRows(db: SqlDb, ids: readonly string[]): number {
   const list = json(ids);
   const IN = `IN (SELECT value FROM json_each(?))`;
   for (const table of IDENTITY_TABLES) db.run(`DELETE FROM ${table} WHERE visitor_id ${IN}`, list);
+  // Matches of the `device_ip` rule kept on other visitors for the measurements.
+  db.run(`UPDATE device_signals SET candidate = NULL WHERE candidate ${IN}`, list);
   db.run(
     `DELETE FROM visitor_merges WHERE child_visitor_id ${IN} OR origin_visitor_id ${IN}`,
     list,
@@ -172,6 +236,20 @@ function tombstone(db: SqlDb, ids: readonly string[], now: number): void {
   db.run(
     `INSERT OR IGNORE INTO suppressed_visitors (vid, created_at) SELECT value, ? FROM json_each(?)`,
     now,
+    json(ids),
+  );
+  // A guess that linked one of them to a visitor left out (`withMerged`) is cut:
+  // that visitor goes on as its own person, not as the one that opted out.
+  const IN = `IN (SELECT value FROM json_each(?))`;
+  db.run(
+    `UPDATE visitor_merges SET active = 0, updated_at = ?
+     WHERE active = 1 AND mechanism IN ('ip_ua', 'device_ip')
+       AND ((child_visitor_id ${IN} AND origin_visitor_id NOT ${IN})
+         OR (origin_visitor_id ${IN} AND child_visitor_id NOT ${IN}))`,
+    now,
+    json(ids),
+    json(ids),
+    json(ids),
     json(ids),
   );
 }

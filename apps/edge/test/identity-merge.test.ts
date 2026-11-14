@@ -296,10 +296,11 @@ describe('identity merge and retro-attribution', () => {
       phone: true,
       session: true,
       ip_ua: false,
+      device_ip: false,
     });
     expect(store.updateIdentitySettings({ session: false })).toEqual({
       ok: true,
-      value: { email: true, phone: true, session: false, ip_ua: false },
+      value: { email: true, phone: true, session: false, ip_ua: false, device_ip: false },
     });
     expect(store.updateIdentitySettings({ ip: true } as never).ok).toBe(false);
     store.ingest(
