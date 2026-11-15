@@ -103,7 +103,8 @@ export type {
 export { NotifySystemEmailProvider } from './providers/notify';
 export type { NotifyServiceConfig } from './providers/notify';
 export { ConsoleEmailMarketingProvider, ConsoleSystemEmailProvider } from './providers/console';
-export { EmailProviderError } from './providers/email-marketing';
+export { EmailProviderError, PROVIDER_CAP_CODES, providerCapWindow } from './providers/email-marketing';
+export type { ProviderCapWindow } from './providers/email-marketing';
 export { FakeEmailMarketingProvider } from './providers/fake';
 export { CloudflareSystemEmailProvider, UnconfiguredSystemEmailProvider } from './providers/cloudflare-email';
 export type { CloudflareSystemEmailConfig, SendEmailBindingLike } from './providers/cloudflare-email';

@@ -17,6 +17,7 @@ const BLOCK_KEYS: Readonly<Record<string, MessageKey>> = {
   invalid_content: 'email.block.invalid_content',
   quota_denied: 'email.block.quota_denied',
   quota_paused: 'email.block.quota_paused',
+  capacity_paused: 'email.block.capacity_paused',
 };
 
 /** Human text of a sending block reason / error code. */

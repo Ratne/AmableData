@@ -1,4 +1,5 @@
 import type { EmailSettings, UpdateEmailSettingsInput } from '@amable/api-types';
+import type { ProviderCapWindow } from '@amable/core';
 import { MailError, toIso, type MailDeps, type SendingState } from './context';
 
 /**
@@ -35,7 +36,8 @@ type SettingKey =
   | 'rate_per_minute'
   | 'warmup_started_at'
   | 'suspended_at'
-  | 'suspended_reason';
+  | 'suspended_reason'
+  | CapacityHoldKey;
 
 export function getSetting(deps: MailDeps, key: SettingKey): string | null {
   const row = deps.db.all<{ value: string }>(`SELECT value FROM mail_meta WHERE key = ?`, key)[0];
@@ -237,6 +239,49 @@ export function resumeSending(deps: MailDeps): void {
   setSetting(deps, 'suspended_reason', null);
 }
 
+// ------------------------------------------------------------ capacity hold
+
+/**
+ * `provider_cap`: the provider refused a send because its hourly / daily
+ * capacity is full; every send waits until `until` without calling it.
+ * `plan_cap`: the plan caps of the managed offering paused the metered sends.
+ * Both only drive the "sending limit reached" notice besides that: the user
+ * never sees the plan or the numbers.
+ */
+type CapacityHoldKey = 'provider_cap' | 'plan_cap';
+
+export interface CapacityHold {
+  readonly window: ProviderCapWindow;
+  readonly until: number;
+}
+
+export function capacityHold(deps: MailDeps, key: CapacityHoldKey): CapacityHold | null {
+  const raw = getSetting(deps, key);
+  if (raw === null) return null;
+  try {
+    const hold = JSON.parse(raw) as Partial<CapacityHold>;
+    if ((hold.window === 'hour' || hold.window === 'day') && typeof hold.until === 'number' && hold.until > deps.now()) {
+      return { window: hold.window, until: hold.until };
+    }
+  } catch {
+    // unreadable: treated as no hold
+  }
+  return null;
+}
+
+export function holdCapacity(deps: MailDeps, key: CapacityHoldKey, hold: CapacityHold | null): void {
+  setSetting(deps, key, hold === null ? null : JSON.stringify(hold));
+}
+
+/** The hold ending last (a daily one outlasts an hourly one). */
+function capacityView(deps: MailDeps): EmailSettings['capacity'] {
+  const holds = [capacityHold(deps, 'provider_cap'), capacityHold(deps, 'plan_cap')].filter((h) => h !== null);
+  const hold = holds.sort((a, b) => b.until - a.until)[0];
+  return hold === undefined
+    ? { limited: false, window: null, until: null }
+    : { limited: true, window: hold.window, until: toIso(hold.until) };
+}
+
 // ---------------------------------------------------------------- can send
 
 export interface SendGate {
@@ -301,6 +346,7 @@ export async function readSettings(deps: MailDeps): Promise<EmailSettings> {
       sent_today: sentToday(deps),
     },
     suspension: { suspended: s.suspended, reason: s.reason, at: toIso(s.at) },
+    capacity: capacityView(deps),
     health: {
       window_days: HEALTH_POLICY.windowDays,
       sent: health.sent,

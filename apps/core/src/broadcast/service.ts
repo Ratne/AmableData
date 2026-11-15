@@ -310,8 +310,12 @@ async function audience(deps: MailDeps, segment: BroadcastSegment): Promise<Audi
   return { segmentSize: ids.length, eligible, excluded };
 }
 
+const CAP_REASONS = new Set(['hourly_cap_reached', 'daily_cap_reached']);
+
 function quotaBlock(decision: QuotaDecision): string | null {
-  return decision.action === 'allow' ? null : decision.action === 'deny' ? 'quota_denied' : 'quota_paused';
+  if (decision.action === 'allow') return null;
+  if (decision.action === 'deny') return 'quota_denied';
+  return CAP_REASONS.has(decision.reason) ? 'capacity_paused' : 'quota_paused';
 }
 
 interface Readiness {
@@ -398,7 +402,7 @@ export async function scheduleBroadcast(
   const block = ready.estimate.block_reason;
   if (block !== null || ready.audience === null) {
     const reason = block ?? 'no_segment';
-    if (reason === 'quota_denied' || reason === 'quota_paused') {
+    if (reason === 'quota_denied' || reason === 'quota_paused' || reason === 'capacity_paused') {
       throw new MailError(reason, 402, `Sending quota check failed: ${ready.estimate.quota.reason ?? reason}`, {
         quota: ready.estimate.quota,
         eligible: ready.estimate.eligible,

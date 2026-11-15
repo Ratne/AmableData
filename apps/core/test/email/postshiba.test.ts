@@ -78,7 +78,9 @@ const ENDPOINT = {
   secret: 'whsec-redacted',
 };
 
-type Handler = (body: unknown) => { status?: number; json: unknown } | Error;
+type Handler = (
+  body: unknown,
+) => { status?: number; json?: unknown; text?: string; headers?: Record<string, string> } | Error;
 
 /** Fake PostShiba routed on `METHOD url`; every call is recorded, unknown routes are 404. */
 function postshiba(routes: Record<string, Handler | Handler[]>) {
@@ -92,7 +94,9 @@ function postshiba(routes: Record<string, Handler | Handler[]>) {
     if (handler === undefined) return Promise.resolve(new Response('{"error":"not_found"}', { status: 404 }));
     const out = handler(body);
     if (out instanceof Error) return Promise.reject(out);
-    return Promise.resolve(new Response(JSON.stringify(out.json), { status: out.status ?? 200 }));
+    return Promise.resolve(
+      new Response(out.text ?? JSON.stringify(out.json), { status: out.status ?? 200, headers: out.headers ?? {} }),
+    );
   };
   return { fetch, calls, keys: () => calls.map((c) => c.key) };
 }
@@ -214,7 +218,7 @@ describe('PostShiba sending (HTTP inject)', () => {
       { code: 'inject_failed', retryable: false },
       { status: 401, retryable: false },
       { code: 'inject_unavailable', retryable: true },
-      { code: 'throttled', retryable: true },
+      { code: 'provider_cap_hour', retryable: true },
       { code: 'outcome_unknown', retryable: false },
       { code: 'domain_unverified', retryable: false, message: 'must be a verified sending domain' },
       { code: 'outcome_unknown', retryable: false },
@@ -225,6 +229,38 @@ describe('PostShiba sending (HTTP inject)', () => {
       expect(error).toBeInstanceOf(EmailProviderError);
       expect(error).toMatchObject(e);
     }
+  });
+
+  it('tells a full cluster (hourly or 24-hour cap) from a rate limit', async () => {
+    const ps = postshiba({
+      [`POST ${INJECT}`]: [
+        () => ({ status: 429, text: 'hourly send limit reached' }),
+        () => ({ status: 429, text: 'daily send limit reached' }),
+        () => ({ status: 429, json: { error: 'throttled', message: 'This cluster hit its 24-hour send limit' } }),
+        () => ({ status: 429, text: 'hourly send limit reached', headers: { 'retry-after': '120' } }),
+        () => ({ status: 429, json: { error: 'rate_limited' } }),
+      ],
+    });
+    const provider = sender(ps.fetch);
+    const errors: EmailProviderError[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      errors.push(await provider.sendEmail(email).then(
+        () => Promise.reject(new Error('expected a refusal')),
+        (err: unknown) => err as EmailProviderError,
+      ));
+    }
+    expect(errors.map((e) => [e.code, e.retryable])).toEqual([
+      ['provider_cap_hour', true],
+      ['provider_cap_day', true],
+      ['provider_cap_day', true],
+      ['provider_cap_hour', true],
+      ['rate_limited', true],
+    ]);
+    expect(errors[0]?.message).toBe('hourly send limit reached');
+    expect(errors[0]?.retryAfterSeconds).toBeGreaterThanOrEqual(60);
+    expect(errors[0]?.retryAfterSeconds).toBeLessThanOrEqual(3600);
+    expect(errors[1]?.retryAfterSeconds).toBe(3600);
+    expect(errors[3]?.retryAfterSeconds).toBe(120);
   });
 });
 

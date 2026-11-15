@@ -207,6 +207,15 @@ export const emailSettingsSchema = z.object({
     reason: z.string().nullable(),
     at: timestampSchema.nullable(),
   }),
+  /**
+   * Sending limit reached (provider capacity full, or the plan caps): sends wait
+   * in the queue until `until`. Never carries the plan or the numbers.
+   */
+  capacity: z.object({
+    limited: z.boolean(),
+    window: z.enum(['hour', 'day']).nullable(),
+    until: timestampSchema.nullable(),
+  }),
   health: z.object({
     window_days: z.number().int(),
     sent: z.number().int(),

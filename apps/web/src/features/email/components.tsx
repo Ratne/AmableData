@@ -1,5 +1,6 @@
 import type { Contact } from '@amable/api-types';
 import { defaultLiquidFields, EmailPreview, type JSONContent, type LiquidFieldGroup } from '@amable/editor';
+import { Alert, AlertDescription, AlertTitle } from '@amable/ui/ui/alert';
 import { Button } from '@amable/ui/ui/button';
 import { Checkbox } from '@amable/ui/ui/checkbox';
 import {
@@ -14,12 +15,44 @@ import { Input } from '@amable/ui/ui/input';
 import { Label } from '@amable/ui/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@amable/ui/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
-import { Monitor, Send, Smartphone, X } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Clock, Monitor, Send, Smartphone, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../i18n';
 import { useMe } from '../../lib/api';
 import { emailKeys, useEmailApi, useEmailMutation } from './api';
 import { blockText, contactLabel } from './format';
+
+/**
+ * Gentle notice while the sending limit is reached: emails wait in the queue
+ * and go out by themselves. Never shows the plan or the numbers.
+ */
+export function CapacityNotice({ className }: { className?: string }) {
+  const { t, locale } = useI18n();
+  const { slug, api } = useEmailApi();
+  const settings = useQuery({
+    queryKey: emailKeys.settings(slug),
+    queryFn: api.settings.get,
+    refetchInterval: (query) => (query.state.data?.capacity.limited === true ? 60_000 : false),
+  });
+  const s = settings.data;
+  if (s?.capacity.limited !== true) return null;
+  const time = s.capacity.until === null ? '' : new Date(s.capacity.until).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  return (
+    <Alert className={className}>
+      <Clock className="size-4" />
+      <AlertTitle>{t('email.capacity.title')}</AlertTitle>
+      <AlertDescription>
+        <p>{s.capacity.window === 'day' ? t('email.capacity.day') : t('email.capacity.hour', { time })}</p>
+        {s.rate_managed ? (
+          <Link to="/t/$tenant/settings/billing" params={{ tenant: slug }} className="font-medium underline">
+            {s.rate_dedicated ? t('email.capacity.change') : t('email.capacity.increase')}
+          </Link>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
+}
 
 /** Liquid fields of the `{{` picker: built-ins, contact custom fields and Dynamic Content snippets. */
 export function useLiquidFields(): LiquidFieldGroup[] {

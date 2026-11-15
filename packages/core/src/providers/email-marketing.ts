@@ -56,6 +56,14 @@ export interface DomainVerification {
   readonly records: readonly DnsRecord[];
 }
 
+/** Codes of a refusal because the provider's hourly or daily sending capacity is full. */
+export const PROVIDER_CAP_CODES = { hour: 'provider_cap_hour', day: 'provider_cap_day' } as const;
+export type ProviderCapWindow = keyof typeof PROVIDER_CAP_CODES;
+
+export function providerCapWindow(code: string | null): ProviderCapWindow | null {
+  return code === PROVIDER_CAP_CODES.hour ? 'hour' : code === PROVIDER_CAP_CODES.day ? 'day' : null;
+}
+
 /**
  * Error raised by providers. `retryable` tells the queue consumer whether the
  * same request may succeed later (rate limit, 5xx, network) or never will
@@ -72,7 +80,9 @@ export class EmailProviderError extends Error {
     /**
      * Provider error code. Normalized codes the pipeline acts on:
      * `suppressed` (the recipient is on the provider suppression list) and
-     * `outcome_unknown` (the message may have been queued: never resend).
+     * `outcome_unknown` (the message may have been queued: never resend),
+     * `provider_cap_hour` / `provider_cap_day` (the sending capacity is full,
+     * nothing was kept: send again after `retryAfterSeconds`).
      */
     readonly code: string | null = null,
   ) {

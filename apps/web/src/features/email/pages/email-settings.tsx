@@ -13,6 +13,7 @@ import { Globe, Save, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../api';
+import { CapacityNotice } from '../components';
 import { blockText, percent } from '../format';
 
 const STATE_KEYS: Readonly<Record<EmailSettings['sending']['state'], MessageKey>> = {
@@ -77,6 +78,7 @@ export function EmailSettingsPage() {
         }
       />
       <PageBody className="grid max-w-5xl gap-4 pt-4 lg:grid-cols-2">
+        <CapacityNotice className="lg:col-span-2" />
         {s?.suspension.suspended ? (
           <Alert variant="destructive" className="lg:col-span-2">
             <ShieldAlert className="size-4" />

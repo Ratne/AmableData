@@ -57,14 +57,14 @@ export function decideQuota(
     if (hourly !== null && usage.thisHour + input.count > hourly) {
       return {
         action: 'pause',
-        reason: `hourly_cap_reached: cap=${String(hourly)}`,
+        reason: 'hourly_cap_reached',
         retryAfterMs: hourStart(nowMs) + HOUR_MS - nowMs,
       };
     }
     if (daily !== null && usage.today + input.count > daily) {
       return {
         action: 'pause',
-        reason: `daily_cap_reached: cap=${String(daily)}`,
+        reason: 'daily_cap_reached',
         retryAfterMs: dayStart(nowMs) + DAY_MS - nowMs,
       };
     }

@@ -109,6 +109,15 @@ export const emailEn = {
   'email.block.invalid_content': 'the email content has errors',
   'email.block.quota_denied': 'not enough email credit',
   'email.block.quota_paused': 'email credit exhausted, sending paused',
+  'email.block.capacity_paused': 'sending limit reached, emails go out as soon as capacity frees up',
+
+  'email.capacity.title': 'You reached your sending limit',
+  'email.capacity.hour':
+    'You reached your hourly sending limit. Your emails are not lost: they are queued and will go out automatically around {time}.',
+  'email.capacity.day':
+    'You reached your daily sending limit. Your emails are not lost: they are queued and will go out automatically as soon as capacity frees up.',
+  'email.capacity.increase': 'Increase sending capacity',
+  'email.capacity.change': 'Change capacity',
 
   'broadcasts.title': 'Broadcasts',
   'broadcasts.new': 'New broadcast',

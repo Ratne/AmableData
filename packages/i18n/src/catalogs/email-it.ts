@@ -110,6 +110,15 @@ export const emailIt: Readonly<Record<keyof typeof emailEn, string>> = {
   'email.block.invalid_content': 'il contenuto dell’email contiene errori',
   'email.block.quota_denied': 'credito email insufficiente',
   'email.block.quota_paused': 'credito email esaurito, invio in pausa',
+  'email.block.capacity_paused': 'limite di invio raggiunto, le email partono appena si libera capacità',
+
+  'email.capacity.title': 'Hai raggiunto il tuo limite di invio',
+  'email.capacity.hour':
+    'Hai raggiunto il limite di invio orario. Le tue email non sono perse: sono in coda e partiranno automaticamente verso le {time}.',
+  'email.capacity.day':
+    'Hai raggiunto il limite di invio giornaliero. Le tue email non sono perse: sono in coda e partiranno automaticamente appena si libera capacità.',
+  'email.capacity.increase': 'Aumenta la capacità di invio',
+  'email.capacity.change': 'Cambia capacità',
 
   'broadcasts.title': 'Broadcast',
   'broadcasts.new': 'Nuovo broadcast',

@@ -1,5 +1,5 @@
-import type { EmailSendRequest, EmailSendSource } from '@amable/core';
-import { EmailProviderError } from '@amable/core';
+import type { EmailSendRequest, EmailSendSource, ProviderCapWindow } from '@amable/core';
+import { EmailProviderError, providerCapWindow } from '@amable/core';
 import { getBroadcastRow } from '../broadcast/store';
 import type { MailSendContact } from '../crm/mail-reads';
 import { MailError, normalizeEmail, parseJson, type MailDeps, type SendingState } from './context';
@@ -17,7 +17,9 @@ import {
   type CompiledContent,
 } from './render';
 import {
+  capacityHold,
   fromAddress,
+  holdCapacity,
   getSetting,
   pruneCounters,
   releaseSlot,
@@ -48,6 +50,11 @@ const TRANSACTIONAL_BLOCKING_SUPPRESSIONS = new Set(['bounce', 'complaint', 'man
 export type SendOutcome =
   | { readonly id: string; readonly action: 'ack'; readonly status: MessageRow['status'] | 'duplicate' }
   | { readonly id: string; readonly action: 'retry'; readonly delaySeconds: number; readonly reason: string };
+
+/** Plan cap behind a quota pause (`hourly_cap_reached` / `daily_cap_reached`), null for the wallet. */
+function planCapWindow(reason: string): ProviderCapWindow | null {
+  return reason.startsWith('hourly_cap_reached') ? 'hour' : reason.startsWith('daily_cap_reached') ? 'day' : null;
+}
 
 export function backoffSeconds(attempt: number): number {
   return Math.min(30 * 2 ** Math.max(attempt - 1, 0), 3600);
@@ -262,6 +269,10 @@ async function processOne(
     });
     if (decision.action === 'deny') return finish(deps, row, 'skipped', `quota_denied: ${decision.reason}`);
     if (decision.action === 'pause') {
+      const window = planCapWindow(decision.reason);
+      if (window !== null) {
+        holdCapacity(deps, 'plan_cap', { window, until: deps.now() + (decision.retryAfterMs ?? 600_000) });
+      }
       return {
         id: request.id,
         action: 'retry',
@@ -269,6 +280,11 @@ async function processOne(
         reason: 'quota_paused',
       };
     }
+  }
+
+  const providerHold = capacityHold(deps, 'provider_cap');
+  if (providerHold !== null) {
+    return { id: request.id, action: 'retry', delaySeconds: Math.ceil((providerHold.until - deps.now()) / 1000), reason: 'provider_capacity' };
   }
 
   const planRate = (await deps.quota.ratePerMinute?.()) ?? null;
@@ -371,6 +387,7 @@ async function processOne(
       metadata: { account: deps.tenantId, [MESSAGE_ID_ARG]: row.id },
     });
     markSent(deps, { row, request, links, providerMessageId: result.messageId, reason: null });
+    if (getSetting(deps, 'provider_cap') !== null) holdCapacity(deps, 'provider_cap', null);
     await deps.quota.recordUsage?.({ tenantId: deps.tenantId, channel: 'email', count: 1, source: request.source }).catch((e: unknown) => console.error('[email] usage metering failed', e));
     return { id: request.id, action: 'ack', status: 'sent' };
   } catch (error) {
@@ -385,6 +402,19 @@ async function processOne(
       markSent(deps, { row, request, links, providerMessageId: null, reason: 'provider_outcome_unknown' });
       await deps.quota.recordUsage?.({ tenantId: deps.tenantId, channel: 'email', count: 1, source: request.source }).catch((e: unknown) => console.error('[email] usage metering failed', e));
       return { id: request.id, action: 'ack', status: 'sent' };
+    }
+    const capWindow = providerCapWindow(code);
+    if (capWindow !== null) {
+      // Refused, nothing kept: the attempt is given back and the whole workspace waits.
+      const delaySeconds = Math.max((error as EmailProviderError).retryAfterSeconds ?? 3600, 60);
+      holdCapacity(deps, 'provider_cap', { window: capWindow, until: deps.now() + delaySeconds * 1000 });
+      deps.db.run(
+        `UPDATE mail_messages SET attempts = ?, lease_until = NULL, status_reason = 'provider_capacity', updated_at = ? WHERE id = ?`,
+        row.attempts,
+        deps.now(),
+        row.id,
+      );
+      return { id: request.id, action: 'retry', delaySeconds, reason: 'provider_capacity' };
     }
     const retryable = error instanceof EmailProviderError ? error.retryable : true;
     const message = error instanceof Error ? error.message : String(error);

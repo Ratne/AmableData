@@ -23,6 +23,7 @@ import { Archive, ArrowLeft, Download, Pause, Play, XCircle } from 'lucide-react
 import { lazy, Suspense, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
+import { CapacityNotice } from '../../email/components';
 import { blockText, BroadcastStatusBadge, percent } from '../../email/format';
 import { formatDateTime } from '../../../lib/dates';
 
@@ -127,6 +128,7 @@ function Report({ broadcast }: { broadcast: Broadcast }) {
         }
       />
       <PageBody className="grid gap-4 pt-4">
+        <CapacityNotice />
         <Card>
           <CardContent className="grid gap-2 pt-6 text-sm">
             <p>{t('broadcasts.report.progress', { enqueued: p.enqueued, total: p.recipients })}</p>

@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { useI18n } from '../../../i18n';
 import { listTableLabels } from '../../../lib/labels';
 import { emailKeys, useEmailApi, useEmailMutation, usePermissions } from '../../email/api';
+import { CapacityNotice } from '../../email/components';
 import { BroadcastStatusBadge, percent } from '../../email/format';
 import { formatDateTime } from '../../../lib/dates';
 
@@ -58,6 +59,7 @@ export function BroadcastsListPage() {
           ) : null
         }
       />
+      <CapacityNotice className="mx-4 mt-4 w-auto" />
       <ListTable<BroadcastSummary>
         rows={list.data?.data ?? []}
         getRowId={(row) => row.id}

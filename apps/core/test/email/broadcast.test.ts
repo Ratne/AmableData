@@ -1,4 +1,4 @@
-import type { QuotaGuard } from '@amable/core';
+import { EmailProviderError, type QuotaGuard } from '@amable/core';
 import { describe, expect, it } from 'vitest';
 import { bucketize, scheduleRecipients, zonedLocalToUtc } from '../../src/broadcast/tz';
 import { configureSender, createMailWorld, sampleDoc } from './helpers';
@@ -133,6 +133,25 @@ describe('broadcasts', () => {
     ]);
     const list = await world.op('broadcasts.list', { limit: 10 });
     expect(list.data[0]?.stats).toEqual({ sent: 3, opened: 2, clicked: 2 });
+  });
+
+  it('delivers every recipient once the provider capacity frees up', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    ['a', 'b', 'c'].forEach((n) => world.contact({ email: `${n}@x.test`, tags: ['News'] }));
+    const b = await draft(world);
+    await world.op('broadcasts.schedule', { id: b.id, schedule: { mode: 'now' } });
+    await world.op('broadcasts.tick', {});
+    const batch = world.queue.map((request) => ({ request, queueAttempts: 1 }));
+    world.provider.failNext(1, new EmailProviderError('daily send limit reached', true, 429, 3600, 'provider_cap_day'));
+    const held = await world.op('send.process', { batch });
+    expect(held.map((o) => (o.action === 'retry' ? o.reason : o.status))).toEqual(['provider_capacity', 'provider_capacity', 'provider_capacity']);
+    expect((await world.op('broadcasts.estimate', { id: b.id })).block_reason).toBe(null);
+
+    world.clock.now += 3600_000;
+    const sent = await world.op('send.process', { batch });
+    expect(sent.map((o) => (o.action === 'ack' ? o.status : o.reason))).toEqual(['sent', 'sent', 'sent']);
+    expect((await world.op('broadcasts.stats', { id: b.id })).totals).toMatchObject({ recipients: 3, sent: 3 });
   });
 
   it('handles segments larger than the 100-parameter SQL limit', async () => {

@@ -106,7 +106,7 @@ describe('platform quota guard — decisions', () => {
     const hourly = await check(h, 1, automation);
     expect(hourly).toEqual({
       action: 'pause',
-      reason: 'hourly_cap_reached: cap=2',
+      reason: 'hourly_cap_reached',
       retryAfterMs: 45 * 60_000,
     });
     // Broadcasts are throttled by the send pipeline, not by the caps here.
@@ -114,7 +114,7 @@ describe('platform quota guard — decisions', () => {
     h.clock.advance(60 * 60_000);
     await guard.recordUsage?.({ tenantId: 't_2', channel: 'email', count: 1, source: automation });
     const daily = await check(h, 1, automation);
-    expect(daily).toMatchObject({ action: 'pause', reason: 'daily_cap_reached: cap=3' });
+    expect(daily).toMatchObject({ action: 'pause', reason: 'daily_cap_reached' });
     expect(daily.action === 'pause' && daily.retryAfterMs).toBe(
       Date.UTC(2026, 9, 16) - h.clock.now,
     );

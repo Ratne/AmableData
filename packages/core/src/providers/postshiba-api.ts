@@ -1,8 +1,10 @@
 import {
   EmailProviderError,
+  PROVIDER_CAP_CODES,
   type DnsRecord,
   type DomainVerification,
   type MarketingEmail,
+  type ProviderCapWindow,
 } from './email-marketing';
 
 /**
@@ -62,6 +64,24 @@ const PERMANENT_CODES = new Set([
   'team_suspended',
 ]);
 
+const HOUR_MS = 3_600_000;
+
+/**
+ * Window of the cluster cap a 429 hit (the message is refused, nothing is kept):
+ * HTTP inject says `hourly/daily send limit reached`, REST `throttled`.
+ */
+function capWindow(code: string | null, text: string): ProviderCapWindow | null {
+  if (code === 'rate_limited') return null;
+  if (code !== 'throttled' && !/send limit/i.test(text)) return null;
+  return /daily|24-hour/i.test(text) ? 'day' : 'hour';
+}
+
+/** Hourly cap: until the next hour. Rolling 24-hour cap: check again in an hour. */
+function capRetrySeconds(window: ProviderCapWindow, nowMs: number): number {
+  if (window === 'day') return HOUR_MS / 1000;
+  return Math.max(60, Math.ceil((Math.floor(nowMs / HOUR_MS) * HOUR_MS + HOUR_MS - nowMs) / 1000));
+}
+
 interface RequestOptions {
   readonly authorization: string;
   readonly fetch?: FetchLike;
@@ -109,6 +129,16 @@ async function postshibaRequest(
   const message =
     isRecord(parsed) && typeof parsed['message'] === 'string' ? parsed['message'] : (rawCode ?? `HTTP ${String(response.status)}`);
   const code = rawCode === null ? null : (NORMALIZED_CODES[rawCode] ?? rawCode);
+  const cap = response.status === 429 ? capWindow(code, `${message} ${text}`) : null;
+  if (cap !== null) {
+    throw new EmailProviderError(
+      (message === 'HTTP 429' && text !== '' ? text : message).slice(0, 300),
+      true,
+      429,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : capRetrySeconds(cap, Date.now()),
+      PROVIDER_CAP_CODES[cap],
+    );
+  }
   const hinted = isRecord(parsed) && typeof parsed['retryable'] === 'boolean' ? parsed['retryable'] : null;
   const retryable =
     code === 'outcome_unknown'

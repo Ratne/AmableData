@@ -152,6 +152,55 @@ describe('send pipeline', () => {
     expect(settings.warmup).toMatchObject({ day: 1, daily_cap: WARMUP_CAPS[1], sent_today: 1 });
   });
 
+  it('waits for the provider capacity without consuming attempts or losing the message', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    const a = world.contact({ email: 'a@x.test' });
+    const b = world.contact({ email: 'b@x.test' });
+    world.provider.failNext(1, new EmailProviderError('hourly send limit reached', true, 429, 1800, 'provider_cap_hour'));
+    const [refused] = await process(world, ['cap-a'], a);
+    expect(refused).toEqual({ id: 'cap-a', action: 'retry', delaySeconds: 1800, reason: 'provider_capacity' });
+    expect(messageRow(world, 'cap-a')).toMatchObject({ status: 'queued', attempts: 0, status_reason: 'provider_capacity' });
+    expect(world.deps.db.all<{ count: number }>(`SELECT count FROM mail_counters WHERE bucket LIKE 'day:%'`)[0]?.count ?? 0).toBe(0);
+    expect((await world.op('settings.get', {})).capacity).toEqual({
+      limited: true,
+      window: 'hour',
+      until: new Date(world.clock.now + 1800_000).toISOString(),
+    });
+
+    // The rest of the workspace waits without calling the provider, past MAX_SEND_ATTEMPTS.
+    for (let i = 0; i < MAX_SEND_ATTEMPTS + 1; i += 1) {
+      world.clock.now += 60_000;
+      const [held] = await process(world, ['cap-a'], a);
+      expect(held).toMatchObject({ action: 'retry', reason: 'provider_capacity' });
+    }
+    const [other] = await process(world, ['cap-b'], b);
+    expect(other).toMatchObject({ action: 'retry', reason: 'provider_capacity' });
+    expect(world.provider.sent).toHaveLength(0);
+    expect(messageRow(world, 'cap-a')?.attempts).toBe(0);
+
+    world.clock.now += 1800_000;
+    expect(await process(world, ['cap-a'], a)).toEqual([{ id: 'cap-a', action: 'ack', status: 'sent' }]);
+    expect(await process(world, ['cap-b'], b)).toEqual([{ id: 'cap-b', action: 'ack', status: 'sent' }]);
+    expect(messageRow(world, 'cap-a')).toMatchObject({ status: 'sent', attempts: 1 });
+    expect((await world.op('settings.get', {})).capacity).toEqual({ limited: false, window: null, until: null });
+  });
+
+  it('reports the plan caps as a sending limit, without numbers', async () => {
+    const world = createMailWorld();
+    await configureSender(world);
+    world.quota.current = {
+      check: () => Promise.resolve({ action: 'pause', reason: 'daily_cap_reached', retryAfterMs: 7200_000 }),
+    };
+    const [paused] = await process(world, ['plan'], world.contact({}));
+    expect(paused).toMatchObject({ action: 'retry', reason: 'quota_paused', delaySeconds: 7200 });
+    expect((await world.op('settings.get', {})).capacity).toEqual({
+      limited: true,
+      window: 'day',
+      until: new Date(world.clock.now + 7200_000).toISOString(),
+    });
+  });
+
   it('applies the per-tenant rate limit per minute', async () => {
     const world = createMailWorld();
     await configureSender(world);
