@@ -274,6 +274,13 @@ describe('device signals module', () => {
     expect(rows<{ visitor_id: string }>(`SELECT visitor_id FROM device_ip_seen`)).toEqual([
       { visitor_id: vidOf(2) },
     ]);
+    // Erasures and the dormant pruning look the matches up by the index, not by a scan.
+    const plan = db().all<{ detail: string }>(
+      `EXPLAIN QUERY PLAN UPDATE device_signals SET candidate = NULL
+       WHERE candidate IN (SELECT value FROM json_each(?))`,
+      '[]',
+    );
+    expect(plan.map((p) => p.detail).join(' ')).toContain('device_signals_candidate');
   });
 
   it('forgets the signals of dormant visitors without archiving them', async () => {
