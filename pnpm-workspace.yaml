@@ -13,3 +13,4 @@ minimumReleaseAgeExclude:
 overrides:
   re2js: '>=2.8.7'
   seroval: '>=1.6.11'
+  '@react-email/render': '^2.3.1'
