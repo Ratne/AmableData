@@ -159,6 +159,9 @@ export const checkoutSettingsSchema = z.object({
   thank_you_url: httpUrl,
   success_message: z.string().max(2000).default(''),
   button_label: z.string().max(100).default(''),
+  /** Two steps: contact details first, then bumps and payment (the lead is sent on "Continue"). */
+  two_step: z.boolean().default(false),
+  continue_label: z.string().max(100).default(''),
   heading: z.string().max(200).default(''),
   terms_url: httpUrl,
   terms_label: z.string().max(300).default(''),

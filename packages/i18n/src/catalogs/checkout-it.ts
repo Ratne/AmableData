@@ -37,6 +37,8 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.tab.offers': 'Post-acquisto',
   'checkout.tab.design': 'Design',
   'checkout.tab.settings': 'Impostazioni',
+  'checkout.tabGroup.offer': 'Offerta',
+  'checkout.tabGroup.checkout': 'Checkout',
 
   'checkout.items.addProduct': 'Aggiungi prodotto',
   'checkout.items.addPlan': 'Aggiungi piano',
@@ -203,6 +205,10 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.settings.termsUrl': 'URL dei termini',
   'checkout.settings.termsHint': "Se impostato, l'acquirente deve accettare i termini per pagare.",
   'checkout.settings.hosted': 'Pagina ospitata (un link che funziona senza landing page)',
+  'checkout.twoStep.label': 'Checkout in 2 passaggi (prima i dati di contatto, poi il pagamento)',
+  'checkout.twoStep.hint':
+    'Con il carrello abbandonato attivo, il lead viene salvato appena si clicca Continua.',
+  'checkout.twoStep.continueLabel': 'Testo del pulsante Continua',
   'checkout.settings.tagsHint':
     "Aggiunti solo a pagamento riuscito (una carta rifiutata non ne aggiunge). Il contatto, il suo owner e la lead source vengono salvati appena l'acquirente invia il modulo.",
   'checkout.settings.attribution':

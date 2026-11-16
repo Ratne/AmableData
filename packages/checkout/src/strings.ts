@@ -78,6 +78,8 @@ export interface CheckoutStrings {
   summaryIntro: string;
   summaryOrders: string;
   summaryOutro: string;
+  stepContinue: string;
+  stepBack: string;
 }
 
 const en: CheckoutStrings = {
@@ -146,7 +148,8 @@ const en: CheckoutStrings = {
   redirecting: 'Redirecting…',
   methodCard: 'Card',
   methodBankTransfer: 'Bank transfer',
-  bankTransferNote: 'You will get the bank details after placing the order. It is shipped once the transfer arrives.',
+  bankTransferNote:
+    'You will get the bank details after placing the order. It is shipped once the transfer arrives.',
   placeOrder: 'Place order — {amount}',
   bankPending: 'Thank you! Your order is placed: complete it with a bank transfer.',
   bankHolder: 'Account holder',
@@ -161,9 +164,12 @@ const en: CheckoutStrings = {
   copy: 'Copy',
   copied: 'Copied',
   summarySubject: 'Bank transfer details for order {reference}',
-  summaryIntro: 'Thank you for your order. To complete it, please make a bank transfer with these details.',
+  summaryIntro:
+    'Thank you for your order. To complete it, please make a bank transfer with these details.',
   summaryOrders: 'Orders',
   summaryOutro: 'The order is confirmed as soon as the transfer arrives.',
+  stepContinue: 'Continue',
+  stepBack: '‹ Back to your details',
 };
 
 const it: CheckoutStrings = {
@@ -232,7 +238,8 @@ const it: CheckoutStrings = {
   redirecting: 'Reindirizzamento…',
   methodCard: 'Carta',
   methodBankTransfer: 'Bonifico bancario',
-  bankTransferNote: 'Riceverai le coordinate bancarie dopo aver confermato l’ordine. L’ordine viene evaso all’arrivo del bonifico.',
+  bankTransferNote:
+    'Riceverai le coordinate bancarie dopo aver confermato l’ordine. L’ordine viene evaso all’arrivo del bonifico.',
   placeOrder: 'Conferma ordine — {amount}',
   bankPending: 'Grazie! Il tuo ordine è confermato: completalo con un bonifico.',
   bankHolder: 'Intestatario',
@@ -247,16 +254,22 @@ const it: CheckoutStrings = {
   copy: 'Copia',
   copied: 'Copiato',
   summarySubject: 'Coordinate per il bonifico dell’ordine {reference}',
-  summaryIntro: 'Grazie per il tuo ordine. Per completarlo effettua un bonifico con queste coordinate.',
+  summaryIntro:
+    'Grazie per il tuo ordine. Per completarlo effettua un bonifico con queste coordinate.',
   summaryOrders: 'Ordini',
   summaryOutro: 'L’ordine viene confermato appena riceviamo il bonifico.',
+  stepContinue: 'Continua',
+  stepBack: '‹ Torna ai tuoi dati',
 };
 
 export type CheckoutLocale = 'en' | 'it';
 
 export const CHECKOUT_STRINGS: Readonly<Record<CheckoutLocale, CheckoutStrings>> = { en, it };
 
-export function resolveCheckoutLocale(setting: string, preferred: readonly string[]): CheckoutLocale {
+export function resolveCheckoutLocale(
+  setting: string,
+  preferred: readonly string[],
+): CheckoutLocale {
   if (setting === 'en' || setting === 'it') return setting;
   for (const tag of preferred) {
     const base = tag.toLowerCase().split('-')[0];

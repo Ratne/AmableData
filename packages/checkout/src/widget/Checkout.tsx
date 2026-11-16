@@ -2,6 +2,7 @@ import { collectMeta, collectTracking, initialValues } from '@amable/forms/widge
 import { FieldRow } from '@amable/forms/widget/fields';
 import { WIDGET_STRINGS } from '@amable/forms/strings';
 import { EMAIL_RE, validateSubmission, visibleFieldKeys } from '@amable/forms/validate';
+import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { countryOptions } from '../countries';
 import { paymentMethodTypesFor } from '../payment-methods';
@@ -181,6 +182,28 @@ function modeLabel(mode: ContactFieldMode, label: string): string {
   return mode === 'required' ? `${label} *` : label;
 }
 
+/** Server error path -> the widget's field key (custom fields use their own key). */
+function fieldKeyOf(path: string): string {
+  if (path.startsWith('values.')) return path.slice(7);
+  if (path.startsWith('buyer.address.')) return `address_${path.slice(14)}`;
+  if (path.startsWith('buyer.')) return path.slice(6);
+  return path;
+}
+
+const BUYER_KEYS: ReadonlySet<string> = new Set([
+  'email',
+  'given_name',
+  'family_name',
+  'phone',
+  'company_name',
+  'address_line1',
+  'address_line2',
+  'address_city',
+  'address_postal_code',
+  'address_region',
+  'address_country',
+]);
+
 export function Checkout({
   config,
   api,
@@ -218,6 +241,20 @@ export function Checkout({
   const mountedAt = useRef(Date.now());
   const hp = useRef<HTMLInputElement>(null);
   const sentLead = useRef('');
+  const leadTimer = useRef<number | undefined>(undefined);
+  const twoStep = config.settings.two_step;
+  // Back from a redirect (3DS, bank page) the details were already sent: resume at payment.
+  const [step, setStep] = useState<1 | 2>(() =>
+    twoStep &&
+    !preview &&
+    sessionTokenFromUrl() !== '' &&
+    new URLSearchParams(location.search).get('redirect_status') !== null
+      ? 2
+      : 1,
+  );
+  /** Fields collected in step 1 of the two-step checkout. */
+  const isStep1Key = (key: string) =>
+    BUYER_KEYS.has(key) || config.fields.some((f) => f.key === key);
 
   const [chosen, setChosen] = useState<Method>(config.payments.card ? 'card' : 'bank_transfer');
   const hasPlan = config.items.some((i) => i.recurring !== null && selection.items.includes(i.id));
@@ -282,32 +319,35 @@ export function Checkout({
 
   // Abandoned cart: the email (with name, phone and cart) is saved once typed, before paying.
   const appliedPromo = quote.promo?.applied === true ? quote.promo.code : '';
-  useEffect(() => {
+  const leadEnabled = !preview && config.settings.abandoned_cart?.enabled === true;
+  const sendLead = () => {
+    window.clearTimeout(leadTimer.current);
     const email = buyer.email.trim();
-    if (preview || config.settings.abandoned_cart?.enabled !== true || !EMAIL_RE.test(email))
-      return undefined;
-    const timer = window.setTimeout(() => {
-      const payload = {
-        selection,
-        promo_code: appliedPromo,
-        buyer: {
-          email,
-          given_name: buyer.given_name,
-          family_name: buyer.family_name,
-          phone: buyer.phone,
-        },
-      };
-      const key = JSON.stringify(payload);
-      if (key === sentLead.current) return;
-      sentLead.current = key;
-      void api.lead(config.id, {
-        ...payload,
-        tracking: collectTracking(),
-        meta: collectMeta(host),
-        hp: hp.current?.value ?? '',
-      });
-    }, 1500);
-    return () => window.clearTimeout(timer);
+    if (!leadEnabled || !EMAIL_RE.test(email)) return;
+    const payload = {
+      selection,
+      promo_code: appliedPromo,
+      buyer: {
+        email,
+        given_name: buyer.given_name,
+        family_name: buyer.family_name,
+        phone: buyer.phone,
+      },
+    };
+    const key = JSON.stringify(payload);
+    if (key === sentLead.current) return;
+    sentLead.current = key;
+    void api.lead(config.id, {
+      ...payload,
+      tracking: collectTracking(),
+      meta: collectMeta(host),
+      hp: hp.current?.value ?? '',
+    });
+  };
+  useEffect(() => {
+    if (!leadEnabled || !EMAIL_RE.test(buyer.email.trim())) return undefined;
+    leadTimer.current = window.setTimeout(sendLead, 1500);
+    return () => window.clearTimeout(leadTimer.current);
   }, [buyer.email, buyer.given_name, buyer.family_name, buyer.phone, selectionKey, appliedPromo]);
 
   // Payment Element: created once Stripe.js is there, updated when the amount or the mode change.
@@ -415,6 +455,7 @@ export function Checkout({
   };
 
   const showErrors = (found: Record<string, string>) => {
+    if (twoStep && Object.keys(found).some(isStep1Key)) setStep(1);
     setErrors(found);
     setAlert(
       found['terms_accepted'] !== undefined && Object.keys(found).length === 1
@@ -432,9 +473,37 @@ export function Checkout({
     );
   };
 
+  const goToStep = (next: 1 | 2) => {
+    setAlert('');
+    setStep(next);
+    if (host.getBoundingClientRect().top < 0)
+      host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const onContinue = () => {
+    setAlert('');
+    if (config.settings.item_selection === 'any' && selection.items.length === 0) {
+      setAlert(strings.pickAtLeastOne);
+      return;
+    }
+    const found = Object.fromEntries(
+      Object.entries(localCheck()).filter(([key]) => isStep1Key(key)),
+    );
+    if (Object.keys(found).length > 0) {
+      showErrors(found);
+      return;
+    }
+    sendLead();
+    goToStep(2);
+  };
+
   const onSubmit = async (event: Event) => {
     event.preventDefault();
     if (busy) return;
+    if (twoStep && step === 1) {
+      onContinue();
+      return;
+    }
     setAlert('');
     if (config.settings.item_selection === 'any' && selection.items.length === 0) {
       setAlert(strings.pickAtLeastOne);
@@ -501,7 +570,7 @@ export function Checkout({
         if (f.error === 'validation_failed' && f.details.length > 0) {
           const mapped: Record<string, string> = {};
           for (const d of f.details) {
-            const key = d.path.replace(/^values\./, '');
+            const key = fieldKeyOf(d.path);
             mapped[key] =
               key === 'terms_accepted'
                 ? strings.termsRequired
@@ -670,6 +739,17 @@ export function Checkout({
       : []),
   ];
 
+  // With the option off the step wrappers disappear: same markup as the one-step checkout.
+  const stepBox = (n: 1 | 2, children: ComponentChildren) =>
+    twoStep ? (
+      <div class={step === n ? 'ac-step' : 'ac-step ac-step-hidden'}>{children}</div>
+    ) : (
+      children
+    );
+  const recapText = [`${buyer.given_name} ${buyer.family_name}`.trim(), buyer.email.trim()]
+    .filter((v) => v !== '')
+    .join(' · ');
+
   return (
     <div class="ac-root">
       <form class="ac-grid" onSubmit={(e) => void onSubmit(e)} noValidate>
@@ -678,165 +758,222 @@ export function Checkout({
             <h2 class="ac-heading">{config.settings.heading}</h2>
           ) : null}
           {preview ? <div class="af-notice">{strings.previewNotice}</div> : null}
-          <Items
-            config={config}
-            selection={selection}
-            setSelection={setSelection}
-            money={money}
-            strings={strings}
-          />
-          {bumpsAt('below_items')}
-          <section class="ac-section">
-            <div class="ac-section-title">{strings.contactTitle}</div>
-            {input('email', strings.email, 'required', 'email', 'email')}
-            {c.name !== 'hidden' ? (
-              <div class="ac-row">
-                {input('given_name', strings.firstName, c.name, 'text', 'given-name')}
-                {input('family_name', strings.lastName, c.name, 'text', 'family-name')}
-              </div>
-            ) : null}
-            {input('phone', strings.phone, c.phone, 'tel', 'tel')}
-            {input('company_name', strings.company, c.company, 'text', 'organization')}
-            {c.address !== 'hidden' ? (
-              <>
-                <AddressLine
-                  api={api}
-                  config={config}
-                  locale={locale}
-                  preview={preview}
-                  label={modeLabel(c.address, strings.addressLine1)}
-                  value={buyer.address_line1}
-                  country={buyer.address_country}
-                  error={errors['address_line1']}
-                  onInput={(v) => setBuyerField('address_line1', v)}
-                  onPick={(s) => {
-                    const line1 =
-                      s.street_number !== null && !s.line1.includes(s.street_number)
-                        ? `${s.line1}, ${s.street_number}`
-                        : s.line1;
-                    setBuyer((prev) => ({
-                      ...prev,
-                      address_line1: line1,
-                      address_city: s.locality ?? prev.address_city,
-                      address_region: s.region ?? prev.address_region,
-                      address_postal_code: s.postal_code ?? prev.address_postal_code,
-                      address_country: s.country_code ?? prev.address_country,
-                    }));
-                    setErrors({});
-                  }}
-                />
-                {input('address_line2', strings.addressLine2, 'optional', 'text', 'address-line2')}
-                <div class="ac-row">
-                  {input(
-                    'address_postal_code',
-                    strings.postalCode,
-                    c.address,
-                    'text',
-                    'postal-code',
-                  )}
-                  {input('address_city', strings.city, c.address, 'text', 'address-level2')}
-                </div>
-                <div class="ac-row">
-                  {input('address_region', strings.region, 'optional', 'text', 'address-level1')}
-                  <div
-                    class={`af-field${errors['address_country'] !== undefined ? ' af-invalid' : ''}`}
-                    data-af-invalid={errors['address_country'] === undefined ? undefined : ''}
-                  >
-                    <label class="af-label" for="ac-address_country">
-                      {modeLabel(c.address, strings.country)}
-                    </label>
-                    <select
-                      id="ac-address_country"
-                      class="af-select"
-                      autoComplete="country"
-                      value={buyer.address_country}
-                      onChange={(e) =>
-                        setBuyerField('address_country', (e.target as HTMLSelectElement).value)
-                      }
-                    >
-                      {c.address === 'required' ? null : <option value="">—</option>}
-                      {countries.map((o) => (
-                        <option key={o.code} value={o.code}>
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
-                    {errors['address_country'] !== undefined ? (
-                      <div class="af-error">{errors['address_country']}</div>
-                    ) : null}
+          {stepBox(
+            1,
+            <>
+              <Items
+                config={config}
+                selection={selection}
+                setSelection={setSelection}
+                money={money}
+                strings={strings}
+              />
+              {twoStep ? null : bumpsAt('below_items')}
+              <section class="ac-section">
+                <div class="ac-section-title">{strings.contactTitle}</div>
+                {input('email', strings.email, 'required', 'email', 'email')}
+                {c.name !== 'hidden' ? (
+                  <div class="ac-row">
+                    {input('given_name', strings.firstName, c.name, 'text', 'given-name')}
+                    {input('family_name', strings.lastName, c.name, 'text', 'family-name')}
                   </div>
+                ) : null}
+                {input('phone', strings.phone, c.phone, 'tel', 'tel')}
+                {input('company_name', strings.company, c.company, 'text', 'organization')}
+                {c.address !== 'hidden' ? (
+                  <>
+                    <AddressLine
+                      api={api}
+                      config={config}
+                      locale={locale}
+                      preview={preview}
+                      label={modeLabel(c.address, strings.addressLine1)}
+                      value={buyer.address_line1}
+                      country={buyer.address_country}
+                      error={errors['address_line1']}
+                      onInput={(v) => setBuyerField('address_line1', v)}
+                      onPick={(s) => {
+                        const line1 =
+                          s.street_number !== null && !s.line1.includes(s.street_number)
+                            ? `${s.line1}, ${s.street_number}`
+                            : s.line1;
+                        setBuyer((prev) => ({
+                          ...prev,
+                          address_line1: line1,
+                          address_city: s.locality ?? prev.address_city,
+                          address_region: s.region ?? prev.address_region,
+                          address_postal_code: s.postal_code ?? prev.address_postal_code,
+                          address_country: s.country_code ?? prev.address_country,
+                        }));
+                        setErrors({});
+                      }}
+                    />
+                    {input(
+                      'address_line2',
+                      strings.addressLine2,
+                      'optional',
+                      'text',
+                      'address-line2',
+                    )}
+                    <div class="ac-row">
+                      {input(
+                        'address_postal_code',
+                        strings.postalCode,
+                        c.address,
+                        'text',
+                        'postal-code',
+                      )}
+                      {input('address_city', strings.city, c.address, 'text', 'address-level2')}
+                    </div>
+                    <div class="ac-row">
+                      {input(
+                        'address_region',
+                        strings.region,
+                        'optional',
+                        'text',
+                        'address-level1',
+                      )}
+                      <div
+                        class={`af-field${errors['address_country'] !== undefined ? ' af-invalid' : ''}`}
+                        data-af-invalid={errors['address_country'] === undefined ? undefined : ''}
+                      >
+                        <label class="af-label" for="ac-address_country">
+                          {modeLabel(c.address, strings.country)}
+                        </label>
+                        <select
+                          id="ac-address_country"
+                          class="af-select"
+                          autoComplete="country"
+                          value={buyer.address_country}
+                          onChange={(e) =>
+                            setBuyerField('address_country', (e.target as HTMLSelectElement).value)
+                          }
+                        >
+                          {c.address === 'required' ? null : <option value="">—</option>}
+                          {countries.map((o) => (
+                            <option key={o.code} value={o.code}>
+                              {o.name}
+                            </option>
+                          ))}
+                        </select>
+                        {errors['address_country'] !== undefined ? (
+                          <div class="af-error">{errors['address_country']}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </section>
+              {config.fields.length > 0 ? (
+                <section class="ac-section">
+                  <div class="ac-section-title">{strings.detailsTitle}</div>
+                  <div class="af-form">
+                    {config.fields.map((field) =>
+                      visible.has(field.key) ? (
+                        <FieldRow
+                          key={field.id}
+                          field={field}
+                          value={values[field.key]}
+                          error={errors[field.key]}
+                          strings={fieldStrings}
+                          onChange={(value) => setValue(field.key, value)}
+                        />
+                      ) : null,
+                    )}
+                  </div>
+                </section>
+              ) : null}
+              {twoStep ? (
+                <div class="af-actions">
+                  <button type="submit" class="af-button" disabled={busy}>
+                    {config.settings.continue_label !== ''
+                      ? config.settings.continue_label
+                      : strings.stepContinue}
+                  </button>
                 </div>
-              </>
-            ) : null}
-          </section>
-          {config.fields.length > 0 ? (
-            <section class="ac-section">
-              <div class="ac-section-title">{strings.detailsTitle}</div>
-              <div class="af-form">
-                {config.fields.map((field) =>
-                  visible.has(field.key) ? (
-                    <FieldRow
-                      key={field.id}
-                      field={field}
-                      value={values[field.key]}
-                      error={errors[field.key]}
-                      strings={fieldStrings}
-                      onChange={(value) => setValue(field.key, value)}
-                    />
-                  ) : null,
-                )}
-              </div>
-            </section>
-          ) : null}
-          {bumpsAt('above_payment')}
-          <section class="ac-section" style={intentMode === 'none' ? 'display:none' : undefined}>
-            <div class="ac-section-title">{strings.paymentTitle}</div>
-            {methods.length > 1 ? (
-              <div class="ac-methods" role="radiogroup">
-                {methods.map(([key, label]) => (
-                  <label key={key} class={`ac-item${method === key ? ' ac-item-on' : ''}`}>
+              ) : null}
+            </>,
+          )}
+          {stepBox(
+            2,
+            <>
+              {twoStep ? (
+                <>
+                  <ol class="ac-steps">
+                    <li>
+                      <button type="button" class="ac-steps-link" onClick={() => goToStep(1)}>
+                        1 · {strings.contactTitle}
+                      </button>
+                    </li>
+                    <li class="is-active" aria-current="step">
+                      2 · {strings.paymentTitle}
+                    </li>
+                  </ol>
+                  <div class="ac-contact-recap">
+                    {recapText !== '' ? <span class="ac-muted">{recapText}</span> : null}
+                    <button type="button" class="ac-link ac-step-back" onClick={() => goToStep(1)}>
+                      {strings.stepBack}
+                    </button>
+                  </div>
+                  {bumpsAt('below_items')}
+                </>
+              ) : null}
+              {bumpsAt('above_payment')}
+              <section
+                class="ac-section"
+                style={intentMode === 'none' ? 'display:none' : undefined}
+              >
+                <div class="ac-section-title">{strings.paymentTitle}</div>
+                {methods.length > 1 ? (
+                  <div class="ac-methods" role="radiogroup">
+                    {methods.map(([key, label]) => (
+                      <label key={key} class={`ac-item${method === key ? ' ac-item-on' : ''}`}>
+                        <input
+                          type="radio"
+                          name="ac-method"
+                          checked={method === key}
+                          onChange={() => setChosen(key)}
+                        />
+                        <span class="ac-item-name">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+                {needsStripe && config.stripe_publishable_key === null && !preview ? (
+                  <div class="af-alert">{strings.stripeMissing}</div>
+                ) : null}
+                {preview ? <div class="af-notice">{strings.previewNotice}</div> : null}
+                {method === 'bank_transfer' ? (
+                  <div class="ac-muted">{strings.bankTransferNote}</div>
+                ) : null}
+                {method === 'card' && redirectCard ? (
+                  <div class="ac-muted">{strings.redirectNote}</div>
+                ) : null}
+                <div class="ac-payment" style={elementMode === 'none' ? 'display:none' : undefined}>
+                  <slot name={PAYMENT_SLOT} />
+                </div>
+              </section>
+              {bumpsAt('below_payment')}
+              {config.settings.terms_url !== '' ? (
+                <div
+                  class={`af-field${errors['terms_accepted'] !== undefined ? ' af-invalid' : ''}`}
+                >
+                  <label class="af-choice">
                     <input
-                      type="radio"
-                      name="ac-method"
-                      checked={method === key}
-                      onChange={() => setChosen(key)}
+                      type="checkbox"
+                      checked={terms}
+                      onChange={(e) => setTerms((e.target as HTMLInputElement).checked)}
                     />
-                    <span class="ac-item-name">{label}</span>
+                    <span>
+                      <a href={config.settings.terms_url} target="_blank" rel="noopener noreferrer">
+                        {config.settings.terms_label || strings.terms}
+                      </a>
+                    </span>
                   </label>
-                ))}
-              </div>
-            ) : null}
-            {needsStripe && config.stripe_publishable_key === null && !preview ? (
-              <div class="af-alert">{strings.stripeMissing}</div>
-            ) : null}
-            {preview ? <div class="af-notice">{strings.previewNotice}</div> : null}
-            {method === 'bank_transfer' ? (
-              <div class="ac-muted">{strings.bankTransferNote}</div>
-            ) : null}
-            {method === 'card' && redirectCard ? (
-              <div class="ac-muted">{strings.redirectNote}</div>
-            ) : null}
-            <div class="ac-payment" style={elementMode === 'none' ? 'display:none' : undefined}>
-              <slot name={PAYMENT_SLOT} />
-            </div>
-          </section>
-          {bumpsAt('below_payment')}
-          {config.settings.terms_url !== '' ? (
-            <div class={`af-field${errors['terms_accepted'] !== undefined ? ' af-invalid' : ''}`}>
-              <label class="af-choice">
-                <input
-                  type="checkbox"
-                  checked={terms}
-                  onChange={(e) => setTerms((e.target as HTMLInputElement).checked)}
-                />
-                <span>
-                  <a href={config.settings.terms_url} target="_blank" rel="noopener noreferrer">
-                    {config.settings.terms_label || strings.terms}
-                  </a>
-                </span>
-              </label>
-            </div>
-          ) : null}
+                </div>
+              ) : null}
+            </>,
+          )}
           <input
             ref={hp}
             class="af-hp"
@@ -850,15 +987,18 @@ export function Checkout({
               {alert}
             </div>
           ) : null}
-          <div class="af-actions">
-            <button
-              type="submit"
-              class="af-button"
-              disabled={busy || (elementMode !== 'none' && !stripeReady && !preview)}
-            >
-              {busy ? strings.paying : buttonLabel}
-            </button>
-          </div>
+          {stepBox(
+            2,
+            <div class="af-actions">
+              <button
+                type="submit"
+                class="af-button"
+                disabled={busy || (elementMode !== 'none' && !stripeReady && !preview)}
+              >
+                {busy ? strings.paying : buttonLabel}
+              </button>
+            </div>,
+          )}
         </div>
         <Summary
           quote={quote}

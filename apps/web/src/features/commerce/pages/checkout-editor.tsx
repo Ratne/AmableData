@@ -15,7 +15,7 @@ import {
   type FormDefinition,
   type FormField as FormFieldDef,
 } from '@amable/forms';
-import { DashboardButton, PageBody, PageToolbar, toast, usePageChrome } from '@amable/ui';
+import { cn, DashboardButton, PageBody, PageToolbar, toast, usePageChrome } from '@amable/ui';
 import { Button } from '@amable/ui/ui/button';
 import { Checkbox } from '@amable/ui/ui/checkbox';
 import { Input } from '@amable/ui/ui/input';
@@ -24,7 +24,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@amable/ui/ui/tabs';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { Check, Copy, ExternalLink, Save } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  CreditCard,
+  ExternalLink,
+  Save,
+  ShoppingBag,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { EditLockBanner } from '../../../lib/edit-lock/edit-lock-banner';
@@ -50,7 +58,61 @@ import {
 import { ChoiceSelect, ErrorNotice, FormField, PageState, SectionCard } from '../components/common';
 
 type EditorTab = 'products' | 'fields' | 'bumps' | 'offers' | 'design' | 'settings';
-const TABS: readonly EditorTab[] = ['products', 'fields', 'bumps', 'offers', 'design', 'settings'];
+
+/** Editor sections, grouped: the group on top, its tabs underneath. */
+const TAB_GROUPS: ReadonlyArray<{
+  id: 'offer' | 'checkout';
+  icon: LucideIcon;
+  tabs: readonly [EditorTab, ...EditorTab[]];
+}> = [
+  { id: 'offer', icon: ShoppingBag, tabs: ['products', 'bumps', 'offers'] },
+  { id: 'checkout', icon: CreditCard, tabs: ['fields', 'design', 'settings'] },
+];
+
+function EditorNav({ tab, onTab }: { tab: EditorTab; onTab: (tab: EditorTab) => void }) {
+  const { t } = useI18n();
+  const [lastByGroup, setLastByGroup] = useState<Partial<Record<string, EditorTab>>>({});
+  const current = TAB_GROUPS.find((g) => g.tabs.includes(tab)) ?? TAB_GROUPS[0]!;
+  useEffect(() => setLastByGroup((prev) => ({ ...prev, [current.id]: tab })), [tab, current.id]);
+  return (
+    <div className="grid gap-2">
+      <div className="bg-muted inline-flex w-fit flex-wrap gap-1 rounded-lg p-1">
+        {TAB_GROUPS.map((g) => {
+          const Icon = g.icon;
+          const active = g.id === current.id;
+          return (
+            <button
+              key={g.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onTab(lastByGroup[g.id] ?? g.tabs[0])}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                active
+                  ? 'bg-background text-foreground shadow-sm dark:bg-input/30'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Icon aria-hidden className="size-4" />
+              {t(`checkout.tabGroup.${g.id}`)}
+            </button>
+          );
+        })}
+      </div>
+      <TabsList className="h-auto w-full justify-start gap-5 rounded-none border-b bg-transparent p-0">
+        {current.tabs.map((value) => (
+          <TabsTrigger
+            key={value}
+            value={value}
+            className="text-muted-foreground hover:text-foreground data-[state=active]:text-foreground data-[state=active]:border-b-primary h-auto flex-none rounded-none border-0 border-b-2 border-transparent px-0.5 pt-1 pb-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:border-b-primary dark:data-[state=active]:bg-transparent"
+          >
+            {t(`checkout.tab.${value}`)}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </div>
+  );
+}
 
 const FIELD_HOST: FormDefinition = formDefinitionSchema.parse({});
 
@@ -322,13 +384,7 @@ function Editor({ checkout }: { checkout: Checkout }) {
             </p>
           ) : null}
           <Tabs value={tab} onValueChange={(value) => setTab(value as EditorTab)}>
-            <TabsList className="flex-wrap">
-              {TABS.map((value) => (
-                <TabsTrigger key={value} value={value}>
-                  {t(`checkout.tab.${value}`)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <EditorNav tab={tab} onTab={setTab} />
             <TabsContent value="products" className="grid gap-4 pt-3">
               <ItemsSection {...sectionProps} />
               <DiscountsSection {...sectionProps} />
@@ -550,6 +606,30 @@ function Editor({ checkout }: { checkout: Checkout }) {
                                 .slice(0, 64),
                             })
                           }
+                        />
+                      )}
+                    </FormField>
+                  ) : null}
+                  <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                    <Switch
+                      checked={settings.two_step}
+                      disabled={!writable}
+                      onCheckedChange={(two_step) => setSettings({ two_step })}
+                    />
+                    {t('checkout.twoStep.label')}
+                  </label>
+                  {settings.two_step ? (
+                    <FormField
+                      label={t('checkout.twoStep.continueLabel')}
+                      hint={`${t('checkout.settings.defaultHint')} ${t('checkout.twoStep.hint')}`}
+                      className="sm:col-span-2"
+                    >
+                      {(id) => (
+                        <Input
+                          id={id}
+                          value={settings.continue_label}
+                          disabled={!writable}
+                          onChange={(e) => setSettings({ continue_label: e.target.value })}
                         />
                       )}
                     </FormField>

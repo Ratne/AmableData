@@ -20,8 +20,17 @@ describe('checkout definition', () => {
   it('defaults to an empty, valid checkout', () => {
     const d = defaultCheckoutDefinition();
     expect(d.items).toEqual([]);
-    expect(d.settings).toMatchObject({ promo_codes: true, promo_param: 'promo', first_offer: '', hosted_enabled: true });
-    expect(d.contact).toMatchObject({ name: 'required', address: 'hidden', address_autocomplete: true });
+    expect(d.settings).toMatchObject({
+      promo_codes: true,
+      promo_param: 'promo',
+      first_offer: '',
+      hosted_enabled: true,
+    });
+    expect(d.contact).toMatchObject({
+      name: 'required',
+      address: 'hidden',
+      address_autocomplete: true,
+    });
   });
 
   it('checks the automatic discounts and the free selection', () => {
@@ -35,7 +44,14 @@ describe('checkout definition', () => {
       issues({
         items: items.slice(0, 2),
         settings: { item_selection: 'any' },
-        discounts: [{ id: 'd1', label: 'Bundle', conditions: [{ item_id: 'a' }, { item_id: 'b', min_quantity: 2 }], percent_bps: 1000 }],
+        discounts: [
+          {
+            id: 'd1',
+            label: 'Bundle',
+            conditions: [{ item_id: 'a' }, { item_id: 'b', min_quantity: 2 }],
+            percent_bps: 1000,
+          },
+        ],
       }),
     ).toEqual([]);
     expect(
@@ -43,8 +59,18 @@ describe('checkout definition', () => {
         items,
         settings: { item_selection: 'one' },
         discounts: [
-          { id: 'd1', label: 'Plan', conditions: [{ item_id: 'm' }, { item_id: 'nope' }], percent_bps: 1000 },
-          { id: 'd1', label: 'Fixed', kind: 'fixed', conditions: [{ item_id: 'a' }, { item_id: 'a' }] },
+          {
+            id: 'd1',
+            label: 'Plan',
+            conditions: [{ item_id: 'm' }, { item_id: 'nope' }],
+            percent_bps: 1000,
+          },
+          {
+            id: 'd1',
+            label: 'Fixed',
+            kind: 'fixed',
+            conditions: [{ item_id: 'a' }, { item_id: 'a' }],
+          },
         ],
       }),
     ).toEqual([
@@ -69,8 +95,12 @@ describe('checkout definition', () => {
         settings: { first_offer: 'up' },
       }),
     ).toEqual([]);
-    expect(issues({ settings: { first_offer: 'missing' } })).toEqual(['settings.first_offer: unknown offer']);
-    expect(issues({ offers: [{ key: 'up', ref_id: 'p1', title: 'Up', on_accept: 'up' }] })).toEqual(['offers.0.on_accept: unknown offer']);
+    expect(issues({ settings: { first_offer: 'missing' } })).toEqual([
+      'settings.first_offer: unknown offer',
+    ]);
+    expect(issues({ offers: [{ key: 'up', ref_id: 'p1', title: 'Up', on_accept: 'up' }] })).toEqual(
+      ['offers.0.on_accept: unknown offer'],
+    );
     expect(
       issues({
         items: [
@@ -99,6 +129,23 @@ describe('checkout definition', () => {
   it('rejects CSS injection in the style', () => {
     expect(issues({ style: { primary_color: 'red;} body{display:none' } })).not.toEqual([]);
   });
+
+  it('keeps the two-step checkout off unless enabled', () => {
+    expect(
+      checkoutDefinitionSchema.parse({ settings: { button_label: 'Buy' } }).settings,
+    ).toMatchObject({
+      two_step: false,
+      continue_label: '',
+    });
+    expect(
+      checkoutDefinitionSchema.parse({
+        settings: { two_step: true, continue_label: 'Go to payment' },
+      }).settings,
+    ).toMatchObject({ two_step: true, continue_label: 'Go to payment' });
+    expect(issues({ settings: { two_step: true, continue_label: 'x'.repeat(101) } })).toHaveLength(
+      1,
+    );
+  });
 });
 
 describe('session payload', () => {
@@ -116,7 +163,9 @@ describe('session payload', () => {
 
 describe('strings', () => {
   it('covers the same keys in every language', () => {
-    expect(Object.keys(CHECKOUT_STRINGS.it).sort()).toEqual(Object.keys(CHECKOUT_STRINGS.en).sort());
+    expect(Object.keys(CHECKOUT_STRINGS.it).sort()).toEqual(
+      Object.keys(CHECKOUT_STRINGS.en).sort(),
+    );
   });
 
   it('picks the locale from the setting or the browser', () => {
@@ -136,5 +185,12 @@ describe('widget bundle', () => {
     expect(bundle).not.toContain('ZodError');
     expect(bundle).toContain('data-amable-checkout');
     expect(bundle).toContain('data-amable-offer');
+  });
+
+  it('ships the two-step checkout', async () => {
+    const bundle = await buildBundle();
+    expect(bundle).toContain('ac-step-hidden');
+    expect(CHECKOUT_STRINGS.it.stepContinue).toBe('Continua');
+    expect(CHECKOUT_STRINGS.en.stepBack).toContain('your details');
   });
 });

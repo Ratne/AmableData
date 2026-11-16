@@ -40,6 +40,8 @@ export const checkoutEn = {
   'checkout.tab.offers': 'Post-purchase',
   'checkout.tab.design': 'Design',
   'checkout.tab.settings': 'Settings',
+  'checkout.tabGroup.offer': 'Offer',
+  'checkout.tabGroup.checkout': 'Checkout',
 
   'checkout.items.addProduct': 'Add product',
   'checkout.items.addPlan': 'Add plan',
@@ -204,6 +206,10 @@ export const checkoutEn = {
   'checkout.settings.termsUrl': 'Terms URL',
   'checkout.settings.termsHint': 'When set, the buyer must accept the terms to pay.',
   'checkout.settings.hosted': 'Hosted page (a link that works without a landing page)',
+  'checkout.twoStep.label': 'Two-step checkout (contact details first, then payment)',
+  'checkout.twoStep.hint':
+    'With the abandoned cart on, the lead is saved as soon as the buyer clicks Continue.',
+  'checkout.twoStep.continueLabel': 'Continue button text',
   'checkout.settings.tagsHint':
     'Added once the payment succeeds (a declined card adds none). The contact, its owner and lead source are saved as soon as the buyer submits.',
   'checkout.settings.attribution':

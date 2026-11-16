@@ -7,7 +7,8 @@ import type { CheckoutStyle } from '../schema';
  * custom CSS (appended last by the form rules) in charge.
  */
 export function buildCheckoutStyles(s: CheckoutStyle): string {
-  const mix = (pct: number) => `color-mix(in srgb, ${s.primary_color} ${String(pct)}%, transparent)`;
+  const mix = (pct: number) =>
+    `color-mix(in srgb, ${s.primary_color} ${String(pct)}%, transparent)`;
   const custom = s.custom_css;
   return `${formStyles({ ...s, custom_css: '' })}
 :where(.ac-root) {
@@ -19,6 +20,14 @@ export function buildCheckoutStyles(s: CheckoutStyle): string {
 :where(.ac-narrow .ac-grid) { grid-template-columns: 1fr; }
 :where(.ac-main) { display: flex; flex-direction: column; gap: calc(${s.gap} * 1.5); min-width: 0; }
 :where(.ac-heading) { font-size: 1.5em; font-weight: 700; margin: 0; }
+:where(.ac-step) { display: contents; }
+:where(.ac-step-hidden) { display: none; }
+:where(.ac-steps) { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0 0 10px; list-style: none; border-bottom: 1px solid ${s.border_color}; font-size: .9em; }
+:where(.ac-steps li) { opacity: .6; }
+:where(.ac-steps li.is-active) { opacity: 1; font-weight: 700; color: ${s.primary_color}; }
+:where(.ac-steps-link) { all: unset; cursor: pointer; }
+:where(.ac-steps-link:hover) { text-decoration: underline; }
+:where(.ac-contact-recap) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
 :where(.ac-section) { display: flex; flex-direction: column; gap: ${s.gap}; }
 :where(.ac-section-title) { font-weight: 700; font-size: 1.05em; }
 :where(.ac-items) { display: flex; flex-direction: column; gap: 10px; }

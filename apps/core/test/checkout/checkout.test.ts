@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { signStripePayload, verifyStripeSignature, WEBHOOK_TOLERANCE_MS } from '../../src/commerce/stripe/webhook';
+import {
+  signStripePayload,
+  verifyStripeSignature,
+  WEBHOOK_TOLERANCE_MS,
+} from '../../src/commerce/stripe/webhook';
 import { commerceWorld, DAY, failure, type CommerceWorld } from '../commerce/helpers';
 
 const BUYER = { email: 'buyer@example.com', given_name: 'Mary', family_name: 'Shelley' };
@@ -32,7 +36,12 @@ function prepare(
   });
 }
 
-function succeed(w: CommerceWorld, intentId: string, amount: number, paymentMethodId: string | null = 'pm_1') {
+function succeed(
+  w: CommerceWorld,
+  intentId: string,
+  amount: number,
+  paymentMethodId: string | null = 'pm_1',
+) {
   return w.t.op('checkout.settleIntent', {
     intentId,
     kind: 'payment',
@@ -44,7 +53,12 @@ function succeed(w: CommerceWorld, intentId: string, amount: number, paymentMeth
   });
 }
 
-function attach(w: CommerceWorld, prepared: { sessionId: string; contactId: string }, intentId: string, kind: 'payment' | 'setup' = 'payment') {
+function attach(
+  w: CommerceWorld,
+  prepared: { sessionId: string; contactId: string },
+  intentId: string,
+  kind: 'payment' | 'setup' = 'payment',
+) {
   w.t.op('checkout.attachIntent', {
     sessionId: prepared.sessionId,
     contactId: prepared.contactId,
@@ -57,22 +71,57 @@ function attach(w: CommerceWorld, prepared: { sessionId: string; contactId: stri
 describe('stripe webhook signature', () => {
   it('accepts a signed payload within the tolerance and rejects tampering or replays', async () => {
     const secret = 'whsec_test_secret';
-    const payload = JSON.stringify({ id: 'evt_1', type: 'payment_intent.succeeded', data: { object: {} } });
+    const payload = JSON.stringify({
+      id: 'evt_1',
+      type: 'payment_intent.succeeded',
+      data: { object: {} },
+    });
     const now = Date.UTC(2026, 9, 15, 12, 0, 0);
     const t = Math.floor(now / 1000);
     const v1 = await signStripePayload(secret, t, payload);
     expect(await verifyStripeSignature(payload, `t=${String(t)},v1=${v1}`, secret, now)).toBe(true);
     // rotated secrets: any matching v1 is enough
-    expect(await verifyStripeSignature(payload, `t=${String(t)},v1=deadbeef,v1=${v1}`, secret, now)).toBe(true);
-    expect(await verifyStripeSignature(`${payload} `, `t=${String(t)},v1=${v1}`, secret, now)).toBe(false);
-    expect(await verifyStripeSignature(payload, `t=${String(t)},v1=${v1}`, 'whsec_other', now)).toBe(false);
-    expect(await verifyStripeSignature(payload, `t=${String(t)},v1=${v1}`, secret, now + WEBHOOK_TOLERANCE_MS + 1_000)).toBe(false);
+    expect(
+      await verifyStripeSignature(payload, `t=${String(t)},v1=deadbeef,v1=${v1}`, secret, now),
+    ).toBe(true);
+    expect(await verifyStripeSignature(`${payload} `, `t=${String(t)},v1=${v1}`, secret, now)).toBe(
+      false,
+    );
+    expect(
+      await verifyStripeSignature(payload, `t=${String(t)},v1=${v1}`, 'whsec_other', now),
+    ).toBe(false);
+    expect(
+      await verifyStripeSignature(
+        payload,
+        `t=${String(t)},v1=${v1}`,
+        secret,
+        now + WEBHOOK_TOLERANCE_MS + 1_000,
+      ),
+    ).toBe(false);
     expect(await verifyStripeSignature(payload, null, secret, now)).toBe(false);
     expect(await verifyStripeSignature(payload, `v1=${v1}`, secret, now)).toBe(false);
   });
 });
 
 describe('checkout sessions', () => {
+  it('sends the two-step option to the widget, off by default', () => {
+    const w = commerceWorld();
+    const items = [{ id: 'i1', kind: 'product', ref_id: w.course }];
+    const plain = checkout(w, { items });
+    expect(w.t.op('checkout.public', { checkoutId: plain.id }).config.settings).toMatchObject({
+      two_step: false,
+      continue_label: '',
+    });
+    const stepped = checkout(w, {
+      items,
+      settings: { two_step: true, continue_label: 'Go to payment' },
+    });
+    expect(w.t.op('checkout.public', { checkoutId: stepped.id }).config.settings).toMatchObject({
+      two_step: true,
+      continue_label: 'Go to payment',
+    });
+  });
+
   it('refuses to sell before Stripe is connected', () => {
     const w = commerceWorld();
     const c = checkout(w, { items: [{ id: 'i1', kind: 'product', ref_id: w.course }] });
@@ -92,7 +141,12 @@ describe('checkout sessions', () => {
       promo_code: 'SAVE10',
       tracking: { utm_source: 'newsletter', utm_campaign: 'launch', ignored: 'x' },
     });
-    expect(prepared).toMatchObject({ reused: false, intentKind: 'payment', save: false, currency: 'EUR' });
+    expect(prepared).toMatchObject({
+      reused: false,
+      intentKind: 'payment',
+      save: false,
+      currency: 'EUR',
+    });
     const draft = w.t.op('orders.get', { id: prepared.orderId ?? '' });
     expect(draft).toMatchObject({
       status: 'draft',
@@ -104,14 +158,27 @@ describe('checkout sessions', () => {
     });
     // The bump headline is shown on the page; the order line keeps the product name.
     expect(draft.items.map((i) => i.name)).toEqual(['Analytics Course', 'Mug']);
-    expect(w.t.op('checkout.public', { checkoutId: c.id }).config.bumps[0]).toMatchObject({ title: 'Add a mug', unit_price_minor: 1_250 });
+    expect(w.t.op('checkout.public', { checkoutId: c.id }).config.bumps[0]).toMatchObject({
+      title: 'Add a mug',
+      unit_price_minor: 1_250,
+    });
     expect(prepared.amountMinor).toBe(draft.total_minor);
     const contact = w.t.op('contacts.get', { id: prepared.contactId });
     expect(contact).toMatchObject({ source_type: 'checkout' });
 
     // A retry with the session token keeps the same session and draft.
-    const retry = prepare(w, c.id, 'h2', { selection: { bumps: ['b1'] }, promo_code: 'SAVE10' }, 'h1');
-    expect(retry).toMatchObject({ reused: true, sessionId: prepared.sessionId, orderId: prepared.orderId });
+    const retry = prepare(
+      w,
+      c.id,
+      'h2',
+      { selection: { bumps: ['b1'] }, promo_code: 'SAVE10' },
+      'h1',
+    );
+    expect(retry).toMatchObject({
+      reused: true,
+      sessionId: prepared.sessionId,
+      orderId: prepared.orderId,
+    });
 
     attach(w, prepared, 'pi_1');
     // The browser and the webhook both report the payment.
@@ -129,12 +196,20 @@ describe('checkout sessions', () => {
 
     // Refunds made in the Stripe dashboard: the cumulative amount, applied once per delta.
     const refund = (amount: number) =>
-      w.t.op('stripe.event', { type: 'charge.refunded', chargeId: 'ch_1', paymentIntentId: 'pi_1', amountRefunded: amount });
+      w.t.op('stripe.event', {
+        type: 'charge.refunded',
+        chargeId: 'ch_1',
+        paymentIntentId: 'pi_1',
+        amountRefunded: amount,
+      });
     expect(refund(1_000)).toEqual({ handled: true });
     refund(1_000);
     expect(w.t.op('orders.get', { id: paid.id }).refunded_minor).toBe(1_000);
     refund(paid.total_minor);
-    expect(w.t.op('orders.get', { id: paid.id })).toMatchObject({ status: 'refunded', refunded_minor: paid.total_minor });
+    expect(w.t.op('orders.get', { id: paid.id })).toMatchObject({
+      status: 'refunded',
+      refunded_minor: paid.total_minor,
+    });
   });
 
   it('keeps the session open with the error after a declined card', () => {
@@ -164,7 +239,12 @@ describe('checkout sessions', () => {
     connectStripe(w);
     const c = checkout(w, { items: [{ id: 'i1', kind: 'plan', ref_id: w.trialPlan }] });
     const prepared = prepare(w, c.id, 'h1');
-    expect(prepared).toMatchObject({ intentKind: 'setup', save: true, orderId: null, amountMinor: 0 });
+    expect(prepared).toMatchObject({
+      intentKind: 'setup',
+      save: true,
+      orderId: null,
+      amountMinor: 0,
+    });
     attach(w, prepared, 'seti_1', 'setup');
     w.t.op('checkout.settleIntent', {
       intentId: 'seti_1',
@@ -193,9 +273,19 @@ describe('refunds through Stripe', () => {
     return { w, orderId, total: prepared.amountMinor };
   }
   const sync = (w: CommerceWorld, cumulative: number, reason: string | null = 'Damaged') =>
-    w.t.op('stripe.refundSync', { chargeId: 'ch_1', paymentIntentId: 'pi_1', amountRefunded: cumulative, reason });
+    w.t.op('stripe.refundSync', {
+      chargeId: 'ch_1',
+      paymentIntentId: 'pi_1',
+      amountRefunded: cumulative,
+      reason,
+    });
   const webhook = (w: CommerceWorld, cumulative: number) =>
-    w.t.op('stripe.event', { type: 'charge.refunded', chargeId: 'ch_1', paymentIntentId: 'pi_1', amountRefunded: cumulative });
+    w.t.op('stripe.event', {
+      type: 'charge.refunded',
+      chargeId: 'ch_1',
+      paymentIntentId: 'pi_1',
+      amountRefunded: cumulative,
+    });
 
   it('plans a partial or full refund on the Stripe payment', () => {
     const { w, orderId, total } = paidOrder();
@@ -203,8 +293,15 @@ describe('refunds through Stripe', () => {
     expect(full.parts).toEqual([
       expect.objectContaining({ paymentIntentId: 'pi_1', amountMinor: total, refundedMinor: 0 }),
     ]);
-    expect(w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: 1_000 }).parts[0]?.amountMinor).toBe(1_000);
-    expect(failure(() => w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: total + 1 })).code).toBe('validation_failed');
+    expect(
+      w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: 1_000 }).parts[0]
+        ?.amountMinor,
+    ).toBe(1_000);
+    expect(
+      failure(() =>
+        w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: total + 1 }),
+      ).code,
+    ).toBe('validation_failed');
   });
 
   it('records the refund once whether the CRM action or the webhook comes first', () => {
@@ -220,25 +317,47 @@ describe('refunds through Stripe', () => {
     const order = w.t.op('orders.get', { id: orderId });
     expect(order).toMatchObject({ status: 'refunded', refunded_minor: total });
     expect(w.t.op('refunds.list', { order_id: orderId, limit: 10 }).data).toHaveLength(2);
-    expect(failure(() => w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: null })).code).toBe('conflict');
+    expect(
+      failure(() => w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: null }))
+        .code,
+    ).toBe('conflict');
   });
 
   it('keeps manual CRM refunds apart from the Stripe totals', () => {
     const { w, orderId, total } = paidOrder();
     w.t.op('refunds.record', { orderId, data: { amount_minor: 500, reason: 'Cash back' } });
-    expect(w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: null }).parts[0]?.amountMinor).toBe(total - 500);
+    expect(
+      w.t.op('stripe.refundPlan', { orderId, paymentId: null, amountMinor: null }).parts[0]
+        ?.amountMinor,
+    ).toBe(total - 500);
     expect(sync(w, 2_000).refund?.amount_minor).toBe(2_000);
     expect(w.t.op('orders.get', { id: orderId }).refunded_minor).toBe(2_500);
   });
 
   it('refuses payments recorded by hand', () => {
     const w = commerceWorld();
-    const order = w.t.op('orders.create', { contact_id: w.contactId, items: [{ product_id: w.mug }] });
-    const payment = w.t.op('payments.record', { orderId: order.id, data: { amount_minor: order.total_minor, method: 'bank_transfer' } });
-    expect(failure(() => w.t.op('stripe.refundPlan', { orderId: order.id, paymentId: null, amountMinor: null })).code).toBe('conflict');
-    expect(failure(() => w.t.op('stripe.refundPlan', { orderId: order.id, paymentId: payment.id, amountMinor: null })).code).toBe(
-      'validation_failed',
-    );
+    const order = w.t.op('orders.create', {
+      contact_id: w.contactId,
+      items: [{ product_id: w.mug }],
+    });
+    const payment = w.t.op('payments.record', {
+      orderId: order.id,
+      data: { amount_minor: order.total_minor, method: 'bank_transfer' },
+    });
+    expect(
+      failure(() =>
+        w.t.op('stripe.refundPlan', { orderId: order.id, paymentId: null, amountMinor: null }),
+      ).code,
+    ).toBe('conflict');
+    expect(
+      failure(() =>
+        w.t.op('stripe.refundPlan', {
+          orderId: order.id,
+          paymentId: payment.id,
+          amountMinor: null,
+        }),
+      ).code,
+    ).toBe('validation_failed');
   });
 });
 
@@ -254,12 +373,22 @@ describe('subscriptions bought through a checkout', () => {
       plans: [{ name: 'Monthly', interval: 'month', price_minor: 10_000, setup_fee_minor: 5_000 }],
     });
     const planId = product.plans[0]?.id ?? '';
-    w.t.op('promoCodes.create', { code: 'HALF3', kind: 'percent', percent_bps: 5000, duration: 'repeating', duration_periods: 3 });
+    w.t.op('promoCodes.create', {
+      code: 'HALF3',
+      kind: 'percent',
+      percent_bps: 5000,
+      duration: 'repeating',
+      duration_periods: 3,
+    });
     const c = checkout(w, { items: [{ id: 'i1', kind: 'plan', ref_id: planId }] });
     const prepared = prepare(w, c.id, 'h1', { promo_code: 'HALF3' });
     expect(prepared.save).toBe(true);
     expect(prepared.quote.lines.map((l) => l.kind)).toEqual(['item', 'setup_fee']);
-    expect(prepared.quote.recurring).toMatchObject({ amount_minor: 10_000, discounted_periods: 2, discounted_amount_minor: 5_000 });
+    expect(prepared.quote.recurring).toMatchObject({
+      amount_minor: 10_000,
+      discounted_periods: 2,
+      discounted_amount_minor: 5_000,
+    });
     attach(w, prepared, 'pi_1');
     succeed(w, 'pi_1', prepared.amountMinor);
 
@@ -310,7 +439,9 @@ describe('subscriptions bought through a checkout', () => {
       amountReceived: 0,
       failureMessage: 'insufficient_funds',
     });
-    expect(w.t.op('subscriptions.list', { limit: 10, contact_id: prepared.contactId }).data[0]?.status).toBe('past_due');
+    expect(
+      w.t.op('subscriptions.list', { limit: 10, contact_id: prepared.contactId }).data[0]?.status,
+    ).toBe('past_due');
     expect(w.t.op('commerce.chargesDue', {})).toHaveLength(0);
     w.t.clock.now += 3 * DAY + 1;
     const [retry] = w.t.op('commerce.chargesDue', {});
@@ -332,7 +463,9 @@ describe('subscriptions bought through a checkout', () => {
     w.t.op('stripe.event', event);
     const order = w.t.op('orders.get', { id: charge.orderId });
     expect(order).toMatchObject({ status: 'paid', paid_minor: charge.amountMinor });
-    expect(w.t.op('subscriptions.list', { limit: 10, contact_id: prepared.contactId }).data[0]?.status).toBe('active');
+    expect(
+      w.t.op('subscriptions.list', { limit: 10, contact_id: prepared.contactId }).data[0]?.status,
+    ).toBe('active');
   });
 });
 
@@ -357,7 +490,10 @@ describe('automatic charges and the subscription lifecycle', () => {
     expect(paused.w.t.op('commerce.chargesDue', {})).toHaveLength(0);
 
     const cancelled = renewalDue();
-    cancelled.w.t.op('subscriptions.cancel', { id: cancelled.sub.id, data: { at_period_end: false } });
+    cancelled.w.t.op('subscriptions.cancel', {
+      id: cancelled.sub.id,
+      data: { at_period_end: false },
+    });
     expect(cancelled.w.t.op('commerce.chargesDue', {})).toHaveLength(0);
   });
 
@@ -374,7 +510,9 @@ describe('automatic charges and the subscription lifecycle', () => {
       failureMessage: null,
     });
     w.t.clock.now += DAY + 1;
-    expect(w.t.op('commerce.chargesDue', {})).toEqual([expect.objectContaining({ orderId: charge.orderId, attempt: 1 })]);
+    expect(w.t.op('commerce.chargesDue', {})).toEqual([
+      expect.objectContaining({ orderId: charge.orderId, attempt: 1 }),
+    ]);
   });
 
   it('passes the buyer email for the Stripe receipt', () => {
@@ -388,7 +526,10 @@ describe('buyer tags and abandoned sessions', () => {
     const w = commerceWorld();
     connectStripe(w);
     const tag = w.t.op('tags.create', { name: 'Customer' });
-    const c = checkout(w, { items: [{ id: 'i1', kind: 'product', ref_id: w.course }], crm: { tag_ids: [tag.id] } });
+    const c = checkout(w, {
+      items: [{ id: 'i1', kind: 'product', ref_id: w.course }],
+      crm: { tag_ids: [tag.id] },
+    });
     const prepared = prepare(w, c.id, 'h1');
     attach(w, prepared, 'pi_1');
     expect(w.t.op('contacts.get', { id: prepared.contactId }).tag_ids).toEqual([]);
@@ -409,7 +550,10 @@ describe('buyer tags and abandoned sessions', () => {
     expect(failure(() => w.t.op('orders.get', { id: orderId })).code).toBe('not_found');
 
     succeed(w, 'pi_1', prepared.amountMinor);
-    expect(w.t.op('orders.get', { id: orderId })).toMatchObject({ status: 'paid', paid_minor: prepared.amountMinor });
+    expect(w.t.op('orders.get', { id: orderId })).toMatchObject({
+      status: 'paid',
+      paid_minor: prepared.amountMinor,
+    });
   });
 
   it('deletes expired sessions after the retention', () => {
@@ -442,12 +586,16 @@ describe('switching Stripe account or mode', () => {
       webhook: null,
     });
     expect(same).toMatchObject({ account_changed: false, saved_payment_methods: 1 });
-    expect(failure(() => w.t.op('stripe.saveAccount', {
-      tenantId: 'tenant_test',
-      publishableKey: 'pk_live_0123456789abcdef',
-      secret: null,
-      webhook: null,
-    })).code).toBe('validation_failed');
+    expect(
+      failure(() =>
+        w.t.op('stripe.saveAccount', {
+          tenantId: 'tenant_test',
+          publishableKey: 'pk_live_0123456789abcdef',
+          secret: null,
+          webhook: null,
+        }),
+      ).code,
+    ).toBe('validation_failed');
 
     const live = w.t.op('stripe.saveAccount', {
       tenantId: 'tenant_test',
@@ -492,11 +640,22 @@ describe('post-purchase offers', () => {
 
   it('shows the first offer after the payment and charges it once', () => {
     const { w, prepared } = offerWorld();
-    expect(w.t.op('checkout.completion', { tokenHash: 'h1' }).next).toEqual({ kind: 'offer', url: null });
-    expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({ status: 'offer', offer: { key: 'up', currency: 'EUR' } });
+    expect(w.t.op('checkout.completion', { tokenHash: 'h1' }).next).toEqual({
+      kind: 'offer',
+      url: null,
+    });
+    expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({
+      status: 'offer',
+      offer: { key: 'up', currency: 'EUR' },
+    });
 
     const first = w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' });
-    expect(first).toMatchObject({ action: 'charge', customerId: 'cus_1', paymentMethodId: 'pm_1', attempt: 1 });
+    expect(first).toMatchObject({
+      action: 'charge',
+      customerId: 'cus_1',
+      paymentMethodId: 'pm_1',
+      attempt: 1,
+    });
     // A double click before Stripe answers reuses the same draft order.
     const again = w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' });
     expect(again).toMatchObject({ action: 'charge', orderId: first.orderId });
@@ -511,7 +670,10 @@ describe('post-purchase offers', () => {
       amountReceived: 0,
       message: null,
     });
-    expect(w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' })).toMatchObject({ action: 'check', pendingIntentId: 'pi_up' });
+    expect(w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' })).toMatchObject({
+      action: 'check',
+      pendingIntentId: 'pi_up',
+    });
 
     const settle = {
       sessionId: first.sessionId,
@@ -526,15 +688,29 @@ describe('post-purchase offers', () => {
     // The webhook arriving later does not record the payment twice.
     expect(w.t.op('checkout.offerSettle', settle)).toEqual({ state: 'stale' });
     const upsell = w.t.op('orders.get', { id: first.orderId ?? '' });
-    expect(upsell).toMatchObject({ status: 'paid', paid_minor: first.amountMinor, parent_order_id: prepared.orderId, source: 'checkout' });
-    expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({ status: 'done', next: { kind: 'thank_you' } });
-    expect(w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' }).action).toBe('none');
+    expect(upsell).toMatchObject({
+      status: 'paid',
+      paid_minor: first.amountMinor,
+      parent_order_id: prepared.orderId,
+      source: 'checkout',
+    });
+    expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({
+      status: 'done',
+      next: { kind: 'thank_you' },
+    });
+    expect(w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' }).action).toBe(
+      'none',
+    );
   });
 
   it('routes a decline to the downsell and ends the chain', () => {
     const { w } = offerWorld();
-    expect(w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'up' })).toEqual({ declined: true });
-    expect(w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'up' })).toEqual({ declined: false });
+    expect(w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'up' })).toEqual({
+      declined: true,
+    });
+    expect(w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'up' })).toEqual({
+      declined: false,
+    });
     expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({
       status: 'offer',
       offer: { key: 'down', kind: 'downsell' },
@@ -552,7 +728,9 @@ describe('post-purchase offers', () => {
     });
     // The failed draft is removed; declining now ends the chain.
     expect(failure(() => w.t.op('orders.get', { id: down.orderId ?? '' })).code).toBe('not_found');
-    expect(w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'down' })).toEqual({ declined: true });
+    expect(w.t.op('checkout.offerDecline', { tokenHash: 'h1', offerKey: 'down' })).toEqual({
+      declined: true,
+    });
     expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({ status: 'done' });
   });
 
@@ -561,7 +739,9 @@ describe('post-purchase offers', () => {
     connectStripe(w);
     const c = checkout(w, {
       items: [{ id: 'i1', kind: 'product', ref_id: w.course }],
-      offers: [{ key: 'plan', kind: 'upsell', item_kind: 'plan', ref_id: w.monthly, title: 'Membership' }],
+      offers: [
+        { key: 'plan', kind: 'upsell', item_kind: 'plan', ref_id: w.monthly, title: 'Membership' },
+      ],
       settings: { first_offer: 'plan' },
     });
     const prepared = prepare(w, c.id, 'h1');
@@ -604,13 +784,18 @@ describe('post-purchase offers', () => {
       amountReceived: up.amountMinor,
       message: null,
     });
-    expect(w.t.op('orders.get', { id: up.orderId ?? '' })).toMatchObject({ status: 'paid', paid_minor: up.amountMinor });
+    expect(w.t.op('orders.get', { id: up.orderId ?? '' })).toMatchObject({
+      status: 'paid',
+      paid_minor: up.amountMinor,
+    });
   });
 
   it('expires the one-click window', () => {
     const { w } = offerWorld();
     w.t.clock.now += 61 * 60_000;
     expect(w.t.op('checkout.offerState', { tokenHash: 'h1' })).toMatchObject({ status: 'done' });
-    expect(w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' }).action).toBe('none');
+    expect(w.t.op('checkout.offerPrepare', { tokenHash: 'h1', offerKey: 'up' }).action).toBe(
+      'none',
+    );
   });
 });
