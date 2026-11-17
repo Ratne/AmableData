@@ -62,6 +62,7 @@ export function renderDraft(page: PageDetailRecord, slug: string, edge: string):
   const url = publicUrl(edge, slug, page);
   return renderBuilderDocumentHtml(page.draft, {
     mode: 'public',
+    preview: true,
     tenantSlug: slug,
     pageId: page.id,
     mediaBaseUrl: `${edge}/m/${slug}/`,

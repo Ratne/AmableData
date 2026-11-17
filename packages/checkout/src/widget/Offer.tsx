@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'preact/hooks';
 import { OFFER_RETURN_PARAM, SESSION_PARAM } from '../gateway';
 import type { BankTransferDetails, NextStep, OfferActionResult, OfferView } from '../public';
-import { everyLabel, fill, formatMoney, type CheckoutLocale, type CheckoutStrings } from '../strings';
+import {
+  everyLabel,
+  fill,
+  formatMoney,
+  type CheckoutLocale,
+  type CheckoutStrings,
+} from '../strings';
 import type { CheckoutApi } from './api';
 import { BankDetails } from './BankDetails';
 import { followNext, navigate, widgetNavigated, withParam } from './nav';
@@ -14,7 +20,30 @@ export interface OfferProps {
   locale: CheckoutLocale;
   /** Only the accept/decline buttons (the page around describes the offer). */
   buttonsOnly: boolean;
+  /** Custom accept text (`{amount}` = price); empty: the default one. */
+  acceptLabel: string;
+  declineLabel: string;
+  /** Draft preview: sample offer, no calls. */
+  preview: boolean;
 }
+
+const PREVIEW_OFFER: OfferView = {
+  key: 'preview',
+  kind: 'upsell',
+  title: 'Special offer',
+  description: 'Post-purchase offer description.',
+  image_url: '',
+  name: 'Product',
+  currency: 'EUR',
+  amount_minor: 4700,
+  regular_amount_minor: 9700,
+  quantity: 1,
+  recurring: null,
+  checkout_id: '',
+  locale: 'en',
+  payment_method: 'card',
+  card_flow: 'element',
+};
 
 type State =
   | { kind: 'loading' }
@@ -35,8 +64,19 @@ function offerReturnUrl(token: string): string {
  * Managed Payments ones pay it on Stripe Checkout. Accept and decline both
  * follow the chain configured on the checkout.
  */
-export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) {
-  const [state, setState] = useState<State>({ kind: 'loading' });
+export function Offer({
+  api,
+  token,
+  strings,
+  locale,
+  buttonsOnly,
+  acceptLabel,
+  declineLabel,
+  preview,
+}: OfferProps) {
+  const [state, setState] = useState<State>(
+    preview ? { kind: 'offer', offer: PREVIEW_OFFER } : { kind: 'loading' },
+  );
   const [busy, setBusy] = useState(false);
   const [alert, setAlert] = useState('');
 
@@ -55,13 +95,18 @@ export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) 
   };
 
   useEffect(() => {
+    if (preview) return;
     if (token === '') {
       setState({ kind: 'message', text: strings.offerExpired, bank: null });
       return;
     }
     void api.offer(token).then((result) => {
       if (!result.ok) {
-        setState({ kind: 'message', text: result.failure.status === 0 ? strings.networkError : strings.offerExpired, bank: null });
+        setState({
+          kind: 'message',
+          text: result.failure.status === 0 ? strings.networkError : strings.offerExpired,
+          bank: null,
+        });
         return;
       }
       const value = result.value;
@@ -71,7 +116,8 @@ export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) 
       }
       setState({ kind: 'offer', offer: value.offer });
       // Back from Stripe Checkout: read how the offer payment went.
-      if (new URLSearchParams(location.search).get(OFFER_RETURN_PARAM) === value.offer.key) void act(value.offer, 'confirm');
+      if (new URLSearchParams(location.search).get(OFFER_RETURN_PARAM) === value.offer.key)
+        void act(value.offer, 'confirm');
     });
   }, [token]);
 
@@ -92,7 +138,11 @@ export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) 
       navigate(result.redirect_url);
       return;
     }
-    if (result.status === 'requires_action' && result.client_secret !== null && result.publishable_key !== null) {
+    if (
+      result.status === 'requires_action' &&
+      result.client_secret !== null &&
+      result.publishable_key !== null
+    ) {
       const stripe = await loadStripe(result.publishable_key, locale);
       const handled = await stripe.handleNextAction({ clientSecret: result.client_secret });
       if (handled.error !== undefined) {
@@ -120,10 +170,19 @@ export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) 
 
   const act = async (offer: OfferView, action: 'accept' | 'decline' | 'confirm') => {
     if (busy) return;
+    if (preview) {
+      setAlert(strings.previewNotice);
+      return;
+    }
     setBusy(true);
     setAlert('');
     try {
-      const result = await api.offerAction(action, token, offer.key, action === 'accept' ? offerReturnUrl(token) : '');
+      const result = await api.offerAction(
+        action,
+        token,
+        offer.key,
+        action === 'accept' ? offerReturnUrl(token) : '',
+      );
       if (!result.ok) {
         if (result.failure.status === 404 || result.failure.status === 410) {
           setState({ kind: 'message', text: strings.offerExpired, bank: null });
@@ -142,28 +201,49 @@ export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) 
   if (state.kind === 'message') {
     return (
       <div class="ac-root">
-        <div class="af-success" role="status">
+        <div class="af-success" part="message" role="status">
           {state.text}
         </div>
-        {state.bank !== null ? <BankDetails details={state.bank} strings={strings} locale={locale} /> : null}
+        {state.bank !== null ? (
+          <BankDetails details={state.bank} strings={strings} locale={locale} />
+        ) : null}
       </div>
     );
   }
   const offer = state.offer;
   const money = (minor: number) => formatMoney(minor, offer.currency, locale);
-  const price = offer.recurring === null ? money(offer.amount_minor) : `${money(offer.amount_minor)} ${everyLabel(strings, offer.recurring.interval, offer.recurring.interval_count)}`;
+  const price =
+    offer.recurring === null
+      ? money(offer.amount_minor)
+      : `${money(offer.amount_minor)} ${everyLabel(strings, offer.recurring.interval, offer.recurring.interval_count)}`;
   const note =
-    offer.payment_method === 'bank_transfer' ? strings.offerBankNote : offer.card_flow === 'redirect' ? strings.redirectNote : strings.oneClickNote;
+    offer.payment_method === 'bank_transfer'
+      ? strings.offerBankNote
+      : offer.card_flow === 'redirect'
+        ? strings.redirectNote
+        : strings.oneClickNote;
   return (
     <div class="ac-root">
-      <div class="ac-offer">
+      <div class="ac-offer" part="box">
         {buttonsOnly ? null : (
           <>
-            {offer.image_url !== '' ? <img class="ac-offer-img" src={offer.image_url} alt="" loading="lazy" /> : null}
-            <h2 class="ac-offer-title">{offer.title !== '' ? offer.title : offer.name}</h2>
-            {offer.description !== '' ? <div class="ac-item-desc">{offer.description}</div> : null}
-            <div class="ac-offer-price">
-              {offer.regular_amount_minor !== null ? <span class="ac-strike">{money(offer.regular_amount_minor)}</span> : null}
+            {offer.image_url !== '' ? (
+              <img class="ac-offer-img" src={offer.image_url} alt="" loading="lazy" />
+            ) : null}
+            <h2 class="ac-offer-title" part="title">
+              {offer.title !== '' ? offer.title : offer.name}
+            </h2>
+            {offer.description !== '' ? (
+              <div class="ac-item-desc" part="description">
+                {offer.description}
+              </div>
+            ) : null}
+            <div class="ac-offer-price" part="price">
+              {offer.regular_amount_minor !== null ? (
+                <span class="ac-strike" part="strike">
+                  {money(offer.regular_amount_minor)}
+                </span>
+              ) : null}
               {price}
             </div>
           </>
@@ -173,12 +253,30 @@ export function Offer({ api, token, strings, locale, buttonsOnly }: OfferProps) 
             {alert}
           </div>
         ) : null}
-        <button type="button" class="af-button" disabled={busy} onClick={() => void act(offer, 'accept')}>
-          {busy ? strings.offerProcessing : fill(strings.offerAccept, { amount: money(offer.amount_minor) })}
+        <button
+          type="button"
+          class="af-button"
+          part="accept"
+          disabled={busy}
+          onClick={() => void act(offer, 'accept')}
+        >
+          {busy
+            ? strings.offerProcessing
+            : fill(acceptLabel !== '' ? acceptLabel : strings.offerAccept, {
+                amount: money(offer.amount_minor),
+              })}
         </button>
-        <div class="ac-muted">{note}</div>
-        <button type="button" class="ac-decline" disabled={busy} onClick={() => void act(offer, 'decline')}>
-          {strings.offerDecline}
+        <div class="ac-muted" part="note">
+          {note}
+        </div>
+        <button
+          type="button"
+          class="ac-decline"
+          part="decline"
+          disabled={busy}
+          onClick={() => void act(offer, 'decline')}
+        >
+          {declineLabel !== '' ? declineLabel : strings.offerDecline}
         </button>
       </div>
     </div>

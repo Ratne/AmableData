@@ -1330,6 +1330,70 @@ const checkout: WidgetDef = {
   ],
 };
 
+/**
+ * Style tab of the offer block. Published, the widget lives in a shadow DOM and
+ * exposes its parts with `part="…"`; in the editor the block is a static copy
+ * with `.b-offer__<part>` classes. Each control targets both.
+ */
+function offerStyleSections(): ControlSection[] {
+  const at = (part: string) => `{{WRAPPER}} .b-offer__${part}, {{WRAPPER}} [data-amable-offer]::part(${part})`;
+  const full = { "display!": "buttons" };
+  // Some parts are dimmed with `opacity`: a chosen color must come out solid.
+  const ink = { cssTemplate: "color: {{VALUE}}; opacity: 1" };
+  const when = (condition: NonNullable<ControlSection["condition"]>, s: ControlSection): ControlSection => ({ ...s, condition });
+  const text = (part: string, label: string): ControlSection =>
+    style(`offer_${part}`, label, [
+      typography(at(part), { key: `${part}Typography` }),
+      color(`${part}Color`, "Text color", at(part), "color", { ...ink, states: ["normal"] }),
+    ]);
+  const button = (part: "accept" | "decline", label: string): ControlSection =>
+    style(`offer_${part}`, label, [
+      typography(at(part), { key: `${part}Typography` }),
+      color(`${part}Color`, "Text color", at(part), "color", { ...ink, hoverSelf: true }),
+      color(`${part}Bg`, "Background color", at(part), "background-color", { hoverSelf: true }),
+      gradient(`${part}Gradient`, "Background gradient", at(part), { hoverSelf: true }),
+      dimensions(`${part}Radius`, "Border radius", at(part), "border-radius"),
+      dimensions(`${part}Padding`, "Padding", at(part), "padding"),
+      boxShadow(`${part}Shadow`, "Shadow", at(part), { hoverSelf: true }),
+    ]);
+  return [
+    style("offer_box", "Box", [
+      color("boxBg", "Background color", at("box"), "background-color", { states: ["normal"] }),
+      dimensions("boxRadius", "Border radius", at("box"), "border-radius"),
+      dimensions("boxPadding", "Padding", at("box"), "padding"),
+      slider("boxGap", "Spacing (gap)", at("box"), "gap", { max: 80, units: ["px", "em"] }),
+      choose(
+        "boxAlign",
+        "Alignment",
+        [
+          { value: "start", label: "Left", icon: "align-left" },
+          { value: "center", label: "Center", icon: "align-center" },
+          { value: "end", label: "Right", icon: "align-right" },
+        ],
+        { group: "style", selector: at("box"), cssTemplate: "text-align: {{VALUE}}; align-items: {{VALUE}}", responsive: true },
+      ),
+    ]),
+    when(full, text("title", "Title")),
+    when(full, text("description", "Description")),
+    when(full, text("price", "Price")),
+    when(
+      full,
+      style("offer_strike", "Struck-through price", [
+        color("strikeColor", "Text color", at("strike"), "color", { ...ink, states: ["normal"] }),
+        slider("strikeSize", "Size", at("strike"), "font-size", { max: 80, units: ["px", "em"] }),
+      ]),
+    ),
+    button("accept", "Accept button"),
+    text("note", "Note under the button"),
+    button("decline", "Decline button"),
+    style("offer_message", "Messages", [
+      typography(at("message"), { key: "messageTypography" }),
+      color("messageColor", "Text color", at("message"), "color", { states: ["normal"] }),
+      color("messageBg", "Background color", at("message"), "background-color", { states: ["normal"] }),
+    ]),
+  ];
+}
+
 const checkoutOffer: WidgetDef = {
   type: "checkout-offer",
   title: "Post-purchase offer",
@@ -1341,12 +1405,13 @@ const checkoutOffer: WidgetDef = {
       select("display", "Display", [
         { value: "full", label: "Offer and buttons" },
         { value: "buttons", label: "Buttons only" },
-      ]),
-      text("buttonColor", "Button color", {
-        placeholder: "#4f46e5",
+      ], {
         description: "Shows the upsell or downsell the buyer reached after paying (one-click accept or decline).",
       }),
+      text("acceptLabel", "Accept text", { placeholder: "Yes, add it — {amount}" }),
+      text("declineLabel", "Decline text", { placeholder: "No thanks" }),
     ]),
+    ...offerStyleSections(),
   ],
 };
 

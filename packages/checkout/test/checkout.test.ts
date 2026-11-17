@@ -187,6 +187,24 @@ describe('widget bundle', () => {
     expect(bundle).toContain('data-amable-offer');
   });
 
+  it('exposes the offer parts to the page styles and reads the preview flag', async () => {
+    const bundle = await buildBundle();
+    for (const part of [
+      'box',
+      'title',
+      'price',
+      'strike',
+      'note',
+      'accept',
+      'decline',
+      'message',
+    ]) {
+      expect(bundle).toContain(`part:"${part}"`);
+    }
+    expect(bundle).toContain('data-amable-preview');
+    expect(bundle).toContain('data-amable-decline-label');
+  });
+
   it('ships the two-step checkout', async () => {
     const bundle = await buildBundle();
     expect(bundle).toContain('ac-step-hidden');

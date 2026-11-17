@@ -17,7 +17,12 @@ import {
   type ElementNode,
 } from '../src/index';
 
-function node(id: string, type: string, settings: Record<string, unknown> = {}, children: ElementNode[] = []): ElementNode {
+function node(
+  id: string,
+  type: string,
+  settings: Record<string, unknown> = {},
+  children: ElementNode[] = [],
+): ElementNode {
   return { id, type, settings, styles: [], children, locked: false };
 }
 
@@ -42,8 +47,15 @@ describe('builder schema', () => {
     expect(validateBuilderDocument({ editorKind: 'sections' }).ok).toBe(false);
     expect(validateBuilderDocument({ body: [{ type: 'heading' }] }).ok).toBe(false);
     const unknown = validateBuilderDocument({ body: [{ id: 'x', type: 'nope' }] });
-    expect(unknown.ok ? [] : unknown.issues.map((i) => i.message)).toEqual(['unknown widget type "nope"']);
-    const dup = validateBuilderDocument({ body: [{ id: 'x', type: 'spacer' }, { id: 'x', type: 'spacer' }] });
+    expect(unknown.ok ? [] : unknown.issues.map((i) => i.message)).toEqual([
+      'unknown widget type "nope"',
+    ]);
+    const dup = validateBuilderDocument({
+      body: [
+        { id: 'x', type: 'spacer' },
+        { id: 'x', type: 'spacer' },
+      ],
+    });
     expect(dup.ok).toBe(false);
     const leafChildren = validateBuilderDocument({
       body: [{ id: 'h', type: 'heading', children: [{ id: 'c', type: 'spacer' }] }],
@@ -53,9 +65,21 @@ describe('builder schema', () => {
 
   it('applies canvas ops', () => {
     const d = doc([node('root', 'container')]);
-    const next = applyCanvasOp(d, { kind: 'insert_node', node: node('h', 'heading', { title: 'Hi' }), parentId: 'root', index: 0 });
+    const next = applyCanvasOp(d, {
+      kind: 'insert_node',
+      node: node('h', 'heading', { title: 'Hi' }),
+      parentId: 'root',
+      index: 0,
+    });
     expect(next.body[0]?.children.map((c) => c.id)).toEqual(['h']);
-    expect(applyCanvasOp(next, { kind: 'insert_node', node: node('h', 'heading'), parentId: null, index: 0 })).toBe(next);
+    expect(
+      applyCanvasOp(next, {
+        kind: 'insert_node',
+        node: node('h', 'heading'),
+        parentId: null,
+        index: 0,
+      }),
+    ).toBe(next);
   });
 
   it('sanitizes rich text, including repeater rows', () => {
@@ -63,7 +87,9 @@ describe('builder schema', () => {
       node('t', 'text', { editor: '<p>ok</p><script>x</script>' }),
       node('tabs', 'tabs', { items: [{ title: 'A', content: '<img onerror=x>' }] }),
     ]);
-    const clean = sanitizeBuilderDocument(d, (html) => html.replace(/<script>.*?<\/script>|<img[^>]*>/g, ''));
+    const clean = sanitizeBuilderDocument(d, (html) =>
+      html.replace(/<script>.*?<\/script>|<img[^>]*>/g, ''),
+    );
     expect(clean.body[0]?.settings.editor).toBe('<p>ok</p>');
     expect(clean.body[1]?.settings.items).toEqual([{ title: 'A', content: '' }]);
   });
@@ -121,7 +147,10 @@ describe('builder schema', () => {
 describe('builder render', () => {
   const page = doc([
     node('root', 'container', { htmlTag: 'section' }, [
-      node('h1', 'heading', { title: 'Hello <strong>world</strong><script>bad()</script>', htmlTag: 'h1' }),
+      node('h1', 'heading', {
+        title: 'Hello <strong>world</strong><script>bad()</script>',
+        htmlTag: 'h1',
+      }),
       node('btn', 'button', { text: 'Go', link: { url: 'javascript:alert(1)' } }),
       node('img', 'image', { image: { url: 'http://localhost:8788/m/acme/01HX.png' }, alt: 'Pic' }),
       node('f', 'form', { formId: '01FORM' }),
@@ -136,7 +165,13 @@ describe('builder render', () => {
       pageId: '01PAGE',
       mediaBaseUrl: '/m/acme/',
       trackerSiteId: 'site_1',
-      meta: { title: 'Acme', description: 'Desc', canonical: 'https://acme.test/x', ogImage: 'https://acme.test/og.png', lang: 'it' },
+      meta: {
+        title: 'Acme',
+        description: 'Desc',
+        canonical: 'https://acme.test/x',
+        ogImage: 'https://acme.test/og.png',
+        lang: 'it',
+      },
     });
     const { html } = out;
     expect(html).toContain('<html lang="it">');
@@ -144,8 +179,12 @@ describe('builder render', () => {
     expect(html).toContain('<link rel="canonical" href="https://acme.test/x"/>');
     expect(html).toContain('<meta property="og:image" content="https://acme.test/og.png"/>');
     expect(html).toContain('<meta name="amable-page-id" content="01PAGE"/>');
-    expect(html).toContain('<div data-amable-form="01FORM" data-amable-tenant="acme" data-amable-page="01PAGE"></div>');
-    expect(html).toContain('<div data-amable-booking="intro-call" data-amable-tenant="acme" data-amable-page="01PAGE"></div>');
+    expect(html).toContain(
+      '<div data-amable-form="01FORM" data-amable-tenant="acme" data-amable-page="01PAGE"></div>',
+    );
+    expect(html).toContain(
+      '<div data-amable-booking="intro-call" data-amable-tenant="acme" data-amable-page="01PAGE"></div>',
+    );
     expect(html.match(/src="\/forms\.js"/g)).toHaveLength(1);
     expect(html.match(/src="\/booking\.js"/g)).toHaveLength(1);
     expect(html).toContain('<script defer data-site="site_1" src="/s.js"></script>');
@@ -161,7 +200,11 @@ describe('builder render', () => {
   });
 
   it('renders placeholders and no tracker in editor mode', () => {
-    const { html, embeds } = renderBuilderPage(page, { mode: 'editor', tenantSlug: 'acme', trackerSiteId: 'site_1' });
+    const { html, embeds } = renderBuilderPage(page, {
+      mode: 'editor',
+      tenantSlug: 'acme',
+      trackerSiteId: 'site_1',
+    });
     expect(html).toContain('data-b-embed-ph="form"');
     expect(html).toContain('data-b-embed-ph="booking"');
     expect(html).not.toContain('data-amable-form=');
@@ -171,7 +214,16 @@ describe('builder render', () => {
 
   it('keeps style content inside the <style> element', () => {
     const evil = doc([
-      { ...node('x', 'heading'), styles: [{ breakpoint: 'desktop', state: 'normal', props: { color: 'red}</style><script>alert(1)</script>' } }] },
+      {
+        ...node('x', 'heading'),
+        styles: [
+          {
+            breakpoint: 'desktop',
+            state: 'normal',
+            props: { color: 'red}</style><script>alert(1)</script>' },
+          },
+        ],
+      },
     ]);
     const { html } = renderBuilderPage(evil);
     expect(html).not.toContain('</style><script>alert(1)');
@@ -192,7 +244,9 @@ describe('builder render', () => {
       node('of', 'checkout-offer', { display: 'buttons', buttonColor: '#16a34a' }),
     ]);
     const out = renderBuilderPage(sales, { tenantSlug: 'acme', pageId: '01PAGE' });
-    expect(out.html).toContain('<div data-amable-checkout="01CO" data-amable-tenant="acme" data-amable-page="01PAGE"></div>');
+    expect(out.html).toContain(
+      '<div data-amable-checkout="01CO" data-amable-tenant="acme" data-amable-page="01PAGE"></div>',
+    );
     expect(out.html).toContain('data-amable-offer');
     expect(out.html).toContain('data-amable-buttons-only');
     expect(out.html.match(/src="\/checkout\.js"/g)).toHaveLength(1);
@@ -206,10 +260,49 @@ describe('builder render', () => {
     expect(editor.html).toContain('data-b-embed-ph="checkout"');
     expect(editor.embeds).toEqual([]);
   });
+
+  it('styles the offer parts in the editor copy and the published widget, hover on the single button', () => {
+    const styled: ElementNode = {
+      ...node('of', 'checkout-offer', {
+        display: 'full',
+        acceptLabel: 'Take it {amount}',
+        declineLabel: 'Skip',
+      }),
+      styles: [
+        {
+          breakpoint: 'desktop',
+          state: 'normal',
+          props: { acceptBg: '#16a34a', titleColor: '#222222' },
+        },
+        { breakpoint: 'desktop', state: 'hover', props: { acceptBg: '#15803d' } },
+      ],
+    };
+    const out = renderBuilderPage(doc([styled]), { tenantSlug: 'acme' });
+    expect(out.html).toMatch(
+      /\.b-offer__accept, \S+ \[data-amable-offer\]::part\(accept\)\{background-color: #16a34a\}/,
+    );
+    expect(out.html).toMatch(
+      /\.b-offer__accept:hover,\S+ \[data-amable-offer\]::part\(accept\):hover\{background-color: #15803d\}/,
+    );
+    expect(out.html).toContain('::part(title){color: #222222; opacity: 1}');
+    expect(out.html).toContain(
+      'data-amable-accept-label="Take it {amount}" data-amable-decline-label="Skip"',
+    );
+    expect(out.html).not.toContain('data-amable-preview');
+    expect(renderBuilderPage(doc([styled]), { tenantSlug: 'acme', preview: true }).html).toContain(
+      'data-amable-preview',
+    );
+    const editor = renderBuilderPage(doc([styled]), { mode: 'editor', tenantSlug: 'acme' }).html;
+    expect(editor).toContain(
+      '<button type="button" class="b-offer__accept">Take it €47.00</button>',
+    );
+    expect(editor).toContain('class="b-offer__title"');
+  });
 });
 
 describe('raw HTML pages', () => {
-  const source = '<!doctype html><html><head><title>Raw</title></head><body><h1>Raw</h1></body></html>';
+  const source =
+    '<!doctype html><html><head><title>Raw</title></head><body><h1>Raw</h1></body></html>';
 
   it('validates html documents and keeps canvas validation for the rest', () => {
     expect(validatePageDocument({ editorKind: 'html', html: source })).toEqual({
@@ -218,12 +311,20 @@ describe('raw HTML pages', () => {
     });
     expect(validatePageDocument({ editorKind: 'html' }).ok).toBe(false);
     expect(validatePageDocument({ editorKind: 'html', html: source, body: [] }).ok).toBe(false);
-    expect(validatePageDocument({ editorKind: 'html', html: 'x'.repeat(1_500_001) }).ok).toBe(false);
+    expect(validatePageDocument({ editorKind: 'html', html: 'x'.repeat(1_500_001) }).ok).toBe(
+      false,
+    );
     // The limit is in UTF-8 bytes: 600k "è" are 1.2 MB, 800k are 1.6 MB.
     expect(validatePageDocument({ editorKind: 'html', html: 'è'.repeat(600_000) }).ok).toBe(true);
     expect(validatePageDocument({ editorKind: 'html', html: 'è'.repeat(800_000) }).ok).toBe(false);
     expect(utf8Bytes('è😀')).toBe(6);
-    const sizes: Array<[string, number]> = [['a', 1], ['ß€', 5], ['日本語', 9], ['👩‍💻 ok', 14], ['\ud800x', 4]];
+    const sizes: Array<[string, number]> = [
+      ['a', 1],
+      ['ß€', 5],
+      ['日本語', 9],
+      ['👩‍💻 ok', 14],
+      ['\ud800x', 4],
+    ];
     for (const [sample, bytes] of sizes) expect(utf8Bytes(sample)).toBe(bytes);
     expect(validatePageDocument(emptyBuilderDocument()).ok).toBe(true);
     expect(validatePageDocument({ body: [{ id: 'x', type: 'nope' }] }).ok).toBe(false);
@@ -232,15 +333,30 @@ describe('raw HTML pages', () => {
   it('serves the markup as written, adding only the tracker before </body>', () => {
     const plain = renderBuilderPage({ editorKind: 'html', html: source }, { tenantSlug: 'acme' });
     expect(plain).toMatchObject({ html: source, hasRawHtml: true, hasTracker: false, embeds: [] });
-    const tracked = renderBuilderPage({ editorKind: 'html', html: source }, { trackerSiteId: 'site_1', scriptOrigin: 'https://e.test' });
+    const tracked = renderBuilderPage(
+      { editorKind: 'html', html: source },
+      { trackerSiteId: 'site_1', scriptOrigin: 'https://e.test' },
+    );
     expect(tracked.hasTracker).toBe(true);
-    expect(tracked.html.startsWith('<!doctype html><html><head><title>Raw</title></head><body><h1>Raw</h1><script>')).toBe(true);
-    expect(tracked.html).toContain('<script defer data-site="site_1" src="https://e.test/s.js"></script>\n</body></html>');
+    expect(
+      tracked.html.startsWith(
+        '<!doctype html><html><head><title>Raw</title></head><body><h1>Raw</h1><script>',
+      ),
+    ).toBe(true);
+    expect(tracked.html).toContain(
+      '<script defer data-site="site_1" src="https://e.test/s.js"></script>\n</body></html>',
+    );
     expect(tracked.html).not.toContain('b-container');
     expect(builderPageCsp(tracked, [])).toContain("script-src 'self' 'unsafe-inline' https:");
-    const fragment = renderBuilderPage({ editorKind: 'html', html: '<p>no body tag</p>' }, { trackerSiteId: 'site_1' });
+    const fragment = renderBuilderPage(
+      { editorKind: 'html', html: '<p>no body tag</p>' },
+      { trackerSiteId: 'site_1' },
+    );
     expect(fragment.html.startsWith('<p>no body tag</p>\n<script>')).toBe(true);
-    const editor = renderBuilderPage({ editorKind: 'html', html: source }, { mode: 'editor', trackerSiteId: 'site_1' });
+    const editor = renderBuilderPage(
+      { editorKind: 'html', html: source },
+      { mode: 'editor', trackerSiteId: 'site_1' },
+    );
     expect(editor.html).toBe(source);
   });
 });

@@ -76,6 +76,12 @@ export interface ControlDef {
    */
   selector?: string;
   /**
+   * Style controls: the hover state goes on the selected element itself
+   * (`sel:hover`) instead of the wrapper. Needed when a widget has several
+   * targets (e.g. two buttons) that must not light up together.
+   */
+  hoverSelf?: boolean;
+  /**
    * Style controls (primitive types only): CSS declaration template with
    * placeholders `{{VALUE}}`, `{{SIZE}}`, `{{UNIT}}`, `{{TOP}}`, `{{RIGHT}}`,
    * `{{BOTTOM}}`, `{{LEFT}}`. When omitted, a sensible default is derived from

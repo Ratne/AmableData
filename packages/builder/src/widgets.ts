@@ -20,10 +20,12 @@ export interface WidgetContext {
   media: (value: unknown) => string;
   /** Collected while rendering: which embed scripts the page must load. */
   embeds: Set<EmbedKind>;
+  /** Draft preview: visitor-bound embeds (post-purchase offer) show sample data. */
+  preview: boolean;
 }
 
 export function defaultWidgetContext(): WidgetContext {
-  return { editable: false, tenantSlug: "", pageId: null, media: mediaUrl, embeds: new Set() };
+  return { editable: false, tenantSlug: "", pageId: null, media: mediaUrl, embeds: new Set(), preview: false };
 }
 
 /** Uploaded PNG/SVG wins over the library icon, sized to 1em like the SVGs. */
@@ -467,13 +469,24 @@ const render: Record<string, (s: S, ctx: WidgetContext) => string> = {
 
   "checkout-offer"(s, ctx) {
     const buttonsOnly = str(s.display) === "buttons";
+    // Legacy: the button color now lives in the Style tab; older pages keep theirs.
+    const color = /^#[0-9a-fA-F]{3,8}$/.test(str(s.buttonColor).trim()) ? str(s.buttonColor).trim() : "";
+    const accept = str(s.acceptLabel).trim();
+    const decline = str(s.declineLabel).trim();
     if (ctx.editable) {
-      return `<div class="b-form-ph" data-b-embed-ph="checkout-offer">${buttonsOnly ? "Offer buttons" : "Post-purchase offer"}</div>`;
+      // Static copy of the widget (no script in the canvas) so the Style tab shows live.
+      const price = "€47.00";
+      const details = buttonsOnly
+        ? ""
+        : `<h2 class="b-offer__title">Special offer</h2><div class="b-offer__description">Post-purchase offer description.</div><div class="b-offer__price"><span class="b-offer__strike">€97.00</span>${price}</div>`;
+      return `<div class="b-offer__box" data-b-embed-ph="checkout-offer"${color ? ` style="--b-offer:${esc(color)}"` : ""}>${details}<button type="button" class="b-offer__accept">${esc((accept || "Yes, add it — {amount}").replace(/\{amount\}/g, price))}</button><div class="b-offer__note">Charged to the payment method you just used. No need to enter it again.</div><button type="button" class="b-offer__decline">${esc(decline || "No thanks")}</button></div>`;
     }
     ctx.embeds.add("checkout");
-    const color = str(s.buttonColor).trim();
-    const colorAttr = /^#[0-9a-fA-F]{3,8}$/.test(color) ? ` data-amable-color="${esc(color)}"` : "";
-    return `<div data-amable-offer data-amable-tenant="${esc(ctx.tenantSlug)}"${buttonsOnly ? " data-amable-buttons-only" : ""}${colorAttr}></div>`;
+    return `<div data-amable-offer data-amable-tenant="${esc(ctx.tenantSlug)}"${buttonsOnly ? " data-amable-buttons-only" : ""}${
+      color ? ` data-amable-color="${esc(color)}"` : ""
+    }${accept ? ` data-amable-accept-label="${esc(accept)}"` : ""}${decline ? ` data-amable-decline-label="${esc(decline)}"` : ""}${
+      ctx.preview ? " data-amable-preview" : ""
+    }></div>`;
   },
 };
 

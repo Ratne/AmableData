@@ -184,6 +184,11 @@ export function styleDefsForType(type: string): Map<string, ControlDef> {
 function selectorFor(def: ControlDef, wrapSel: string, state: string): string {
   const base = (def.selector ?? '{{WRAPPER}}').replace(/\{\{WRAPPER\}\}/g, wrapSel);
   if (state === 'hover') {
+    if (def.hoverSelf)
+      return base
+        .split(',')
+        .map((s) => `${s.trim()}:hover`)
+        .join(',');
     // Apply hover to the wrapper token position.
     return base.includes(wrapSel) ? base.replace(wrapSel, `${wrapSel}:hover`) : `${base}:hover`;
   }

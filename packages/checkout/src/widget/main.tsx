@@ -117,6 +117,9 @@ function mountOffer(el: HTMLElement): void {
       strings={CHECKOUT_STRINGS[locale]}
       locale={locale}
       buttonsOnly={el.hasAttribute('data-amable-buttons-only')}
+      acceptLabel={el.getAttribute('data-amable-accept-label') ?? ''}
+      declineLabel={el.getAttribute('data-amable-decline-label') ?? ''}
+      preview={el.hasAttribute('data-amable-preview')}
     />,
     container(el, style),
   );

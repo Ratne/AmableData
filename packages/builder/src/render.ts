@@ -185,6 +185,14 @@ picture{display:contents}
 /* map / form */
 .b-map{width:100%;height:400px;border:0;border-radius:var(--b-radius)}
 .b-form-ph,.b-image__ph{font-size:.9rem}
+/* post-purchase offer, editor copy of the widget defaults */
+.b-offer__box{display:flex;flex-direction:column;gap:14px;text-align:center;align-items:center;padding:8px;font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:#111827}
+.b-offer__title{font-family:inherit;color:inherit;font-size:1.4em;font-weight:800;margin:0}
+.b-offer__description,.b-offer__note{font-size:.85em;opacity:.72}
+.b-offer__price{font-size:1.6em;font-weight:800;color:var(--b-offer,#4f46e5)}
+.b-offer__strike{text-decoration:line-through;opacity:.55;font-weight:400;margin-right:6px}
+.b-offer__accept{width:100%;max-width:420px;border:0;border-radius:8px;cursor:pointer;font:inherit;font-weight:600;font-size:1.05em;padding:16px;background:var(--b-offer,#4f46e5);color:#fff}
+.b-offer__decline{all:unset;cursor:pointer;text-decoration:underline;opacity:.7;font-size:.9em}
 /* nav menu */
 .b-nav{display:flex;align-items:center;gap:24px;width:100%;position:relative}
 .b-nav__logo{display:inline-flex;align-items:center;text-decoration:none;flex:none}
@@ -982,6 +990,12 @@ export interface RenderOptions {
   trackerSiteId?: string | null;
   /** Origin serving `/forms.js`, `/booking.js`, `/s.js`. Defaults to same-origin (""). */
   scriptOrigin?: string;
+  /**
+   * Draft preview outside the editor: blocks tied to the visitor (the
+   * post-purchase offer, which needs `?amb_cs=`) show sample data instead of an
+   * empty state.
+   */
+  preview?: boolean;
 }
 
 /** A rendered page plus what the caller needs to build its Content-Security-Policy. */
@@ -1054,6 +1068,7 @@ export function renderBuilderPage(doc: PageDocument, opts: RenderOptions = {}): 
       pageId,
       media: mediaResolver(opts.mediaBaseUrl),
       embeds: new Set(),
+      preview: opts.preview ?? false,
     },
   };
   const body = doc.body.map((n) => renderNode(n, pass)).join("\n");
