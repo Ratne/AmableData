@@ -486,7 +486,10 @@ const navMenu: WidgetDef = {
       ]),
     ]),
     content("nav_cta", "CTA button (optional)", [
-      text("ctaText", "Text", { placeholder: "Sign up now" }),
+      text("ctaText", "Text", {
+        placeholder: "Sign up now",
+        description: "Inline HTML allowed as in the Button widget: <b>, <i>, <u>, <span>, <br>…",
+      }),
       url("ctaLink", "Link"),
     ]),
     style("nav_style", "Style", [
@@ -592,7 +595,7 @@ const button: WidgetDef = {
     content("button_content", "Button", [
       text("text", "Text", {
         description:
-          "Inline HTML allowed: <br> for a line break, <span>word</span> for the part to highlight (set its color in Style → <span> parts color).",
+          "Inline HTML allowed: <b>/<strong> bold, <i>/<em> italic, <u> underline, <s> strikethrough, <small> smaller, <mark> highlight, <sup>/<sub> superscript and subscript, <br> for a line break, <span>word</span> for the part to color (set its color in Style → <span> parts color). Every tag also takes style=\"...\" and class=\"...\".",
       }),
       select("action", "Click action", [
         { value: "link", label: "Open a link" },

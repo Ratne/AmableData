@@ -149,7 +149,7 @@ const render: Record<string, (s: S, ctx: WidgetContext) => string> = {
       })
       .join("");
     const cta = str(s.ctaText)
-      ? `<a class="b-nav__cta" ${hasLink(s.ctaLink) ? linkAttrs(s.ctaLink) : 'href="#"'}>${esc(str(s.ctaText))}</a>`
+      ? `<a class="b-nav__cta" ${hasLink(s.ctaLink) ? linkAttrs(s.ctaLink) : 'href="#"'}>${sanitizeInlineHtml(str(s.ctaText))}</a>`
       : "";
     const burger =
       collapse === "never"
