@@ -11,6 +11,7 @@ import {
   sha256Hex,
   timingSafeEqual,
   verifyTotp,
+  type RateLimitRule,
 } from '@amable/auth';
 import { formatDateTime, resolveLocale } from '@amable/i18n';
 import type { Context } from 'hono';
@@ -19,6 +20,7 @@ import type { AppEnv } from '../middleware/context';
 import { HttpError } from '../middleware/errors';
 import { defer } from '../middleware/request';
 import { sendSystemEmail } from './emails';
+import { cancelReset } from './mfa-reset';
 import { RATE_RULES } from './rate-limit';
 import { setChallengeCookie } from './sessions';
 import {
@@ -51,7 +53,8 @@ import {
  */
 
 type OtpMethod = 'totp' | 'email' | 'recovery';
-export type VerifyMethod = OtpMethod | 'enroll_totp' | 'enroll_email';
+/** `reset_email` confirms a "lost second factor" request, never signs in. */
+export type VerifyMethod = OtpMethod | 'enroll_totp' | 'enroll_email' | 'reset_email';
 
 const ISSUER = 'amabledata';
 
@@ -68,12 +71,26 @@ function allowedMethods(user: UserRow, challenge: Pick<ChallengeRow, 'purpose' |
     : ['totp', 'recovery'];
 }
 
+/** Only authenticator users can lose their factor; email users recover the mailbox instead. */
+function canRequestReset(user: UserRow, challenge: Pick<ChallengeRow, 'purpose'>) {
+  return user.mfaMethod === 'totp' && (challenge.purpose === 'login' || challenge.purpose === 'step_up');
+}
+
+function accepts(user: UserRow, challenge: ChallengeRow, method: VerifyMethod) {
+  return method === 'reset_email'
+    ? canRequestReset(user, challenge)
+    : allowedMethods(user, challenge).includes(method);
+}
+
 export interface ChallengeState {
   status: 'mfa_required';
   enrolled: boolean;
   methods: VerifyMethod[];
   attemptsLeft: number;
   expiresAt: number;
+  /** Whether "I lost my second factor" is offered, and when a pending reset takes effect. */
+  resetAvailable: boolean;
+  resetDueAt: number | null;
 }
 
 export function describeChallenge(user: UserRow, challenge: ChallengeRow): ChallengeState {
@@ -83,6 +100,8 @@ export function describeChallenge(user: UserRow, challenge: ChallengeRow): Chall
     methods: allowedMethods(user, challenge),
     attemptsLeft: Math.max(AUTH_POLICY.maxOtpAttempts - challenge.attempts, 0),
     expiresAt: challenge.expiresAt,
+    resetAvailable: canRequestReset(user, challenge),
+    resetDueAt: user.mfaResetDueAt,
   };
 }
 
@@ -148,26 +167,38 @@ export async function startSessionChallenge(
   return row;
 }
 
-async function emailCodeHash(pepper: string, challengeId: string, code: string) {
-  return hmacSha256Hex(pepper, `email-otp:${challengeId}:${code}`);
+/** Reset codes are domain-separated, so they never sign in and sign-in codes never reset. */
+async function emailCodeHash(pepper: string, challengeId: string, code: string, reset = false) {
+  return hmacSha256Hex(pepper, `${reset ? 'email-reset' : 'email-otp'}:${challengeId}:${code}`);
 }
 
 export async function recoveryCodeHash(pepper: string, code: string) {
   return hmacSha256Hex(pepper, `recovery:${normalizeRecoveryCode(code)}`);
 }
 
-/** Sends a 6-digit email code for this challenge: at most 1/minute and 5/hour per user. */
-export async function sendEmailCode(c: Context<AppEnv>, user: UserRow, challenge: ChallengeRow) {
+/**
+ * Sends a 6-digit email code for this challenge: at most 1/minute and 5/hour per
+ * user. With `reset` the code confirms a lost-factor request (3/hour at most).
+ */
+export async function sendEmailCode(
+  c: Context<AppEnv>,
+  user: UserRow,
+  challenge: ChallengeRow,
+  { reset = false }: { reset?: boolean } = {},
+) {
   const methods = allowedMethods(user, challenge);
-  if (!methods.includes('email') && !methods.includes('enroll_email')) {
-    throw new HttpError(400, 'method_not_allowed');
-  }
+  const allowed = reset
+    ? canRequestReset(user, challenge)
+    : methods.includes('email') || methods.includes('enroll_email');
+  if (!allowed) throw new HttpError(400, 'method_not_allowed');
   const services = c.get('services');
   const now = services.now();
   if (challenge.status !== 'pending' || challenge.expiresAt <= now) {
     throw new HttpError(401, 'challenge_expired');
   }
-  for (const rule of [RATE_RULES.emailCodeMinute, RATE_RULES.emailCodeHour]) {
+  const rules: RateLimitRule[] = [RATE_RULES.emailCodeMinute, RATE_RULES.emailCodeHour];
+  if (reset) rules.push(RATE_RULES.mfaResetAccount);
+  for (const rule of rules) {
     const result = await services.limiter.consume(rule, user.id);
     if (!result.allowed) {
       throw new HttpError(429, 'rate_limited', { retryAfterMs: result.retryAfterMs });
@@ -178,7 +209,7 @@ export async function sendEmailCode(c: Context<AppEnv>, user: UserRow, challenge
   await setChallengeEmailCode(
     c.env.DB,
     challenge.id,
-    await emailCodeHash(services.pepper, challenge.id, code),
+    await emailCodeHash(services.pepper, challenge.id, code, reset),
     expiresAt,
   );
   // OTP codes are sent immediately, never queued.
@@ -237,13 +268,14 @@ async function checkCode(
       return result.ok ? { totpStep: result.step } : null;
     }
     case 'email':
-    case 'enroll_email': {
+    case 'enroll_email':
+    case 'reset_email': {
       if (challenge.emailCodeHash === null || challenge.emailCodeExpiresAt === null) return null;
       if (challenge.emailCodeExpiresAt <= now) return null;
       const normalized = code.replace(/\s+/g, '');
       if (!/^\d{6}$/.test(normalized)) return null;
       const matches = timingSafeEqual(
-        await emailCodeHash(services.pepper, challenge.id, normalized),
+        await emailCodeHash(services.pepper, challenge.id, normalized, method === 'reset_email'),
         challenge.emailCodeHash,
       );
       return matches ? { totpStep: null } : null;
@@ -283,9 +315,7 @@ export async function verifyChallenge(
 ): Promise<VerifyOutcome> {
   const services = c.get('services');
   const now = services.now();
-  if (!allowedMethods(user, challenge).includes(method)) {
-    throw new HttpError(400, 'method_not_allowed');
-  }
+  if (!accepts(user, challenge, method)) throw new HttpError(400, 'method_not_allowed');
   if (challenge.status !== 'pending' || challenge.expiresAt <= now) return { status: 'expired' };
 
   const attempt = await reserveAttempt(c.env.DB, challenge.id, AUTH_POLICY.maxOtpAttempts, now);
@@ -295,6 +325,11 @@ export async function verifyChallenge(
   if (correct !== null) {
     if (!(await completeChallenge(c.env.DB, challenge.id))) return { status: 'expired' };
     let recoveryCodes: string[] | null = null;
+    // Only the factor itself cancels a pending reset: an email code proves no more
+    // than the request did.
+    if ((method === 'totp' || method === 'recovery') && user.mfaResetDueAt !== null) {
+      await cancelReset(c, user, 'factor_used');
+    }
     if (method === 'enroll_totp' || method === 'enroll_email') {
       const totpSecretEnc = method === 'enroll_totp' ? challenge.pendingTotpSecretEnc : null;
       await enrollMfa(

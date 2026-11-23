@@ -78,6 +78,10 @@ export interface ChallengeState {
   methods: VerifyMethod[];
   attemptsLeft: number;
   expiresAt: number;
+  /** "I lost my second factor" is offered (authenticator users at sign-in or step-up). */
+  resetAvailable?: boolean;
+  /** When a pending recovery clears the factor. */
+  resetDueAt?: number | null;
 }
 
 export interface AuthenticatedBody {

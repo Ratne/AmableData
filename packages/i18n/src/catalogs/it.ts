@@ -100,6 +100,23 @@ export const it: Readonly<Record<MessageKey, string>> = {
   'auth.challenge.cancelled':
     "Troppi codici errati. Per sicurezza l'accesso è stato annullato: ricomincia dal login.",
   'auth.challenge.expired': 'Questo accesso è scaduto. Ricomincia.',
+  'auth.mfaReset.link': 'Ho perso il secondo fattore',
+  'auth.mfaReset.title': "Hai perso l'app di autenticazione e i codici di recupero?",
+  'auth.mfaReset.intro':
+    "Conferma con un codice inviato alla tua email. Per sicurezza il secondo fattore viene rimosso solo dopo 24 ore: ti mandiamo per email un link per annullare, e anche un accesso con l'app di autenticazione o con un codice di recupero annulla la richiesta. Al prossimo accesso configurerai un nuovo secondo fattore.",
+  'auth.mfaReset.sendCode': 'Inviami un codice di conferma',
+  'auth.mfaReset.resend': 'Invia un nuovo codice',
+  'auth.mfaReset.confirm': 'Conferma la richiesta',
+  'auth.mfaReset.scheduled':
+    'Richiesta confermata. Il secondo fattore verrà rimosso il {time}: accedi dopo quel momento per configurarne uno nuovo. Tutte le sessioni verranno chiuse.',
+  'auth.mfaReset.pending':
+    'È in corso una richiesta di recupero: il secondo fattore verrà rimosso il {time}.',
+  'auth.mfaReset.cancelTitle': 'Annulla il recupero del secondo fattore',
+  'auth.mfaReset.cancelling': 'Annullamento della richiesta…',
+  'auth.mfaReset.cancelled': 'La richiesta è stata annullata. Il secondo fattore resta com’è.',
+  'auth.mfaReset.nothingPending': 'Non c’è nessuna richiesta di recupero in corso: niente da annullare.',
+  'auth.mfaReset.cancelInvalid':
+    'Questo link non è valido o è scaduto. Se il secondo fattore è già stato rimosso, accedi e configurane uno nuovo.',
   'auth.enroll.title': 'Configura la verifica in due passaggi',
   'auth.enroll.intro':
     "La verifica in due passaggi è obbligatoria. Scegli un'app di autenticazione (consigliata) o i codici via email.",
@@ -162,6 +179,9 @@ export const it: Readonly<Record<MessageKey, string>> = {
   'auth.security.changeMfa': 'Cambia metodo',
   'auth.security.mfaChanged':
     'Metodo di verifica aggiornato. Gli altri dispositivi sono stati disconnessi.',
+  'auth.security.resetPending':
+    'È stata confermata via email una richiesta di rimozione del secondo fattore. Verrà rimosso il {time} e tutte le sessioni verranno chiuse. Se non sei stato tu, annullala e cambia la password.',
+  'auth.security.resetCancel': 'Annulla la richiesta',
   'auth.logout': 'Esci',
   'prefs.language': 'Lingua',
   'prefs.theme': 'Tema',

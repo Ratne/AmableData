@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   AuthApiError,
   authApi,
+  currentLocale,
   errorMessage,
   homePath,
   useT,
@@ -10,6 +11,106 @@ import {
   type VerifyMethod,
 } from '../api';
 import { AuthCard, Button, Field, Notice, QrCode, RecoveryCodes } from '../components';
+
+function formatWhen(at: number) {
+  return new Date(at).toLocaleString(currentLocale(), { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/**
+ * "I lost my second factor": an email code confirms the request, and the
+ * factor is removed 24 hours later unless cancelled (from the email, from
+ * Security or by signing in with the old factor). Nothing is unlocked now.
+ */
+function LostFactorForm({
+  basePath,
+  pendingDueAt,
+  onBack,
+  onClosed,
+}: {
+  basePath: string;
+  pendingDueAt: number | null;
+  /** Back to the second-factor form. */
+  onBack: () => void;
+  /** Leaves the flow once the challenge is used up. */
+  onClosed: () => void;
+}) {
+  const t = useT();
+  const [code, setCode] = useState('');
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [dueAt, setDueAt] = useState<number | null>(null);
+  const [closed, setClosed] = useState(false);
+
+  async function sendCode() {
+    setError('');
+    try {
+      await authApi(`${basePath}/mfa-reset/email-code`, { body: {} });
+      setSent(true);
+    } catch (err) {
+      setError(errorMessage(t, err));
+    }
+  }
+
+  async function confirm(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const body = await authApi<{ dueAt: number }>(`${basePath}/mfa-reset/confirm`, { body: { code } });
+      setDueAt(body.dueAt);
+    } catch (err) {
+      setError(errorMessage(t, err));
+      if (err instanceof AuthApiError && err.code !== 'invalid_code') setClosed(true);
+      setCode('');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (dueAt !== null || closed) {
+    return (
+      <div className="space-y-4" data-testid="mfa-reset-result">
+        {dueAt !== null && <Notice>{t('auth.mfaReset.scheduled', { time: formatWhen(dueAt) })}</Notice>}
+        <Notice tone="error">{error}</Notice>
+        <Button onClick={onClosed}>{t('common.back')}</Button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="space-y-4" onSubmit={(e) => void confirm(e)} data-testid="mfa-reset-form">
+      <p className="text-sm font-medium">{t('auth.mfaReset.title')}</p>
+      <p className="text-sm text-muted-foreground">{t('auth.mfaReset.intro')}</p>
+      {pendingDueAt !== null && (
+        <Notice>{t('auth.mfaReset.pending', { time: formatWhen(pendingDueAt) })}</Notice>
+      )}
+      <Button type="button" variant={sent ? 'ghost' : 'primary'} onClick={() => void sendCode()}>
+        {sent ? t('auth.mfaReset.resend') : t('auth.mfaReset.sendCode')}
+      </Button>
+      {sent && (
+        <>
+          <Notice>{t('auth.challenge.codeSent')}</Notice>
+          <Field
+            label={t('auth.challenge.code')}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+          <Button type="submit" disabled={busy}>
+            {t('auth.mfaReset.confirm')}
+          </Button>
+        </>
+      )}
+      <Notice tone="error">{error}</Notice>
+      <Button type="button" variant="ghost" onClick={onBack}>
+        {t('common.back')}
+      </Button>
+    </form>
+  );
+}
 
 /**
  * Second factor after password / magic link / invite: verify with TOTP, email
@@ -38,6 +139,8 @@ export function SecondFactorForm({
   const [info, setInfo] = useState('');
   const [cancelled, setCancelled] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [lost, setLost] = useState(false);
+  const leave = () => (onCancelled === undefined ? window.location.assign('/login') : onCancelled());
 
   useEffect(() => {
     if (method === 'enroll_totp' && setup === null) {
@@ -86,15 +189,25 @@ export function SecondFactorForm({
     enroll_totp: t('auth.enroll.totp'),
     enroll_email: t('auth.enroll.email'),
   };
+  const resetDueAt = state.resetDueAt ?? null;
 
   if (cancelled) {
     return (
       <div className="space-y-4">
         <Notice tone="error">{error}</Notice>
-        <Button onClick={() => (onCancelled === undefined ? window.location.assign('/login') : onCancelled())}>
-          {t('common.back')}
-        </Button>
+        <Button onClick={leave}>{t('common.back')}</Button>
       </div>
+    );
+  }
+
+  if (lost) {
+    return (
+      <LostFactorForm
+        basePath={basePath}
+        pendingDueAt={resetDueAt}
+        onBack={() => setLost(false)}
+        onClosed={leave}
+      />
     );
   }
 
@@ -144,7 +257,24 @@ export function SecondFactorForm({
               {switchLabel[m]}
             </Button>
           ))}
+        {state.resetAvailable === true && !enrolling && (
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="mfa-reset-link"
+            onClick={() => {
+              setLost(true);
+              setError('');
+              setInfo('');
+            }}
+          >
+            {t('auth.mfaReset.link')}
+          </Button>
+        )}
       </div>
+      {resetDueAt !== null && !enrolling && (
+        <Notice>{t('auth.mfaReset.pending', { time: formatWhen(resetDueAt) })}</Notice>
+      )}
     </form>
   );
 }

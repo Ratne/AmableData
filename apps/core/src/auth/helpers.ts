@@ -57,6 +57,7 @@ export async function meBody(c: Context<AppEnv>, user: UserRow) {
     mfa: {
       method: user.mfaMethod,
       recoveryCodesLeft: await countRecoveryCodes(c.env.DB, user.id),
+      resetDueAt: user.mfaResetDueAt,
     },
     memberships: memberships.map((m) => ({
       slug: m.slug,

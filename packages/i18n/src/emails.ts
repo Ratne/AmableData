@@ -17,6 +17,9 @@ export interface SystemEmailVars {
   password_changed: Record<string, never>;
   new_device: { device: string; location: string; time: string };
   mfa_changed: { method: string };
+  mfa_reset_scheduled: { until: string; cancelUrl: string };
+  mfa_reset_cancelled: Record<string, never>;
+  mfa_reset_done: Record<string, never>;
   otp_failed: { device: string; time: string };
   account_locked: { until: string };
   invite: { tenant: string; inviter: string; role: string; url: string; days: number };
@@ -84,6 +87,29 @@ const templates: Record<Locale, Templates> = {
     mfa_changed: {
       subject: 'Two-factor authentication updated',
       body: ['Your two-factor authentication settings changed (method: {method}).'],
+      footer: securityFooterEn,
+    },
+    mfa_reset_scheduled: {
+      subject: 'Your second factor will be removed on {until}',
+      body: [
+        'Someone confirmed with a code sent to this address that the second factor of your account was lost.',
+        'On {until} the authenticator and the recovery codes will be removed, every session will be signed out and a new second factor will be set up at the next sign-in.',
+        'If this was not you, cancel now. Signing in with your authenticator or a recovery code also cancels the request.',
+      ],
+      action: { label: 'Cancel the request', urlVar: 'cancelUrl' },
+      footer: 'If this was not you, also change your password: whoever asked can read this mailbox.',
+    },
+    mfa_reset_cancelled: {
+      subject: 'Second factor recovery cancelled',
+      body: ['The request to remove the second factor of your account was cancelled. Nothing changes.'],
+      footer: securityFooterEn,
+    },
+    mfa_reset_done: {
+      subject: 'Your second factor was removed',
+      body: [
+        'As requested 24 hours ago, the second factor and the recovery codes of your account were removed and every session was signed out.',
+        'At the next sign-in you will set up a new second factor and receive new recovery codes.',
+      ],
       footer: securityFooterEn,
     },
     otp_failed: {
@@ -167,6 +193,29 @@ const templates: Record<Locale, Templates> = {
     mfa_changed: {
       subject: 'Verifica in due passaggi aggiornata',
       body: ['Le impostazioni della verifica in due passaggi sono cambiate (metodo: {method}).'],
+      footer: securityFooterIt,
+    },
+    mfa_reset_scheduled: {
+      subject: 'Il secondo fattore verrà rimosso il {until}',
+      body: [
+        'Qualcuno ha confermato, con un codice inviato a questo indirizzo, di aver perso il secondo fattore del tuo account.',
+        "Il {until} l'app di autenticazione e i codici di recupero verranno rimossi, tutte le sessioni verranno chiuse e al prossimo accesso configurerai un nuovo secondo fattore.",
+        "Se non sei stato tu, annulla subito. Anche un accesso con l'app di autenticazione o con un codice di recupero annulla la richiesta.",
+      ],
+      action: { label: 'Annulla la richiesta', urlVar: 'cancelUrl' },
+      footer: 'Se non sei stato tu, cambia anche la password: chi ha fatto la richiesta legge questa casella.',
+    },
+    mfa_reset_cancelled: {
+      subject: 'Recupero del secondo fattore annullato',
+      body: ['La richiesta di rimuovere il secondo fattore del tuo account è stata annullata. Non cambia nulla.'],
+      footer: securityFooterIt,
+    },
+    mfa_reset_done: {
+      subject: 'Il secondo fattore è stato rimosso',
+      body: [
+        'Come richiesto 24 ore fa, il secondo fattore e i codici di recupero del tuo account sono stati rimossi e tutte le sessioni sono state chiuse.',
+        'Al prossimo accesso configurerai un nuovo secondo fattore e riceverai nuovi codici di recupero.',
+      ],
       footer: securityFooterIt,
     },
     otp_failed: {

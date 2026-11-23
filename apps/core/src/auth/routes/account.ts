@@ -22,6 +22,7 @@ import {
 } from '../challenge';
 import { sendSystemEmail } from '../emails';
 import { meBody, verifyPasswordUniform } from '../helpers';
+import { applyDueReset, cancelReset, scheduleReset } from '../mfa-reset';
 import { clearSessionCookie, rotateSession, setPrefsCookie } from '../sessions';
 import {
   addMembership,
@@ -59,7 +60,15 @@ async function currentUser(c: Context<AppEnv>): Promise<UserRow> {
   return user;
 }
 
-accountRoutes.get('/me', async (c) => c.json(await meBody(c, await currentUser(c))));
+accountRoutes.get('/me', async (c) => {
+  const stepUpAt = getSessionAuth(c).session.stepUpAt;
+  const validUntil = stepUpAt === null ? null : stepUpAt + AUTH_POLICY.stepUpMaxAgeMs;
+  return c.json({
+    ...(await meBody(c, await currentUser(c))),
+    stepUpValidUntil:
+      validUntil !== null && validUntil > c.get('services').now() ? validUntil : null,
+  });
+});
 
 // Only workspace owners administer a self-hosted installation, so only they see updates.
 accountRoutes.get('/me/update', async (c) => {
@@ -204,7 +213,13 @@ const verifySchema = z.strictObject({
 
 accountRoutes.post('/auth/step-up/start', async (c) => {
   const auth = getSessionAuth(c);
-  const user = await currentUser(c);
+  const before = await currentUser(c);
+  const user = await applyDueReset(c, before);
+  if (user.mfaMethod === null && before.mfaMethod !== null) {
+    // The reset closed every session, this one included: sign in and enroll again.
+    clearSessionCookie(c);
+    return jsonError(c, 401, 'unauthenticated');
+  }
   const challenge = await startSessionChallenge(c, user, auth.session.publicId, 'step_up');
   return c.json(describeChallenge(user, challenge));
 });
@@ -233,6 +248,33 @@ accountRoutes.post('/auth/step-up/verify', async (c) => {
   await setSessionStepUp(c.env.DB, newHash, now);
   await audit(c, 'auth.step_up', { tenantId: null, details: { method: body.method } });
   return c.json({ ok: true, validUntil: now + AUTH_POLICY.stepUpMaxAgeMs });
+});
+
+// --- lost second factor (from a live session) ------------------------------------------------
+
+accountRoutes.post('/auth/step-up/mfa-reset/email-code', async (c) => {
+  const { challenge, user } = await loadSessionChallenge(c, 'step_up');
+  await sendEmailCode(c, user, challenge, { reset: true });
+  return c.json({ ok: true });
+});
+
+accountRoutes.post('/auth/step-up/mfa-reset/confirm', async (c) => {
+  const body = await parseJson(c, z.strictObject({ code: z.string().min(1).max(64) }));
+  const { auth, challenge, user } = await loadSessionChallenge(c, 'step_up');
+  const outcome = await verifyChallenge(c, user, challenge, 'reset_email', body.code);
+  if (outcome.status !== 'ok') {
+    if (outcome.status === 'cancelled') {
+      await deleteSessionByHash(c.env.DB, auth.session.hash);
+      clearSessionCookie(c);
+    }
+    return verifyFailure(c, outcome);
+  }
+  return c.json({ status: 'mfa_reset_scheduled', dueAt: await scheduleReset(c, user) });
+});
+
+accountRoutes.post('/me/2fa/reset/cancel', async (c) => {
+  const user = await currentUser(c);
+  return c.json({ ok: true, cancelled: await cancelReset(c, user, 'settings') });
 });
 
 // --- 2FA management (after step-up) -------------------------------------------------------

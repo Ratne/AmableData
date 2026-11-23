@@ -27,6 +27,8 @@ export const AUTH_POLICY = {
   passwordResetTtlMs: HOUR,
   emailChangeTtlMs: HOUR,
   inviteTtlMs: 7 * DAY,
+  /** Wait between a confirmed "lost second factor" request and the reset, to allow a cancel. */
+  mfaResetDelayMs: DAY,
 
   sessionIdleMs: 7 * DAY,
   sessionAbsoluteMs: 30 * DAY,

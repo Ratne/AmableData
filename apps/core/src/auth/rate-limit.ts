@@ -62,6 +62,7 @@ export const RATE_RULES = {
   loginFailures: { name: 'login_fail', limit: 1_000_000, windowMs: 15 * MINUTE },
   magicLinkAccount: { name: 'magic_account', limit: 3, windowMs: 15 * MINUTE },
   resetAccount: { name: 'reset_account', limit: 3, windowMs: 60 * MINUTE },
+  mfaResetAccount: { name: 'mfa_reset_account', limit: 3, windowMs: 60 * MINUTE },
   emailCodeMinute: { name: 'email_code_min', limit: 1, windowMs: MINUTE },
   emailCodeHour: { name: 'email_code_hour', limit: 5, windowMs: 60 * MINUTE },
   invitesTenant: { name: 'invites_tenant', limit: 50, windowMs: 60 * MINUTE },

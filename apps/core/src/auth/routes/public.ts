@@ -18,6 +18,7 @@ import {
 } from '../challenge';
 import { sendSystemEmail } from '../emails';
 import { accountKey, enforceLimit, meBody, verifyPasswordUniform } from '../helpers';
+import { applyDueReset, cancelReset, scheduleReset } from '../mfa-reset';
 import { RATE_RULES } from '../rate-limit';
 import {
   clearChallengeCookie,
@@ -116,7 +117,7 @@ publicAuthRoutes.post('/auth/login', async (c) => {
   if (user.passwordHash !== null && services.hasher.needsRehash(user.passwordHash)) {
     await setPassword(c.env.DB, user.id, await services.hasher.hash(body.password), services.now());
   }
-  return c.json(await startLoginChallenge(c, user, 'password'));
+  return c.json(await startLoginChallenge(c, await applyDueReset(c, user), 'password'));
 });
 
 // --- magic link ---------------------------------------------------------------------------
@@ -176,7 +177,7 @@ publicAuthRoutes.post('/auth/magic-link/consume', async (c) => {
       .run();
   }
   // The magic link is only the first factor: 2FA still follows.
-  return c.json(await startLoginChallenge(c, user, 'magic_link'));
+  return c.json(await startLoginChallenge(c, await applyDueReset(c, user), 'magic_link'));
 });
 
 // --- second factor ------------------------------------------------------------------------
@@ -195,13 +196,14 @@ async function loadLoginChallenge(c: Context<AppEnv>) {
     clearChallengeCookie(c);
     throw new HttpError(401, 'no_challenge');
   }
-  const user = await findUserById(c.env.DB, challenge.userId);
-  if (user === null || user.disabledAt !== null) throw new HttpError(401, 'no_challenge');
-  if (user.lockedUntil !== null && user.lockedUntil > now) {
+  const found = await findUserById(c.env.DB, challenge.userId);
+  if (found === null || found.disabledAt !== null) throw new HttpError(401, 'no_challenge');
+  if (found.lockedUntil !== null && found.lockedUntil > now) {
     clearChallengeCookie(c);
-    throw new HttpError(423, 'account_locked', { lockedUntil: user.lockedUntil });
+    throw new HttpError(423, 'account_locked', { lockedUntil: found.lockedUntil });
   }
-  return { challenge, user };
+  // A reset that fell due while the challenge was open turns it into an enrollment.
+  return { challenge, user: await applyDueReset(c, found) };
 }
 
 publicAuthRoutes.get('/auth/challenge', async (c) => {
@@ -265,6 +267,46 @@ publicAuthRoutes.post('/auth/challenge/verify', async (c) => {
     recoveryCodes: outcome.recoveryCodes,
     ...(await meBody(c, fresh)),
   });
+});
+
+// --- lost second factor ---------------------------------------------------------------------
+
+publicAuthRoutes.post('/auth/challenge/mfa-reset/email-code', async (c) => {
+  await enforceLimit(c.get('services').ipLimiter, RATE_RULES.authIp, clientIp(c) ?? 'unknown');
+  const { challenge, user } = await loadLoginChallenge(c);
+  await sendEmailCode(c, user, challenge, { reset: true });
+  return c.json({ ok: true });
+});
+
+const resetConfirmSchema = z.strictObject({ code: z.string().min(1).max(64) });
+
+/** Confirms the request with the email code: no session, the factor is cleared later. */
+publicAuthRoutes.post('/auth/challenge/mfa-reset/confirm', async (c) => {
+  const body = await parseJson(c, resetConfirmSchema);
+  await enforceLimit(c.get('services').ipLimiter, RATE_RULES.authIp, clientIp(c) ?? 'unknown');
+  const { challenge, user } = await loadLoginChallenge(c);
+  const outcome = await verifyChallenge(c, user, challenge, 'reset_email', body.code);
+  if (outcome.status !== 'ok') {
+    if (outcome.status !== 'wrong') clearChallengeCookie(c);
+    return verifyFailure(c, outcome);
+  }
+  clearChallengeCookie(c);
+  return c.json({ status: 'mfa_reset_scheduled', dueAt: await scheduleReset(c, user) });
+});
+
+publicAuthRoutes.post('/auth/mfa-reset/cancel', async (c) => {
+  const body = await parseJson(c, z.strictObject({ token: tokenField }));
+  const services = c.get('services');
+  await enforceLimit(services.ipLimiter, RATE_RULES.authIp, clientIp(c) ?? 'unknown');
+  const consumed = await consumeToken(
+    c.env.DB,
+    await sha256Hex(body.token),
+    'mfa_reset_cancel',
+    services.now(),
+  );
+  const user = consumed === null ? null : await findUserById(c.env.DB, consumed.userId);
+  if (user === null) return jsonError(c, 400, 'invalid_token');
+  return c.json({ ok: true, cancelled: await cancelReset(c, user, 'link') });
 });
 
 // --- logout ---------------------------------------------------------------------------------

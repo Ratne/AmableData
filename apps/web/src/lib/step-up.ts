@@ -13,6 +13,10 @@ export type StepUpPrompt = () => Promise<boolean>;
 
 let prompt: StepUpPrompt | null = null;
 let inflight: Promise<boolean> | null = null;
+/** Server time until which the last step-up is accepted (0 = none known). */
+let validUntil = 0;
+/** Margin for the request's travel time and a slightly late client clock. */
+const VALIDITY_MARGIN_MS = 15_000;
 
 /** Installs the prompt (one per app); returns the uninstaller. */
 export function registerStepUpPrompt(next: StepUpPrompt): () => void {
@@ -20,6 +24,24 @@ export function registerStepUpPrompt(next: StepUpPrompt): () => void {
   return () => {
     if (prompt === next) prompt = null;
   };
+}
+
+/** Records how long the server accepts the current step-up (`/api/me` or a verify answer). */
+export function noteStepUp(until: number | null | undefined): void {
+  validUntil = typeof until === 'number' && Number.isFinite(until) ? until : 0;
+}
+
+/**
+ * Asks for the second factor before a sensitive action, unless a recent
+ * step-up still holds, so the action is sent once instead of failing with a
+ * 403 first. False when the user gave up. Without a mounted prompt the
+ * request goes ahead and the server decides.
+ */
+export async function requestStepUp(): Promise<boolean> {
+  if (Date.now() < validUntil - VALIDITY_MARGIN_MS) return true;
+  const ask = prompt;
+  if (ask === null) return true;
+  return askOnce(ask);
 }
 
 /** True for the API error code, whatever client error class carries it. */

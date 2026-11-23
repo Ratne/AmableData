@@ -1,6 +1,6 @@
 import { LOCALES, THEMES, type Locale, type Theme } from '@amable/i18n/client';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { isStepUpRequired } from '../../../lib/step-up';
+import { isStepUpRequired, noteStepUp, requestStepUp } from '../../../lib/step-up';
 import { authApi, currentLocale, errorMessage, useT, type ChallengeState } from '../api';
 import { Button, Field, Notice, RecoveryCodes } from '../components';
 import { SecondFactorForm } from './challenge';
@@ -16,11 +16,13 @@ interface DeviceSession {
 }
 
 /**
- * Sensitive actions (valid 5 minutes server-side after a step-up): the
- * app-wide step-up dialog replays them, so a `step_up_required` that still
- * reaches here means the user closed that dialog.
+ * Sensitive actions (valid 5 minutes server-side after a step-up): the second
+ * factor is asked first when no recent step-up holds, so the action is not
+ * sent to fail with a 403. A `step_up_required` that still reaches here means
+ * the user closed the dialog.
  */
 async function run(action: () => Promise<void>) {
+  if (!(await requestStepUp())) return;
   try {
     await action();
   } catch (err) {
@@ -52,16 +54,23 @@ export function SecurityPage() {
   const [newEmail, setNewEmail] = useState('');
   const [mfaMethod, setMfaMethod] = useState<MfaMethod>(null);
   const [enrollment, setEnrollment] = useState<ChallengeState | null>(null);
+  const [resetDueAt, setResetDueAt] = useState<number | null>(null);
 
   const load = useCallback(() => {
     authApi<{ sessions: DeviceSession[] }>('/api/me/sessions')
       .then((body) => setSessions(body.sessions))
       .catch((err: unknown) => setError(errorMessage(t, err)));
-    authApi<{ user: { theme: string; email: string }; mfa: { method: MfaMethod } }>('/api/me')
+    authApi<{
+      user: { theme: string; email: string };
+      mfa: { method: MfaMethod; resetDueAt?: number | null };
+      stepUpValidUntil?: number | null;
+    }>('/api/me')
       .then((body) => {
         setTheme((THEMES as readonly string[]).includes(body.user.theme) ? (body.user.theme as Theme) : 'system');
         setEmail(body.user.email);
         setMfaMethod(body.mfa.method);
+        setResetDueAt(body.mfa.resetDueAt ?? null);
+        noteStepUp(body.stepUpValidUntil);
       })
       .catch(() => undefined);
   }, [t]);
@@ -129,6 +138,17 @@ export function SecurityPage() {
     }).catch((err: unknown) => setError(errorMessage(t, err)));
   }
 
+  async function cancelReset() {
+    setError('');
+    try {
+      await authApi('/api/me/2fa/reset/cancel', { body: {} });
+      setMessage(t('auth.mfaReset.cancelled'));
+      load();
+    } catch (err) {
+      setError(errorMessage(t, err));
+    }
+  }
+
   async function savePrefs(next: { locale?: Locale; theme?: Theme }) {
     await authApi('/api/me/preferences', { method: 'PATCH', body: next });
     // The document language/theme are injected server-side: reload to apply everywhere.
@@ -138,6 +158,22 @@ export function SecurityPage() {
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-6 text-foreground">
       <h1 className="text-xl font-semibold">{t('auth.security.title')}</h1>
+      {resetDueAt !== null && (
+        <div
+          role="alert"
+          data-testid="mfa-reset-banner"
+          className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300"
+        >
+          <p>
+            {t('auth.security.resetPending', {
+              time: new Date(resetDueAt).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }),
+            })}
+          </p>
+          <Button className="sm:w-auto" onClick={() => void cancelReset()}>
+            {t('auth.security.resetCancel')}
+          </Button>
+        </div>
+      )}
       <Notice tone="error">{error}</Notice>
       <Notice>{message}</Notice>
       <Section title={t('auth.security.devices')}>

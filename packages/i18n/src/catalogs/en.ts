@@ -98,6 +98,22 @@ export const en = {
   'auth.challenge.cancelled':
     'Too many wrong codes. For your security this sign-in was cancelled — start again.',
   'auth.challenge.expired': 'This sign-in expired. Start again.',
+  'auth.mfaReset.link': 'I lost my second factor',
+  'auth.mfaReset.title': 'Lost your authenticator and recovery codes?',
+  'auth.mfaReset.intro':
+    'Confirm with a code sent to your email. For your security the second factor is removed only after 24 hours: we email you a link to cancel, and signing in with your authenticator or a recovery code cancels it too. Then you set up a new second factor at the next sign-in.',
+  'auth.mfaReset.sendCode': 'Email me a confirmation code',
+  'auth.mfaReset.resend': 'Send a new code',
+  'auth.mfaReset.confirm': 'Confirm the request',
+  'auth.mfaReset.scheduled':
+    'Request confirmed. Your second factor will be removed on {time}: sign in after that to set up a new one. Every session will be signed out.',
+  'auth.mfaReset.pending': 'A recovery request is pending: the second factor will be removed on {time}.',
+  'auth.mfaReset.cancelTitle': 'Cancel the second factor recovery',
+  'auth.mfaReset.cancelling': 'Cancelling the request…',
+  'auth.mfaReset.cancelled': 'The request was cancelled. Your second factor stays as it is.',
+  'auth.mfaReset.nothingPending': 'No recovery request is pending: nothing to cancel.',
+  'auth.mfaReset.cancelInvalid':
+    'This link is invalid or has expired. If the second factor was already removed, sign in and set up a new one.',
   'auth.enroll.title': 'Set up two-factor authentication',
   'auth.enroll.intro':
     'Two-factor authentication is required. Choose an authenticator app (recommended) or email codes.',
@@ -159,6 +175,9 @@ export const en = {
     'Switching method signs out your other devices and replaces your recovery codes.',
   'auth.security.changeMfa': 'Change method',
   'auth.security.mfaChanged': 'Two-factor method updated. Your other devices were signed out.',
+  'auth.security.resetPending':
+    'A request to remove your second factor was confirmed by email. It will be removed on {time} and every session will be signed out. If this was not you, cancel it and change your password.',
+  'auth.security.resetCancel': 'Cancel the request',
   'auth.logout': 'Sign out',
   'prefs.language': 'Language',
   'prefs.theme': 'Theme',

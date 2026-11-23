@@ -7,7 +7,7 @@ import {
 } from '@amable/ui/ui/dialog';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n';
-import { registerStepUpPrompt } from '../../lib/step-up';
+import { noteStepUp, registerStepUpPrompt } from '../../lib/step-up';
 import { authApi, type ChallengeState } from './api';
 import { SecondFactorForm } from './pages/challenge';
 
@@ -50,7 +50,10 @@ export function StepUpProvider() {
           <SecondFactorForm
             state={challenge}
             basePath="/api/auth/step-up"
-            onVerified={() => finish(true)}
+            onVerified={(body) => {
+              noteStepUp(typeof body.validUntil === 'number' ? body.validUntil : null);
+              finish(true);
+            }}
             onCancelled={() => finish(false)}
           />
         ) : null}

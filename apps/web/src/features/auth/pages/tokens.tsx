@@ -152,3 +152,40 @@ export function EmailConfirmPage() {
     </AuthCard>
   );
 }
+
+/** /auth/mfa-reset/cancel#token=… — the link of the warning email: cancels a pending second-factor recovery. */
+export function MfaResetCancelPage() {
+  const t = useT();
+  const [result, setResult] = useState<'cancelled' | 'none' | 'invalid' | null>(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const token = takeFragmentToken();
+    if (token === null) {
+      setResult('invalid');
+      return;
+    }
+    authApi<{ cancelled: boolean }>('/api/auth/mfa-reset/cancel', { body: { token } })
+      .then((body) => setResult(body.cancelled ? 'cancelled' : 'none'))
+      .catch(() => setResult('invalid'));
+  }, []);
+
+  return (
+    <AuthCard title={t('auth.mfaReset.cancelTitle')}>
+      {result === null ? (
+        <p className="text-sm text-muted-foreground">{t('auth.mfaReset.cancelling')}</p>
+      ) : (
+        <Notice tone={result === 'invalid' ? 'error' : 'info'}>
+          {result === 'cancelled'
+            ? t('auth.mfaReset.cancelled')
+            : result === 'none'
+              ? t('auth.mfaReset.nothingPending')
+              : t('auth.mfaReset.cancelInvalid')}
+        </Notice>
+      )}
+      <Button onClick={() => window.location.assign('/login')}>{t('common.back')}</Button>
+    </AuthCard>
+  );
+}

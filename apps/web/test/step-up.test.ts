@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/lib/api';
 import { FormsApiError } from '../src/features/forms/api/client';
-import { isStepUpRequired, registerStepUpPrompt, stepUpFetch } from '../src/lib/step-up';
+import {
+  isStepUpRequired,
+  noteStepUp,
+  registerStepUpPrompt,
+  requestStepUp,
+  stepUpFetch,
+} from '../src/lib/step-up';
 
 const stepUpResponse = () =>
   new Response(JSON.stringify({ error: 'step_up_required' }), {
@@ -116,5 +122,42 @@ describe('stepUpFetch', () => {
 
     expect(response.status).toBe(403);
     expect(prompt).not.toHaveBeenCalled();
+  });
+});
+
+describe('requestStepUp', () => {
+  let unregister: (() => void) | null = null;
+  afterEach(() => {
+    unregister?.();
+    unregister = null;
+    noteStepUp(null);
+  });
+
+  it('asks before the action when no step-up is known', async () => {
+    const prompt = vi.fn(() => Promise.resolve(true));
+    unregister = registerStepUpPrompt(prompt);
+    expect(await requestStepUp()).toBe(true);
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a closed dialog', async () => {
+    unregister = registerStepUpPrompt(() => Promise.resolve(false));
+    expect(await requestStepUp()).toBe(false);
+  });
+
+  it('skips the prompt while the last step-up still holds, not in its final seconds', async () => {
+    const prompt = vi.fn(() => Promise.resolve(true));
+    unregister = registerStepUpPrompt(prompt);
+    noteStepUp(Date.now() + 4 * 60_000);
+    expect(await requestStepUp()).toBe(true);
+    expect(prompt).not.toHaveBeenCalled();
+
+    noteStepUp(Date.now() + 5_000);
+    expect(await requestStepUp()).toBe(true);
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the request go when no prompt is mounted', async () => {
+    expect(await requestStepUp()).toBe(true);
   });
 });

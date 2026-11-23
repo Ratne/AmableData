@@ -22,6 +22,9 @@ export interface UserRow {
   lockedUntil: number | null;
   disabledAt: number | null;
   lastTenantId: string | null;
+  /** Pending second-factor recovery: the factor is cleared at `mfaResetDueAt` unless cancelled. */
+  mfaResetRequestedAt: number | null;
+  mfaResetDueAt: number | null;
   createdAt: number;
 }
 
@@ -41,6 +44,8 @@ interface RawUser {
   locked_until: number | null;
   disabled_at: number | null;
   last_tenant_id: string | null;
+  mfa_reset_requested_at?: number | null;
+  mfa_reset_due_at?: number | null;
   created_at: number;
 }
 
@@ -61,6 +66,8 @@ function mapUser(raw: RawUser): UserRow {
     lockedUntil: raw.locked_until,
     disabledAt: raw.disabled_at,
     lastTenantId: raw.last_tenant_id,
+    mfaResetRequestedAt: raw.mfa_reset_requested_at ?? null,
+    mfaResetDueAt: raw.mfa_reset_due_at ?? null,
     createdAt: raw.created_at,
   };
 }
@@ -156,10 +163,70 @@ export async function enrollMfa(
   await db
     .prepare(
       `UPDATE users SET mfa_method = ?, totp_secret_enc = ?, totp_last_step = ?,
-         mfa_enrolled_at = ?, updated_at = ? WHERE id = ?`,
+         mfa_enrolled_at = ?, mfa_reset_requested_at = NULL, mfa_reset_due_at = NULL,
+         updated_at = ? WHERE id = ?`,
     )
     .bind(input.method, input.totpSecretEnc, input.totpStep, now, now, userId)
     .run();
+}
+
+// --- second-factor recovery ------------------------------------------------------
+
+/**
+ * Schedules the reset of the second factor. A request already pending keeps
+ * its due time, so asking again never brings the reset closer. Returns the due time.
+ */
+export async function scheduleMfaReset(db: D1Database, userId: string, dueAt: number, now: number) {
+  const row = await db
+    .prepare(
+      `UPDATE users SET mfa_reset_requested_at = COALESCE(mfa_reset_requested_at, ?),
+         mfa_reset_due_at = COALESCE(mfa_reset_due_at, ?), updated_at = ?
+       WHERE id = ? RETURNING mfa_reset_due_at`,
+    )
+    .bind(now, dueAt, now, userId)
+    .first<{ mfa_reset_due_at: number }>();
+  return row?.mfa_reset_due_at ?? dueAt;
+}
+
+/** Cancels a pending reset; false when there was none. */
+export async function cancelMfaReset(db: D1Database, userId: string, now: number) {
+  const result = await db
+    .prepare(
+      `UPDATE users SET mfa_reset_requested_at = NULL, mfa_reset_due_at = NULL, updated_at = ?
+       WHERE id = ? AND mfa_reset_due_at IS NOT NULL`,
+    )
+    .bind(now, userId)
+    .run();
+  return result.meta.changes === 1;
+}
+
+/**
+ * Applies a reset whose due time has passed: clears the factor, then the
+ * recovery codes, every session and the pending cancel links. The guarded
+ * UPDATE makes it run once, however many requests race. True when applied.
+ */
+export async function applyDueMfaReset(db: D1Database, userId: string, now: number) {
+  const cleared = await db
+    .prepare(
+      `UPDATE users SET mfa_method = NULL, totp_secret_enc = NULL, totp_last_step = NULL,
+         mfa_enrolled_at = NULL, mfa_reset_requested_at = NULL, mfa_reset_due_at = NULL,
+         updated_at = ?
+       WHERE id = ? AND mfa_reset_due_at IS NOT NULL AND mfa_reset_due_at <= ?`,
+    )
+    .bind(now, userId, now)
+    .run();
+  if (cleared.meta.changes !== 1) return false;
+  await db.batch([
+    db.prepare(`DELETE FROM recovery_codes WHERE user_id = ?`).bind(userId),
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId),
+    db
+      .prepare(
+        `UPDATE auth_tokens SET invalidated_at = ?
+         WHERE user_id = ? AND purpose = 'mfa_reset_cancel' AND used_at IS NULL AND invalidated_at IS NULL`,
+      )
+      .bind(now, userId),
+  ]);
+  return true;
 }
 
 /** Atomically records a used TOTP step; false if the step was already used (replay). */
@@ -554,7 +621,7 @@ export async function setChallengePendingTotp(db: D1Database, id: string, secret
 
 // --- single-use email tokens ----------------------------------------------------
 
-export type TokenPurpose = 'magic_link' | 'password_reset' | 'email_change';
+export type TokenPurpose = 'magic_link' | 'password_reset' | 'email_change' | 'mfa_reset_cancel';
 
 export async function insertToken(
   db: D1Database,

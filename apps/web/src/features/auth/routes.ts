@@ -7,7 +7,7 @@ import { LoginPage } from './pages/login';
  *   rootRoute.addChildren([...createAuthRoutes(rootRoute), …])
  *
  * Paths are fixed: the server builds email links to /auth/magic, /auth/reset,
- * /auth/email and /invite (token in the URL fragment).
+ * /auth/email, /auth/mfa-reset/cancel and /invite (token in the URL fragment).
  *
  * Only the login page is in the entry chunk; the others load on demand.
  */
@@ -22,6 +22,7 @@ export function createAuthRoutes(parent: AnyRoute): AnyRoute[] {
     route('/auth/forgot', lazyRouteComponent(tokens, 'ForgotPasswordPage')),
     route('/auth/reset', lazyRouteComponent(tokens, 'ResetPasswordPage')),
     route('/auth/email', lazyRouteComponent(tokens, 'EmailConfirmPage')),
+    route('/auth/mfa-reset/cancel', lazyRouteComponent(tokens, 'MfaResetCancelPage')),
     route('/invite', lazyRouteComponent(() => import('./pages/invite'), 'InvitePage')),
     // Standalone for now; the shell can re-parent it under its settings layout.
     route('/account/security', lazyRouteComponent(() => import('./pages/security'), 'SecurityPage')),
