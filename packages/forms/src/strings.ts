@@ -9,6 +9,12 @@ export interface WidgetStrings {
   step: string;
   success: string;
   select: string;
+  /** aria-label of the phone country-prefix selector. */
+  phoneCountry: string;
+  /** "No prefix" entry of the phone country selector. */
+  phoneNoPrefix: string;
+  /** aria-label of the address suggestions listbox. */
+  addressSuggestions: string;
   fixErrors: string;
   genericError: string;
   networkError: string;
@@ -28,6 +34,9 @@ const en: WidgetStrings = {
   step: 'Step {n} of {total}',
   success: 'Thank you! Your submission has been received.',
   select: 'Select…',
+  phoneCountry: 'Country code',
+  phoneNoPrefix: 'No prefix',
+  addressSuggestions: 'Address suggestions',
   fixErrors: 'Please check the highlighted fields.',
   genericError: 'Something went wrong. Please try again.',
   networkError: 'Network error. Please check your connection and try again.',
@@ -58,6 +67,9 @@ const it: WidgetStrings = {
   step: 'Passo {n} di {total}',
   success: 'Grazie! Abbiamo ricevuto la tua richiesta.',
   select: 'Seleziona…',
+  phoneCountry: 'Prefisso internazionale',
+  phoneNoPrefix: 'Senza prefisso',
+  addressSuggestions: 'Suggerimenti di indirizzo',
   fixErrors: 'Controlla i campi evidenziati.',
   genericError: 'Si è verificato un errore. Riprova.',
   networkError: 'Errore di rete. Controlla la connessione e riprova.',

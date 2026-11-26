@@ -1,4 +1,5 @@
 import { collectsValue, OPTION_KINDS } from './constants';
+import { isCountryCode } from './countries';
 import type { FormField, SubmissionValue, SubmissionValues, VisibilityRule } from './schema';
 
 /**
@@ -157,6 +158,10 @@ function checkValue(
       return DATE_RE.test(text) && !Number.isNaN(Date.parse(`${text}T00:00:00Z`))
         ? { value: text }
         : { error: 'invalid_date' };
+    case 'country': {
+      const code = text.toUpperCase();
+      return isCountryCode(code) ? { value: code } : { error: 'invalid_option' };
+    }
     default:
       if (OPTION_KINDS.has(field.kind) && !field.options.some((o) => o.value === text)) {
         return { error: 'invalid_option' };

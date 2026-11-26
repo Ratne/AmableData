@@ -237,6 +237,10 @@ export interface PublicFormConfig {
   readonly style: FormStyle;
   /** Turnstile site key when the form requires the challenge and the installation has one. */
   readonly turnstile_site_key: string | null;
+  /** ISO-2 country of the request (edge geolocation): default phone prefix and country. Null in previews. */
+  readonly visitor_country: string | null;
+  /** The installation can suggest addresses (geocoder or app) while typing a field mapped to `address.line1`. */
+  readonly address_lookup: boolean;
 }
 
 // ----------------------------------------------------------------- submission

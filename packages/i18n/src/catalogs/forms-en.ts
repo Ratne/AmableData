@@ -89,6 +89,8 @@ export const formsEn = {
   'forms.kind.textarea': 'Long text',
   'forms.kind.number': 'Number',
   'forms.kind.date': 'Date',
+  'forms.kind.country': 'Country',
+  'forms.kind.address': 'Address (street, number, postal code, city, province, country)',
   'forms.kind.select': 'Dropdown',
   'forms.kind.radio': 'Single choice',
   'forms.kind.checkbox': 'Checkbox',
@@ -123,6 +125,13 @@ export const formsEn = {
   'forms.map.address.region': 'Region / state',
   'forms.map.address.postal_code': 'Postal code',
   'forms.map.address.country_code': 'Country (ISO code)',
+
+  'forms.address.line1': 'Address',
+  'forms.address.street_number': 'Street number',
+  'forms.address.postal_code': 'Postal code',
+  'forms.address.locality': 'City',
+  'forms.address.region': 'State / Province',
+  'forms.address.country': 'Country',
 
   'forms.crm.intro':
     'Each submission creates the contact, or updates the one with the same email (or phone), then triggers automations.',

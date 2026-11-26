@@ -68,6 +68,9 @@ export function previewConfig(id: string, name: string, tenant: string, definiti
     settings,
     style: definition.style,
     turnstile_site_key: null,
+    // No request to geolocate in the preview; the widget falls back to the browser locale.
+    visitor_country: null,
+    address_lookup: true,
   };
 }
 

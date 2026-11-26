@@ -3,7 +3,7 @@ import type { PublicFormConfig, SubmitPayloadInput, SubmitResult } from '../sche
 import type { WidgetStrings } from '../strings';
 import { splitSteps, validateSubmission, visibleFieldKeys, type FieldErrorCode } from '../validate';
 import { collectMeta, collectTracking, initialValues } from './capture';
-import { FieldRow } from './fields';
+import { FieldRow, type FieldFormContext } from './fields';
 import { mountTurnstile, type TurnstileHandle } from './turnstile';
 
 export interface FormProps {
@@ -28,7 +28,9 @@ function isFieldErrorCode(code: string, strings: WidgetStrings): code is FieldEr
 
 export function Form({ config, strings, apiBase, host, preview }: FormProps) {
   const steps = useMemo(() => splitSteps(config.fields), [config.fields]);
-  const [values, setValues] = useState<Record<string, unknown>>(() => initialValues(config.fields));
+  const [values, setValues] = useState<Record<string, unknown>>(() =>
+    initialValues(config.fields, location.search, config.visitor_country),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [alert, setAlert] = useState('');
   const [stepIndex, setStepIndex] = useState(0);
@@ -69,6 +71,18 @@ export function Form({ config, strings, apiBase, host, preview }: FormProps) {
       return next;
     });
   };
+
+  /** Several fields at once (an address suggestion fills its sibling fields). */
+  const patchValues = (next: Record<string, unknown>) => {
+    setValues((prev) => ({ ...prev, ...next }));
+    setErrors((prev) => {
+      const out = { ...prev };
+      for (const key of Object.keys(next)) delete out[key];
+      return out;
+    });
+  };
+
+  const fieldForm: FieldFormContext = { config, apiBase, preview, values, patch: patchValues };
 
   const localizedErrors = (codes: Record<string, string>, keys?: Set<string>) => {
     const out: Record<string, string> = {};
@@ -217,6 +231,7 @@ export function Form({ config, strings, apiBase, host, preview }: FormProps) {
               error={errors[field.key]}
               strings={strings}
               onChange={(value) => setValue(field.key, value)}
+              form={fieldForm}
             />
           ) : null,
         )}

@@ -15,6 +15,7 @@ export const ADDABLE_KINDS: readonly FieldKind[] = [
   'textarea',
   'number',
   'date',
+  'country',
   'select',
   'radio',
   'checkbox',
@@ -27,7 +28,11 @@ export const ADDABLE_KINDS: readonly FieldKind[] = [
   'page_break',
 ];
 
-const DEFAULT_MAPPING: Partial<Record<FieldKind, FormField['map_to']>> = { email: 'email', phone: 'phone' };
+const DEFAULT_MAPPING: Partial<Record<FieldKind, FormField['map_to']>> = {
+  email: 'email',
+  phone: 'phone',
+  country: 'address.country_code',
+};
 
 /** `First name!` → `first_name`, unique among `taken`. */
 function fieldKey(label: string, taken: ReadonlySet<string>, fallback: string): string {
@@ -61,6 +66,52 @@ export function newField(kind: FieldKind, definition: FormDefinition, label: str
         ]
       : [],
     map_to: mapping !== null && !usedTargets.has(mapping) ? mapping : null,
+  });
+}
+
+export interface AddressGroupLabels {
+  line1: string;
+  street_number: string;
+  postal_code: string;
+  locality: string;
+  region: string;
+  country: string;
+}
+
+/**
+ * The "Address" palette entry: street (with autocomplete), street number,
+ * postal code, city, province and country, already mapped to the contact
+ * address (a mapping stays empty when another field already uses it).
+ */
+export function newAddressFields(definition: FormDefinition, labels: AddressGroupLabels): FormField[] {
+  const taken = new Set(definition.fields.map((f) => f.key));
+  const usedTargets = new Set(definition.fields.map((f) => f.map_to));
+  const parts: ReadonlyArray<{
+    part: keyof AddressGroupLabels;
+    kind: FieldKind;
+    mapTo: NonNullable<FormField['map_to']>;
+    width: FormField['width'];
+  }> = [
+    { part: 'line1', kind: 'text', mapTo: 'address.line1', width: 'full' },
+    { part: 'street_number', kind: 'text', mapTo: 'address.street_number', width: 'half' },
+    { part: 'postal_code', kind: 'text', mapTo: 'address.postal_code', width: 'half' },
+    { part: 'locality', kind: 'text', mapTo: 'address.locality', width: 'half' },
+    { part: 'region', kind: 'text', mapTo: 'address.region', width: 'half' },
+    { part: 'country', kind: 'country', mapTo: 'address.country_code', width: 'full' },
+  ];
+  return parts.map(({ part, kind, mapTo, width }) => {
+    const key = fieldKey(labels[part], taken, part);
+    taken.add(key);
+    const mapped = !usedTargets.has(mapTo);
+    if (mapped) usedTargets.add(mapTo);
+    return formFieldSchema.parse({
+      id: `f_${crypto.randomUUID().slice(0, 8)}`,
+      kind,
+      key,
+      label: labels[part],
+      width,
+      map_to: mapped ? mapTo : null,
+    });
   });
 }
 

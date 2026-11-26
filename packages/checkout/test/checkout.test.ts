@@ -180,8 +180,9 @@ describe('widget bundle', () => {
     const bundle = await buildBundle();
     const generated = readFileSync(join(import.meta.dirname, '../generated/bundle.ts'), 'utf8');
     expect(generated).toBe(renderModule(bundle));
-    // Larger than the forms widget: it embeds the form fields plus the cart, bumps and offers.
-    expect(bundle.length).toBeLessThan(80_000);
+    // Larger than the forms widget: it embeds the form fields (with the phone
+    // country selector and its country data) plus the cart, bumps and offers.
+    expect(bundle.length).toBeLessThan(100_000);
     expect(bundle).not.toContain('ZodError');
     expect(bundle).toContain('data-amable-checkout');
     expect(bundle).toContain('data-amable-offer');

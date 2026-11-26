@@ -1,4 +1,5 @@
 import { TRACKING_PARAMS } from '../constants';
+import { isCountryCode } from '../countries';
 import type { FormField, SubmissionMeta } from '../schema';
 
 /**
@@ -96,10 +97,14 @@ export function collectMeta(element: Element): SubmissionMeta {
   };
 }
 
-/** Initial values: field defaults, then URL prefill parameters, then hidden-field parameters. */
+/**
+ * Initial values: field defaults, then URL prefill parameters, then hidden-field
+ * parameters. Country fields left empty default to the geolocated `visitorCountry`.
+ */
 export function initialValues(
   fields: readonly FormField[],
   search: string = location.search,
+  visitorCountry: string | null = null,
 ): Record<string, unknown> {
   const params = new URLSearchParams(search);
   const values: Record<string, unknown> = {};
@@ -133,12 +138,22 @@ export function initialValues(
         if (Number.isFinite(n) && n >= 1) values[field.key] = Math.min(n, field.max_rating);
         break;
       }
+      case 'country': {
+        const code = raw.trim().toUpperCase();
+        if (isCountryCode(code)) values[field.key] = code;
+        break;
+      }
       case 'heading':
       case 'html':
       case 'page_break':
         break;
       default:
         values[field.key] = raw.slice(0, 1000);
+    }
+  }
+  if (visitorCountry !== null && isCountryCode(visitorCountry)) {
+    for (const field of fields) {
+      if (field.kind === 'country' && values[field.key] === undefined) values[field.key] = visitorCountry;
     }
   }
   return values;

@@ -29,6 +29,25 @@ export function buildStyles(s: FormStyle): string {
   border-color: ${s.primary_color}; box-shadow: 0 0 0 3px color-mix(in srgb, ${s.primary_color} 20%, transparent);
 }
 :where(.af-invalid .af-input, .af-invalid .af-textarea, .af-invalid .af-select) { border-color: #dc2626; }
+:where(.af-phone) { display: flex; gap: 8px; }
+:where(.af-phone .af-input) { flex: 1 1 auto; min-width: 0; }
+:where(.af-phone-prefix) {
+  position: relative; display: flex; align-items: center; gap: 6px; padding: 0 12px; white-space: nowrap;
+  border: 1px solid ${s.border_color}; border-radius: ${s.radius}; background: ${s.input_background}; flex: none;
+}
+:where(.af-phone-prefix:focus-within) {
+  border-color: ${s.primary_color}; box-shadow: 0 0 0 3px color-mix(in srgb, ${s.primary_color} 20%, transparent);
+}
+:where(.af-phone-prefix select) { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font: inherit; }
+:where(.af-suggest) { position: relative; }
+:where(.af-suggest-list) {
+  position: absolute; z-index: 5; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none;
+  background: #fff; color: #111827; border: 1px solid ${s.border_color}; border-radius: ${s.radius};
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+:where(.af-suggest-list button) { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: .92em; }
+:where(.af-suggest-list button:hover, .af-suggest-list button:focus) { background: color-mix(in srgb, ${s.primary_color} 10%, transparent); }
+:where(.af-suggest-attribution) { padding: 4px 10px 2px; font-size: .75em; color: #6b7280; text-align: right; }
 :where(.af-choices) { display: flex; flex-direction: column; gap: 8px; }
 :where(.af-choice) { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
 :where(.af-choice input) { width: 18px; height: 18px; margin: 2px 0 0; accent-color: ${s.primary_color}; flex: none; }

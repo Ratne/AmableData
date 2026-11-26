@@ -20,7 +20,7 @@ import { Switch } from '@amable/ui/ui/switch';
 import { Textarea } from '@amable/ui/ui/textarea';
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react';
 import { useI18n } from '../../../i18n';
-import { ADDABLE_KINDS, collectsValue, newField, OPTION_KINDS } from '../lib/fields';
+import { ADDABLE_KINDS, collectsValue, newAddressFields, newField, OPTION_KINDS } from '../lib/fields';
 import { Choice, FormField as Field, Pill } from './common';
 
 type Patch = (patch: Partial<FormField>) => void;
@@ -52,6 +52,20 @@ export function FieldList({
     const field = newField(kind, definition, t(`forms.kind.${kind}`));
     onChange([...fields, field]);
     onSelect(field.id);
+  };
+  /** The "Address" entry adds the whole group: street, number, postal code, city, province, country. */
+  const addAddress = () => {
+    const group = newAddressFields(definition, {
+      line1: t('forms.address.line1'),
+      street_number: t('forms.address.street_number'),
+      postal_code: t('forms.address.postal_code'),
+      locality: t('forms.address.locality'),
+      region: t('forms.address.region'),
+      country: t('forms.address.country'),
+    });
+    onChange([...fields, ...group]);
+    const first = group[0];
+    if (first !== undefined) onSelect(first.id);
   };
   return (
     <div className="grid gap-2">
@@ -110,11 +124,18 @@ export function FieldList({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-          {ADDABLE_KINDS.map((kind) => (
+          {ADDABLE_KINDS.flatMap((kind) => [
             <DropdownMenuItem key={kind} onSelect={() => add(kind)}>
               {t(`forms.kind.${kind}`)}
-            </DropdownMenuItem>
-          ))}
+            </DropdownMenuItem>,
+            ...(kind === 'country'
+              ? [
+                  <DropdownMenuItem key="address_group" onSelect={addAddress}>
+                    {t('forms.kind.address')}
+                  </DropdownMenuItem>,
+                ]
+              : []),
+          ])}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -283,7 +304,7 @@ export function FieldProperties({
           {(id) => <Textarea id={id} rows={5} className="font-mono text-xs" value={field.html} disabled={disabled} onChange={(e) => onPatch({ html: e.target.value })} />}
         </Field>
       ) : null}
-      {['text', 'email', 'phone', 'textarea', 'number', 'select'].includes(field.kind) ? (
+      {['text', 'email', 'phone', 'textarea', 'number', 'select', 'country'].includes(field.kind) ? (
         <Field label={t('forms.builder.placeholder')}>
           {(id) => <Input id={id} value={field.placeholder} disabled={disabled} onChange={(e) => onPatch({ placeholder: e.target.value })} />}
         </Field>

@@ -10,6 +10,7 @@ import {
 } from '@amable/forms';
 import { ulid } from 'ulid';
 import { z } from 'zod';
+import { addressLookupAvailable, suggestAddresses } from '../crm/api/address-lookup';
 import { GatewayError, type GatewayContext, type GatewayHandlers, type GatewayRawHandlers } from '../public/context';
 import { blockingValidationErrors } from './app-validation';
 import { encryptSubmission } from './crypto';
@@ -18,8 +19,18 @@ import { formsRuntime, type FormsRuntime } from './runtime';
 
 const formRefSchema = z.strictObject({ formId: z.string().min(1).max(64) });
 const submitInputSchema = z.strictObject({ formId: z.string().min(1).max(64), payload: z.unknown() });
+const addressInputSchema = z.strictObject({
+  formId: z.string().min(1).max(64),
+  q: z.string().trim().min(3).max(200),
+  country: z
+    .string()
+    .regex(/^([A-Za-z]{2})?$/)
+    .default(''),
+  lang: z.string().max(16).default(''),
+});
 
 const SUBMIT_RATE = { name: 'forms:submit:ip', limit: 30, windowMs: 10 * 60_000 } as const;
+const ADDRESS_RATE = { name: 'forms:address:ip', limit: 60, windowMs: 5 * 60_000 } as const;
 
 type Output<K extends keyof FormsGatewayOps> = FormsGatewayOps[K]['output'];
 
@@ -41,23 +52,38 @@ function turnstileRequired(definition: FormDefinition, runtime: FormsRuntime): b
   return definition.settings.turnstile_enabled && runtime.turnstile.enabled;
 }
 
-function publicConfig(
+/** The form has a street field that can be autocompleted. */
+function wantsAddressLookup(definition: FormDefinition): boolean {
+  return definition.fields.some((field) => field.map_to === 'address.line1');
+}
+
+/** ISO-2 country of the request (edge geolocation), null when absent or unusable. */
+function visitorCountry(ctx: GatewayContext): string | null {
+  const country = ctx.client.country?.toUpperCase() ?? '';
+  return /^[A-Z]{2}$/.test(country) ? country : null;
+}
+
+async function publicConfig(
+  ctx: GatewayContext,
   form: { id: string; name: string; definition: FormDefinition },
-  tenantSlug: string,
   runtime: FormsRuntime,
-): PublicFormConfig {
+): Promise<PublicFormConfig> {
   const { allowed_domains: _allowed, ...settings } = form.definition.settings;
   void _allowed;
   return {
     id: form.id,
     name: form.name,
-    tenant: tenantSlug,
+    tenant: ctx.tenant.slug,
     fields: form.definition.fields.map((field) =>
       field.kind === 'html' ? { ...field, html: sanitizeHtml(field.html) } : field,
     ),
     settings,
     style: form.definition.style,
     turnstile_site_key: turnstileRequired(form.definition, runtime) ? runtime.turnstileSiteKey : null,
+    visitor_country: visitorCountry(ctx),
+    address_lookup: wantsAddressLookup(form.definition)
+      ? await addressLookupAvailable(ctx.env, ctx.tenant.id)
+      : false,
   };
 }
 
@@ -96,14 +122,31 @@ async function loadPublic(ctx: GatewayContext, formId: string) {
 async function config(ctx: GatewayContext, input: unknown): Promise<Output<'forms.config'>> {
   const { formId } = parse(formRefSchema, input);
   const form = await loadPublic(ctx, formId);
-  return publicConfig(form, ctx.tenant.slug, await formsRuntime(ctx.env));
+  return publicConfig(ctx, form, await formsRuntime(ctx.env));
 }
 
 async function hosted(ctx: GatewayContext, input: unknown): Promise<Output<'forms.hosted'>> {
   const { formId } = parse(formRefSchema, input);
   const form = await loadPublic(ctx, formId);
   if (!form.definition.settings.hosted_enabled) throw new GatewayError(404, 'not_found', 'form not found');
-  return { config: publicConfig(form, ctx.tenant.slug, await formsRuntime(ctx.env)), tenantName: ctx.tenant.name };
+  return { config: await publicConfig(ctx, form, await formsRuntime(ctx.env)), tenantName: ctx.tenant.name };
+}
+
+/** Address autocomplete of the widget: only for forms with a street field, rate limited by IP. */
+async function address(ctx: GatewayContext, input: unknown): Promise<Output<'forms.address'>> {
+  const { formId, q, country, lang } = parse(addressInputSchema, input);
+  if (ctx.client.ip !== null) {
+    const runtime = await formsRuntime(ctx.env);
+    const limit = await runtime.limiter.consume(ADDRESS_RATE, `${ctx.tenant.id}:${ctx.client.ip}`);
+    if (!limit.allowed) throw new GatewayError(429, 'rate_limited', 'too many requests, retry later');
+  }
+  const form = await loadPublic(ctx, formId);
+  if (!wantsAddressLookup(form.definition)) return { data: [], attribution: null };
+  return suggestAddresses(ctx.env, ctx.tenant.id, {
+    q,
+    ...(country === '' ? {} : { country: country.toUpperCase() }),
+    ...(lang === '' ? {} : { lang: lang.slice(0, 2).toLowerCase() }),
+  });
 }
 
 function successOf(definition: FormDefinition, submissionId: string): SubmitResult {
@@ -200,5 +243,6 @@ export const formsGatewayHandlers: GatewayHandlers = {
   'forms.config': config,
   'forms.hosted': hosted,
   'forms.submit': submit,
+  'forms.address': address,
 };
 export const formsGatewayRawHandlers: GatewayRawHandlers = {};

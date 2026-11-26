@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { COUNTRY_DIAL, countryForNumber, dialCodeOf, flagEmoji } from '../src/countries';
 import {
   acceptLanguageTags,
   defaultFormDefinition,
@@ -13,6 +14,7 @@ import {
   visibleFieldKeys,
   type FormDefinitionInput,
 } from '../src/index';
+import { initialValues } from '../src/widget/capture';
 import { buildBundle, renderModule } from '../scripts/build.mjs';
 
 const definition = (input: FormDefinitionInput) => formDefinitionSchema.parse(input);
@@ -156,6 +158,52 @@ describe('validateSubmission', () => {
   it('rejects options outside the list for multi choice fields', () => {
     const result = validateSubmission(sample, { name: 'A', email: 'a@b.co', budget: 'small', topics: ['other'] });
     expect(result).toEqual({ ok: false, errors: { topics: 'invalid_option' } });
+  });
+
+  it('normalizes country fields to known ISO codes', () => {
+    const def = definition({ fields: [{ id: 'c', kind: 'country', key: 'stato', required: true }] });
+    expect(validateSubmission(def, { stato: 'it' })).toEqual({ ok: true, values: { stato: 'IT' } });
+    expect(validateSubmission(def, { stato: 'XX' })).toEqual({ ok: false, errors: { stato: 'invalid_option' } });
+    expect(validateSubmission(def, {})).toEqual({ ok: false, errors: { stato: 'required' } });
+  });
+});
+
+describe('countries', () => {
+  it('lists unique ISO codes with sane calling codes', () => {
+    const codes = COUNTRY_DIAL.map(([code]) => code);
+    expect(new Set(codes).size).toBe(codes.length);
+    for (const [code, dial] of COUNTRY_DIAL) {
+      expect(code).toMatch(/^[A-Z]{2}$/);
+      expect(dial).toMatch(/^\d{0,4}$/);
+    }
+    expect(dialCodeOf('IT')).toBe('39');
+    expect(dialCodeOf('BV')).toBeNull();
+    expect(flagEmoji('IT')).toBe('🇮🇹');
+  });
+
+  it('finds the country of an international number by longest calling code', () => {
+    expect(countryForNumber('+39 333 1234567')).toBe('IT');
+    expect(countryForNumber('+1 416 555 0100')).toBe('US');
+    expect(countryForNumber('+1 416 555 0100', 'CA')).toBe('CA');
+    expect(countryForNumber('+44 7911 123456')).toBe('GB');
+    expect(countryForNumber('+1268 555 0100')).toBe('AG');
+    expect(countryForNumber('333 1234567')).toBeNull();
+    expect(countryForNumber('+999 1')).toBeNull();
+  });
+});
+
+describe('initial values', () => {
+  it('defaults country fields to the geolocated visitor country', () => {
+    const fields = definition({
+      fields: [
+        { id: 'c', kind: 'country', key: 'stato' },
+        { id: 'd', kind: 'country', key: 'fisso', default_value: 'FR' },
+        { id: 'e', kind: 'country', key: 'da_url', prefill_param: 'nazione' },
+      ],
+    }).fields;
+    expect(initialValues(fields, '?nazione=de', 'IT')).toEqual({ stato: 'IT', fisso: 'FR', da_url: 'DE' });
+    // Unknown prefill codes and unknown visitor countries leave the fields empty.
+    expect(initialValues(fields, '?nazione=zz', 'ZZ')).toEqual({ fisso: 'FR' });
   });
 });
 

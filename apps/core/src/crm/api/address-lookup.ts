@@ -41,6 +41,12 @@ async function addressAppOf(env: Env, tenantId: string): Promise<AppInstall | nu
   );
 }
 
+/** Whether any address source can answer (installation geocoder or installed address app). */
+export async function addressLookupAvailable(env: Env, tenantId: string): Promise<boolean> {
+  if (addressLookupUrl(env.ADDRESS_LOOKUP_URL) !== null) return true;
+  return (await addressAppOf(env, tenantId)) !== null;
+}
+
 async function askApp(env: Env, install: AppInstall, query: AddressLookupQuery): Promise<AddressSuggestion[] | null> {
   const def = install.manifest.extensions.address_lookup;
   if (def === undefined || install.status !== 'active') return null;

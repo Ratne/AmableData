@@ -7,6 +7,7 @@ export const FIELD_KINDS = [
   'textarea',
   'number',
   'date',
+  'country',
   'select',
   'radio',
   'checkbox',

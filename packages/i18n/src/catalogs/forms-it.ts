@@ -94,6 +94,8 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.kind.textarea': 'Testo lungo',
   'forms.kind.number': 'Numero',
   'forms.kind.date': 'Data',
+  'forms.kind.country': 'Paese (stato)',
+  'forms.kind.address': 'Indirizzo (via, civico, CAP, città, provincia, paese)',
   'forms.kind.select': 'Menu a tendina',
   'forms.kind.radio': 'Scelta singola',
   'forms.kind.checkbox': 'Casella',
@@ -128,6 +130,13 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.map.address.region': 'Provincia / regione',
   'forms.map.address.postal_code': 'CAP',
   'forms.map.address.country_code': 'Paese (codice ISO)',
+
+  'forms.address.line1': 'Indirizzo',
+  'forms.address.street_number': 'Numero civico',
+  'forms.address.postal_code': 'CAP',
+  'forms.address.locality': 'Città',
+  'forms.address.region': 'Provincia',
+  'forms.address.country': 'Paese',
 
   'forms.crm.intro':
     'Ogni risposta crea il contatto, o aggiorna quello con la stessa email (o lo stesso telefono), e avvia le automazioni.',

@@ -1,6 +1,6 @@
 import { createStaticTurnstile, verifyWebhook, WEBHOOK_SIGNATURE_HEADER } from '@amable/auth';
-import type { SubmitPayloadInput } from '@amable/forms';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { PublicFormConfig, SubmitPayloadInput } from '@amable/forms';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearServiceAccountTokens, GOOGLE_TOKEN_URL } from '../../src/forms/connectors/google-service-account';
 import { decryptSubmission, encryptSecret } from '../../src/forms/crypto';
 import { formsGatewayHandlers } from '../../src/forms/gateway';
@@ -191,6 +191,70 @@ describe('public submit', () => {
     await consumeFormSubmissions({ queue: 'form-submissions', messages: [message] } as unknown as MessageBatch<unknown>, h.env);
     expect(acks).toEqual(['ack']);
     expect(submissionRow(id)?.status).toBe('processed');
+  });
+});
+
+describe('widget config and address autocomplete', () => {
+  const addressDefinition = () =>
+    leadDefinition({
+      fields: [
+        ...(leadDefinition().fields ?? []),
+        { id: 'a1', kind: 'text', key: 'indirizzo', label: 'Indirizzo', map_to: 'address.line1' },
+        { id: 'a2', kind: 'country', key: 'paese', label: 'Paese', map_to: 'address.country_code' },
+      ],
+    });
+
+  const addressHandler = formsGatewayHandlers['forms.address'];
+  if (addressHandler === undefined) throw new Error('forms.address handler missing');
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete h.env.ADDRESS_LOOKUP_URL;
+  });
+
+  it('geolocates the visitor and enables address lookup only with a street field', async () => {
+    const plain = (await configHandler(gatewayCtx(h.env, waits.ctx, TENANT), { formId })) as PublicFormConfig;
+    expect(plain.visitor_country).toBe('IT');
+    expect(plain.address_lookup).toBe(false);
+
+    db.op('forms.update', { id: formId, data: { definition: addressDefinition() } });
+    const withAddress = (await configHandler(gatewayCtx(h.env, waits.ctx, TENANT), { formId })) as PublicFormConfig;
+    expect(withAddress.address_lookup).toBe(true);
+
+    h.env.ADDRESS_LOOKUP_URL = 'off';
+    const off = (await configHandler(gatewayCtx(h.env, waits.ctx, TENANT), { formId })) as PublicFormConfig;
+    expect(off.address_lookup).toBe(false);
+  });
+
+  it('suggests addresses from the geocoder only for forms with a street field', async () => {
+    const ctx = gatewayCtx(h.env, waits.ctx, TENANT);
+    const query = { formId, q: 'via roma 1', country: 'it', lang: 'it-IT' };
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.startsWith('https://photon.komoot.io/')) {
+        return Response.json({
+          features: [
+            { properties: { type: 'house', street: 'Via Roma', housenumber: '1', postcode: '20121', city: 'Milano', county: 'Milano', countrycode: 'IT' } },
+          ],
+        });
+      }
+      return realFetch(input, init);
+    });
+
+    // The lead form has no street field: nothing is proxied to the geocoder.
+    expect(await addressHandler(ctx, query)).toEqual({ data: [], attribution: null });
+
+    db.op('forms.update', { id: formId, data: { definition: addressDefinition() } });
+    const result = (await addressHandler(ctx, query)) as { data: Array<Record<string, unknown>>; attribution: string | null };
+    expect(result.attribution).toBe('© OpenStreetMap');
+    expect(result.data[0]).toMatchObject({
+      line1: 'Via Roma',
+      street_number: '1',
+      postal_code: '20121',
+      locality: 'Milano',
+      country_code: 'IT',
+    });
   });
 });
 

@@ -24,6 +24,7 @@ import {
  * - `GET /forms.js`: embed widget, served from memory (hash ETag);
  * - `GET /f/:slug/:formId`: hosted page (noindex) mounting the widget;
  * - `GET /f/:slug/:formId/config`: public JSON configuration;
+ * - `POST /f/:slug/:formId/address`: address autocomplete of the widget;
  * - `POST /f/:slug/:formId`: submit (JSON from the widget, or a plain
  *   urlencoded HTML form post). CORS is open: embeds live on any site and no
  *   cookie is involved.
@@ -85,6 +86,7 @@ formsEdgeRoutes.get('/forms.js', (c) => serveBundle(c, FORMS_WIDGET_BUNDLE, FORM
 // --------------------------------------------------------------------- config
 
 formsEdgeRoutes.options('/f/:slug/:formId/config', () => new Response(null, { status: 204, headers: OPEN_CORS }));
+formsEdgeRoutes.options('/f/:slug/:formId/address', () => new Response(null, { status: 204, headers: OPEN_CORS }));
 formsEdgeRoutes.options('/f/:slug/:formId', () => new Response(null, { status: 204, headers: OPEN_CORS }));
 
 formsEdgeRoutes.get('/f/:slug/:formId/config', async (c) => {
@@ -99,6 +101,49 @@ formsEdgeRoutes.get('/f/:slug/:formId/config', async (c) => {
       { formId: ref.formId },
     );
     return okJson(value, 'public, max-age=30');
+  } catch (error) {
+    return fromGatewayError(error);
+  }
+});
+
+// -------------------------------------------------------------------- address
+
+const MAX_ADDRESS_BYTES = 4 * 1024;
+
+const str = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '');
+
+formsEdgeRoutes.post('/f/:slug/:formId/address', async (c) => {
+  const ref = validRef(c);
+  if (ref === null) return errorJson(404, 'not_found', 'form not found');
+  if (!(c.req.header('content-type') ?? '').toLowerCase().includes('application/json')) {
+    return errorJson(415, 'unsupported_media_type', 'send JSON');
+  }
+  const raw = await readBoundedText(c, MAX_ADDRESS_BYTES);
+  if (raw === null) return errorJson(413, 'payload_too_large', 'request too large');
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return errorJson(400, 'bad_request', 'expected a JSON object');
+    }
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return errorJson(400, 'bad_request', 'invalid JSON');
+  }
+  try {
+    const { value } = await callCore<FormsGatewayOps, 'forms.address'>(
+      c.env,
+      'forms.address',
+      tenantRef(c, ref.slug),
+      clientInfo(c),
+      {
+        formId: ref.formId,
+        q: str(body['q'], 200),
+        country: str(body['country'], 2),
+        lang: str(body['lang'], 16),
+      },
+    );
+    return okJson(value);
   } catch (error) {
     return fromGatewayError(error);
   }
