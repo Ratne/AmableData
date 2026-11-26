@@ -95,7 +95,7 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
   'forms.kind.number': 'Numero',
   'forms.kind.date': 'Data',
   'forms.kind.country': 'Paese (stato)',
-  'forms.kind.address': 'Indirizzo (via, civico, CAP, città, provincia, paese)',
+  'forms.kind.address': 'Indirizzo (paese, via, civico, CAP, città, provincia)',
   'forms.kind.select': 'Menu a tendina',
   'forms.kind.radio': 'Scelta singola',
   'forms.kind.checkbox': 'Casella',

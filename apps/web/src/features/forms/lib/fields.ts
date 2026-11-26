@@ -79,9 +79,10 @@ export interface AddressGroupLabels {
 }
 
 /**
- * The "Address" palette entry: street (with autocomplete), street number,
- * postal code, city, province and country, already mapped to the contact
- * address (a mapping stays empty when another field already uses it).
+ * The "Address" palette entry: country first (it narrows the street
+ * autocomplete), then street, street number, postal code, city and province,
+ * already mapped to the contact address (a mapping stays empty when another
+ * field already uses it).
  */
 export function newAddressFields(definition: FormDefinition, labels: AddressGroupLabels): FormField[] {
   const taken = new Set(definition.fields.map((f) => f.key));
@@ -92,12 +93,12 @@ export function newAddressFields(definition: FormDefinition, labels: AddressGrou
     mapTo: NonNullable<FormField['map_to']>;
     width: FormField['width'];
   }> = [
+    { part: 'country', kind: 'country', mapTo: 'address.country_code', width: 'full' },
     { part: 'line1', kind: 'text', mapTo: 'address.line1', width: 'full' },
     { part: 'street_number', kind: 'text', mapTo: 'address.street_number', width: 'half' },
     { part: 'postal_code', kind: 'text', mapTo: 'address.postal_code', width: 'half' },
     { part: 'locality', kind: 'text', mapTo: 'address.locality', width: 'half' },
     { part: 'region', kind: 'text', mapTo: 'address.region', width: 'half' },
-    { part: 'country', kind: 'country', mapTo: 'address.country_code', width: 'full' },
   ];
   return parts.map(({ part, kind, mapTo, width }) => {
     const key = fieldKey(labels[part], taken, part);

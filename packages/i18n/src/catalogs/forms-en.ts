@@ -90,7 +90,7 @@ export const formsEn = {
   'forms.kind.number': 'Number',
   'forms.kind.date': 'Date',
   'forms.kind.country': 'Country',
-  'forms.kind.address': 'Address (street, number, postal code, city, province, country)',
+  'forms.kind.address': 'Address (country, street, number, postal code, city, province)',
   'forms.kind.select': 'Dropdown',
   'forms.kind.radio': 'Single choice',
   'forms.kind.checkbox': 'Checkbox',
