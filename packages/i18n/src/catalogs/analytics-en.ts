@@ -488,6 +488,15 @@ export const analyticsEn = {
   'analytics.device.stable': 'Stable',
   'analytics.device.hint':
     'Unique: visitors whose device key no other visitor has. Stable: returning visitors whose key never changed. Precision: matches where both visitors left an email, counted correct when it is the same one. The rule counts matches even while it is off.',
+  'analytics.device.fpRule': 'Match by browser and network (14 days)',
+  'analytics.device.fpRuleHint':
+    'More precise than the device rule: it also uses the browser’s own readings (canvas, audio, fonts, math results) to recognize the same browser after it cleared its cookies, even between identical laptops on one network. Only readings worth trusting count: Safari 17+, Firefox 120+ and Samsung Internet 26+ noise some of them in private browsing and those are dropped, so iPhones usually leave too little for a key. Links a new visitor to the only person seen in the last 14 days with the same key on the same network, with the same safeguards as the device rule; when both rules find someone, this one wins. It is a fingerprint: consider leaving it off in sensitive sectors (health, pharmacy). Off by default.',
+  'analytics.device.fpCollected': 'Visitors with a browser key',
+  'analytics.device.fpUnstable': 'Canvas noised by the browser',
+  'analytics.device.fpWouldMerge': 'Visits matched by browser',
+  'analytics.device.fpPrecision': 'Precision by browser',
+  'analytics.device.mechanism.device_ip': 'device',
+  'analytics.device.mechanism.fp': 'browser',
   'analytics.device.merges': 'Merges by device and network ({n})',
   'analytics.device.unlink': 'Unlink',
   'analytics.device.unlinkAll': 'Unlink all',

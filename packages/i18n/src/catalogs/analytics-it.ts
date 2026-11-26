@@ -486,6 +486,15 @@ export const analyticsIt: Readonly<Record<AnalyticsMessageKey, string>> = {
   'analytics.device.stable': 'Stabili',
   'analytics.device.hint':
     'Unici: visitatori con una chiave del dispositivo che nessun altro ha. Stabili: visitatori di ritorno la cui chiave non è mai cambiata. Precisione: abbinamenti in cui entrambi i visitatori hanno lasciato un’email, giusti quando è la stessa. La regola conta gli abbinamenti anche da spenta.',
+  'analytics.device.fpRule': 'Abbina per browser e rete (14 giorni)',
+  'analytics.device.fpRuleHint':
+    'Più precisa della regola per dispositivo: usa anche le letture proprie del browser (canvas, audio, font, calcoli matematici) per riconoscere lo stesso browser dopo che ha cancellato i cookie, anche tra portatili identici sulla stessa rete. Si basa solo sulle letture affidabili: Safari 17+, Firefox 120+ e Samsung Internet 26+ ne alterano alcune in navigazione privata e quelle vengono scartate, così su iPhone di solito non c’è abbastanza per una chiave. Collega un visitatore nuovo all’unica persona vista negli ultimi 14 giorni con la stessa chiave sulla stessa rete, con le stesse cautele della regola per dispositivo; se entrambe trovano qualcuno vince questa. È un fingerprint: valuta di lasciarla spenta nei settori sensibili (salute, farmacia). Spenta di default.',
+  'analytics.device.fpCollected': 'Visitatori con chiave del browser',
+  'analytics.device.fpUnstable': 'Canvas alterati dal browser',
+  'analytics.device.fpWouldMerge': 'Visite abbinate per browser',
+  'analytics.device.fpPrecision': 'Precisione per browser',
+  'analytics.device.mechanism.device_ip': 'dispositivo',
+  'analytics.device.mechanism.fp': 'browser',
   'analytics.device.merges': 'Unioni per dispositivo e rete ({n})',
   'analytics.device.unlink': 'Scollega',
   'analytics.device.unlinkAll': 'Scollega tutte',

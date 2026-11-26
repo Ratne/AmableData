@@ -697,4 +697,24 @@ export const analyticsMigrations: readonly Migration[] = [
       `CREATE INDEX device_ip_seen_visitor ON device_ip_seen (visitor_id)`,
     ],
   },
+  {
+    id: 13,
+    name: 'analytics_device_fp',
+    statements: [
+      // Hash of the browser install signals and the person the `fp` rule matched.
+      `ALTER TABLE device_signals ADD COLUMN fp_key TEXT`,
+      `ALTER TABLE device_signals ADD COLUMN fp_candidate TEXT`,
+      `CREATE INDEX device_signals_fp_candidate ON device_signals (fp_candidate) WHERE fp_candidate IS NOT NULL`,
+      // Browser install key + network per visitor, for the fp merge.
+      `CREATE TABLE fp_seen (
+        fp_key TEXT NOT NULL,
+        net TEXT NOT NULL,
+        visitor_id TEXT NOT NULL,
+        last_seen INTEGER NOT NULL,
+        PRIMARY KEY (fp_key, net, visitor_id)
+      )`,
+      `CREATE INDEX fp_seen_time ON fp_seen (last_seen)`,
+      `CREATE INDEX fp_seen_visitor ON fp_seen (visitor_id)`,
+    ],
+  },
 ];

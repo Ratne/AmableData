@@ -48,6 +48,7 @@ const IDENTITY_TABLES = [
   'ip_ua_seen',
   'device_signals',
   'device_ip_seen',
+  'fp_seen',
 ] as const;
 /** Traffic rows: moved to an anonymous id so aggregates stay consistent. */
 const TRAFFIC_TABLES = [
@@ -67,7 +68,7 @@ const json = (ids: readonly string[]) => JSON.stringify(ids);
 
 /**
  * The given visitors plus every visitor merged with them, transitively. The
- * `ip_ua` and `device_ip` merges are a guess (same network and browser or device), so they never carry an
+ * `ip_ua`, `device_ip` and `fp` merges are a guess (same network and browser or device), so they never carry an
  * opt-out or an erasure to somebody else. Two visitors of one group that gave
  * the same email or phone are one person all the same: their own merge would
  * say so, had the guess not put them in one group first.
@@ -85,7 +86,7 @@ function withMerged(db: SqlDb, ids: readonly string[]): string[] {
     };
     for (const r of db.all<{ a: string; b: string }>(
       `SELECT child_visitor_id AS a, origin_visitor_id AS b FROM visitor_merges
-       WHERE active = 1 AND mechanism NOT IN ('ip_ua', 'device_ip')
+       WHERE active = 1 AND mechanism NOT IN ('ip_ua', 'device_ip', 'fp')
          AND (child_visitor_id IN (SELECT value FROM json_each(?)) OR origin_visitor_id IN (SELECT value FROM json_each(?)))`,
       json(frontier),
       json(frontier),
@@ -116,7 +117,7 @@ function sameKeyInGroup(
     keyTypes.length > 0 &&
     first(
       db,
-      `SELECT 1 AS x FROM visitor_merges WHERE active = 1 AND mechanism IN ('ip_ua', 'device_ip') LIMIT 1`,
+      `SELECT 1 AS x FROM visitor_merges WHERE active = 1 AND mechanism IN ('ip_ua', 'device_ip', 'fp') LIMIT 1`,
     ) !== undefined;
   const groupOf = new Map<string, readonly string[]>();
   return (ids) => {
@@ -173,8 +174,9 @@ export function purgeVisitorRows(db: SqlDb, ids: readonly string[]): number {
   const list = json(ids);
   const IN = `IN (SELECT value FROM json_each(?))`;
   for (const table of IDENTITY_TABLES) db.run(`DELETE FROM ${table} WHERE visitor_id ${IN}`, list);
-  // Matches of the `device_ip` rule kept on other visitors for the measurements.
+  // Matches of the `device_ip` and `fp` rules kept on other visitors for the measurements.
   db.run(`UPDATE device_signals SET candidate = NULL WHERE candidate ${IN}`, list);
+  db.run(`UPDATE device_signals SET fp_candidate = NULL WHERE fp_candidate ${IN}`, list);
   db.run(
     `DELETE FROM visitor_merges WHERE child_visitor_id ${IN} OR origin_visitor_id ${IN}`,
     list,
@@ -243,7 +245,7 @@ function tombstone(db: SqlDb, ids: readonly string[], now: number): void {
   const IN = `IN (SELECT value FROM json_each(?))`;
   db.run(
     `UPDATE visitor_merges SET active = 0, updated_at = ?
-     WHERE active = 1 AND mechanism IN ('ip_ua', 'device_ip')
+     WHERE active = 1 AND mechanism IN ('ip_ua', 'device_ip', 'fp')
        AND ((child_visitor_id ${IN} AND origin_visitor_id NOT ${IN})
          OR (origin_visitor_id ${IN} AND child_visitor_id NOT ${IN}))`,
     now,

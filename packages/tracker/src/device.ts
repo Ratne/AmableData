@@ -3,6 +3,10 @@
  * it on (the `GET /e` handshake says so), never cookieless, after an opt-out,
  * for bots or with Global Privacy Control. Sent once per browser session as a
  * `device` event through the running tracker.
+ *
+ * Parts of the readings follow FingerprintJS
+ * (https://github.com/fingerprintjs/fingerprintjs), MIT License,
+ * Copyright (c) 2025 FingerprintJS, Inc.
  */
 
 export type DeviceSignals = Record<string, string | number>;
@@ -63,6 +67,9 @@ const attempt = <T>(fn: () => T): T | undefined => {
 const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
   Promise.race([promise.catch(() => undefined), new Promise<undefined>((r) => setTimeout(r, ms))]);
 
+/** A reading the browser noises at random (two reads differ): never part of a fingerprint. */
+export const UNSTABLE = 'unstable';
+
 function fonts(doc: Document): string | undefined {
   const ctx = doc.createElement('canvas').getContext('2d');
   if (ctx === null) return undefined;
@@ -98,7 +105,51 @@ function canvas(doc: Document): string | undefined {
   ctx.arc(180, 30, 22, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(200,0,120,0.6)';
   ctx.fill();
-  return fnv(el.toDataURL());
+  const image = el.toDataURL();
+  // Browsers that noise the canvas give a different image at every read.
+  return image === el.toDataURL() ? fnv(image) : UNSTABLE;
+}
+
+/**
+ * Results of the engine's math functions on fixed inputs: they differ between
+ * engines and systems, and no browser noises them. Inputs after FingerprintJS
+ * (`src/sources/math.ts`, MIT).
+ */
+function math(): string {
+  const M = Math;
+  const values = [
+    M.acos(0.123124234234234242),
+    M.acosh(1e308),
+    M.log(1e154 + M.sqrt(1e154 * 1e154 - 1)),
+    M.asin(0.123124234234234242),
+    M.asinh(1),
+    M.atanh(0.5),
+    M.atan(0.5),
+    M.sin(-1e300),
+    M.sinh(1),
+    M.exp(1) - 1 / M.exp(1) / 2,
+    M.cos(10.000000000123),
+    M.cosh(1),
+    M.tan(-1e300),
+    M.tanh(1),
+    M.exp(1),
+    M.expm1(1),
+    M.log1p(10),
+    M.pow(M.PI, -100),
+  ];
+  return fnv(values.join(','));
+}
+
+/** Room the system takes around the screen (task bar, dock, menu bar), rounded: top, right, bottom, left. */
+function screenFrame(win: Window): string | undefined {
+  // Some browsers report no frame in fullscreen.
+  if (win.document.fullscreenElement) return undefined;
+  const s = win.screen as Screen & { availTop?: number; availLeft?: number };
+  const top = Number(s.availTop) || 0;
+  const left = Number(s.availLeft) || 0;
+  const round = (n: number): number => Math.round(n / 10) * 10;
+  const frame = [top, s.width - s.availWidth - left, s.height - s.availHeight - top, left];
+  return frame.some((n) => !Number.isFinite(n)) ? undefined : frame.map(round).join(',');
 }
 
 function gpu(doc: Document): string | undefined {
@@ -171,6 +222,11 @@ export async function collectDevice(win: Window): Promise<DeviceSignals> {
     attempt(() => canvas(doc)),
   );
   put('au', await within(attempt(() => audio(win)) ?? Promise.resolve(undefined), 1000));
+  put('math', attempt(math));
+  put(
+    'sf',
+    attempt(() => screenFrame(win)),
+  );
   const ua = await within(
     nav.userAgentData?.getHighEntropyValues?.([
       'platform',

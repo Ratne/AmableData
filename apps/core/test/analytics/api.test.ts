@@ -100,6 +100,7 @@ describe('analytics sites', () => {
       session: true,
       ip_ua: false,
       device_ip: false,
+      fp: false,
     });
     expect(
       (await viewer.patch(`${BASE}/sites/${siteId}/identity-settings`, { ip_ua: true })).status,

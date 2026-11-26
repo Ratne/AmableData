@@ -155,13 +155,15 @@ export const MERGE_MECHANISMS = [
   'session',
   'ip_ua',
   'device_ip',
+  'fp',
   'manual',
 ] as const;
 export type MergeMechanism = (typeof MERGE_MECHANISMS)[number];
 
 /**
- * Automatic merge mechanisms of a site; `ip_ua` (same-day IP + user agent) and
- * `device_ip` (device signals + network within 7 days) are off by default.
+ * Automatic merge mechanisms of a site; `ip_ua` (same-day IP + user agent),
+ * `device_ip` (device signals + network within 7 days) and `fp` (browser install
+ * signals + network within 14 days) are off by default.
  */
 export const identityMergeSettingsSchema = z.object({
   email: z.boolean(),
@@ -169,11 +171,12 @@ export const identityMergeSettingsSchema = z.object({
   session: z.boolean(),
   ip_ua: z.boolean(),
   device_ip: z.boolean(),
+  fp: z.boolean(),
 });
 export type IdentityMergeSettingsBody = z.infer<typeof identityMergeSettingsSchema>;
 export const identityMergeSettingsPatchSchema = identityMergeSettingsSchema.partial().strict();
 
-/** Measurements of the device signals module and the merges of the `device_ip` rule. */
+/** Measurements of the device signals module and the merges of the `device_ip` and `fp` rules. */
 export const deviceSignalsReportSchema = z.object({
   /** Visitors with device signals. */
   collected: z.number().int(),
@@ -194,11 +197,21 @@ export const deviceSignalsReportSchema = z.object({
   would_merge: z.number().int(),
   /** Matches where both visitors have an email: `correct` when they share one. */
   precision: z.object({ checked: z.number().int(), correct: z.number().int() }),
-  /** Active `device_ip` merges (newest first, at most 200). */
+  /** The `fp` rule (browser install key), measured the same way. */
+  fp: z.object({
+    /** Visitors with a browser install key (a canvas or audio reading the browser does not noise). */
+    collected: z.number().int(),
+    /** Canvas readings the browser noised (two reads differed). */
+    unstable: z.number().int(),
+    would_merge: z.number().int(),
+    precision: z.object({ checked: z.number().int(), correct: z.number().int() }),
+  }),
+  /** Active `device_ip` and `fp` merges (newest first, at most 200). */
   merges: z.array(
     z.object({
       child_visitor_id: z.string(),
       origin_visitor_id: z.string(),
+      mechanism: z.enum(['device_ip', 'fp']),
       created_at: z.number().int(),
     }),
   ),

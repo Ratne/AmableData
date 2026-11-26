@@ -271,9 +271,10 @@ async function pruneDormantVisitors(
   );
   for (const table of dependents) db.run(`DELETE FROM ${table} WHERE visitor_id IN ${IN}`, ids);
   // Device signals are never archived: they are only deleted, with the matches pointing at them.
-  for (const table of ['device_signals', 'device_ip_seen'] as const)
+  for (const table of ['device_signals', 'device_ip_seen', 'fp_seen'] as const)
     db.run(`DELETE FROM ${table} WHERE visitor_id IN ${IN}`, ids);
   db.run(`UPDATE device_signals SET candidate = NULL WHERE candidate IN ${IN}`, ids);
+  db.run(`UPDATE device_signals SET fp_candidate = NULL WHERE fp_candidate IN ${IN}`, ids);
   db.run(`DELETE FROM visitors WHERE id IN ${IN}`, ids);
   return rows.length;
 }

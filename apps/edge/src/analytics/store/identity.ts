@@ -389,19 +389,27 @@ export function signalsFromEvent(e: EnrichedEvent): IdentitySignals | null {
 
 // ------------------------------------------------------------ merge settings
 
-const IDENTITY_MERGE_MECHANISMS = ['email', 'phone', 'session', 'ip_ua', 'device_ip'] as const;
+const IDENTITY_MERGE_MECHANISMS = [
+  'email',
+  'phone',
+  'session',
+  'ip_ua',
+  'device_ip',
+  'fp',
+] as const;
 /** Probabilistic matches: never propagated (erasure, opt-out) nor rebuilt by the reprocess. */
-const GUESS_MECHANISMS = ['ip_ua', 'device_ip'] as const;
+const GUESS_MECHANISMS = ['ip_ua', 'device_ip', 'fp'] as const;
 type AutoMergeMechanism = (typeof IDENTITY_MERGE_MECHANISMS)[number];
 export type IdentityMergeSettings = Record<AutoMergeMechanism, boolean>;
 
-/** `ip_ua` and `device_ip` are probabilistic matches: off until the workspace opts in. */
+/** `ip_ua`, `device_ip` and `fp` are probabilistic matches: off until the workspace opts in. */
 const DEFAULT_MERGE_SETTINGS: IdentityMergeSettings = {
   email: true,
   phone: true,
   session: true,
   ip_ua: false,
   device_ip: false,
+  fp: false,
 };
 
 export { identityMergeSettingsPatchSchema };
@@ -721,14 +729,20 @@ export function recordIpUa(
 }
 
 const DEVICE_IP_WINDOW_MS = 7 * 86_400_000;
-/** More visitors than this seen with the same device key + network: shared network, no merge. */
+/**
+ * The `fp` key tells one browser install apart, so it is trusted longer; past
+ * this the browser has updated anyway and its readings changed.
+ */
+const FP_WINDOW_MS = 14 * 86_400_000;
+/** More visitors than this seen with the same key + network: shared network, no merge. */
 const DEVICE_IP_SHARED_THRESHOLD = 3;
 /** A visitor first seen longer ago than this is not new (the module turned on later). */
 const DEVICE_NEW_VISITOR_MS = 86_400_000;
 
-/** Sightings past twice the window: dropped by every device event and by the daily retention. */
+/** Sightings past twice their window: dropped by every device event and by the daily retention. */
 export function pruneDeviceSightings(db: SqlDb, now: number): void {
   db.run(`DELETE FROM device_ip_seen WHERE last_seen < ?`, now - 2 * DEVICE_IP_WINDOW_MS);
+  db.run(`DELETE FROM fp_seen WHERE last_seen < ?`, now - 2 * FP_WINDOW_MS);
 }
 
 function anySuppressed(db: SqlDb, visitorIds: readonly string[]): boolean {
@@ -742,11 +756,47 @@ function anySuppressed(db: SqlDb, visitorIds: readonly string[]): boolean {
 }
 
 /**
+ * The only person seen with the key + network within the window, with at most
+ * three visitors on the pair, other than the visitor's own group and never a
+ * tombstone; null otherwise.
+ */
+function soleSighting(
+  db: SqlDb,
+  sightings: { table: 'device_ip_seen' | 'fp_seen'; column: 'device_key' | 'fp_key' },
+  key: string,
+  net: string,
+  visitorId: string,
+  since: number,
+): string | null {
+  const others = db.all<{ visitor_id: string }>(
+    `SELECT DISTINCT visitor_id FROM ${sightings.table}
+     WHERE ${sightings.column} = ? AND net = ? AND visitor_id != ? AND last_seen >= ? LIMIT 20`,
+    key,
+    net,
+    visitorId,
+    since,
+  );
+  const people = new Set(others.map((o) => groupOrigin(db, o.visitor_id)));
+  const only = [...people][0];
+  return others.length + 1 <= DEVICE_IP_SHARED_THRESHOLD &&
+    people.size === 1 &&
+    only !== undefined &&
+    only !== groupOrigin(db, visitorId) &&
+    // Nobody merges into a tombstone: neither a visitor that opted out nor one
+    // hanging on it (a link made after the opt-out, or older than its cut).
+    !anySuppressed(db, [only, ...others.map((o) => o.visitor_id)])
+    ? only
+    : null;
+}
+
+/**
  * Device signals of a cookie visitor (module on): keeps the latest set and the
  * device key + network sighting, and records the person the `device_ip` rule
  * matches for a new visitor — the only person seen with that pair in the last
  * 7 days, with at most three visitors on it — so the rule can be measured
- * before it is turned on. With `device_ip` on, the visitor is merged into it.
+ * before it is turned on. The `fp` rule does the same with the browser install
+ * key over 14 days. With a rule on, the visitor is merged into its match; `fp`
+ * first, as it tells apart two devices of the same model.
  */
 export function recordDevice(
   db: SqlDb,
@@ -754,6 +804,7 @@ export function recordDevice(
   device: {
     key: string;
     net: string | null;
+    fp: string | null;
     signals: string;
     browser: string | null;
     os: string | null;
@@ -774,35 +825,34 @@ export function recordDevice(
     ) !== undefined;
   pruneDeviceSightings(db, now);
   let candidate: string | null = null;
+  let fpCandidate: string | null = null;
   if (!known && device.net !== null && visitor.first_seen >= now - DEVICE_NEW_VISITOR_MS) {
-    const others = db.all<{ visitor_id: string }>(
-      `SELECT DISTINCT visitor_id FROM device_ip_seen
-       WHERE device_key = ? AND net = ? AND visitor_id != ? AND last_seen >= ? LIMIT 20`,
+    candidate = soleSighting(
+      db,
+      { table: 'device_ip_seen', column: 'device_key' },
       device.key,
       device.net,
       visitorId,
       now - DEVICE_IP_WINDOW_MS,
     );
-    const people = new Set(others.map((o) => groupOrigin(db, o.visitor_id)));
-    const only = [...people][0];
-    if (
-      others.length + 1 <= DEVICE_IP_SHARED_THRESHOLD &&
-      people.size === 1 &&
-      only !== undefined &&
-      only !== groupOrigin(db, visitorId) &&
-      // Nobody merges into a tombstone: neither a visitor that opted out nor one
-      // hanging on it (a link made after the opt-out, or older than its cut).
-      !anySuppressed(db, [only, ...others.map((o) => o.visitor_id)])
-    )
-      candidate = only;
+    if (device.fp !== null)
+      fpCandidate = soleSighting(
+        db,
+        { table: 'fp_seen', column: 'fp_key' },
+        device.fp,
+        device.net,
+        visitorId,
+        now - FP_WINDOW_MS,
+      );
   }
   db.run(
-    `INSERT INTO device_signals (visitor_id, device_key, signals, browser, os, first_seen, last_seen, candidate)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO device_signals (visitor_id, device_key, signals, browser, os, first_seen, last_seen, candidate,
+       fp_key, fp_candidate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (visitor_id) DO UPDATE SET
        changes = changes + (device_key != excluded.device_key),
        device_key = excluded.device_key, signals = excluded.signals, browser = excluded.browser,
-       os = excluded.os, last_seen = excluded.last_seen`,
+       os = excluded.os, last_seen = excluded.last_seen, fp_key = excluded.fp_key`,
     visitorId,
     device.key,
     device.signals,
@@ -811,6 +861,8 @@ export function recordDevice(
     now,
     now,
     candidate,
+    device.fp,
+    fpCandidate,
   );
   if (device.net !== null) {
     db.run(
@@ -821,9 +873,21 @@ export function recordDevice(
       visitorId,
       now,
     );
+    if (device.fp !== null)
+      db.run(
+        `INSERT INTO fp_seen (fp_key, net, visitor_id, last_seen) VALUES (?, ?, ?, ?)
+         ON CONFLICT (fp_key, net, visitor_id) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen)`,
+        device.fp,
+        device.net,
+        visitorId,
+        now,
+      );
   }
-  if (candidate === null || !getMergeSettings(db).device_ip) return null;
-  return linkGroups(db, visitorId, candidate, 'device_ip', now);
+  const settings = getMergeSettings(db);
+  if (fpCandidate !== null && settings.fp) return linkGroups(db, visitorId, fpCandidate, 'fp', now);
+  if (candidate !== null && settings.device_ip)
+    return linkGroups(db, visitorId, candidate, 'device_ip', now);
+  return null;
 }
 
 export const funnelVisitorLinkSchema = z.object({

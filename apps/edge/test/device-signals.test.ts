@@ -604,6 +604,130 @@ describe('device signals module', () => {
     ]);
   });
 
+  describe('fp rule', () => {
+    const CHROME =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+    const FIREFOX =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0';
+    const LAPTOP = {
+      dpr: 1,
+      cd: 24,
+      hc: 8,
+      tp: 0,
+      plat: 'Win32',
+      gpu: 'Google Inc. (Intel)|ANGLE (Intel, Intel(R) UHD Graphics 620)',
+      fonts: '1110111100110000000000000000000000000000',
+      math: '9c1d2e3f',
+      au: '7f00aa11',
+      sf: '0,0,40,0',
+      langs: 'it-IT,it,en',
+    };
+    const fpKeys = () =>
+      rows<{ visitor_id: string; fp_key: string | null; fp_candidate: string | null }>(
+        `SELECT visitor_id, fp_key, fp_candidate FROM device_signals ORDER BY visitor_id`,
+      );
+
+    it('tells apart identical laptops on one network, where the device_ip rule guesses wrong or gives up', async () => {
+      const env = edgeEnv(ns);
+      enable();
+      siteDb().updateIdentitySettings({ fp: true });
+      // Three colleagues, same laptop model, one office network: only the canvas differs.
+      for (const [n, cv] of [
+        [1, 'aaaa0001'],
+        [2, 'bbbb0002'],
+        [3, 'cccc0003'],
+      ] as const)
+        await visit(env, n, '198.51.100.60', { ua: CHROME, signals: { ...LAPTOP, cv } });
+      // The first one again, after clearing the cookies.
+      await visit(env, 4, '198.51.100.60', { ua: CHROME, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      // device_ip takes the second colleague for the first, then sees a shared network.
+      expect(candidates().map((c) => c.candidate)).toEqual([null, vidOf(1), null, null]);
+      expect(fpKeys().map((k) => k.fp_candidate)).toEqual([null, null, null, vidOf(1)]);
+      expect(merges()).toEqual([
+        { child_visitor_id: vidOf(4), origin_visitor_id: vidOf(1), mechanism: 'fp' },
+      ]);
+    });
+
+    it('measures the fp match while off and reports it', async () => {
+      const env = edgeEnv(ns);
+      enable();
+      await visit(env, 1, '198.51.100.61', { ua: CHROME, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      await visit(env, 2, '198.51.100.61', { ua: CHROME, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      // A noised canvas still leaves the audio reading.
+      await visit(env, 3, '198.51.100.62', { ua: CHROME, signals: { ...LAPTOP, cv: 'unstable' } });
+      expect(fpKeys()[1]?.fp_candidate).toBe(vidOf(1));
+      expect(merges()).toEqual([]);
+      for (const n of [1, 2])
+        await send(
+          env,
+          { ...base(n), type: 'identify', id: `identify-${n}`, data: { email: 'ada@example.com' } },
+          '198.51.100.61',
+          CHROME,
+        );
+      expect(siteDb().deviceSignalsReport().fp).toEqual({
+        collected: 3,
+        unstable: 1,
+        would_merge: 1,
+        precision: { checked: 1, correct: 1 },
+      });
+    });
+
+    it('keeps no browser install key without a canvas or audio reading worth trusting', async () => {
+      const env = edgeEnv(ns);
+      enable();
+      const { au: _au, ...noAudio } = LAPTOP;
+      await visit(env, 1, '198.51.100.63', { ua: CHROME, signals: { ...noAudio, cv: 'unstable' } });
+      // Safari 17+ noises canvas and audio in private browsing: both readings are dropped.
+      await visit(env, 2, '198.51.100.63', { signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      // Firefox 120+ randomizes the canvas; the audio reading stays.
+      await visit(env, 3, '198.51.100.63', { ua: FIREFOX, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      const keys = fpKeys();
+      expect(keys[0]?.fp_key).toBeNull();
+      expect(keys[1]?.fp_key).toBeNull();
+      expect(keys[2]?.fp_key).not.toBeNull();
+      const stored = rows<{ signals: string }>(
+        `SELECT signals FROM device_signals ORDER BY visitor_id`,
+      ).map((r) => JSON.parse(r.signals) as Record<string, unknown>);
+      expect(stored[1]).toMatchObject({ cv: 'skipped', au: 'skipped', sf: 'skipped' });
+      expect(stored[2]).toMatchObject({ cv: 'skipped', au: '7f00aa11', sf: '0,0,40,0' });
+    });
+
+    it('drops the sightings and the matches with the erasure and the module', async () => {
+      const env = edgeEnv(ns);
+      enable();
+      await visit(env, 1, '198.51.100.64', { ua: CHROME, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      await visit(env, 2, '198.51.100.64', { ua: CHROME, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      const fpSeen = () =>
+        rows<{ visitor_id: string }>(`SELECT visitor_id FROM fp_seen ORDER BY visitor_id`);
+      expect(fpSeen()).toHaveLength(2);
+      siteDb().suppressVisitors({ visitorIds: [vidOf(1)], keys: [], purge: true });
+      expect(fpSeen()).toEqual([{ visitor_id: vidOf(2) }]);
+      expect(fpKeys()).toEqual([
+        { visitor_id: vidOf(2), fp_key: expect.any(String) as string, fp_candidate: null },
+      ]);
+      siteDb().updateSite({ device_signals: false });
+      expect(fpSeen()).toEqual([]);
+    });
+
+    it('cuts an fp merge when one of the two visitors opts out, and unlinks it from the report', async () => {
+      const env = edgeEnv(ns);
+      enable();
+      siteDb().updateIdentitySettings({ fp: true });
+      await visit(env, 1, '198.51.100.65', { ua: CHROME, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      await visit(env, 2, '198.51.100.65', { ua: CHROME, signals: { ...LAPTOP, cv: 'aaaa0001' } });
+      await visit(env, 3, '198.51.100.66', { ua: CHROME, signals: { ...LAPTOP, cv: 'dddd0004' } });
+      await visit(env, 4, '198.51.100.66', { ua: CHROME, signals: { ...LAPTOP, cv: 'dddd0004' } });
+      expect(siteDb().deviceSignalsReport()).toMatchObject({
+        merged: 2,
+        merges: [{ mechanism: 'fp' }, { mechanism: 'fp' }],
+      });
+      const out = siteDb().suppressVisitors({ visitorIds: [vidOf(1)], keys: [], purge: false });
+      expect(out.visitorIds).toEqual([vidOf(1)]);
+      expect(siteDb().unmergeDeviceMerges([vidOf(4)])).toBe(1);
+      expect(siteDb().deviceSignalsReport()).toMatchObject({ merged: 0, merges: [] });
+    });
+  });
+
   it('never archives the signals', async () => {
     const event = {
       type: 'device',

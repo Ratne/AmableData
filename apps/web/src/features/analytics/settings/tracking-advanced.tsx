@@ -127,8 +127,8 @@ export function IdentityMatchingPanel({ tenant, site }: { tenant: string; site: 
 const pct = (part: number, whole: number) => (whole === 0 ? 0 : part / whole);
 
 /**
- * Device signals module and the `device_ip` rule (both off by default): what the
- * signals collected so far say, and the merges of the rule with "Unlink".
+ * Device signals module and the `device_ip` and `fp` rules (all off by default):
+ * what the signals collected so far say, and the merges of the rules with "Unlink".
  */
 export function DeviceRecognitionPanel({ tenant, site }: { tenant: string; site: Site }) {
   const { t } = useI18n();
@@ -142,7 +142,8 @@ export function DeviceRecognitionPanel({ tenant, site }: { tenant: string; site:
   );
   const rule = useAnalyticsMutation(
     tenant,
-    (on: boolean) => analyticsApi(tenant).sites.updateIdentitySettings(site.id, { device_ip: on }),
+    (patch: { device_ip?: boolean; fp?: boolean }) =>
+      analyticsApi(tenant).sites.updateIdentitySettings(site.id, patch),
     { invalidate: [analyticsKeys.site(tenant, site.id, 'identity-settings')] },
   );
   const unmerge = useAnalyticsMutation(
@@ -174,7 +175,15 @@ export function DeviceRecognitionPanel({ tenant, site }: { tenant: string; site:
             label={t('analytics.device.rule')}
             hint={t('analytics.device.ruleHint')}
             checked={settings.data.device_ip}
-            onChange={(checked) => rule.mutate(checked)}
+            onChange={(checked) => rule.mutate({ device_ip: checked })}
+          />
+        ) : null}
+        {settings.data ? (
+          <SwitchRow
+            label={t('analytics.device.fpRule')}
+            hint={t('analytics.device.fpRuleHint')}
+            checked={settings.data.fp}
+            onChange={(checked) => rule.mutate({ fp: checked })}
           />
         ) : null}
         {report.error ? (
@@ -198,6 +207,20 @@ export function DeviceRecognitionPanel({ tenant, site }: { tenant: string; site:
                       : t('analytics.device.precisionValue', {
                           share: f.percent(pct(data.precision.correct, data.precision.checked)),
                           n: f.number(data.precision.checked),
+                        }),
+                  ],
+                  ['fpCollected', f.number(data.fp.collected)],
+                  ['fpUnstable', f.number(data.fp.unstable)],
+                  ['fpWouldMerge', f.number(data.fp.would_merge)],
+                  [
+                    'fpPrecision',
+                    data.fp.precision.checked === 0
+                      ? '—'
+                      : t('analytics.device.precisionValue', {
+                          share: f.percent(
+                            pct(data.fp.precision.correct, data.fp.precision.checked),
+                          ),
+                          n: f.number(data.fp.precision.checked),
                         }),
                   ],
                 ] as const
@@ -270,6 +293,9 @@ export function DeviceRecognitionPanel({ tenant, site }: { tenant: string; site:
                     {short(m.child_visitor_id)} → {short(m.origin_visitor_id)}
                   </span>
                   <span className="flex items-center gap-2">
+                    <span className="rounded border border-border/60 px-1.5 text-muted-foreground">
+                      {t(`analytics.device.mechanism.${m.mechanism}`)}
+                    </span>
                     <span className="text-muted-foreground">
                       {f.dateTime(new Date(m.created_at).toISOString())}
                     </span>

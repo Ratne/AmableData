@@ -319,6 +319,7 @@ export async function enrichTrackerEvent(
         key: site.secretHash ?? site.siteId,
         // A server's address is everybody's network: the signals are kept, the rule sits out.
         ip: ctx.relayed === true ? '' : ctx.ip,
+        userAgent: ctx.userAgent,
         ...(payload.sw === undefined ? {} : { sw: payload.sw }),
         ...(payload.sh === undefined ? {} : { sh: payload.sh }),
         ...(payload.tz === undefined ? {} : { tz: payload.tz }),

@@ -572,7 +572,8 @@ function ingestOne(
     recordDevice(
       db,
       e.vid,
-      { ...e.deviceSighting, browser: e.browser, os: e.os },
+      // Events queued before the `fp` key existed carry none.
+      { ...e.deviceSighting, fp: e.deviceSighting.fp ?? null, browser: e.browser, os: e.os },
       opts.now ?? Date.now(),
     );
     return 'ok';

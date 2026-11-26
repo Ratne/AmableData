@@ -1305,7 +1305,7 @@ export class AnalyticsStore {
   deviceSignalsReport(): DeviceSignalsReport {
     return device.deviceSignalsReport(this.db);
   }
-  /** Disconnects `device_ip` merges: the given children, or all with `null`. */
+  /** Disconnects `device_ip` and `fp` merges: the given children, or all with `null`. */
   unmergeDeviceMerges(childVisitorIds: readonly string[] | null): number {
     return this.db.transaction(() =>
       device.unmergeDeviceMerges(this.db, childVisitorIds, this.now()),

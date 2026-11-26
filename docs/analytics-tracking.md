@@ -179,7 +179,7 @@ visitor of each domain, other devices. The store keeps them apart and links them
   identifies too), payments, `he=` landing links and CRM contacts. The clear values never reach
   the store: see [Event pipeline and contact data](#event-pipeline-and-contact-data).
 - `visitor_merges` links a child to an origin with a mechanism (`email`, `phone`, `session`,
-  `ip_ua`, `device_ip`, `manual`). Automatic mechanisms can be switched off per site; the visitor
+  `ip_ua`, `device_ip`, `fp`, `manual`). Automatic mechanisms can be switched off per site; the visitor
   first seen stays the origin. Merges are reversible (`unmergeVisitors`) and an explicit
   disconnection is respected by later automatic merges. Visitor rows are never rewritten.
 - Queries group by the origin through the recursive `VISITOR_ORIGIN_CTE`, so a merge changes
@@ -188,20 +188,22 @@ visitor of each domain, other devices. The store keeps them apart and links them
   (email/phone key or CRM contact) its touches are kept.
 - GDPR: the keys of a deleted visitor go to `identity_blacklist`; future events carrying them are
   dropped and no conversion carrying them is forwarded.
-- `ip_ua` and `device_ip` are guesses, off by default. An opt-out or an erasure does not extend
+- `ip_ua`, `device_ip` and `fp` are guesses, off by default. An opt-out or an erasure does not extend
   to the other visitor, and an opt-out cuts the link (the other visitor goes on as its own
   person). Two visitors of one group that gave the same email or phone are one person all the
   same, where the site merges by that key: they are suppressed together. The identity reprocess
   never rebuilds a guess.
 
-### Device signals and `device_ip`
+### Device signals, `device_ip` and `fp`
 
 - Site setting `device_signals` (off by default, never on a cookieless site). When on, the
   `GET /e` handshake answers `device: true` and the cookie builds load the module `…-d.js` next
   to the tracker (`/s-d.js`, or `/<dir>/<name>-d.js` on a neutral path), never with Global Privacy
   Control, after an opt-out, for bots or where the tracker itself is off. It sends one `device`
   event per browser session: screen and pixel density, cores, memory, touch points, platform,
-  GPU, languages, system preferences, fonts, canvas and audio hashes, UA client hints. It is a
+  GPU, languages, system preferences, fonts, canvas and audio hashes, math results, screen frame
+  (room taken by task bar and dock, rounded to 10 px, none in fullscreen), UA client hints. The
+  canvas is read twice: a browser that noises it gives two images and sends `cv: "unstable"`. It is a
   fingerprint: the site owner turns it on and covers it in the cookie banner. A self-hosted copy
   of the tracker looks for the module next to itself (`<name>-d.js`); one served under a name
   without `.js` loads none.
@@ -228,10 +230,28 @@ visitor of each domain, other devices. The store keeps them apart and links them
   measurements (`GET /sites/{id}/device-signals`: visitors with signals, distinct devices,
   uniqueness and stability per system and browser, matches and precision on visitors known by
   email). `POST /sites/{id}/device-signals/unmerge` disconnects some or all of its merges.
-- Turning the setting off, or deleting the site, deletes both tables, and the DO keeps nothing
+- Noised readings: browsers that noise or spoof some readings in some of their modes (private
+  browsing, strict tracking protection) give no evidence with them, so the edge stores
+  `"skipped"` in their place, by the parsed user agent: Safari 17+ canvas, audio and screen
+  frame; Firefox 120+ (not on iOS/iPadOS) canvas, 143+ also the screen frame; Samsung Internet
+  26+ audio. The list follows FingerprintJS (MIT), which detects the same browsers by feature.
+- Rule `fp` (browser install, off by default): the `fp` key hashes the readings of one browser
+  install (canvas, audio, fonts, math, GPU, screen, density, cores, memory, touch points,
+  platform, languages, screen frame, model, architecture, time zone), not the colour scheme nor
+  the system version; it exists only when canvas or audio gave a usable reading, so most iPhones
+  have none. Like `device_ip`, over the sightings of key + network (`fp_seen`, 28 days): a new
+  visitor joins the only person seen with the same `fp` key on the same network in the last 14
+  days, at most three visitors on the pair, never a tombstone, recorded while off
+  (`device_signals.fp_candidate`) and reported (`fp` in the report: visitors with a key, noised
+  canvases, matches, precision). It recognizes the same browser after its cookies were cleared
+  and tells apart identical laptops on one network, where `device_ip` guesses wrong or sees a
+  shared network. When both rules match, `fp` merges. The unmerge endpoint disconnects both.
+  It is browser fingerprinting for the consent rules (ePrivacy, GDPR): the cookie banner of the
+  site must cover it, and sites in sensitive sectors (health, pharmacy) should leave it off.
+- Turning the setting off, or deleting the site, deletes the three tables, and the DO keeps nothing
   that still arrives. An erasure deletes the visitor's rows and the matches pointing at it;
   visitors forgotten after 13 idle months lose theirs too, and the daily retention drops the
-  sightings past 14 days. The R2 archive (`events/`, `corrections/`, `poison/`) never holds the
+  sightings past twice their window (14 days for `device_ip_seen`, 28 for `fp_seen`). The R2 archive (`events/`, `corrections/`, `poison/`) never holds the
   signals: the `device` event is archived without them. Segments parked because the DO could not
   apply them carry the full event, like every other event: `wal-pending/` until the replay,
   `wal-stale/` until someone reconciles it.

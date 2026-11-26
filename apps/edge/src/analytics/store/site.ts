@@ -147,6 +147,7 @@ export function updateSite(db: SqlDb, patch: UpdateSiteInput, now: number): Site
     // Module off (or cookieless): the device signals and sightings go with it.
     db.run(`DELETE FROM device_signals`);
     db.run(`DELETE FROM device_ip_seen`);
+    db.run(`DELETE FROM fp_seen`);
   }
   if (patch.timezone !== undefined && patch.timezone !== s.timezone) {
     // Daily rollups are keyed by local day: rebuild the days still covered by raw data.
@@ -173,6 +174,7 @@ export function deleteSite(db: SqlDb, now: number): boolean {
   // Nothing is collected any more: the device signals go at once, like with the module turned off.
   db.run(`DELETE FROM device_signals`);
   db.run(`DELETE FROM device_ip_seen`);
+  db.run(`DELETE FROM fp_seen`);
   return true;
 }
 
