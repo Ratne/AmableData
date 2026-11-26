@@ -238,6 +238,11 @@ function sampleSubmission(fields: readonly FormField[], now: number): ConnectorS
       locale: 'en',
       time_zone: 'UTC',
       viewport: '',
+      fbp: '',
+      fbc: '',
+      ttp: '',
+      ip: '203.0.113.1',
+      user_agent: 'Mozilla/5.0 (test)',
     },
   };
 }

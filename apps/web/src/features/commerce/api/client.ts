@@ -4,12 +4,15 @@ import type {
   CancelOrderInput,
   CancelSubscriptionInput,
   ChangePlanInput,
+  ConnectionTestResult,
   Checkout,
+  CheckoutConnection,
   CheckoutEmbed,
   CheckoutSummary,
   CommerceSettings,
   Contact,
   CreateBankAccountInput,
+  CreateCheckoutConnectionInput,
   CreateCheckoutInput,
   CreateOrderInput,
   CreatePaymentInput,
@@ -36,6 +39,7 @@ import type {
   Subscription,
   SubscriptionStatus,
   UpdateBankAccountInput,
+  UpdateCheckoutConnectionInput,
   UpdateCheckoutInput,
   UpdateCommerceSettingsInput,
   UpdateManagedPaymentsInput,
@@ -98,6 +102,17 @@ export function commerceClient(slug: string) {
       remove: (checkoutId: string) => del(`/checkouts/${id(checkoutId)}`),
       duplicate: (checkoutId: string) => post<Checkout>(`/checkouts/${id(checkoutId)}/duplicate`),
       embed: (checkoutId: string) => get<CheckoutEmbed>(`/checkouts/${id(checkoutId)}/embed`),
+      connections: {
+        list: (checkoutId: string) => get<{ data: CheckoutConnection[] }>(`/checkouts/${id(checkoutId)}/connections`),
+        create: (checkoutId: string, input: CreateCheckoutConnectionInput) =>
+          post<CheckoutConnection>(`/checkouts/${id(checkoutId)}/connections`, input),
+        update: (checkoutId: string, connectionId: string, input: UpdateCheckoutConnectionInput) =>
+          patch<CheckoutConnection>(`/checkouts/${id(checkoutId)}/connections/${id(connectionId)}`, input),
+        remove: (checkoutId: string, connectionId: string) =>
+          del<{ id: string; deleted: true }>(`/checkouts/${id(checkoutId)}/connections/${id(connectionId)}`),
+        test: (checkoutId: string, connectionId: string) =>
+          post<ConnectionTestResult>(`/checkouts/${id(checkoutId)}/connections/${id(connectionId)}/test`),
+      },
     },
     categories: {
       list: () => get<{ data: ProductCategory[] }>('/productCategories'),

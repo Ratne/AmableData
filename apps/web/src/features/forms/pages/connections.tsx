@@ -21,6 +21,7 @@ import { text, type AppInputSchema } from '../../apps/api';
 import { AppSchemaInputs } from '../../automations/components/app-forms';
 import { useStepUp } from '../../developers/components';
 import { formsKeys, useDates, useForm, useForms, useFormsMutation, usePermissions } from '../api/hooks';
+import { AdConversionFields, buildConversionConfig } from '../components/ad-conversion-fields';
 import { Choice, ErrorNotice, FormField as Field, Pill, SectionCard } from '../components/common';
 import { useFormChrome } from '../components/form-chrome';
 import { applyWebhookBody, buildWebhookBody, parseBodyTemplate } from '../lib/webhook-body';
@@ -267,6 +268,10 @@ function ConnectionSummary({ connection }: { connection: FormConnection }) {
         return Array.isArray(c['recipients']) ? c['recipients'].join(', ') : '';
       case 'docuseal':
         return `${t('forms.connections.template')} ${String(c['template_id'] ?? '')}`;
+      case 'facebook_capi':
+        return `Pixel ${str(c['pixel_id'])} · ${str(c['event_name'], 'Lead')}${str(c['test_event_code']) ? ' · test' : ''}`;
+      case 'tiktok_events':
+        return `Pixel ${str(c['pixel_code'])} · ${str(c['event_name'], 'Lead')}${str(c['test_event_code']) ? ' · test' : ''}`;
       case 'app':
         return `${str(c['app_id'])} · ${str(c['key'])}`;
     }
@@ -391,6 +396,9 @@ function ConnectionDialog({
           prefill: clean.map(([source, field]) => ({ source, field: field.trim() })),
           send_email: config['send_email'] !== false,
         };
+      case 'facebook_capi':
+      case 'tiktok_events':
+        return buildConversionConfig(type, config);
       case 'app':
         return { app_id: app?.app_id ?? str(initial['app_id']), key: app?.key ?? str(initial['key']), settings };
     }
@@ -406,7 +414,7 @@ function ConnectionDialog({
           ...(apiKey.trim() === '' ? {} : { secret: apiKey.trim() }),
         });
       }
-      const input = { type, name: name.trim(), config: built, ...(type === 'docuseal' || type === 'google_sheets' ? { secret: apiKey.trim() } : {}) } as CreateConnectionInput;
+      const input = { type, name: name.trim(), config: built, ...(type === 'docuseal' || type === 'google_sheets' || type === 'facebook_capi' || type === 'tiktok_events' ? { secret: apiKey.trim() } : {}) } as CreateConnectionInput;
       const created = await api.connections.create(formId, input);
       if (created.signing_secret !== null) onSecret(created.signing_secret);
       return created;
@@ -624,6 +632,9 @@ function ConnectionDialog({
                 {t('forms.connections.sendEmail')}
               </label>
             </>
+          ) : null}
+          {type === 'facebook_capi' || type === 'tiktok_events' ? (
+            <AdConversionFields type={type} config={config} set={set} token={apiKey} setToken={setApiKey} hasToken={connection?.has_secret ?? false} />
           ) : null}
           {type === 'app' && app === null ? (
             <p className="text-sm text-destructive">{t('forms.connector.appMissing', { app: str(initial['app_id']) })}</p>

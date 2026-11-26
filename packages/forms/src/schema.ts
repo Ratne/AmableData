@@ -256,6 +256,13 @@ export const submissionMetaSchema = z.object({
   locale: z.string().max(16).default(''),
   time_zone: z.string().max(64).default(''),
   viewport: z.string().max(20).default(''),
+  /** Ad platform cookies (`_fbp`, `_fbc`, `_ttp`) for server-side conversions. */
+  fbp: z.string().max(512).default(''),
+  fbc: z.string().max(512).default(''),
+  ttp: z.string().max(512).default(''),
+  /** Set by the server from the request, never trusted from the browser. */
+  ip: z.string().max(64).default(''),
+  user_agent: z.string().max(1024).default(''),
 });
 export type SubmissionMeta = z.infer<typeof submissionMetaSchema>;
 

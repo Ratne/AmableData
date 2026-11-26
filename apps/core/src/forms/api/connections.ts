@@ -67,7 +67,7 @@ export function registerConnectionsRoutes(router: OpenAPIHono<AppEnv>): void {
       const box = c.get('services').secretBox;
       let secret: string | null = null;
       if (connector.secret === 'generated') secret = `whsec_${randomToken(24)}`;
-      if (body.type === 'docuseal' || body.type === 'google_sheets') secret = body.secret;
+      if ('secret' in body) secret = body.secret;
       const hint = secret === null ? null : checkedSecretHint(connector, secret);
       const connection = await callCrm(c, 'forms.createConnection', {
         id,

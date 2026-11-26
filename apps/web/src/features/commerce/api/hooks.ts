@@ -38,6 +38,7 @@ export const commerceKeys = {
   checkouts: (slug: string) => ['commerce', slug, 'checkouts'] as const,
   checkout: (slug: string, id: string) => ['commerce', slug, 'checkouts', id] as const,
   checkoutEmbed: (slug: string, id: string) => ['commerce', slug, 'checkouts', id, 'embed'] as const,
+  checkoutConnections: (slug: string, id: string) => ['commerce', slug, 'checkouts', id, 'connections'] as const,
 };
 
 function useTenantSlug(): string {

@@ -24,6 +24,11 @@ function content(values: SubmissionContent['values'], tracking: Record<string, s
       locale: 'it',
       time_zone: 'Europe/Rome',
       viewport: '',
+      fbp: '',
+      fbc: '',
+      ttp: '',
+      ip: '',
+      user_agent: '',
     },
   };
 }

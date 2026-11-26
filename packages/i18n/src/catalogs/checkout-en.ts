@@ -40,6 +40,15 @@ export const checkoutEn = {
   'checkout.tab.offers': 'Post-purchase',
   'checkout.tab.design': 'Design',
   'checkout.tab.settings': 'Settings',
+  'checkout.tab.integrations': 'Integrations',
+  'checkout.integrations.intro':
+    'Every paid order of this checkout (card, recorded bank transfer, post-purchase offers) is sent server-side to these pixels as a Purchase with value and currency. Failed sends are retried automatically.',
+  'checkout.integrations.empty': 'No integrations yet.',
+  'checkout.integrations.saved': 'Integration saved',
+  'checkout.integrations.deleted': 'Integration deleted',
+  'checkout.integrations.delete': 'Delete integration',
+  'checkout.integrations.dedupHint':
+    'The event ID is the order ID: give the browser pixel the same value to count the purchase once.',
   'checkout.tabGroup.offer': 'Offer',
   'checkout.tabGroup.checkout': 'Checkout',
 

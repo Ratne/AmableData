@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { dateTimeSchema, idSchema, optText, timestampSchema } from '../crm/common';
 import { customFieldValuesSchema } from '../crm/custom-fields';
+import {
+  adConversionEventSchema,
+  deliveryStatusSchema,
+  facebookCapiConfigSchema,
+  tiktokEventsConfigSchema,
+} from '../forms';
 import { isCurrencyCode } from './currencies';
 
 export * from './currencies';
@@ -680,6 +686,60 @@ export const checkoutEmbedSchema = z.object({
   offer_snippet: z.string(),
 });
 export type CheckoutEmbed = z.infer<typeof checkoutEmbedSchema>;
+
+// ------------------------------------------------- checkout integrations
+
+/** Server-side conversions sent for every paid order of the checkout (Purchase by default). */
+export const CHECKOUT_CONNECTION_TYPES = ['facebook_capi', 'tiktok_events'] as const;
+export const checkoutConnectionTypeSchema = z.enum(CHECKOUT_CONNECTION_TYPES);
+export type CheckoutConnectionType = z.infer<typeof checkoutConnectionTypeSchema>;
+
+const checkoutConnectionCommon = {
+  name: z.string().trim().min(1).max(100),
+  enabled: z.boolean().optional(),
+  /** Access token from the platform's Events Manager (encrypted at rest, never returned). */
+  secret: z.string().trim().min(1).max(1000),
+};
+
+export const createCheckoutConnectionSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('facebook_capi'),
+    ...checkoutConnectionCommon,
+    config: facebookCapiConfigSchema.extend({ event_name: adConversionEventSchema.default('Purchase') }),
+  }),
+  z.strictObject({
+    type: z.literal('tiktok_events'),
+    ...checkoutConnectionCommon,
+    config: tiktokEventsConfigSchema.extend({ event_name: adConversionEventSchema.default('Purchase') }),
+  }),
+]);
+export type CreateCheckoutConnectionInput = z.infer<typeof createCheckoutConnectionSchema>;
+
+export const updateCheckoutConnectionSchema = z.strictObject({
+  name: z.string().trim().min(1).max(100).optional(),
+  enabled: z.boolean().optional(),
+  /** Full replacement, validated against the connection type. */
+  config: z.record(z.string(), z.unknown()).optional(),
+  secret: z.string().trim().min(1).max(1000).optional(),
+});
+export type UpdateCheckoutConnectionInput = z.infer<typeof updateCheckoutConnectionSchema>;
+
+export const checkoutConnectionSchema = z.object({
+  id: idSchema,
+  checkout_id: idSchema,
+  type: checkoutConnectionTypeSchema,
+  name: z.string(),
+  enabled: z.boolean(),
+  config: z.record(z.string(), z.unknown()),
+  has_secret: z.boolean(),
+  secret_hint: z.string().nullable(),
+  last_delivery: z.object({ status: deliveryStatusSchema, at: timestampSchema }).nullable(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+export type CheckoutConnection = z.infer<typeof checkoutConnectionSchema>;
+
+export const checkoutConnectionParamSchema = z.object({ id: idSchema, connectionId: idSchema });
 
 // ----------------------------------------------------------------- stripe
 

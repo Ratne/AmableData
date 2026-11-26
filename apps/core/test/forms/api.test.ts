@@ -200,6 +200,8 @@ describe('forms REST v2 permissions by role', () => {
       'google_sheets',
       'email_notification',
       'docuseal',
+      'facebook_capi',
+      'tiktok_events',
     ]);
   });
 

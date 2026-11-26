@@ -26,9 +26,18 @@ import { withAlarmReporting } from '../platform/telemetry';
 import { createPlatformQuotaGuard } from '../platform/quota';
 import { webhookService } from '../webhooks/runtime';
 import { appActionPort } from '../apps/actions';
+import { enqueueCheckoutConversions } from '../checkout/conversions';
 import { armPointInTime } from './point-in-time';
 
 const nextUlid = monotonicFactory();
+
+/** First payments of orders (renewals are not new conversions); the consumer drops non-checkout orders. */
+function paidCheckoutCandidates(events: ReadonlyArray<{ type: string; payload: Readonly<Record<string, unknown>> }>): string[] {
+  return events
+    .filter((e) => e.type === 'order.paid' && e.payload['renewal'] !== true && e.payload['source'] === 'checkout')
+    .map((e) => e.payload['orderId'])
+    .filter((id): id is string => typeof id === 'string');
+}
 
 /**
  * Engine — the automation engine Durable Object, one per tenant (addressed by
@@ -100,7 +109,10 @@ export class Engine extends DurableObject<Env> {
         return this.secretBox;
       },
       webhooks: {
-        publish: (events) => webhookService(this.env).publish(bound, events),
+        publish: async (events) => {
+          await webhookService(this.env).publish(bound, events);
+          await enqueueCheckoutConversions(this.env, bound, paidCheckoutCandidates(events));
+        },
       },
       apps: appActionPort(this.env, bound),
       now: () => Date.now(),

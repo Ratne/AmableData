@@ -237,6 +237,31 @@ export const formsIt: Readonly<Record<FormsMessageKey, string>> = {
     'Aggiunge una riga a un foglio Google, scritta da un service account con cui condividi il foglio.',
   'forms.connector.email_notification.hint': 'Invia le risposte via email al tuo team.',
   'forms.connector.docuseal.hint': 'Invia un documento da firmare, precompilato con le risposte.',
+  'forms.connector.facebook_capi': 'Meta Conversions API',
+  'forms.connector.tiktok_events': 'TikTok Events API',
+  'forms.connector.facebook_capi.hint':
+    'Invia ogni risposta al pixel Meta come evento server-side (Lead di default), con email e telefono hashati, fbclid e cookie _fbp/_fbc.',
+  'forms.connector.tiktok_events.hint':
+    'Invia ogni risposta al pixel TikTok come evento server-side (Lead di default), con email e telefono hashati, ttclid e cookie _ttp.',
+  'forms.conversion.pixelId': 'ID pixel (dataset)',
+  'forms.conversion.pixelCode': 'Pixel code',
+  'forms.conversion.token': 'Access token',
+  'forms.conversion.tokenKeep': 'Lascia vuoto per mantenere il token attuale.',
+  'forms.conversion.metaSetup':
+    'In Gestione eventi di Meta apri il pixel → Impostazioni → API Conversioni → Genera token di accesso.',
+  'forms.conversion.tiktokSetup':
+    'In TikTok Ads Manager → Strumenti → Eventi apri il pixel web → Impostazioni → Events API → Genera access token.',
+  'forms.conversion.event': 'Evento',
+  'forms.conversion.customEvent': 'Evento personalizzato…',
+  'forms.conversion.customEventName': 'Nome evento personalizzato',
+  'forms.conversion.testCode': 'Codice evento di test',
+  'forms.conversion.testCodeHint':
+    'Dalla scheda Eventi di test: gli eventi vanno solo allo strumento di test. Lascialo vuoto in produzione; senza, "Prova" verifica solo il token.',
+  'forms.conversion.callingCode': 'Prefisso internazionale predefinito',
+  'forms.conversion.callingCodeHint': 'Aggiunto ai numeri scritti senza prefisso, es. 39.',
+  'forms.conversion.externalId': 'Invia external_id (id risposta hashato)',
+  'forms.conversion.dedupHint':
+    "Se anche il pixel nel browser traccia lo stesso evento, passagli lo stesso event ID (l'id della risposta) così la piattaforma lo conta una volta.",
   'forms.connector.app': 'App',
   'forms.connector.app.hint': 'Invia ogni risposta a {app}.',
   'forms.connector.appMissing': "L'app {app} non è più installata",

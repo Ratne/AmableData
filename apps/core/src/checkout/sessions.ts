@@ -70,6 +70,15 @@ export const SESSION_CLEANUP_MS = 86_400_000;
 /** Expired sessions are kept this long for a late payment, then deleted. */
 export const EXPIRED_SESSION_RETENTION_MS = 30 * 86_400_000;
 
+/** Buyer data the ad platforms match server-side conversions on. */
+export interface AdMeta {
+  fbp: string;
+  fbc: string;
+  ttp: string;
+  ip: string;
+  user_agent: string;
+}
+
 export type SessionStatus = 'open' | 'processing' | 'paid' | 'completed' | 'expired';
 
 export interface SessionRow {
@@ -87,6 +96,8 @@ export interface SessionRow {
   visitor_id: string | null;
   page_url: string | null;
   locale: string | null;
+  /** `AdMeta` JSON: ad cookies, IP and user agent of the buyer, for server-side conversions. */
+  ad_meta: string | null;
   /** `checkout`: a Stripe Checkout Session (Managed Payments), `intent_id` is its id. */
   intent_kind: 'payment' | 'setup' | 'checkout' | null;
   intent_id: string | null;
@@ -671,13 +682,20 @@ export function prepareCheckoutSession(
     page_url: payload.meta.page_url === '' ? null : payload.meta.page_url,
     locale,
     payment_method: method,
+    ad_meta: JSON.stringify({
+      fbp: payload.meta.fbp,
+      fbc: payload.meta.fbc,
+      ttp: payload.meta.ttp,
+      ip: payload.meta.ip,
+      user_agent: payload.meta.user_agent,
+    } satisfies AdMeta),
   };
   if (existing === null) {
     ctx.db.run(
       `INSERT INTO crm_checkout_sessions (id, checkout_id, token_hash, status, contact_id, order_id, currency, amount_minor,
-         selection, field_values, tracking, visitor_id, page_url, locale, payment_method, stripe_customer_id, expires_at,
+         selection, field_values, tracking, visitor_id, page_url, locale, payment_method, ad_meta, stripe_customer_id, expires_at,
          created_at, updated_at)
-       VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       sessionId,
       row.id,
       input.tokenHash,
@@ -692,6 +710,7 @@ export function prepareCheckoutSession(
       columns.page_url,
       columns.locale,
       columns.payment_method,
+      columns.ad_meta,
       customerId,
       now + OPEN_SESSION_TTL_MS,
       now,
@@ -700,7 +719,7 @@ export function prepareCheckoutSession(
   } else {
     ctx.db.run(
       `UPDATE crm_checkout_sessions SET contact_id = ?, order_id = ?, currency = ?, amount_minor = ?, selection = ?,
-         field_values = ?, tracking = ?, visitor_id = ?, page_url = ?, locale = ?, payment_method = ?, last_error = NULL,
+         field_values = ?, tracking = ?, visitor_id = ?, page_url = ?, locale = ?, payment_method = ?, ad_meta = ?, last_error = NULL,
          expires_at = ?, updated_at = ? WHERE id = ?`,
       columns.contact_id,
       columns.order_id,
@@ -713,6 +732,7 @@ export function prepareCheckoutSession(
       columns.page_url,
       columns.locale,
       columns.payment_method,
+      columns.ad_meta,
       now + OPEN_SESSION_TTL_MS,
       now,
       sessionId,

@@ -3,7 +3,9 @@ import type { FormsRuntime } from '../runtime';
 import { appConnector } from './app';
 import { docusealConnector } from './docuseal';
 import { emailNotificationConnector } from './email-notification';
+import { facebookCapiConnector } from './facebook-capi';
 import { googleSheetsConnector } from './google-sheets';
+import { tiktokEventsConnector } from './tiktok-events';
 import type { Connector } from './types';
 import { webhookConnector } from './webhook';
 
@@ -13,6 +15,8 @@ const CONNECTORS: { readonly [K in ConnectorType]: Connector<unknown> } = {
   google_sheets: googleSheetsConnector as Connector<unknown>,
   email_notification: emailNotificationConnector as Connector<unknown>,
   docuseal: docusealConnector as Connector<unknown>,
+  facebook_capi: facebookCapiConnector as Connector<unknown>,
+  tiktok_events: tiktokEventsConnector as Connector<unknown>,
   app: appConnector as Connector<unknown>,
 };
 

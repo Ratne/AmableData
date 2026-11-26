@@ -37,6 +37,15 @@ export const checkoutIt: Readonly<Record<CheckoutMessageKey, string>> = {
   'checkout.tab.offers': 'Post-acquisto',
   'checkout.tab.design': 'Design',
   'checkout.tab.settings': 'Impostazioni',
+  'checkout.tab.integrations': 'Integrazioni',
+  'checkout.integrations.intro':
+    'Ogni ordine pagato di questo checkout (carta, bonifico registrato, offerte post-acquisto) viene inviato lato server a questi pixel come Purchase con valore e valuta. Gli invii non riusciti vengono ritentati in automatico.',
+  'checkout.integrations.empty': 'Nessuna integrazione.',
+  'checkout.integrations.saved': 'Integrazione salvata',
+  'checkout.integrations.deleted': 'Integrazione eliminata',
+  'checkout.integrations.delete': 'Elimina integrazione',
+  'checkout.integrations.dedupHint':
+    "L'event ID è l'id dell'ordine: passa lo stesso valore al pixel nel browser per contare l'acquisto una volta sola.",
   'checkout.tabGroup.offer': 'Offerta',
   'checkout.tabGroup.checkout': 'Checkout',
 

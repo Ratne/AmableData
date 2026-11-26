@@ -165,6 +165,8 @@ async function submit(ctx: GatewayContext, input: unknown): Promise<Output<'form
     ...payload.meta,
     visitor_id: payload.meta.visitor_id !== '' ? payload.meta.visitor_id : (ctx.client.visitorId ?? ''),
     referrer: payload.meta.referrer !== '' ? payload.meta.referrer : (ctx.client.referer ?? ''),
+    ip: (ctx.client.ip ?? '').slice(0, 64),
+    user_agent: (ctx.client.userAgent ?? '').slice(0, 1024),
   };
   const ciphertext = await encryptSubmission(runtime.secretBox, ctx.tenant.id, submissionId, {
     values: validation.values,

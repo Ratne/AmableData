@@ -88,6 +88,11 @@ export function collectMeta(element: Element): SubmissionMeta {
     locale: navigator.language.slice(0, 16),
     time_zone: timeZone.slice(0, 64),
     viewport: `${String(window.innerWidth)}x${String(window.innerHeight)}`,
+    fbp: readCookie('_fbp').slice(0, 512),
+    fbc: readCookie('_fbc').slice(0, 512),
+    ttp: readCookie('_ttp').slice(0, 512),
+    ip: '',
+    user_agent: '',
   };
 }
 

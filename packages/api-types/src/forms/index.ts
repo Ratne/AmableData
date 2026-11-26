@@ -200,7 +200,15 @@ export type ContactSubmissionDetail = z.infer<typeof contactSubmissionDetailSche
 
 // ------------------------------------------------------------ connections
 
-export const CONNECTOR_TYPES = ['webhook', 'google_sheets', 'email_notification', 'docuseal', 'app'] as const;
+export const CONNECTOR_TYPES = [
+  'webhook',
+  'google_sheets',
+  'email_notification',
+  'docuseal',
+  'facebook_capi',
+  'tiktok_events',
+  'app',
+] as const;
 export const connectorTypeSchema = z.enum(CONNECTOR_TYPES);
 export type ConnectorType = z.infer<typeof connectorTypeSchema>;
 
@@ -308,6 +316,32 @@ export const appConnectorConfigSchema = z.strictObject({
 });
 export type AppConnectorConfig = z.infer<typeof appConnectorConfigSchema>;
 
+/** Standard or custom event name of an ad platform (`Lead`, `CompleteRegistration`, …). */
+export const adConversionEventSchema = z.string().trim().regex(/^[A-Za-z0-9_ -]{1,100}$/, 'invalid event name');
+const conversionCommon = {
+  event_name: adConversionEventSchema.default('Lead'),
+  /** Routes events to the platform's Test Events tool; empty in production. */
+  test_event_code: z.string().trim().max(100).default(''),
+  /** Hashed submission id as `external_id` (better matching and dedup). */
+  send_external_id: z.boolean().default(true),
+  /** Calling code for phone numbers typed without international prefix, e.g. `39`. */
+  default_calling_code: z.string().trim().regex(/^\d{0,4}$/, 'digits only').default(''),
+};
+
+/** Meta Conversions API: the access token from Events Manager is the connection secret. */
+export const facebookCapiConfigSchema = z.strictObject({
+  pixel_id: z.string().trim().regex(/^\d{5,30}$/, 'invalid pixel id'),
+  ...conversionCommon,
+});
+export type FacebookCapiConfig = z.infer<typeof facebookCapiConfigSchema>;
+
+/** TikTok Events API 2.0: the access token from Events Manager is the connection secret. */
+export const tiktokEventsConfigSchema = z.strictObject({
+  pixel_code: z.string().trim().regex(/^[A-Za-z0-9]{5,40}$/, 'invalid pixel code'),
+  ...conversionCommon,
+});
+export type TiktokEventsConfig = z.infer<typeof tiktokEventsConfigSchema>;
+
 const connectionCommon = {
   name: z.string().trim().min(1).max(100),
   enabled: z.boolean().optional(),
@@ -333,6 +367,20 @@ export const createConnectionSchema = z.discriminatedUnion('type', [
     config: docusealConfigSchema,
     /** DocuSeal API key (encrypted at rest, never returned). */
     secret: z.string().trim().min(1).max(500),
+  }),
+  z.strictObject({
+    type: z.literal('facebook_capi'),
+    ...connectionCommon,
+    config: facebookCapiConfigSchema,
+    /** Conversions API access token (encrypted at rest, never returned). */
+    secret: z.string().trim().min(1).max(1000),
+  }),
+  z.strictObject({
+    type: z.literal('tiktok_events'),
+    ...connectionCommon,
+    config: tiktokEventsConfigSchema,
+    /** Events API access token (encrypted at rest, never returned). */
+    secret: z.string().trim().min(1).max(1000),
   }),
   z.strictObject({ type: z.literal('app'), ...connectionCommon, config: appConnectorConfigSchema }),
 ]);

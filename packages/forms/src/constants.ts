@@ -53,4 +53,4 @@ export const CUSTOM_MAP_PREFIX = 'custom.';
 /** Attribution parameters captured from the host page URL. */
 export const UTM_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const;
 /** Click ids and referral parameters also kept when present. */
-export const TRACKING_PARAMS = [...UTM_PARAMS, 'gclid', 'fbclid', 'msclkid', 'ref'] as const;
+export const TRACKING_PARAMS = [...UTM_PARAMS, 'gclid', 'fbclid', 'ttclid', 'msclkid', 'ref'] as const;

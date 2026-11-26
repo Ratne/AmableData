@@ -405,6 +405,8 @@ async function session(ctx: GatewayContext, input: unknown): Promise<Output<'che
         ...payload.meta,
         visitor_id:
           payload.meta.visitor_id !== '' ? payload.meta.visitor_id : (ctx.client.visitorId ?? ''),
+        ip: (ctx.client.ip ?? '').slice(0, 64),
+        user_agent: (ctx.client.userAgent ?? '').slice(0, 1024),
       },
     },
     tokenHash: await sha256Hex(freshToken),
@@ -948,19 +950,39 @@ async function stripeWebhook(
   return { received: true };
 }
 
+/**
+ * Ops that may mark orders paid: the engine drains the outbox right after
+ * (automations, webhooks, ad conversions) instead of at its next poll.
+ */
+function kicking<I, O>(handler: (ctx: GatewayContext, input: I) => Promise<O>) {
+  return async (ctx: GatewayContext, input: I): Promise<O> => {
+    const out = await handler(ctx, input);
+    try {
+      ctx.executionCtx.waitUntil(
+        ctx.env.ENGINE.get(ctx.env.ENGINE.idFromName(ctx.tenant.id))
+          .kick(ctx.tenant.id)
+          .catch((error: unknown) => console.error('[checkout] engine kick failed', error)),
+      );
+    } catch {
+      // No execution context or engine binding (tests): the periodic poll picks events up.
+    }
+    return out;
+  };
+}
+
 /** Public ops reachable from the edge worker (see `CheckoutGatewayOps` in @amable/checkout). */
 export const checkoutGatewayHandlers: GatewayHandlers = {
   'checkout.config': config,
   'checkout.hosted': hosted,
   'checkout.quote': quote,
-  'checkout.session': session,
+  'checkout.session': kicking(session),
   'checkout.lead': lead,
-  'checkout.complete': complete,
+  'checkout.complete': kicking(complete),
   'checkout.offer': offer,
-  'checkout.offerAccept': offerAccept,
-  'checkout.offerConfirm': offerConfirm,
+  'checkout.offerAccept': kicking(offerAccept),
+  'checkout.offerConfirm': kicking(offerConfirm),
   'checkout.offerDecline': offerDecline,
   'checkout.flushSummary': flushSummary,
   'checkout.address': address,
-  'checkout.stripeWebhook': stripeWebhook,
+  'checkout.stripeWebhook': kicking(stripeWebhook),
 };

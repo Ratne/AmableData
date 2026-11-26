@@ -27,6 +27,7 @@ import { t0025CheckoutLeads } from './0025_checkout_leads';
 import { t0026WebRegistry } from './0026_web_registry';
 import { t0027WebSales } from './0027_web_sales';
 import { t0028WebSuppressions } from './0028_web_suppressions';
+import { t0029CheckoutConnections } from './0029_checkout_connections';
 
 /**
  * Ordered list of tenant-DO SQLite migrations.
@@ -61,4 +62,5 @@ export const tenantMigrations: readonly Migration[] = [
   t0026WebRegistry,
   t0027WebSales,
   t0028WebSuppressions,
+  t0029CheckoutConnections,
 ];

@@ -1,21 +1,34 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi';
 import {
+  checkoutConnectionParamSchema,
+  checkoutConnectionSchema,
   checkoutEmbedSchema,
   checkoutSchema,
+  connectionTestResultSchema,
+  createCheckoutConnectionSchema,
   checkoutSummarySchema,
   createCheckoutSchema,
   deletedResponseSchema,
   idSchema,
   listCheckoutsQuerySchema,
   pageOf,
+  updateCheckoutConnectionSchema,
   updateCheckoutSchema,
+  type CheckoutConnection,
 } from '@amable/api-types';
+import { ulid } from 'ulid';
 import { callCrm, crmRoute, json, jsonBody } from '../crm/api/core';
 import { assertEditable, LOCKED_RESPONSE, registerEditLockRoutes } from '../edit-lock/routes';
 import { audit, getTenant, type AppEnv } from '../middleware';
 import { edgeOrigin } from '../env';
+import { CrmError } from '../crm/errors';
+import { touchesConnectionSecrets } from '../forms/api/shared';
+import { encryptSecret, secretHint } from '../forms/crypto';
+import { formsRuntime } from '../forms/runtime';
+import { testCheckoutConnection } from './conversions';
 
 const tags = ['Checkouts'];
+const connectionTags = ['Checkout integrations'];
 const params = z.object({ id: idSchema });
 
 /** Checkout REST routes, relative to `/api/v2/t/{slug}`. */
@@ -135,6 +148,7 @@ export function registerCheckoutRoutes(app: OpenAPIHono<AppEnv>): void {
       );
     },
   );
+  registerCheckoutConnectionRoutes(app);
   registerEditLockRoutes(app, {
     kind: 'checkouts',
     basePath: '/checkouts',
@@ -144,4 +158,141 @@ export function registerCheckoutRoutes(app: OpenAPIHono<AppEnv>): void {
     takeover: 'checkouts:write',
     exists: (c, id) => callCrm(c, 'checkouts.get', { id }),
   });
+}
+
+/** Config of a checkout connection validated against its type (create and full replacement). */
+function checkedConfig(type: CheckoutConnection['type'], name: string, config: unknown): Record<string, unknown> {
+  const parsed = createCheckoutConnectionSchema.safeParse({ type, name, secret: 'x', config });
+  if (!parsed.success) {
+    throw new CrmError(
+      'validation_failed',
+      'invalid configuration',
+      parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+    );
+  }
+  return parsed.data.config;
+}
+
+function registerCheckoutConnectionRoutes(app: OpenAPIHono<AppEnv>): void {
+  app.openapi(
+    crmRoute('checkouts:read', {
+      method: 'get',
+      path: '/checkouts/{id}/connections',
+      tags: connectionTags,
+      summary: 'List the integrations of a checkout (access tokens are never returned)',
+      request: { params },
+      responses: { 200: json(z.object({ data: z.array(checkoutConnectionSchema) }), 'Integrations') },
+    }),
+    async (c) =>
+      c.json({ data: await callCrm(c, 'checkoutConnections.list', { checkoutId: c.req.valid('param').id }) }, 200),
+  );
+  app.openapi(
+    crmRoute(
+      'checkouts:write',
+      {
+        method: 'post',
+        path: '/checkouts/{id}/connections',
+        tags: connectionTags,
+        summary: 'Add a server-side conversion integration (Meta Conversions API, TikTok Events API)',
+        request: { params, body: jsonBody(createCheckoutConnectionSchema) },
+        responses: { 201: json(checkoutConnectionSchema, 'The integration') },
+      },
+      { stepUp: true },
+    ),
+    async (c) => {
+      const checkoutId = c.req.valid('param').id;
+      const body = c.req.valid('json');
+      const id = ulid();
+      const tenantId = getTenant(c).tenant.id;
+      const connection = await callCrm(c, 'checkoutConnections.create', {
+        id,
+        checkoutId,
+        type: body.type,
+        name: body.name,
+        enabled: body.enabled ?? true,
+        config: body.config,
+        secretCiphertext: await encryptSecret(c.get('services').secretBox, tenantId, id, body.secret),
+        secretHint: secretHint(body.secret),
+      });
+      await audit(c, 'checkouts.connection_created', { target: id, details: { checkout_id: checkoutId, type: body.type } });
+      return c.json(connection, 201);
+    },
+  );
+  app.openapi(
+    crmRoute(
+      'checkouts:write',
+      {
+        method: 'patch',
+        path: '/checkouts/{id}/connections/{connectionId}',
+        tags: connectionTags,
+        summary: 'Update an integration (config is replaced and validated against its type)',
+        request: { params: checkoutConnectionParamSchema, body: jsonBody(updateCheckoutConnectionSchema) },
+        responses: { 200: json(checkoutConnectionSchema, 'The integration') },
+      },
+      { stepUp: touchesConnectionSecrets },
+    ),
+    async (c) => {
+      const { id: checkoutId, connectionId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const current = await callCrm(c, 'checkoutConnections.get', { checkoutId, id: connectionId });
+      const tenantId = getTenant(c).tenant.id;
+      const connection = await callCrm(c, 'checkoutConnections.update', {
+        checkoutId,
+        id: connectionId,
+        ...(body.name === undefined ? {} : { name: body.name }),
+        ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
+        ...(body.config === undefined
+          ? {}
+          : { config: checkedConfig(current.type, body.name ?? current.name, body.config) }),
+        ...(body.secret === undefined
+          ? {}
+          : {
+              secretHint: secretHint(body.secret),
+              secretCiphertext: await encryptSecret(c.get('services').secretBox, tenantId, connectionId, body.secret),
+            }),
+      });
+      await audit(c, 'checkouts.connection_updated', {
+        target: connectionId,
+        details: { checkout_id: checkoutId, secret_changed: body.secret !== undefined },
+      });
+      return c.json(connection, 200);
+    },
+  );
+  app.openapi(
+    crmRoute('checkouts:write', {
+      method: 'delete',
+      path: '/checkouts/{id}/connections/{connectionId}',
+      tags: connectionTags,
+      summary: 'Delete an integration',
+      request: { params: checkoutConnectionParamSchema },
+      responses: { 200: json(deletedResponseSchema, 'Deleted') },
+    }),
+    async (c) => {
+      const { id: checkoutId, connectionId } = c.req.valid('param');
+      const result = await callCrm(c, 'checkoutConnections.delete', { checkoutId, id: connectionId });
+      await audit(c, 'checkouts.connection_deleted', { target: connectionId, details: { checkout_id: checkoutId } });
+      return c.json(result, 200);
+    },
+  );
+  app.openapi(
+    crmRoute('checkouts:write', {
+      method: 'post',
+      path: '/checkouts/{id}/connections/{connectionId}/test',
+      tags: connectionTags,
+      summary: 'Check the token, or send a sample Purchase to the Test Events tool when a test events code is set',
+      request: { params: checkoutConnectionParamSchema },
+      responses: { 200: json(connectionTestResultSchema, 'Test result') },
+    }),
+    async (c) => {
+      const { id: checkoutId, connectionId } = c.req.valid('param');
+      const connection = await callCrm(c, 'checkoutConnections.forWorker', { checkoutId, id: connectionId });
+      const result = await testCheckoutConnection({
+        runtime: await formsRuntime(c.env),
+        tenantId: getTenant(c).tenant.id,
+        connection,
+      });
+      await audit(c, 'checkouts.connection_tested', { target: connectionId, details: { checkout_id: checkoutId, status: result.status } });
+      return c.json(result, 200);
+    },
+  );
 }

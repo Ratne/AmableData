@@ -1,8 +1,9 @@
+import { isCheckoutConversionMessage, processCheckoutConversions } from '../checkout/conversions';
 import type { Env } from '../env';
 import { MAX_DELIVERY_ATTEMPTS, processSubmission, type ProcessOutcome } from './process';
 import { formsRuntime } from './runtime';
 
-/** Queue carrying stored form submissions to process (CRM mapping, connections). */
+/** Queue carrying stored form submissions to process (CRM mapping, connections) and paid checkout orders to send as conversions. */
 export const FORM_SUBMISSIONS_QUEUE = 'form-submissions';
 
 export interface FormSubmissionMessage {
@@ -32,6 +33,21 @@ function retryDelaySeconds(attempt: number): number {
 export async function consumeFormSubmissions(batch: MessageBatch<unknown>, env: Env): Promise<void> {
   const runtime = await formsRuntime(env);
   for (const message of batch.messages) {
+    if (isCheckoutConversionMessage(message.body)) {
+      try {
+        const outcome = await processCheckoutConversions(env, message.body.tenantId, message.body.orderId, {
+          attempt: message.attempts,
+          final: message.attempts >= MAX_DELIVERY_ATTEMPTS,
+          runtime,
+        });
+        if (outcome.retry) message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
+        else message.ack();
+      } catch (error) {
+        console.error('[checkout] conversions failed', message.body.orderId, error);
+        message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
+      }
+      continue;
+    }
     if (!isMessage(message.body)) {
       message.ack();
       continue;

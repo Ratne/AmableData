@@ -230,6 +230,31 @@ export const formsEn = {
     'Appends a row to a Google spreadsheet, written by a service account you share the sheet with.',
   'forms.connector.email_notification.hint': 'Emails the answers to your team.',
   'forms.connector.docuseal.hint': 'Sends a document to sign, prefilled with the answers.',
+  'forms.connector.facebook_capi': 'Meta Conversions API',
+  'forms.connector.tiktok_events': 'TikTok Events API',
+  'forms.connector.facebook_capi.hint':
+    'Sends every submission to your Meta pixel as a server-side event (Lead by default), with hashed email and phone, fbclid and _fbp/_fbc cookies.',
+  'forms.connector.tiktok_events.hint':
+    'Sends every submission to your TikTok pixel as a server-side event (Lead by default), with hashed email and phone, ttclid and _ttp cookie.',
+  'forms.conversion.pixelId': 'Pixel (dataset) ID',
+  'forms.conversion.pixelCode': 'Pixel code',
+  'forms.conversion.token': 'Access token',
+  'forms.conversion.tokenKeep': 'Leave empty to keep the current token.',
+  'forms.conversion.metaSetup':
+    'In Meta Events Manager open the pixel → Settings → Conversions API → Generate access token.',
+  'forms.conversion.tiktokSetup':
+    'In TikTok Ads Manager → Tools → Events, open the web pixel → Settings → Events API → Generate access token.',
+  'forms.conversion.event': 'Event',
+  'forms.conversion.customEvent': 'Custom event…',
+  'forms.conversion.customEventName': 'Custom event name',
+  'forms.conversion.testCode': 'Test event code',
+  'forms.conversion.testCodeHint':
+    'From the Test Events tab: events go only to the test tool. Leave empty in production; without it, "Test" only checks the token.',
+  'forms.conversion.callingCode': 'Default calling code',
+  'forms.conversion.callingCodeHint': 'Added to phone numbers typed without prefix, e.g. 39.',
+  'forms.conversion.externalId': 'Send external_id (hashed submission id)',
+  'forms.conversion.dedupHint':
+    'If the browser pixel tracks the same event, give it the same event ID (the submission ID) so the platform counts it once.',
   'forms.connector.app': 'App',
   'forms.connector.app.hint': 'Sends every submission to {app}.',
   'forms.connector.appMissing': 'App {app} is no longer installed',

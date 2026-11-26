@@ -48,6 +48,7 @@ import {
   useCommerceSettings,
   usePermissions,
 } from '../api/hooks';
+import { CheckoutIntegrations } from '../components/checkout-integrations';
 import { CheckoutPreview, previewCheckoutConfig } from '../components/checkout-preview';
 import {
   BumpsSection,
@@ -57,7 +58,7 @@ import {
 } from '../components/checkout-sections';
 import { ChoiceSelect, ErrorNotice, FormField, PageState, SectionCard } from '../components/common';
 
-type EditorTab = 'products' | 'fields' | 'bumps' | 'offers' | 'design' | 'settings';
+type EditorTab = 'products' | 'fields' | 'bumps' | 'offers' | 'design' | 'settings' | 'integrations';
 
 /** Editor sections, grouped: the group on top, its tabs underneath. */
 const TAB_GROUPS: ReadonlyArray<{
@@ -66,7 +67,7 @@ const TAB_GROUPS: ReadonlyArray<{
   tabs: readonly [EditorTab, ...EditorTab[]];
 }> = [
   { id: 'offer', icon: ShoppingBag, tabs: ['products', 'bumps', 'offers'] },
-  { id: 'checkout', icon: CreditCard, tabs: ['fields', 'design', 'settings'] },
+  { id: 'checkout', icon: CreditCard, tabs: ['fields', 'design', 'settings', 'integrations'] },
 ];
 
 function EditorNav({ tab, onTab }: { tab: EditorTab; onTab: (tab: EditorTab) => void }) {
@@ -469,6 +470,9 @@ function Editor({ checkout }: { checkout: Checkout }) {
             </TabsContent>
             <TabsContent value="offers" className="pt-3">
               <OffersSection {...sectionProps} />
+            </TabsContent>
+            <TabsContent value="integrations" className="pt-3">
+              <CheckoutIntegrations checkoutId={checkout.id} writable={writable} />
             </TabsContent>
             <TabsContent value="design" className="pt-3">
               <SectionCard title={t('checkout.tab.design')}>

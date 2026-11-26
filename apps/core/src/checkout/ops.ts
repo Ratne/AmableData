@@ -3,6 +3,7 @@ import * as stripe from '../commerce/stripe/account';
 import * as bank from './bank-transfer';
 import * as charges from './charges';
 import * as checkouts from './checkouts';
+import * as connections from './connections';
 import * as leads from './leads';
 import * as offers from './offers';
 import * as sessions from './sessions';
@@ -19,6 +20,15 @@ export const checkoutOps = {
   'checkouts.update': checkouts.updateCheckout,
   'checkouts.delete': checkouts.deleteCheckout,
   'checkouts.duplicate': checkouts.duplicateCheckout,
+  // integrations (server-side conversions of paid orders)
+  'checkoutConnections.list': connections.listCheckoutConnections,
+  'checkoutConnections.get': connections.getCheckoutConnection,
+  'checkoutConnections.forWorker': connections.checkoutConnectionForWorker,
+  'checkoutConnections.create': connections.createCheckoutConnection,
+  'checkoutConnections.update': connections.updateCheckoutConnection,
+  'checkoutConnections.delete': connections.deleteCheckoutConnection,
+  'checkoutConnections.paidOrder': connections.paidCheckoutOrder,
+  'checkoutConnections.recordDelivery': connections.recordCheckoutDelivery,
   // public purchase flow
   'checkout.public': sessions.checkoutPublic,
   'checkout.quote': sessions.checkoutQuote,
