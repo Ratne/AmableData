@@ -28,6 +28,21 @@ export const opsEn = {
   'ops.backups.title': 'Backups',
   'ops.backups.none': 'No backup yet.',
   'ops.backups.last': 'Last on {at} ({n} kept)',
+  'ops.telemetry.title': 'Anonymous usage statistics',
+  'ops.telemetry.intro':
+    'Once a day the installation sends anonymous counts (workspaces, funnels, forms, apps, contacts as a range) to help decide where the project goes. No names, emails, domains or contact data, under a random id that is replaced when you switch it off.',
+  'ops.telemetry.docs': 'What is sent',
+  'ops.telemetry.on': 'On',
+  'ops.telemetry.off': 'Off',
+  'ops.telemetry.portal': 'Managed in the AmableData portal, on the page of this installation.',
+  'ops.telemetry.envOff': 'Switched off by the deployment (TELEMETRY=off).',
+  'ops.telemetry.ownersOnly': 'Only the workspace owners can change it.',
+  'ops.telemetry.neverSent': 'Nothing sent yet.',
+  'ops.telemetry.lastSent': 'Last sent on {at}.',
+  'ops.telemetry.showPreview': 'Show the exact data',
+  'ops.telemetry.hidePreview': 'Hide the data',
+  'ops.telemetry.enabledToast': 'Anonymous statistics on',
+  'ops.telemetry.disabledToast': 'Anonymous statistics off: nothing more is sent',
 } as const;
 
 export type OpsMessageKey = keyof typeof opsEn;

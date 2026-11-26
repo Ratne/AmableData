@@ -24,6 +24,7 @@ import type { SqlDb } from '../crm/db/sql';
 import type { Env } from '../env';
 import { withAlarmReporting } from '../platform/telemetry';
 import { createPlatformQuotaGuard } from '../platform/quota';
+import { engineUsageCounts, type EngineUsageCounts } from '../platform/usage-counts';
 import { webhookService } from '../webhooks/runtime';
 import { appActionPort } from '../apps/actions';
 import { enqueueCheckoutConversions } from '../checkout/conversions';
@@ -171,6 +172,11 @@ export class Engine extends DurableObject<Env> {
   /** Size of this object's SQLite database (bytes), for the owner diagnostics. */
   storageInfo(): { bytes: number } {
     return { bytes: this.ctx.storage.sql.databaseSize };
+  }
+
+  /** Automation count for the anonymous usage telemetry. */
+  usageCounts(): EngineUsageCounts {
+    return engineUsageCounts(this.db);
   }
 
   /** Backup RPCs (apps/core/src/backup), reached only by the owner-guarded backup routes and the cron. */

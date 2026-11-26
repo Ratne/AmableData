@@ -88,6 +88,8 @@
     "APP_ORIGIN": "__APP_ORIGIN__",
     "EDGE_ORIGIN": "__EDGE_ORIGIN__",
     "ERROR_REPORTING": "local",
+    // Anonymous daily usage statistics (docs/telemetry.md): "off" switches them off for good.
+    "TELEMETRY": "__TELEMETRY__",
     // "SYSTEM_EMAIL_FROM": "no-reply@example.com",
     // "TURNSTILE_SITE_KEY": "",
     // "GOOGLE_OAUTH_CLIENT_ID": "",

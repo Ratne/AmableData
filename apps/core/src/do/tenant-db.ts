@@ -28,6 +28,7 @@ import type { Env } from '../env';
 import { nextEsignDue } from '../esign/due';
 import { runEsignDue } from '../esign/runner';
 import { AlarmStepError, reportAlarmFailure, withAlarmReporting } from '../platform/telemetry';
+import { tenantUsageCounts, type TenantUsageCounts } from '../platform/usage-counts';
 import { armPointInTime } from './point-in-time';
 
 /**
@@ -255,6 +256,11 @@ export class TenantDb extends DurableObject<Env> {
   /** Size of this object's SQLite database (bytes), for the owner diagnostics. */
   storageInfo(): { bytes: number } {
     return { bytes: this.ctx.storage.sql.databaseSize };
+  }
+
+  /** Workspace counts for the anonymous usage telemetry (apps/core/src/platform/usage-telemetry.ts). */
+  usageCounts(): TenantUsageCounts {
+    return tenantUsageCounts(this.crmDb);
   }
 
   private readonly backup = createSqlBackup(backupSqlFromStorage(this.ctx.storage), {

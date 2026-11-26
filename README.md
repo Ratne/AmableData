@@ -88,6 +88,10 @@ rerun the script: `git fetch --tags && git checkout <tag> && pnpm install && pnp
 owners a notice when a newer one exists; set the variable `UPDATE_CHECK=off` to disable it.
 Watch the repository for releases to get them by email.
 
+The installation also sends one anonymous usage ping a day (counts of workspaces, funnels,
+forms, apps; contacts only as a range; no personal data). See [exactly what is sent](docs/telemetry.md);
+switch it off with `--no-telemetry`, in Settings > Operations, or with `TELEMETRY=off`.
+
 Or deploy the core worker in one click:
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Ratne/AmableData/tree/main/deploy/cloudflare)

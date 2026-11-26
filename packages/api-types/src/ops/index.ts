@@ -39,3 +39,22 @@ export const opsReplaySchema = z.object({
   remaining: z.boolean(),
 });
 export type OpsReplay = z.infer<typeof opsReplaySchema>;
+
+/**
+ * Anonymous usage statistics of the installation (docs/telemetry.md).
+ * `control`: `local` (the owner decides here), `portal` (linked installation:
+ * decided in the AmableData portal), `env_off` (`TELEMETRY=off` in the deployment).
+ */
+export const opsTelemetrySchema = z.object({
+  enabled: z.boolean(),
+  control: z.enum(['local', 'portal', 'env_off']),
+  /** Only workspace owners change it, and only when `control` is `local`. */
+  can_change: z.boolean(),
+  last_sent_at: ts.nullable(),
+  /** The exact body of the next daily ping. */
+  preview: z.record(z.string(), z.unknown()),
+});
+export type OpsTelemetry = z.infer<typeof opsTelemetrySchema>;
+
+export const opsTelemetryUpdateSchema = z.strictObject({ enabled: z.boolean() });
+export type OpsTelemetryUpdate = z.infer<typeof opsTelemetryUpdateSchema>;

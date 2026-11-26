@@ -1,10 +1,12 @@
 import type { OpsStatus } from '@amable/api-types';
 import { formatDateTime } from '@amable/i18n/client';
 import { DashboardButton, PageBody, usePageChrome } from '@amable/ui';
+import { Switch } from '@amable/ui/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@amable/ui/ui/table';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { Pill, SectionCard, type Tone } from '../../../components/feature-kit';
 import { PageState } from '../../crm/components/states';
 import { useI18n } from '../../../i18n';
@@ -30,7 +32,83 @@ export function OpsPage() {
       <PageState isPending={status.isPending} error={status.error}>
         {() => <OpsView slug={slug} status={status.data!} />}
       </PageState>
+      <TelemetryCard slug={slug} />
     </PageBody>
+  );
+}
+
+const TELEMETRY_DOCS_URL = 'https://github.com/Ratne/AmableData/blob/main/docs/telemetry.md';
+
+function TelemetryCard({ slug }: { slug: string }) {
+  const { t, locale } = useI18n();
+  const [showPreview, setShowPreview] = useState(false);
+  const telemetry = useQuery({
+    queryKey: opsKeys.telemetry(slug),
+    queryFn: () => opsApi.telemetry(slug),
+  });
+  const toggle = useApiMutation(
+    {
+      mutationFn: (enabled: boolean) => opsApi.setTelemetry(slug, enabled),
+      success: (r) => t(r.enabled ? 'ops.telemetry.enabledToast' : 'ops.telemetry.disabledToast'),
+    },
+    opsKeys.telemetry(slug),
+    (tr, error) =>
+      apiErrorMessage(tr, error, {
+        forbidden: 'ops.telemetry.ownersOnly',
+        notFound: 'ops.forbidden',
+        validation: 'common.error',
+      }),
+  );
+  const data = telemetry.data;
+  if (data === undefined) return null;
+  const hint =
+    data.control === 'portal'
+      ? 'ops.telemetry.portal'
+      : data.control === 'env_off'
+        ? 'ops.telemetry.envOff'
+        : data.can_change
+          ? null
+          : 'ops.telemetry.ownersOnly';
+  return (
+    <SectionCard
+      title={t('ops.telemetry.title')}
+      actions={
+        <label className="flex items-center gap-2 text-sm">
+          <Switch
+            checked={data.enabled}
+            disabled={!data.can_change || toggle.isPending}
+            onCheckedChange={(enabled) => toggle.mutate(enabled)}
+            aria-label={t('ops.telemetry.title')}
+          />
+          {t(data.enabled ? 'ops.telemetry.on' : 'ops.telemetry.off')}
+        </label>
+      }
+    >
+      <div className="grid gap-2 text-sm">
+        <p className="text-muted-foreground">
+          {t('ops.telemetry.intro')}{' '}
+          <a className="underline" href={TELEMETRY_DOCS_URL} target="_blank" rel="noreferrer">
+            {t('ops.telemetry.docs')}
+          </a>
+        </p>
+        {hint !== null && <p className="text-muted-foreground">{t(hint)}</p>}
+        <p>
+          {data.last_sent_at === null
+            ? t('ops.telemetry.neverSent')
+            : t('ops.telemetry.lastSent', { at: formatDateTime(locale, data.last_sent_at) })}
+        </p>
+        <div>
+          <DashboardButton size="sm" variant="secondary" onClick={() => setShowPreview((v) => !v)}>
+            {t(showPreview ? 'ops.telemetry.hidePreview' : 'ops.telemetry.showPreview')}
+          </DashboardButton>
+        </div>
+        {showPreview && (
+          <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
+            {JSON.stringify(data.preview, null, 2)}
+          </pre>
+        )}
+      </div>
+    </SectionCard>
   );
 }
 

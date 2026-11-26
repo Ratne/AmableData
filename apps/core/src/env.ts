@@ -78,6 +78,8 @@ export interface Env {
   APP_VERSION?: string;
   /** `off` disables the daily "new version available" check (managed installations, opt-out). */
   UPDATE_CHECK?: string;
+  /** `off` disables the daily anonymous usage statistics for good (docs/telemetry.md). */
+  TELEMETRY?: string;
   /** Error reporting sink: `local` (default: logs only), `control_plane` (needs LICENSE_KEY) or an https URL. */
   ERROR_REPORTING?: string;
   /** 0..1 sampling of repeated errors (default 1). */

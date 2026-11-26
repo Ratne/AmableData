@@ -11,6 +11,7 @@ import { runCrmOp, type CrmOpInput, type CrmOpName, type CrmOpOutput } from '../
 import { ensureSearchIndex } from '../../src/crm/search/index-store';
 import { TENANT_ARCHIVE_STREAMS } from '../../src/archive/model';
 import { runArchiveOp } from '../../src/archive/store';
+import { tenantUsageCounts } from '../../src/platform/usage-counts';
 import type { Env } from '../../src/env';
 
 /** SqlDb over node:sqlite with savepoint-based nesting (mirrors transactionSync). */
@@ -116,6 +117,7 @@ export function fakeTenantDbNamespace(now?: () => number): Env['TENANT_DB'] {
               ),
             ),
           ),
+        usageCounts: () => Promise.resolve(tenantUsageCounts(current.db)),
         archive: (op: string, input: unknown) =>
           Promise.resolve(
             structuredClone(

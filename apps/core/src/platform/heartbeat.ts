@@ -11,6 +11,7 @@ import {
   writeMeta,
 } from './quota';
 import { pendingErrorCount } from './telemetry';
+import { applyPortalTelemetry } from './usage-telemetry';
 
 async function count(db: D1Database, sql: string): Promise<number> {
   return (await db.prepare(sql).first<{ n: number }>())?.n ?? 0;
@@ -38,6 +39,7 @@ export async function sendHeartbeat(env: Env, nowMs: number): Promise<HeartbeatR
   const snapshot = parseQuotaSnapshot(response.quota);
   if (snapshot !== null) await storeQuotaSnapshot(env.DB, snapshot, nowMs);
   if (Array.isArray(response.dnsChanges)) await applyDnsChanges(env.DB, response.dnsChanges, nowMs);
+  if (typeof response.telemetry === 'boolean') await applyPortalTelemetry(env.DB, response.telemetry);
   if (typeof response.reporting === 'object' && response.reporting !== null) {
     await writeMeta(env.DB, META_REPORTING, {
       sampleRate: response.reporting.sampleRate,

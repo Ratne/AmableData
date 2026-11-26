@@ -28,6 +28,9 @@
  *   --deploy              build and deploy after provisioning
  *   --owner-email <email> first owner (invitation link printed at the end)
  *   --workspace <name>    first workspace name (default "My workspace"), slug from it
+ *   --telemetry on|off    anonymous daily usage statistics (docs/telemetry.md); asked once
+ *                         when omitted on a terminal, then kept from the rendered config
+ *   --no-telemetry        same as --telemetry off
  *   --dry-run             print every wrangler command instead of running it (no network)
  *
  * Migrations run automatically when the workers boot; updating later is
@@ -37,6 +40,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,6 +78,7 @@ export function parseArgs(argv) {
     dryRun: false,
     ownerEmail: null,
     workspace: 'My workspace',
+    telemetry: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -89,6 +94,11 @@ export function parseArgs(argv) {
     else if (arg === '--core-origin') options.coreOrigin = origin();
     else if (arg === '--owner-email') options.ownerEmail = value().trim().toLowerCase();
     else if (arg === '--workspace') options.workspace = value().trim();
+    else if (arg === '--telemetry') {
+      const choice = value().trim().toLowerCase();
+      if (choice !== 'on' && choice !== 'off') throw new Error('--telemetry must be on or off');
+      options.telemetry = choice;
+    } else if (arg === '--no-telemetry') options.telemetry = 'off';
     else if (arg === '--deploy') options.deploy = true;
     else if (arg === '--dry-run') options.dryRun = true;
     else throw new Error(`unknown option ${arg}`);
@@ -272,6 +282,37 @@ function setSecrets(wrangler) {
   }
 }
 
+/** `TELEMETRY` value of an already rendered core config (null when absent). */
+export function renderedTelemetry(config) {
+  const match = /"TELEMETRY":\s*"(on|off)"/.exec(config ?? '');
+  return match?.[1] ?? null;
+}
+
+async function askTelemetry() {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await rl.question(
+      'Share anonymous usage statistics once a day (counts only, no personal data, see docs/telemetry.md)? [Y/n] ',
+    );
+    return /^n/i.test(answer.trim()) ? 'off' : 'on';
+  } finally {
+    rl.close();
+  }
+}
+
+/** Flag, then the previous choice, then one question on a terminal; default on. */
+async function telemetryChoice(options) {
+  if (options.telemetry !== null) return options.telemetry;
+  let previous = null;
+  try {
+    previous = renderedTelemetry(readFileSync(join(root, CORE_CONFIG), 'utf8'));
+  } catch {
+    // first run: no rendered config yet
+  }
+  if (previous !== null) return previous;
+  return process.stdin.isTTY && !options.dryRun ? askTelemetry() : 'on';
+}
+
 /** `git describe` output → APP_VERSION (`2026.10.1`, or `2026.10.1-3-gabc1234` between releases). */
 export function releaseVersion(describe) {
   const value = describe.trim();
@@ -306,11 +347,14 @@ async function main() {
   console.log('\n2/4 Writing production wrangler configs');
   const appOrigin = options.appOrigin ?? 'https://amable-core.example.workers.dev';
   const edgeOrigin = options.edgeOrigin ?? 'https://amable-edge.example.workers.dev';
+  const telemetry = await telemetryChoice(options);
   const core = renderTemplate(readFileSync(join(root, 'deploy/self-host/core.wrangler.jsonc'), 'utf8'), {
     D1_DATABASE_ID: d1Id,
     APP_ORIGIN: appOrigin,
     EDGE_ORIGIN: edgeOrigin,
+    TELEMETRY: telemetry,
   });
+  console.log(`  anonymous usage statistics: ${telemetry} (change: --telemetry on|off, or Settings > Operations)`);
   const edge = renderTemplate(readFileSync(join(root, 'deploy/self-host/edge.wrangler.jsonc'), 'utf8'), {
     CORE_ORIGIN: options.coreOrigin ?? appOrigin,
   });

@@ -78,5 +78,7 @@
   "vars": {
     "ENVIRONMENT": "production",
     "ERROR_REPORTING": "local",
+    // Anonymous daily usage statistics (docs/telemetry.md); also switchable in Settings > Operations.
+    // "TELEMETRY": "off",
   },
 }

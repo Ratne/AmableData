@@ -20,6 +20,7 @@ import { parkRegistryDeadLetters } from './ops/registry-dlq';
 import { platformScheduled } from './platform/mount';
 import { withErrorReporting } from './platform/telemetry';
 import { runUpdateCheck } from './platform/updates';
+import { runTelemetryPing } from './platform/usage-telemetry';
 import { handleGoogleOAuthCallback } from './providers/oauth-callback';
 import { GOOGLE_OAUTH_CALLBACK_PATH } from './providers/select';
 import { runRetention } from './platform/retention';
@@ -101,6 +102,8 @@ const handler = {
     if (backups?.status !== 'ran') await job('archive', () => runScheduledArchive(archiveDeps(env)));
     // Self-hosted: latest public release, once a day.
     await job('update-check', () => runUpdateCheck(env, controller.scheduledTime));
+    // Anonymous usage statistics (opt-out), once a day.
+    await job('usage-telemetry', () => runTelemetryPing(env, controller.scheduledTime));
     // Marketplace apps: catalog sync (every 6 hours), uninstall cleanup, metrics retention.
     await job('apps', () => runAppsCron(env, controller.scheduledTime));
   },

@@ -1,10 +1,23 @@
-import { opsReplaySchema, opsStatusSchema, type OpsStatus } from '@amable/api-types';
+import {
+  opsReplaySchema,
+  opsStatusSchema,
+  opsTelemetrySchema,
+  opsTelemetryUpdateSchema,
+  type OpsStatus,
+  type OpsTelemetry,
+} from '@amable/api-types';
 import { siteStub, tenantSitesStub } from '@amable/app-edge/analytics';
 import type { Context, Hono } from 'hono';
 import { listBackups, backupDeps } from '../backup/service';
 import { tenantBackupPrefix } from '../backup/format';
-import { createCrmRouter, crmRoute, json } from '../crm/api/core';
-import { audit, getTenant, type AppEnv } from '../middleware';
+import { createCrmRouter, crmRoute, json, jsonBody } from '../crm/api/core';
+import { audit, getTenant, HttpError, type AppEnv } from '../middleware';
+import {
+  previewUsagePing,
+  setLocalTelemetry,
+  telemetryControl,
+  telemetryStatus,
+} from '../platform/usage-telemetry';
 import { parkedRegistry, replayParkedRegistry } from './registry-dlq';
 
 const tags = ['Operations'];
@@ -78,6 +91,48 @@ opsApi.openapi(
     const result = await replayParkedRegistry(c.env, tenantId(c));
     await audit(c, 'ops.registry_replayed', { details: result });
     return c.json(result, 200);
+  },
+);
+
+async function telemetryBody(c: Context<AppEnv>): Promise<OpsTelemetry> {
+  const status = await telemetryStatus(c.env);
+  return {
+    enabled: status.enabled,
+    control: status.control,
+    can_change: status.control === 'local' && getTenant(c).role === 'owner',
+    last_sent_at: status.lastSentAt,
+    preview: { ...(await previewUsagePing(c.env)) },
+  };
+}
+
+opsApi.openapi(
+  crmRoute('settings:manage', {
+    method: 'get',
+    path: '/telemetry',
+    tags,
+    summary: 'Anonymous usage statistics of the installation: state and the exact next ping',
+    responses: { 200: json(opsTelemetrySchema, 'Telemetry') },
+  }),
+  async (c) => c.json(await telemetryBody(c), 200),
+);
+
+// Installation-wide choice: workspace owners administer the installation (as for update notices).
+opsApi.openapi(
+  crmRoute('settings:manage', {
+    method: 'put',
+    path: '/telemetry',
+    tags,
+    summary: 'Switch the anonymous usage statistics on or off (open source installations, owners)',
+    request: { body: jsonBody(opsTelemetryUpdateSchema) },
+    responses: { 200: json(opsTelemetrySchema, 'Telemetry') },
+  }),
+  async (c) => {
+    const { enabled } = c.req.valid('json');
+    if (getTenant(c).role !== 'owner') throw new HttpError(403, 'forbidden');
+    if (telemetryControl(c.env) !== 'local') throw new HttpError(409, 'telemetry_managed_elsewhere');
+    await setLocalTelemetry(c.env, enabled);
+    await audit(c, enabled ? 'ops.telemetry_enabled' : 'ops.telemetry_disabled', {});
+    return c.json(await telemetryBody(c), 200);
   },
 );
 

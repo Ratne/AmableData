@@ -9,6 +9,7 @@ import {
   parseArgs,
   parseD1Id,
   releaseVersion,
+  renderedTelemetry,
   renderTemplate,
   secretPlan,
   slugify,
@@ -36,6 +37,10 @@ describe('self-host setup script', () => {
     expect(() => parseArgs(['--app-origin', 'http://crm.example.com'])).toThrow(/https origin/);
     expect(() => parseArgs(['--owner-email', 'me@example.com'])).toThrow(/needs --app-origin/);
     expect(() => parseArgs(['--nope'])).toThrow(/unknown option/);
+    expect(parseArgs([]).telemetry).toBeNull();
+    expect(parseArgs(['--telemetry', 'ON']).telemetry).toBe('on');
+    expect(parseArgs(['--no-telemetry']).telemetry).toBe('off');
+    expect(() => parseArgs(['--telemetry', 'maybe'])).toThrow(/on or off/);
   });
 
   it('turns git describe output into APP_VERSION', () => {
@@ -58,8 +63,12 @@ describe('self-host setup script', () => {
       D1_DATABASE_ID: ID,
       APP_ORIGIN: 'https://crm.example.com',
       EDGE_ORIGIN: 'https://t.example.com',
+      TELEMETRY: 'off',
     });
     expect(core).toContain(`"database_id": "${ID}"`);
+    expect(core).toContain('"TELEMETRY": "off"');
+    expect(renderedTelemetry(core)).toBe('off');
+    expect(renderedTelemetry('{}')).toBeNull();
     expect(core).toContain('"ENVIRONMENT": "production"');
     expect(core).not.toMatch(/"ENVIRONMENT":\s*"dev"/);
     expect(core).not.toContain('EMAIL_ALLOW_UNVERIFIED_DOMAIN');

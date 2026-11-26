@@ -71,6 +71,58 @@ export interface HeartbeatResponse {
   readonly reporting: { readonly sampleRate: number; readonly maxBatch: number };
   /** Managed email: sending domains with DNS to update (absent on older control planes). */
   readonly dnsChanges?: readonly EmailDnsChange[];
+  /** Anonymous usage statistics allowed by the customer in the portal (absent on older control planes). */
+  readonly telemetry?: boolean;
+}
+
+// ------------------------------------------------------- usage telemetry
+
+/**
+ * `POST /v1/public/telemetry` — anonymous usage statistics, at most once a day,
+ * from every installation that did not opt out (open source included). It is
+ * NOT authenticated on purpose: no license key, so the control plane cannot
+ * link the statistics to a customer. `anonymousId` is a random UUID generated
+ * by the installation (a new one after every opt-out / opt-in).
+ * Never sent: hostnames, names, emails, slugs, contact data, license or account ids.
+ */
+export const TELEMETRY_PATH = '/v1/public/telemetry' as const;
+
+export type TelemetryEdition = 'open_source' | 'self_hosted_licensed' | 'managed';
+export const TELEMETRY_EDITIONS: readonly TelemetryEdition[] = ['open_source', 'self_hosted_licensed', 'managed'];
+
+/** Contacts are only reported as a range, never as an exact number. */
+export type ContactsBucket = '0' | '1-100' | '101-1k' | '1k-10k' | '10k+';
+export const CONTACTS_BUCKETS: readonly ContactsBucket[] = ['0', '1-100', '101-1k', '1k-10k', '10k+'];
+
+/** Structural counts of the installation, summed over its workspaces. */
+export interface TelemetryCounts {
+  readonly tenants: number;
+  readonly users: number;
+  /** Tracking sites. */
+  readonly sites: number;
+  /** Active funnel graphs. */
+  readonly funnels: number;
+  readonly forms: number;
+  readonly pages: number;
+  readonly automations: number;
+  readonly products: number;
+  readonly bookingCalendars: number;
+}
+
+export interface TelemetryPing {
+  readonly anonymousId: string;
+  /** Release tag of the running code. */
+  readonly version: string;
+  readonly schemaVersion: number;
+  readonly edition: TelemetryEdition;
+  readonly counts: TelemetryCounts;
+  readonly contactsBucket: ContactsBucket;
+  /** Ids of the official catalog apps active in at least one workspace (public ids). */
+  readonly apps: readonly string[];
+}
+
+export interface TelemetryPingResponse {
+  readonly ok: true;
 }
 
 // ----------------------------------------------------------------- quota
