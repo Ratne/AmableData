@@ -3,10 +3,6 @@
  * it on (the `GET /e` handshake says so), never cookieless, after an opt-out,
  * for bots or with Global Privacy Control. Sent once per browser session as a
  * `device` event through the running tracker.
- *
- * Parts of the readings follow FingerprintJS
- * (https://github.com/fingerprintjs/fingerprintjs), MIT License,
- * Copyright (c) 2025 FingerprintJS, Inc.
  */
 
 export type DeviceSignals = Record<string, string | number>;
@@ -112,30 +108,27 @@ function canvas(doc: Document): string | undefined {
 
 /**
  * Results of the engine's math functions on fixed inputs: they differ between
- * engines and systems, and no browser noises them. Inputs after FingerprintJS
- * (`src/sources/math.ts`, MIT).
+ * engines and systems (huge trigonometric arguments, values near the edges of
+ * each domain), and no browser noises them.
  */
 function math(): string {
   const M = Math;
   const values = [
-    M.acos(0.123124234234234242),
-    M.acosh(1e308),
-    M.log(1e154 + M.sqrt(1e154 * 1e154 - 1)),
-    M.asin(0.123124234234234242),
-    M.asinh(1),
-    M.atanh(0.5),
-    M.atan(0.5),
-    M.sin(-1e300),
-    M.sinh(1),
-    M.exp(1) - 1 / M.exp(1) / 2,
-    M.cos(10.000000000123),
-    M.cosh(1),
-    M.tan(-1e300),
-    M.tanh(1),
-    M.exp(1),
-    M.expm1(1),
-    M.log1p(10),
-    M.pow(M.PI, -100),
+    M.sin(1e250),
+    M.cos(-7e211),
+    M.tan(3e180),
+    M.acos(0.987),
+    M.asin(-0.314),
+    M.atanh(0.999),
+    M.acosh(2e305),
+    M.sinh(0.732),
+    M.cosh(-11.1),
+    M.tanh(0.042),
+    M.exp(-707),
+    M.expm1(3e-9),
+    M.log1p(-0.999),
+    M.cbrt(-1e-200),
+    M.pow(M.E, 33.3),
   ];
   return fnv(values.join(','));
 }

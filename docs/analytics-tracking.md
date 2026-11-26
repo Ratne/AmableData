@@ -234,7 +234,7 @@ visitor of each domain, other devices. The store keeps them apart and links them
   browsing, strict tracking protection) give no evidence with them, so the edge stores
   `"skipped"` in their place, by the parsed user agent: Safari 17+ canvas, audio and screen
   frame; Firefox 120+ (not on iOS/iPadOS) canvas, 143+ also the screen frame; Samsung Internet
-  26+ audio. The list follows FingerprintJS (MIT), which detects the same browsers by feature.
+  26+ audio.
 - Rule `fp` (browser install, off by default): the `fp` key hashes the readings of one browser
   install (canvas, audio, fonts, math, GPU, screen, density, cores, memory, touch points,
   platform, languages, screen frame, model, architecture, time zone), not the colour scheme nor

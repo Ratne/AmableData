@@ -45,8 +45,7 @@ const usable = (v: string | number | undefined): boolean =>
 
 /**
  * Readings a browser noises or spoofs in some of its modes (private browsing,
- * strict tracking protection), so a value is no evidence. After FingerprintJS
- * (https://github.com/fingerprintjs/fingerprintjs, MIT): Safari 17+ noises
+ * strict tracking protection), so a value is no evidence: Safari 17+ noises
  * canvas and audio and zeroes the screen frame, Firefox 120+ randomizes the
  * canvas (143+ also spoofs the screen frame), Samsung Internet 26+ noises audio.
  */
